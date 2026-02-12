@@ -109,6 +109,12 @@
 - SSE 断开：按指数退避重连，上限 30s
 - Server 不可达：Settings 显示 Disconnected，Chat/Files 显示占位提示
 
+#### 3.4 SSE 鲁棒性（详见 [SSE_ROBUSTNESS.md](SSE_ROBUSTNESS.md)）
+
+- 解析：API 使用单行 `data:`，当前实现已满足
+- 请求头：建议添加 `Accept: text/event-stream`、`Cache-Control: no-cache`
+- 重连：可选，现有轮询 + 前台恢复已覆盖主要场景
+
 ### 4. 状态管理
 
 ```swift
