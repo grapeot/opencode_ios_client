@@ -28,16 +28,17 @@
 - [x] Markdown 预览：使用 MarkdownUI 库（swift-markdown-ui 2.4.1）替代自定义渲染，完整支持 GFM（表格、标题、代码块、列表等）
 - [x] 单元测试：defaultServerAddress、sessionDecoding、messageDecoding、sseEvent、partDecoding
 - [x] UI 打磨：放大输入框（3-8 行，capsule 形状）、模型选择器胶囊渐变、渲染风格 SF Symbols、消息气泡优化、工具/补丁/权限卡片圆角柔化、MarkdownUI 用于 chat 消息渲染
+- [x] Chat：AI response 支持文字选择/复制（含 Markdown 渲染）
+- [x] Chat → 文件跳转：改用 URLComponents 编码 query，统一规范化 file path；补充空内容 warning log
+- [x] Tool 卡片：理由/标题收起态最多两行 + 省略号，展开态显示完整 Reason
+- [x] Session Todo（task list）：支持 `/session/:id/todo` 拉取 + SSE `todo.updated` 更新；`todowrite` tool 渲染为 Task List 卡片
 
 ## 待办
 
 - [ ] **Sync Streaming**：delta 增量更新、Tool 完成后收起（见 [SYNC_STREAMING_RESEARCH.md](SYNC_STREAMING_RESEARCH.md)）
 - [ ] Phase 3：完善 Diff 行级高亮、语法高亮（可选）
 - [ ] 与真实 OpenCode Server 联调验证
-- [ ] Chat：AI response 支持文字选择/复制（Markdown 渲染也要可选中）
-- [ ] Chat → 文件跳转：Markdown 预览偶发空白/仅第一行（排查 bug 或补 log）
-- [ ] Tool 卡片：理由/标题收起态两行省略，展开态完整显示
-- [ ] Session Todo（task list）：参考 opencode 官方 web client 的 todo/todowrite 渲染与更新机制，并实现到 iOS（含 RFC/PRD 更新）
+- [ ] 与真实 OpenCode Server 联调验证（含 todo.updated 实测）
 
 ## 遇到的问题
 
