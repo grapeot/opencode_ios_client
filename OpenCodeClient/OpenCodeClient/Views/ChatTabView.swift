@@ -8,6 +8,7 @@ import SwiftUI
 struct ChatTabView: View {
     @Bindable var state: AppState
     @State private var inputText = ""
+    @State private var isSending = false
 
     var body: some View {
         NavigationStack {
@@ -40,15 +41,26 @@ struct ChatTabView: View {
 
                     Button {
                         Task {
-                            let text = inputText
+                            let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !text.isEmpty else { return }
                             inputText = ""
-                            await state.sendMessage(text)
+                            isSending = true
+                            let success = await state.sendMessage(text)
+                            isSending = false
+                            if !success {
+                                inputText = text
+                            }
                         }
                     } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
+                        if isSending {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.title2)
+                        }
                     }
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
 
                     if state.isBusy {
                         Button {
@@ -68,6 +80,16 @@ struct ChatTabView: View {
                     Button("New") {
                         Task { await state.createSession() }
                     }
+                }
+            }
+            .alert("发送失败", isPresented: Binding(
+                get: { state.sendError != nil },
+                set: { if !$0 { state.sendError = nil } }
+            )) {
+                Button("确定") { state.sendError = nil }
+            } message: {
+                if let error = state.sendError {
+                    Text(error)
                 }
             }
         }

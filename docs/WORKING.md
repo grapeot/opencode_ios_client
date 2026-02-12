@@ -28,7 +28,12 @@
 
 ## 遇到的问题
 
-（记录实现过程中遇到的问题与解决方案）
+1. **Local network prohibited (iOS)**：连接 `192.168.180.128:4096` 时报错 `Local network prohibited`。需在 Info.plist 添加：
+   - `NSLocalNetworkUsageDescription`：说明为何需要本地网络，首次访问会弹出权限弹窗
+   - `NSAppTransportSecurity` → `NSAllowsLocalNetworking`：允许 HTTP 访问本地 IP
+   - 用户需在弹窗中要点「允许」才能连接
+
+2. **发送后卡住**：发送失败时无反馈，输入框已清空导致用户不知道失败。修复：发送失败时恢复输入、显示错误 alert、发送中显示 loading
 
 ## 决策记录
 

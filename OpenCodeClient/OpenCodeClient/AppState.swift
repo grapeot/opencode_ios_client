@@ -15,6 +15,7 @@ final class AppState {
     var isConnected: Bool = false
     var serverVersion: String?
     var connectionError: String?
+    var sendError: String?
 
     var sessions: [Session] = []
     var currentSessionID: String?
@@ -104,13 +105,19 @@ final class AppState {
         }
     }
 
-    func sendMessage(_ text: String) async {
-        guard let sessionID = currentSessionID else { return }
+    func sendMessage(_ text: String) async -> Bool {
+        sendError = nil
+        guard let sessionID = currentSessionID else {
+            sendError = "请先选择或创建 Session"
+            return false
+        }
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
         do {
             try await apiClient.promptAsync(sessionID: sessionID, text: text, model: model)
+            return true
         } catch {
-            connectionError = error.localizedDescription
+            sendError = error.localizedDescription
+            return false
         }
     }
 
