@@ -81,6 +81,19 @@ final class AppState {
         }
     }
 
+    func refreshSessions() async {
+        guard isConnected else { return }
+        await loadSessions()
+        if let statuses = try? await apiClient.sessionStatus() {
+            sessionStatuses = statuses
+        }
+    }
+
+    func selectSession(_ session: Session) {
+        currentSessionID = session.id
+        Task { await loadMessages() }
+    }
+
     func createSession() async {
         guard isConnected else { return }
         do {

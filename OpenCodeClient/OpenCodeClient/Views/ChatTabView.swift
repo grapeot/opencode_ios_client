@@ -9,6 +9,7 @@ struct ChatTabView: View {
     @Bindable var state: AppState
     @State private var inputText = ""
     @State private var isSending = false
+    @State private var showSessionList = false
 
     var body: some View {
         NavigationStack {
@@ -77,10 +78,20 @@ struct ChatTabView: View {
             .navigationTitle(state.currentSession?.title ?? "Chat")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showSessionList = true
+                    } label: {
+                        Image(systemName: "list.bullet")
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("New") {
                         Task { await state.createSession() }
                     }
                 }
+            }
+            .sheet(isPresented: $showSessionList) {
+                SessionListView(state: state)
             }
             .alert("发送失败", isPresented: Binding(
                 get: { state.sendError != nil },

@@ -147,6 +147,7 @@ final class AppState {
 
 ### 6. 权限与输入
 
+- **Session 列表**：列出 workspace 下所有已有 Session，作为连接与解析的验证手段
 - **权限**：`permission.asked` 时展示卡片，用户手动批准/拒绝，调用 `POST /session/:id/permissions/:permissionID`
 - **输入**：支持多行，发送用 `prompt_async`；busy 时消息由服务端排队
 - **Abort**：提供按钮调用 `POST /session/:id/abort`

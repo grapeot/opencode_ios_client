@@ -139,7 +139,9 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 #### 4.2.5 Session 管理
 
-从 Chat Tab 顶部左侧的按钮进入 Session 列表（slide-over 或 navigation push）。列表显示所有 Session，按时间倒序。每个条目显示：标题、创建时间、消息数、状态（idle/busy）。支持新建 Session、删除 Session。
+从 Chat Tab 顶部左侧的按钮进入 Session 列表（slide-over 或 navigation push）。**列出 workspace 下所有已有 Session**，是重要的功能验证手段：可验证连接是否正确、API 解析是否正常、消息/状态能否正确展示。
+
+列表显示所有 Session，按时间倒序。每个条目显示：标题、创建时间、消息数、状态（idle/busy）。支持新建 Session、删除 Session、切换 Session。
 
 ### 4.3 Files Tab（文件浏览与 Diff）
 

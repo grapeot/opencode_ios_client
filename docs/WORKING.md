@@ -11,6 +11,7 @@
 
 ## 已完成
 
+- [x] Session 列表：Chat Tab 左侧列表按钮，展示 workspace 下所有 Session，支持切换、新建、下拉刷新
 - [x] PRD 更新（async API、默认 server、移除大 session/推送/多项目）
 - [x] RFC 更新（MarkdownUI、原生能力、Phase 4 暂不实现）
 - [x] Git 初始化、.gitignore（含 opencode-official）、docs 移至 docs/
