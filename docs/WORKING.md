@@ -34,6 +34,10 @@
 - [ ] **Sync Streaming**：delta 增量更新、Tool 完成后收起（见 [SYNC_STREAMING_RESEARCH.md](SYNC_STREAMING_RESEARCH.md)）
 - [ ] Phase 3：完善 Diff 行级高亮、语法高亮（可选）
 - [ ] 与真实 OpenCode Server 联调验证
+- [ ] Chat：AI response 支持文字选择/复制（Markdown 渲染也要可选中）
+- [ ] Chat → 文件跳转：Markdown 预览偶发空白/仅第一行（排查 bug 或补 log）
+- [ ] Tool 卡片：理由/标题收起态两行省略，展开态完整显示
+- [ ] Session Todo（task list）：参考 opencode 官方 web client 的 todo/todowrite 渲染与更新机制，并实现到 iOS（含 RFC/PRD 更新）
 
 ## 遇到的问题
 
