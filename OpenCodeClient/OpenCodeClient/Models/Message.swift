@@ -5,22 +5,6 @@
 
 import Foundation
 
-private extension String {
-    func normalizedFilePathForAPI() -> String {
-        var s = trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("a/") || s.hasPrefix("b/") {
-            s = String(s.dropFirst(2))
-        }
-        if let hash = s.firstIndex(of: "#") {
-            s = String(s[..<hash])
-        }
-        if let r = s.range(of: ":[0-9]+(:[0-9]+)?$", options: .regularExpression) {
-            s = String(s[..<r.lowerBound])
-        }
-        return s
-    }
-}
-
 struct Message: Codable, Identifiable {
     let id: String
     let sessionID: String
@@ -214,12 +198,12 @@ struct Part: Codable, Identifiable {
     var filePathsForNavigation: [String] {
         var out: [String] = []
         if let files = files {
-            out.append(contentsOf: files.map { $0.path.normalizedFilePathForAPI() })
+            out.append(contentsOf: files.map { PathNormalizer.normalize($0.path) })
         }
-        if let p = metadata?.path?.normalizedFilePathForAPI(), !p.isEmpty {
+        if let p = metadata?.path.map({ PathNormalizer.normalize($0) }), !p.isEmpty {
             out.append(p)
         }
-        if let p = state?.pathFromInput?.normalizedFilePathForAPI(), !p.isEmpty, !out.contains(p) {
+        if let p = state?.pathFromInput.map({ PathNormalizer.normalize($0) }), !p.isEmpty, !out.contains(p) {
             out.append(p)
         }
         return out

@@ -7,7 +7,7 @@
 - **最后更新**：2026-02-12
 - **Phase**：Phase 3 完成（Think Streaming + iPad 分栏）
 - **编译**：✅ 通过
-- **测试**：✅ 47 个单元测试通过
+- **测试**：✅ 52 个单元测试通过
 
 ## 已完成
 
@@ -41,7 +41,7 @@
 - [x] **Code Review 1.1**：AppState 拆分（SessionStore/MessageStore/FileStore/TodoStore，保持对外 API 不变）
 - [x] **Code Review 1.2**：SSE 调研（API 单行 data 已满足，RFC 规划，加 Accept/Cache-Control 头）
 - [x] **Code Review 1.3**：SSE message.updated 按 sessionID 过滤
-- [ ] **Code Review 1.4**：PathNormalizer 统一路径规范化
+- [x] **Code Review 1.4**：PathNormalizer 统一路径规范化（Utils/PathNormalizer.swift）
 - [ ] **Phase 4：iPad / Vision Pro 布局优化**：可考虑（可选）从 Chat 点击文件时在左栏展示而非 sheet
 
 ## 遇到的问题

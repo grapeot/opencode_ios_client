@@ -430,6 +430,33 @@ struct FilePathNavigationTests {
     }
 }
 
+// MARK: - PathNormalizer (Code Review 1.4)
+
+struct PathNormalizerTests {
+
+    @Test func stripsABPrefix() {
+        #expect(PathNormalizer.normalize("a/src/app.swift") == "src/app.swift")
+        #expect(PathNormalizer.normalize("b/docs/readme.md") == "docs/readme.md")
+    }
+
+    @Test func stripsHashAndSuffix() {
+        #expect(PathNormalizer.normalize("docs/readme.md#L42") == "docs/readme.md")
+    }
+
+    @Test func stripsLineColSuffix() {
+        #expect(PathNormalizer.normalize("src/app.swift:42:10") == "src/app.swift")
+        #expect(PathNormalizer.normalize("lib/parser.py:10") == "lib/parser.py")
+    }
+
+    @Test func trimsWhitespace() {
+        #expect(PathNormalizer.normalize("  src/app.swift  ") == "src/app.swift")
+    }
+
+    @Test func leavesPlainPathUnchanged() {
+        #expect(PathNormalizer.normalize("src/main.swift") == "src/main.swift")
+    }
+}
+
 // MARK: - PartStateBridge Tests
 
 struct PartStateBridgeTests {

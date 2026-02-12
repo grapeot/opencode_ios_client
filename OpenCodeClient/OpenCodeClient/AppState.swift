@@ -328,7 +328,7 @@ final class AppState {
     }
 
     /// 是否应处理 message.updated：有 sessionID 时需匹配当前 session，否则保持原行为
-    static func shouldProcessMessageEvent(eventSessionID: String?, currentSessionID: String?) -> Bool {
+    nonisolated static func shouldProcessMessageEvent(eventSessionID: String?, currentSessionID: String?) -> Bool {
         guard currentSessionID != nil else { return false }
         if let sid = eventSessionID { return sid == currentSessionID }
         return true  // 无 sessionID 时保持原行为（向后兼容）
