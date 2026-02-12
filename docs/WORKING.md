@@ -38,7 +38,7 @@
 
 ## 待办
 
-- [ ] **Code Review 1.1**：AppState 拆分（SessionStore/MessageStore/FileStore/TodoStore）
+- [x] **Code Review 1.1**：AppState 拆分（SessionStore/MessageStore/FileStore/TodoStore，保持对外 API 不变）
 - [ ] **Code Review 1.2**：SSE 解析与重连策略（调研 API → RFC → 测试 → 实现）
 - [ ] **Code Review 1.3**：SSE 事件按 session 过滤
 - [ ] **Code Review 1.4**：PathNormalizer 统一路径规范化

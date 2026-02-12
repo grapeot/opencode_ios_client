@@ -17,14 +17,18 @@ final class AppState {
     var connectionError: String?
     var sendError: String?
 
-    var sessions: [Session] = []
-    var currentSessionID: String?
-    var sessionStatuses: [String: SessionStatus] = [:]
+    private let sessionStore = SessionStore()
+    private let messageStore = MessageStore()
+    private let fileStore = FileStore()
+    private let todoStore = TodoStore()
 
-    var messages: [MessageWithParts] = []
-    var partsByMessage: [String: [Part]] = [:]
-    /// Delta 累积：key = "messageID:partID"，用于打字机效果
-    var streamingPartTexts: [String: String] = [:]
+    var sessions: [Session] { get { sessionStore.sessions } set { sessionStore.sessions = newValue } }
+    var currentSessionID: String? { get { sessionStore.currentSessionID } set { sessionStore.currentSessionID = newValue } }
+    var sessionStatuses: [String: SessionStatus] { get { sessionStore.sessionStatuses } set { sessionStore.sessionStatuses = newValue } }
+
+    var messages: [MessageWithParts] { get { messageStore.messages } set { messageStore.messages = newValue } }
+    var partsByMessage: [String: [Part]] { get { messageStore.partsByMessage } set { messageStore.partsByMessage = newValue } }
+    var streamingPartTexts: [String: String] { get { messageStore.streamingPartTexts } set { messageStore.streamingPartTexts = newValue } }
 
     /// 固定三个模型，不再从 server 导入
     var modelPresets: [ModelPreset] = [
@@ -38,19 +42,19 @@ final class AppState {
 
     var themePreference: String = "auto"  // "auto" | "light" | "dark"
 
-    var sessionDiffs: [FileDiff] = []
-    var selectedDiffFile: String?
+    var sessionDiffs: [FileDiff] { get { fileStore.sessionDiffs } set { fileStore.sessionDiffs = newValue } }
+    var selectedDiffFile: String? { get { fileStore.selectedDiffFile } set { fileStore.selectedDiffFile = newValue } }
     var selectedTab: Int = 0  // 0=Chat, 1=Files, 2=Settings
     var fileToOpenInFilesTab: String?  // 从 Chat 中 tool 点击跳转时设置，Files tab 或 sheet 展示
 
-    var sessionTodos: [String: [TodoItem]] = [:]
+    var sessionTodos: [String: [TodoItem]] { get { todoStore.sessionTodos } set { todoStore.sessionTodos = newValue } }
 
-    var fileTreeRoot: [FileNode] = []
-    var fileStatusMap: [String: String] = [:]  // path -> status
-    var expandedPaths: Set<String> = []
-    var fileChildrenCache: [String: [FileNode]] = [:]  // path -> children
-    var fileSearchQuery: String = ""
-    var fileSearchResults: [String] = []
+    var fileTreeRoot: [FileNode] { get { fileStore.fileTreeRoot } set { fileStore.fileTreeRoot = newValue } }
+    var fileStatusMap: [String: String] { get { fileStore.fileStatusMap } set { fileStore.fileStatusMap = newValue } }
+    var expandedPaths: Set<String> { get { fileStore.expandedPaths } set { fileStore.expandedPaths = newValue } }
+    var fileChildrenCache: [String: [FileNode]] { get { fileStore.fileChildrenCache } set { fileStore.fileChildrenCache = newValue } }
+    var fileSearchQuery: String { get { fileStore.fileSearchQuery } set { fileStore.fileSearchQuery = newValue } }
+    var fileSearchResults: [String] { get { fileStore.fileSearchResults } set { fileStore.fileSearchResults = newValue } }
 
     private let apiClient = APIClient()
     private let sseClient = SSEClient()
