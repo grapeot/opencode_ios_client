@@ -46,6 +46,13 @@ struct SettingsTabView: View {
                     }
                 }
 
+                Section("Appearance") {
+                    Picker("Theme", selection: $state.themePreference) {
+                        Text("Auto").tag("auto")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    }
+                }
                 Section("About") {
                     if let version = state.serverVersion {
                         LabeledContent("Server Version", value: version)

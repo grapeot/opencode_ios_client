@@ -73,6 +73,13 @@ actor APIClient {
         return try JSONDecoder().decode(Session.self, from: responseData)
     }
 
+    func updateSession(sessionID: String, title: String) async throws -> Session {
+        let body = ["title": title]
+        let data = try JSONEncoder().encode(body)
+        let (responseData, _) = try await makeRequest(path: "/session/\(sessionID)", method: "PATCH", body: data)
+        return try JSONDecoder().decode(Session.self, from: responseData)
+    }
+
     func messages(sessionID: String) async throws -> [MessageWithParts] {
         let (data, _) = try await makeRequest(path: "/session/\(sessionID)/message")
         return try JSONDecoder().decode([MessageWithParts].self, from: data)
@@ -122,6 +129,92 @@ actor APIClient {
             throw APIError.httpError(statusCode: http.statusCode, data: Data())
         }
     }
+
+    func providers() async throws -> ProvidersResponse {
+        let (data, _) = try await makeRequest(path: "/config/providers")
+        return try JSONDecoder().decode(ProvidersResponse.self, from: data)
+    }
+
+    func summarize(sessionID: String) async throws {
+        let (_, response) = try await makeRequest(path: "/session/\(sessionID)/summarize", method: "POST")
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            throw APIError.httpError(statusCode: http.statusCode, data: Data())
+        }
+    }
+
+    func sessionDiff(sessionID: String) async throws -> [FileDiff] {
+        let (data, _) = try await makeRequest(path: "/session/\(sessionID)/diff")
+        return try JSONDecoder().decode([FileDiff].self, from: data)
+    }
+}
+
+struct FileDiff: Codable, Identifiable, Hashable {
+    var id: String { file }
+    let file: String
+    let before: String
+    let after: String
+    let additions: Int
+    let deletions: Int
+    let status: String?
+
+    enum CodingKeys: String, CodingKey {
+        case file, path, before, after, additions, deletions, status
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        file = (try? c.decode(String.self, forKey: .file)) ?? (try? c.decode(String.self, forKey: .path)) ?? ""
+        before = (try? c.decode(String.self, forKey: .before)) ?? ""
+        after = (try? c.decode(String.self, forKey: .after)) ?? ""
+        additions = (try? c.decode(Int.self, forKey: .additions)) ?? 0
+        deletions = (try? c.decode(Int.self, forKey: .deletions)) ?? 0
+        status = try? c.decode(String.self, forKey: .status)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(file, forKey: .file)
+        try c.encode(before, forKey: .before)
+        try c.encode(after, forKey: .after)
+        try c.encode(additions, forKey: .additions)
+        try c.encode(deletions, forKey: .deletions)
+        try c.encodeIfPresent(status, forKey: .status)
+    }
+
+    init(file: String, before: String, after: String, additions: Int, deletions: Int, status: String?) {
+        self.file = file
+        self.before = before
+        self.after = after
+        self.additions = additions
+        self.deletions = deletions
+        self.status = status
+    }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(file) }
+    static func == (lhs: FileDiff, rhs: FileDiff) -> Bool { lhs.file == rhs.file }
+}
+
+/// OpenCode GET /config/providers 返回 providers 为 array，每个元素含 id, name, models: { modelID: ModelInfo }
+struct ProvidersResponse: Codable {
+    let providers: [ConfigProvider]?
+    let `default`: DefaultProvider?
+}
+
+struct ConfigProvider: Codable {
+    let id: String
+    let name: String?
+    let models: [String: ProviderModel]?
+}
+
+struct ProviderModel: Codable {
+    let id: String
+    let name: String?
+    let providerID: String?
+}
+
+struct DefaultProvider: Codable {
+    let providerID: String
+    let modelID: String
 }
 
 struct HealthResponse: Codable {

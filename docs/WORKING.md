@@ -5,7 +5,7 @@
 ## 当前状态
 
 - **最后更新**：2026-02-12
-- **Phase**：Phase 1 基本完成
+- **Phase**：Phase 2 完成，UX 简化完成
 - **编译**：✅ 通过
 - **测试**：✅ 9 个单元测试通过
 
@@ -19,11 +19,13 @@
 - [x] Phase 1 基础：Models、APIClient、SSEClient、AppState
 - [x] Phase 1 UI：Chat Tab、Settings Tab、Files Tab（占位）
 - [x] Phase 1 完善：SSE 事件解析、流式更新、Part.state 兼容、Markdown 渲染、工具调用全行显示
+- [x] Phase 2：Part 渲染（reasoning 折叠、step 分隔线、patch 卡片）、权限手动批准、主题切换
+- [x] UX 简化：一行 toolbar（左：新建/重命名/查看 session；右：3 模型图标），移除 Compact、Import、Model Presets
 - [x] 单元测试：defaultServerAddress、sessionDecoding、messageDecoding、sseEvent、partDecoding
 
 ## 待办
 
-- [ ] Phase 2：Part 渲染、权限手动批准、主题、模型切换
+- [ ] **Sync Streaming**：delta 增量更新、Tool 完成后收起（见 [SYNC_STREAMING_RESEARCH.md](SYNC_STREAMING_RESEARCH.md)）
 - [ ] Phase 3：文件树、Markdown 预览、文档 Diff、高亮
 - [ ] 与真实 OpenCode Server 联调验证
 
@@ -45,6 +47,23 @@
 
 5. **Unable to simultaneously satisfy constraints**：键盘相关 (TUIKeyboardContentView, UIKeyboardImpl) 的约束冲突。来自系统键盘，非应用代码，通常无需修复。
 
+6. **术语澄清**：Sync streaming 实指 Think（ReasoningPartView）的展开/收起行为，非 Tool。
+
 ## 决策记录
 
 （记录实现过程中的技术决策）
+
+## API 验证（192.168.180.128:4096）
+
+- **GET /global/health**：✅ `{ healthy, version }`
+- **GET /config/providers**：✅ 返回 `providers: array`（非 dict），每项含 `id`, `name`, `models: { modelID: ModelInfo }`。已修复 iOS 解析。
+- **Import from Server**：依赖 config/providers，解析修复后应可正常导入。
+
+用户指定模型对应：
+- OpenAI GPT-5.2：✅ `openai` / `gpt-5.2`
+- POE Opus Claude 4.6：✅ `poe` / `anthropic/claude-opus-4-6`
+- z.ai coding plan GLM-4.7：✅ `zai-coding-plan` / `glm-4.7`
+
+## Diff 问题
+
+`GET /session/:id/diff` 实测返回 `[]`，即使 session 有 write 操作。GH #10920 等表明可能是 OpenCode server 端 session_diff 追踪问题，官方 web 客户端也可能遇到。暂不修复，待 server 端修复。

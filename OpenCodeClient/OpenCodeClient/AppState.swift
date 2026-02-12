@@ -24,8 +24,21 @@ final class AppState {
     var messages: [MessageWithParts] = []
     var partsByMessage: [String: [Part]] = [:]
 
-    var modelPresets: [ModelPreset] = []
+    /// 固定三个模型，不再从 server 导入
+    var modelPresets: [ModelPreset] = [
+        ModelPreset(displayName: "GPT-5.2", providerID: "openai", modelID: "gpt-5.2"),
+        ModelPreset(displayName: "Opus 4.6", providerID: "poe", modelID: "anthropic/claude-opus-4-6"),
+        ModelPreset(displayName: "GLM-4.7", providerID: "zai-coding-plan", modelID: "glm-4.7"),
+    ]
     var selectedModelIndex: Int = 0
+
+    var pendingPermissions: [PendingPermission] = []
+
+    var themePreference: String = "auto"  // "auto" | "light" | "dark"
+
+    var sessionDiffs: [FileDiff] = []
+    var selectedDiffFile: String?
+    var selectedTab: Int = 0  // 0=Chat, 1=Files, 2=Settings
 
     private let apiClient = APIClient()
     private let sseClient = SSEClient()
@@ -92,7 +105,10 @@ final class AppState {
 
     func selectSession(_ session: Session) {
         currentSessionID = session.id
-        Task { await loadMessages() }
+        Task {
+            await loadMessages()
+            await loadSessionDiff()
+        }
     }
 
     func createSession() async {
@@ -116,6 +132,15 @@ final class AppState {
             partsByMessage = Dictionary(uniqueKeysWithValues: loaded.map { ($0.info.id, $0.parts) })
         } catch {
             connectionError = error.localizedDescription
+        }
+    }
+
+    func loadSessionDiff() async {
+        guard let sessionID = currentSessionID else { sessionDiffs = []; return }
+        do {
+            sessionDiffs = try await apiClient.sessionDiff(sessionID: sessionID)
+        } catch {
+            sessionDiffs = []
         }
     }
 
@@ -151,6 +176,39 @@ final class AppState {
         guard let sessionID = currentSessionID else { return }
         do {
             try await apiClient.abort(sessionID: sessionID)
+        } catch {
+            connectionError = error.localizedDescription
+        }
+    }
+
+    func summarizeSession() async {
+        guard let sessionID = currentSessionID else { return }
+        do {
+            try await apiClient.summarize(sessionID: sessionID)
+            await loadMessages()
+            await refreshSessions()
+        } catch {
+            connectionError = error.localizedDescription
+        }
+    }
+
+    func updateSessionTitle(sessionID: String, title: String) async {
+        do {
+            _ = try await apiClient.updateSession(sessionID: sessionID, title: title)
+            await refreshSessions()
+        } catch {
+            connectionError = error.localizedDescription
+        }
+    }
+
+    func respondPermission(_ perm: PendingPermission, approved: Bool) async {
+        guard approved else {
+            pendingPermissions.removeAll { $0.id == perm.id }
+            return
+        }
+        do {
+            try await apiClient.respondPermission(sessionID: perm.sessionID, permissionID: perm.permissionID)
+            pendingPermissions.removeAll { $0.id == perm.id }
         } catch {
             connectionError = error.localizedDescription
         }
@@ -193,6 +251,16 @@ final class AppState {
         case "message.updated", "message.part.updated":
             if currentSessionID != nil {
                 await loadMessages()
+                await loadSessionDiff()
+            }
+        case "permission.asked":
+            if let sessionID = props["sessionID"]?.value as? String,
+               let permissionID = props["permissionID"]?.value as? String {
+                let desc = (props["description"]?.value as? String) ?? (props["tool"]?.value as? String) ?? "Permission required"
+                let perm = PendingPermission(sessionID: sessionID, permissionID: permissionID, description: desc)
+                if !pendingPermissions.contains(where: { $0.permissionID == permissionID }) {
+                    pendingPermissions.append(perm)
+                }
             }
         default:
             break
@@ -205,8 +273,16 @@ final class AppState {
         if isConnected {
             await loadSessions()
             await loadMessages()
+            await loadSessionDiff()
             let statuses = try? await apiClient.sessionStatus()
             if let statuses { sessionStatuses = statuses }
         }
     }
+}
+
+struct PendingPermission: Identifiable {
+    var id: String { "\(sessionID)/\(permissionID)" }
+    let sessionID: String
+    let permissionID: String
+    let description: String
 }

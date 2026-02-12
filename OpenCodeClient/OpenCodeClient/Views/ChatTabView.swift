@@ -10,10 +10,55 @@ struct ChatTabView: View {
     @State private var inputText = ""
     @State private var isSending = false
     @State private var showSessionList = false
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                HStack {
+                    HStack(spacing: 8) {
+                        Button {
+                            Task {
+                                await state.createSession()
+                            }
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .font(.title3)
+                        }
+                        Button {
+                            renameText = state.currentSession?.title ?? ""
+                            showRenameAlert = true
+                        } label: {
+                            Image(systemName: "pencil.circle")
+                                .font(.title3)
+                        }
+                        Button {
+                            showSessionList = true
+                        } label: {
+                            Image(systemName: "list.bullet")
+                                .font(.title3)
+                        }
+                    }
+                    Spacer()
+                    HStack(spacing: 6) {
+                        ForEach(Array(state.modelPresets.enumerated()), id: \.element.id) { index, preset in
+                            Button {
+                                state.selectedModelIndex = index
+                            } label: {
+                                Image(systemName: modelIcon(preset))
+                                    .font(.subheadline)
+                                    .padding(6)
+                                    .background(state.selectedModelIndex == index ? Color.accentColor : Color.gray.opacity(0.2))
+                                    .foregroundColor(state.selectedModelIndex == index ? .white : .primary)
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 if let status = state.currentSessionStatus {
                     HStack {
                         Circle()
@@ -26,13 +71,33 @@ struct ChatTabView: View {
                     .padding(.vertical, 4)
                 }
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            ForEach(state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }) { perm in
+                                PermissionCardView(permission: perm) { approved in
+                                    Task { await state.respondPermission(perm, approved: approved) }
+                                }
+                            }
                         ForEach(state.messages, id: \.info.id) { msg in
-                            MessageRowView(message: msg)
+                            MessageRowView(message: msg, state: state)
+                        }
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottom")
+                        }
+                        .padding()
+                    }
+                    .scrollDismissesKeyboard(.immediately)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                    .onChange(of: scrollAnchor) { _, _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
-                    .padding()
                 }
 
                 HStack(alignment: .bottom, spacing: 8) {
@@ -76,20 +141,6 @@ struct ChatTabView: View {
                 .padding()
             }
             .navigationTitle(state.currentSession?.title ?? "Chat")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showSessionList = true
-                    } label: {
-                        Image(systemName: "list.bullet")
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("New") {
-                        Task { await state.createSession() }
-                    }
-                }
-            }
             .sheet(isPresented: $showSessionList) {
                 SessionListView(state: state)
             }
@@ -98,12 +149,37 @@ struct ChatTabView: View {
                 set: { if !$0 { state.sendError = nil } }
             )) {
                 Button("确定") { state.sendError = nil }
-            } message: {
+            }             message: {
                 if let error = state.sendError {
                     Text(error)
                 }
             }
+            .alert("重命名 Session", isPresented: $showRenameAlert) {
+                TextField("标题", text: $renameText)
+                Button("取消", role: .cancel) { showRenameAlert = false }
+                Button("确定") {
+                    guard let id = state.currentSessionID else { return }
+                    Task { await state.updateSessionTitle(sessionID: id, title: renameText) }
+                    showRenameAlert = false
+                }
+            } message: {
+                Text("输入新标题")
+            }
         }
+    }
+
+    private func modelIcon(_ preset: ModelPreset) -> String {
+        if preset.displayName.contains("GPT") { return "cpu" }
+        if preset.displayName.contains("Opus") { return "brain" }
+        if preset.displayName.contains("GLM") { return "sparkles" }
+        return "gear"
+    }
+
+    /// 内容变化时用于触发自动滚动
+    private var scrollAnchor: String {
+        let perm = state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count
+        let msg = state.messages.map { "\($0.info.id)-\($0.parts.count)" }.joined(separator: "|")
+        return "\(perm)-\(msg)"
     }
 
     private func statusColor(_ status: SessionStatus) -> Color {
@@ -125,6 +201,7 @@ struct ChatTabView: View {
 
 struct MessageRowView: View {
     let message: MessageWithParts
+    @Bindable var state: AppState
 
     @ViewBuilder
     private func markdownText(_ text: String) -> some View {
@@ -138,6 +215,8 @@ struct MessageRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if message.info.isUser {
+                Divider()
+                    .padding(.vertical, 4)
                 userMessageView
             } else {
                 assistantMessageView
@@ -170,20 +249,177 @@ struct MessageRowView: View {
                     markdownText(part.text ?? "")
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                } else if part.isReasoning {
+                    ReasoningPartView(part: part)
                 } else if part.isTool {
-                    HStack {
-                        Image(systemName: "wrench.fill")
-                        Text(part.tool ?? "tool")
-                        Text(part.stateDisplay ?? "")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(8)
+                    ToolPartView(part: part)
+                } else if part.isStepStart {
+                    EmptyView()
+                } else if part.isStepFinish {
+                    EmptyView()
+                } else if part.isPatch {
+                    PatchPartView(part: part, state: state)
                 }
             }
         }
+    }
+}
+
+struct ReasoningPartView: View {
+    let part: Part
+    @State private var isExpanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            Group {
+                if let text = part.text, !text.isEmpty, let attr = try? AttributedString(markdown: text) {
+                    Text(attr)
+                } else {
+                    Text(part.text ?? "")
+                }
+            }
+            .font(.caption2)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            HStack {
+                Image(systemName: "brain.head.profile")
+                Text("Thinking...")
+            }
+            .font(.caption2)
+            .padding(8)
+        }
+        .padding(.trailing, 16)
+        .background(Color.purple.opacity(0.08))
+        .cornerRadius(8)
+    }
+}
+
+struct ToolPartView: View {
+    let part: Part
+    @State private var isExpanded: Bool
+
+    init(part: Part) {
+        self.part = part
+        // running 默认展开，completed 默认收起
+        self._isExpanded = State(initialValue: part.stateDisplay?.lowercased() == "running")
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                if let input = part.toolInputSummary ?? part.metadata?.input, !input.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Command / Input")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(input)
+                            .font(.system(.caption2, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                }
+                if let path = part.metadata?.path {
+                    LabeledContent("Path", value: path)
+                }
+                if let output = part.toolOutput, !output.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Output")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(output)
+                            .font(.system(.caption2, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            .font(.caption2)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "wrench.fill")
+                Text(part.tool ?? "tool")
+                if let reason = part.toolReason ?? part.metadata?.title, !reason.isEmpty {
+                    Text(": \(reason)")
+                        .foregroundStyle(.secondary)
+                } else if let status = part.stateDisplay, !status.isEmpty {
+                    Text(status)
+                        .foregroundStyle(.secondary)
+                }
+                if part.stateDisplay?.lowercased() == "running" {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                }
+            }
+            .font(.caption2)
+        }
+        .onChange(of: part.stateDisplay) { _, newValue in
+            if newValue?.lowercased() == "completed" {
+                isExpanded = false
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+struct PatchPartView: View {
+    let part: Part
+    @Bindable var state: AppState
+
+    var body: some View {
+        let fileCount = part.files?.count ?? 0
+        Button {
+            state.selectedTab = 1
+            if let first = part.files?.first {
+                state.selectedDiffFile = first.path
+            }
+        } label: {
+            HStack {
+                Image(systemName: "doc.text")
+                Text("\(fileCount) file(s) changed")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct PermissionCardView: View {
+    let permission: PendingPermission
+    let onRespond: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("Permission required")
+                    .font(.headline)
+            }
+            Text(permission.description)
+                .font(.subheadline)
+            HStack(spacing: 8) {
+                Button("Approve") {
+                    onRespond(true)
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Reject") {
+                    onRespond(false)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.15))
+        .cornerRadius(8)
     }
 }
