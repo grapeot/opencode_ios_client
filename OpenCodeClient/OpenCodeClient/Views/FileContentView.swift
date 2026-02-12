@@ -61,12 +61,14 @@ struct FileContentView: View {
     private func loadContent() {
         isLoading = true
         loadError = nil
+        print("[FileContentView] loadContent path=\(filePath)")
         Task {
             do {
                 let fc = try await state.loadFileContent(path: filePath)
                 await MainActor.run {
                     content = fc.text ?? fc.content
                     isLoading = false
+                    print("[FileContentView] loaded type=\(fc.type) contentLen=\(content?.count ?? 0)")
                     if content == nil && fc.type == "binary" {
                         loadError = "Binary file"
                     }
@@ -75,6 +77,7 @@ struct FileContentView: View {
                 await MainActor.run {
                     loadError = error.localizedDescription
                     isLoading = false
+                    print("[FileContentView] load failed: \(error)")
                 }
             }
         }
@@ -115,22 +118,36 @@ struct CodeView: View {
     }
 }
 
-/// Markdown preview using MarkdownUI or AttributedString
+/// Markdown preview. Native AttributedString 不支持 tables，复杂内容可能解析失败。
 struct MarkdownPreviewView: View {
     let text: String
 
+    private var markdownWithBreaks: String {
+        // Standard Markdown hard break: two spaces at the end of a line.
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\n", with: "  \n")
+    }
+
     var body: some View {
         ScrollView {
-            if let attr = try? AttributedString(markdown: text) {
-                Text(attr)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-            } else {
-                Text(text)
-                    .font(.body)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+            Group {
+                if let attr = try? AttributedString(markdown: markdownWithBreaks, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                    Text(attr)
+                } else if let attr = try? AttributedString(markdown: markdownWithBreaks) {
+                    Text(attr)
+                } else {
+                    // 回退时按行渲染，保证换行
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(text.components(separatedBy: .newlines).enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(.body, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
         }
     }
 }
