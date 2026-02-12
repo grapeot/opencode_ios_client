@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import MarkdownUI
 
 struct FileContentView: View {
     @Bindable var state: AppState
@@ -118,52 +119,15 @@ struct CodeView: View {
     }
 }
 
-/// Markdown preview. 
-///
-/// Apple's AttributedString(markdown:) in SwiftUI Text ignores line breaks regardless
-/// of parsing mode (.full, .inlineOnly, etc.). The only reliable workaround is to split
-/// the text by newlines and render each line as its own Text(AttributedString) in a VStack.
+/// Markdown preview using MarkdownUI library for full GFM rendering.
 struct MarkdownPreviewView: View {
     let text: String
 
-    private var lines: [String] {
-        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
-        let result = normalized.components(separatedBy: "\n")
-        return result
-    }
-
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
-                    if line.trimmingCharacters(in: .whitespaces).isEmpty {
-                        // Empty line → render as spacing
-                        Spacer().frame(height: 8)
-                    } else if let attr = try? AttributedString(markdown: line, options: .init(interpretedSyntax: .full)) {
-                        Text(attr)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(line)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-        }
-        .onAppear {
-            print("[MarkdownPreview] text length: \(text.count)")
-            print("[MarkdownPreview] lines count: \(lines.count)")
-            print("[MarkdownPreview] contains \\n: \(text.contains("\n"))")
-            print("[MarkdownPreview] contains \\r\\n: \(text.contains("\r\n"))")
-            print("[MarkdownPreview] contains literal \\\\n: \(text.contains("\\n"))")
-            if text.count > 200 {
-                let preview = String(text.prefix(200))
-                print("[MarkdownPreview] first 200 chars: \(preview.debugDescription)")
-            } else {
-                print("[MarkdownPreview] full text: \(text.debugDescription)")
-            }
+            Markdown(text)
+                .textSelection(.enabled)
+                .padding()
         }
     }
 }
