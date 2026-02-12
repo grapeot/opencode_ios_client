@@ -41,6 +41,8 @@ final class AppState {
     var selectedTab: Int = 0  // 0=Chat, 1=Files, 2=Settings
     var fileToOpenInFilesTab: String?  // 从 Chat 中 tool 点击跳转时设置，Files tab 或 sheet 展示
 
+    var sessionTodos: [String: [TodoItem]] = [:]
+
     var fileTreeRoot: [FileNode] = []
     var fileStatusMap: [String: String] = [:]  // path -> status
     var expandedPaths: Set<String> = []
@@ -70,6 +72,11 @@ final class AppState {
 
     var isBusy: Bool {
         currentSessionStatus?.type == "busy"
+    }
+
+    var currentTodos: [TodoItem] {
+        guard let id = currentSessionID else { return [] }
+        return sessionTodos[id] ?? []
     }
 
     func configure(serverURL: String, username: String? = nil, password: String? = nil) {
@@ -116,6 +123,17 @@ final class AppState {
         Task {
             await loadMessages()
             await loadSessionDiff()
+            await loadSessionTodos()
+        }
+    }
+
+    func loadSessionTodos() async {
+        guard let sessionID = currentSessionID else { return }
+        do {
+            let todos = try await apiClient.sessionTodos(sessionID: sessionID)
+            sessionTodos[sessionID] = todos
+        } catch {
+            // keep previous value if any
         }
     }
 
@@ -330,6 +348,14 @@ final class AppState {
                     pendingPermissions.append(perm)
                 }
             }
+        case "todo.updated":
+            if let sessionID = props["sessionID"]?.value as? String,
+               let todosObj = props["todos"]?.value,
+               JSONSerialization.isValidJSONObject(todosObj),
+               let todosData = try? JSONSerialization.data(withJSONObject: todosObj),
+               let decoded = try? JSONDecoder().decode([TodoItem].self, from: todosData) {
+                sessionTodos[sessionID] = decoded
+            }
         default:
             break
         }
@@ -342,6 +368,7 @@ final class AppState {
             await loadSessions()
             await loadMessages()
             await loadSessionDiff()
+            await loadSessionTodos()
             await loadFileTree()
             await loadFileStatus()
             let statuses = try? await apiClient.sessionStatus()

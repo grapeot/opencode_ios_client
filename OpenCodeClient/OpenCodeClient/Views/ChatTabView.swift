@@ -80,6 +80,9 @@ struct ChatTabView: View {
                                     Task { await state.respondPermission(perm, approved: approved) }
                                 }
                             }
+                            if !state.currentTodos.isEmpty {
+                                SessionTodoCardView(todos: state.currentTodos)
+                            }
                         ForEach(state.messages, id: \.info.id) { msg in
                             MessageRowView(message: msg, state: state)
                         }
@@ -341,6 +344,24 @@ struct ToolPartView: View {
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
+                if let reason = part.toolReason ?? part.metadata?.title, !reason.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reason")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(reason)
+                            .font(.caption2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if part.tool == "todowrite" {
+                    let todos = part.toolTodos.isEmpty ? (state.sessionTodos[part.sessionID] ?? []) : part.toolTodos
+                    if !todos.isEmpty {
+                        TodoListInlineView(todos: todos)
+                    }
+                }
                 if let input = part.toolInputSummary ?? part.metadata?.input, !input.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Command / Input")
@@ -388,8 +409,12 @@ struct ToolPartView: View {
                 Text(part.tool ?? "tool")
                     .fontWeight(.medium)
                 if let reason = part.toolReason ?? part.metadata?.title, !reason.isEmpty {
-                    Text("· \(reason)")
+                    Text("·")
                         .foregroundStyle(.secondary)
+                    Text(reason)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
                 } else if let status = part.stateDisplay, !status.isEmpty {
                     Text(status)
                         .foregroundStyle(.secondary)
@@ -446,8 +471,9 @@ struct ToolPartView: View {
     }
 
     private func openFile(_ path: String) {
-        print("[ToolPartView] openFile path=\(path)")
-        state.fileToOpenInFilesTab = path
+        let p = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("[ToolPartView] openFile path=\(p)")
+        state.fileToOpenInFilesTab = p
         state.selectedTab = 1
     }
 }
@@ -499,7 +525,8 @@ struct PatchPartView: View {
     }
 
     private func openFile(_ path: String) {
-        state.fileToOpenInFilesTab = path
+        let p = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        state.fileToOpenInFilesTab = p
         state.selectedTab = 1
     }
 }
@@ -549,5 +576,59 @@ struct PermissionCardView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
+    }
+}
+
+struct SessionTodoCardView: View {
+    let todos: [TodoItem]
+    @State private var isExpanded = false
+
+    private var completed: Int {
+        todos.filter { $0.isCompleted }.count
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            TodoListInlineView(todos: todos)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checklist")
+                    .foregroundStyle(.blue.opacity(0.7))
+                Text("Task List")
+                    .fontWeight(.semibold)
+                Text("\(completed)/\(todos.count)")
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .font(.caption2)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.blue.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct TodoListInlineView: View {
+    let todos: [TodoItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(todos) { todo in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(todo.isCompleted ? .green : .secondary)
+                        .font(.caption)
+                        .padding(.top, 1)
+                    Text(todo.content)
+                        .font(.caption2)
+                        .foregroundStyle(todo.isCompleted ? .secondary : .primary)
+                        .strikethrough(todo.isCompleted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 }

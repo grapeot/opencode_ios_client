@@ -135,7 +135,7 @@ final class AppState {
 #### 5.1 消息流
 
 - **布局**：OpenCode 风格，无左右气泡；人类消息灰色背景，AI 消息白/透明
-- **Part 渲染**：text (Markdown)、reasoning (折叠)、tool (卡片)、patch (跳转 Files)。tool/patch 若含文件路径，点击可「在 File Tree 中打开」预览
+- **Part 渲染**：text (Markdown)、reasoning (折叠)、tool (卡片)、patch (跳转 Files)。tool/patch 若含文件路径，点击可「在 File Tree 中打开」预览；其中 `todowrite` tool 需渲染为 Task List（todo）视图，并响应 SSE `todo.updated`
 - **流式（Sync Streaming）**：`message.part.updated` 带 `delta` 时追加到对应 Part，实现打字机效果；无 delta 时全量 reload。Tool 卡片：running 展开、completed 默认收起
 - **主题**：跟随 `@Environment(\.colorScheme)`，Light/Dark
 

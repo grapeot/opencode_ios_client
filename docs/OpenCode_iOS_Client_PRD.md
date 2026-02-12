@@ -108,6 +108,7 @@ App 采用底部 Tab Bar，三个 Tab：
 - `text` — Markdown 渲染（支持代码块、链接、列表等）
 - `reasoning` — 折叠面板，标题 "Thinking..."，点击展开查看推理过程
 - `tool` — 工具调用卡片，显示工具名称和状态（pending → running → completed/error）。**running 时展开**显示进度（spinner），**completed 时默认收起**，可点击展开查看元数据（如文件路径、命令输出）
+- `tool`（todowrite）— 渲染为 Task List（todo）卡片：展示条目列表与完成进度（completed/total）；todo 的全量内容可来自 tool 输入/metadata，且会通过 SSE `todo.updated` 事件更新
 - `step-start` / `step-finish` — 渲染为步骤分隔线，显示 token 用量和成本
 - `patch` — 文件变更摘要卡片，显示修改的文件列表，点击可跳转到 Files Tab 的 File Tree 中打开该文件预览
 - `tool`（write/edit/apply_patch/read_file 等）— 若 part 含文件路径（metadata.path、state.input.path、files 数组、或 patchText 解析），点击可弹出选项「在 File Tree 中打开」，直接打开文件预览
