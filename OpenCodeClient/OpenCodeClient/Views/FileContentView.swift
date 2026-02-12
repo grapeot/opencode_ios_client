@@ -118,50 +118,52 @@ struct CodeView: View {
     }
 }
 
-/// Markdown preview. Native AttributedString 不支持 tables，复杂内容可能解析失败。
+/// Markdown preview. 
 ///
-/// Key insight: SwiftUI's `.full` Markdown parsing treats single \n as soft breaks
-/// (standard Markdown spec). To preserve visible line breaks, we convert single \n
-/// to Markdown hard breaks (two trailing spaces + \n), while keeping \n\n as paragraph breaks.
+/// Apple's AttributedString(markdown:) in SwiftUI Text ignores line breaks regardless
+/// of parsing mode (.full, .inlineOnly, etc.). The only reliable workaround is to split
+/// the text by newlines and render each line as its own Text(AttributedString) in a VStack.
 struct MarkdownPreviewView: View {
     let text: String
 
-    /// Pre-process: convert single newlines to Markdown hard breaks, preserve paragraph breaks.
-    private var processedMarkdown: String {
+    private var lines: [String] {
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
-        // Split by paragraph breaks (double newline), process each paragraph separately
-        let paragraphs = normalized.components(separatedBy: "\n\n")
-        let processed = paragraphs.map { paragraph in
-            // Within each paragraph, convert single \n to hard break (two spaces + \n)
-            paragraph.replacingOccurrences(of: "\n", with: "  \n")
-        }
-        return processed.joined(separator: "\n\n")
+        let result = normalized.components(separatedBy: "\n")
+        return result
     }
 
     var body: some View {
         ScrollView {
-            Group {
-                // Try full Markdown parsing with pre-processed hard breaks
-                if let attr = try? AttributedString(markdown: processedMarkdown, options: .init(interpretedSyntax: .full)) {
-                    Text(attr)
-                        .textSelection(.enabled)
-                // Fallback: inline-only preserving whitespace (no block formatting but line breaks work)
-                } else if let attr = try? AttributedString(markdown: processedMarkdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-                    Text(attr)
-                        .textSelection(.enabled)
-                } else {
-                    // 最终回退：按行渲染
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(text.components(separatedBy: .newlines).enumerated()), id: \.offset) { _, line in
-                            Text(line)
-                                .font(.system(.body, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                    if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                        // Empty line → render as spacing
+                        Spacer().frame(height: 8)
+                    } else if let attr = try? AttributedString(markdown: line, options: .init(interpretedSyntax: .full)) {
+                        Text(attr)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text(line)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
+        }
+        .onAppear {
+            print("[MarkdownPreview] text length: \(text.count)")
+            print("[MarkdownPreview] lines count: \(lines.count)")
+            print("[MarkdownPreview] contains \\n: \(text.contains("\n"))")
+            print("[MarkdownPreview] contains \\r\\n: \(text.contains("\r\n"))")
+            print("[MarkdownPreview] contains literal \\\\n: \(text.contains("\\n"))")
+            if text.count > 200 {
+                let preview = String(text.prefix(200))
+                print("[MarkdownPreview] first 200 chars: \(preview.debugDescription)")
+            } else {
+                print("[MarkdownPreview] full text: \(text.debugDescription)")
+            }
         }
     }
 }
