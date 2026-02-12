@@ -135,9 +135,15 @@ final class AppState {
 #### 5.1 消息流
 
 - **布局**：OpenCode 风格，无左右气泡；人类消息灰色背景，AI 消息白/透明
-- **Part 渲染**：text (Markdown)、reasoning (折叠)、tool (卡片)、patch (跳转 Files)
-- **流式**：`message.part.updated` 带 `delta` 时追加到对应 Part，实现打字机效果
+- **Part 渲染**：text (Markdown)、reasoning (折叠)、tool (卡片)、patch (跳转 Files)。tool/patch 若含文件路径，点击可「在 File Tree 中打开」预览
+- **流式（Sync Streaming）**：`message.part.updated` 带 `delta` 时追加到对应 Part，实现打字机效果；无 delta 时全量 reload。Tool 卡片：running 展开、completed 默认收起
 - **主题**：跟随 `@Environment(\.colorScheme)`，Light/Dark
+
+#### 5.1.1 Sync Streaming 实现
+
+- **Delta 处理**：`handleSSEEvent` 收到 `message.part.updated` 时，若 `properties.delta` 存在，则定位 `messageID`/`partID` 对应 Part，将 delta 追加到 text；否则执行 `loadMessages()` 全量刷新
+- **Tool 折叠**：`ToolPartView` 根据 `part.state.status`：`running` 时 `isExpanded = true`，`completed` 时 `isExpanded = false`（默认），用户可手动切换
+- **限制**：Tool output 的实时流式（terminal 逐行）当前 API 不支持，见 PRD 调研
 
 #### 5.2 文档审查
 

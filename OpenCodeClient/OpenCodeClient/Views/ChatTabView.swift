@@ -46,12 +46,13 @@ struct ChatTabView: View {
                             Button {
                                 state.selectedModelIndex = index
                             } label: {
-                                Image(systemName: modelIcon(preset))
+                                Text(preset.displayName)
                                     .font(.subheadline)
-                                    .padding(6)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
                                     .background(state.selectedModelIndex == index ? Color.accentColor : Color.gray.opacity(0.2))
                                     .foregroundColor(state.selectedModelIndex == index ? .white : .primary)
-                                    .clipShape(Circle())
+                                    .cornerRadius(8)
                             }
                             .buttonStyle(.plain)
                         }
@@ -81,6 +82,9 @@ struct ChatTabView: View {
                             }
                         ForEach(state.messages, id: \.info.id) { msg in
                             MessageRowView(message: msg, state: state)
+                        }
+                        if let streamingPart = streamingReasoningPart {
+                            StreamingReasoningView(part: streamingPart)
                         }
                             Color.clear
                                 .frame(height: 1)
@@ -168,11 +172,12 @@ struct ChatTabView: View {
         }
     }
 
-    private func modelIcon(_ preset: ModelPreset) -> String {
-        if preset.displayName.contains("GPT") { return "cpu" }
-        if preset.displayName.contains("Opus") { return "brain" }
-        if preset.displayName.contains("GLM") { return "sparkles" }
-        return "gear"
+    /// 仅在 streaming 时显示：当 session busy 且最后一条 assistant 消息的最后一个 part 是 reasoning
+    private var streamingReasoningPart: Part? {
+        guard state.isBusy else { return nil }
+        guard let lastMsg = state.messages.last, lastMsg.info.isAssistant else { return nil }
+        guard let lastPart = lastMsg.parts.last, lastPart.isReasoning else { return nil }
+        return lastPart
     }
 
     /// 内容变化时用于触发自动滚动
@@ -244,15 +249,13 @@ struct MessageRowView: View {
 
     private var assistantMessageView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(message.parts, id: \.id) { part in
+            ForEach(message.parts.filter { !$0.isReasoning }, id: \.id) { part in
                 if part.isText {
                     markdownText(part.text ?? "")
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                } else if part.isReasoning {
-                    ReasoningPartView(part: part)
                 } else if part.isTool {
-                    ToolPartView(part: part)
+                    ToolPartView(part: part, state: state)
                 } else if part.isStepStart {
                     EmptyView()
                 } else if part.isStepFinish {
@@ -265,29 +268,18 @@ struct MessageRowView: View {
     }
 }
 
-struct ReasoningPartView: View {
+/// 仅在 streaming 时显示，think 完成后消失
+struct StreamingReasoningView: View {
     let part: Part
-    @State private var isExpanded = false
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            Group {
-                if let text = part.text, !text.isEmpty, let attr = try? AttributedString(markdown: text) {
-                    Text(attr)
-                } else {
-                    Text(part.text ?? "")
-                }
-            }
-            .font(.caption2)
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            HStack {
-                Image(systemName: "brain.head.profile")
-                Text("Thinking...")
-            }
-            .font(.caption2)
-            .padding(8)
+        VStack(alignment: .leading, spacing: 4) {
+            Text((part.text ?? "").isEmpty ? "Thinking..." : (part.text ?? ""))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .padding(8)
         }
         .padding(.trailing, 16)
         .background(Color.purple.opacity(0.08))
@@ -297,11 +289,13 @@ struct ReasoningPartView: View {
 
 struct ToolPartView: View {
     let part: Part
+    @Bindable var state: AppState
     @State private var isExpanded: Bool
+    @State private var showOpenFileSheet = false
 
-    init(part: Part) {
+    init(part: Part, state: AppState) {
         self.part = part
-        // running 默认展开，completed 默认收起
+        self.state = state
         self._isExpanded = State(initialValue: part.stateDisplay?.lowercased() == "running")
     }
 
@@ -333,6 +327,16 @@ struct ToolPartView: View {
                             .textSelection(.enabled)
                     }
                 }
+                if !part.filePathsForNavigation.isEmpty {
+                    ForEach(part.filePathsForNavigation, id: \.self) { path in
+                        Button {
+                            openFile(path)
+                        } label: {
+                            Label("在 File Tree 中打开 \(path)", systemImage: "folder.badge.plus")
+                                .font(.caption2)
+                        }
+                    }
+                }
             }
             .font(.caption2)
             .padding(8)
@@ -352,6 +356,20 @@ struct ToolPartView: View {
                     ProgressView()
                         .scaleEffect(0.5)
                 }
+                Spacer()
+                if !part.filePathsForNavigation.isEmpty {
+                    Button {
+                        if part.filePathsForNavigation.count == 1 {
+                            openFile(part.filePathsForNavigation[0])
+                        } else {
+                            showOpenFileSheet = true
+                        }
+                    } label: {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .font(.caption2)
         }
@@ -364,19 +382,49 @@ struct ToolPartView: View {
         .padding(8)
         .background(Color.blue.opacity(0.1))
         .cornerRadius(8)
+        .contextMenu {
+            if !part.filePathsForNavigation.isEmpty {
+                ForEach(part.filePathsForNavigation, id: \.self) { path in
+                    Button("在 File Tree 中打开 \(path)") {
+                        openFile(path)
+                    }
+                }
+            }
+        }
+        .confirmationDialog("打开文件", isPresented: $showOpenFileSheet) {
+            ForEach(part.filePathsForNavigation, id: \.self) { path in
+                Button("在 File Tree 中打开 \(path)") {
+                    openFile(path)
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("选择要打开的文件")
+        }
+    }
+
+    private func openFile(_ path: String) {
+        print("[ToolPartView] openFile path=\(path)")
+        state.fileToOpenInFilesTab = path
+        state.selectedTab = 1
     }
 }
 
 struct PatchPartView: View {
     let part: Part
     @Bindable var state: AppState
+    @State private var showOpenFileSheet = false
 
     var body: some View {
         let fileCount = part.files?.count ?? 0
         Button {
-            state.selectedTab = 1
-            if let first = part.files?.first {
-                state.selectedDiffFile = first.path
+            let paths = part.filePathsForNavigation
+            if paths.count == 1 {
+                openFile(paths[0])
+            } else if paths.count > 1 {
+                showOpenFileSheet = true
+            } else {
+                state.selectedTab = 1
             }
         } label: {
             HStack {
@@ -389,6 +437,21 @@ struct PatchPartView: View {
             .cornerRadius(8)
         }
         .buttonStyle(.plain)
+        .confirmationDialog("打开文件", isPresented: $showOpenFileSheet) {
+            ForEach(part.filePathsForNavigation, id: \.self) { path in
+                Button("在 File Tree 中打开 \(path)") {
+                    openFile(path)
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("选择要打开的文件")
+        }
+    }
+
+    private func openFile(_ path: String) {
+        state.fileToOpenInFilesTab = path
+        state.selectedTab = 1
     }
 }
 

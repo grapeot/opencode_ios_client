@@ -39,6 +39,7 @@ final class AppState {
     var sessionDiffs: [FileDiff] = []
     var selectedDiffFile: String?
     var selectedTab: Int = 0  // 0=Chat, 1=Files, 2=Settings
+    var fileToOpenInFilesTab: String?  // 从 Chat 中 tool 点击跳转时设置，Files tab 或 sheet 展示
 
     var fileTreeRoot: [FileNode] = []
     var fileStatusMap: [String: String] = [:]  // path -> status

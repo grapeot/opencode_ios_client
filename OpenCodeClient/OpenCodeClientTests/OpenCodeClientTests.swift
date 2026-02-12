@@ -95,4 +95,14 @@ struct OpenCodeClientTests {
         #expect(msg.parts[0].stateDisplay == nil)
         #expect(msg.parts[1].stateDisplay == "running")
     }
+
+    @Test func partFilePathsFromApplyPatch() throws {
+        // patchText with "*** Add File: path" - path should be extracted
+        let partJson = """
+        {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","text":null,"tool":"apply_patch","callID":"c1","state":{"status":"completed","input":{"patchText":"*** Begin Patch\\n*** Add File: research/deepseek-news-2026-02.md\\n+# content"},"metadata":{}},"metadata":null,"files":null}
+        """
+        let data = partJson.data(using: .utf8)!
+        let part = try JSONDecoder().decode(Part.self, from: data)
+        #expect(part.filePathsForNavigation.contains("research/deepseek-news-2026-02.md"))
+    }
 }
