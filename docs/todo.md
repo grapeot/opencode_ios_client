@@ -7,7 +7,6 @@
 3. ~~Tool call 卡片的“理由/标题”在收起态只显示一到两行，超出用省略号；展开后显示完整内容。~~
 4. ~~支持 OpenCode 的 session task list（todo）：拉取、SSE 更新、todowrite 渲染为 Task List 卡片。~~
 
-## 待办（Phase 3）
+## 待办（Phase 4+）
 
-- **Think Streaming delta**：解析 `message.part.updated` 的 `delta`，增量追加实现打字机效果（见 [THINK_STREAMING.md](THINK_STREAMING.md)）
-- **iPad / Vision Pro 布局**：无 Tab Bar；左右分栏（左 Files 预览、右 Chat）；Settings 作为第一行 toolbar 按钮（见 PRD §4.1.2）
+- **可选**：从 Chat 点击「在 File Tree 中打开」时，在 iPad  split 布局下于左栏展示而非 sheet

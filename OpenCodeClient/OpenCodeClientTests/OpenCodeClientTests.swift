@@ -58,6 +58,23 @@ struct OpenCodeClientTests {
         #expect(event.payload.type == "message.updated")
     }
 
+    // Think Streaming: message.part.updated with delta for typing effect
+    @Test func sseEventMessagePartUpdatedWithDelta() throws {
+        let json = """
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","messageID":"m1","delta":"Hello ","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"reasoning"}}}}
+        """
+        let data = json.data(using: .utf8)!
+        let event = try JSONDecoder().decode(SSEEvent.self, from: data)
+        #expect(event.payload.type == "message.part.updated")
+        let props = event.payload.properties ?? [:]
+        #expect((props["sessionID"]?.value as? String) == "s1")
+        #expect((props["delta"]?.value as? String) == "Hello ")
+        let partObj = props["part"]?.value as? [String: Any]
+        #expect(partObj != nil)
+        #expect((partObj?["messageID"] as? String) == "m1")
+        #expect((partObj?["id"] as? String) == "p1")
+    }
+
     // Regression: Part.state can be String or object (ToolState); was causing loadMessages decode failure during thinking
     @Test func partDecodingWithStateAsString() throws {
         let partJson = """

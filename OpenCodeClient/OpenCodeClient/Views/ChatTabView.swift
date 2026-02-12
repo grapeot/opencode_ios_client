@@ -8,6 +8,8 @@ import MarkdownUI
 
 struct ChatTabView: View {
     @Bindable var state: AppState
+    var showSettingsInToolbar: Bool = false
+    var onSettingsTap: (() -> Void)?
     @State private var inputText = ""
     @State private var isSending = false
     @State private var showSessionList = false
@@ -66,6 +68,15 @@ struct ChatTabView: View {
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                        }
+                        if showSettingsInToolbar, let onSettingsTap {
+                            Button {
+                                onSettingsTap()
+                            } label: {
+                                Image(systemName: "gear")
+                                    .font(.title3)
+                                    .symbolRenderingMode(.hierarchical)
+                            }
                         }
                     }
                 }

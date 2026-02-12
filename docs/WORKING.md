@@ -5,9 +5,9 @@
 ## 当前状态
 
 - **最后更新**：2026-02-12
-- **Phase**：Phase 2 完成，UX 简化完成，UI 打磨完成
+- **Phase**：Phase 3 完成（Think Streaming + iPad 分栏）
 - **编译**：✅ 通过
-- **测试**：✅ 35 个单元测试通过
+- **测试**：✅ 36 个单元测试通过
 
 ## 已完成
 
@@ -32,11 +32,12 @@
 - [x] Chat → 文件跳转：改用 URLComponents 编码 query，统一规范化 file path；补充空内容 warning log
 - [x] Tool 卡片：理由/标题收起态最多两行 + 省略号，展开态显示完整 Reason
 - [x] Session Todo（task list）：支持 `/session/:id/todo` 拉取 + SSE `todo.updated` 更新；`todowrite` tool 渲染为 Task List 卡片
+- [x] Phase 3：Think Streaming delta（见 [THINK_STREAMING.md](THINK_STREAMING.md)）
+- [x] Phase 3：iPad / Vision Pro 布局：`horizontalSizeClass == .regular` 时左右分栏（左 Files、右 Chat），Settings 为 toolbar 按钮
 
 ## 待办
 
-- [ ] **Phase 3：Think Streaming**：delta 增量更新（见 [THINK_STREAMING.md](THINK_STREAMING.md)）；Tool 折叠/Reasoning 展示已实现
-- [ ] **Phase 3：iPad / Vision Pro 布局**：无 Tab，左右分栏（左 Files 预览、右 Chat），Settings 作为第一行 toolbar 按钮
+- [ ] **Phase 4：iPad / Vision Pro 布局优化**：可考虑（可选）从 Chat 点击文件时在左栏展示而非 sheet
 
 ## 遇到的问题
 
