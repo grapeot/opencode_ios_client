@@ -21,7 +21,8 @@
   - [x] 添加 Citadel 依赖（SPM）
   - [x] 实现实际 SSH 连接逻辑（本地 127.0.0.1:4096 → SSH DirectTCPIP → VPS 127.0.0.1:remotePort）
   - [x] 修复 project deployment target（避免 UITests 无法在 simulator 上运行）
-- [ ] **UI 改进**（低优先级）：busy 状态用菊花代替圆形按钮
+- [x] **UI 改进**（低优先级）：busy 状态用菊花代替圆形按钮
+- [ ] **权限请求交互修复**：支持 Allow once / Allow always / Reject，并确保 POST `/session/:id/permissions/:permissionID` 带 body `{"response":...}`
 
 ## 已完成
 

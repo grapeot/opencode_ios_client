@@ -89,19 +89,19 @@ struct ChatTabView: View {
                                     alignment: .leading,
                                     spacing: 10
                                 ) {
-                                    ForEach(currentPermissions) { perm in
-                                        PermissionCardView(permission: perm) { approved in
-                                            Task { await state.respondPermission(perm, approved: approved) }
+                                     ForEach(currentPermissions) { perm in
+                                        PermissionCardView(permission: perm) { response in
+                                            Task { await state.respondPermission(perm, response: response) }
                                         }
+                                     }
+                                 }
+                             } else {
+                                 ForEach(currentPermissions) { perm in
+                                    PermissionCardView(permission: perm) { response in
+                                        Task { await state.respondPermission(perm, response: response) }
                                     }
-                                }
-                            } else {
-                                ForEach(currentPermissions) { perm in
-                                    PermissionCardView(permission: perm) { approved in
-                                        Task { await state.respondPermission(perm, approved: approved) }
-                                    }
-                                }
-                            }
+                                 }
+                             }
                         if messageGroups.isEmpty {
                             emptySessionStateView
                         } else {

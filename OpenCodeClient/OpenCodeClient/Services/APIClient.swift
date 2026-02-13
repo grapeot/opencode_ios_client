@@ -238,9 +238,23 @@ actor APIClient {
         return try JSONDecoder().decode([String: SessionStatus].self, from: data)
     }
 
-    func respondPermission(sessionID: String, permissionID: String) async throws {
-        let (_, response) = try await makeRequest(path: "/session/\(sessionID)/permissions/\(permissionID)", method: "POST")
-        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+    enum PermissionResponse: String, Encodable {
+        case once
+        case always
+        case reject
+    }
+
+    func respondPermission(sessionID: String, permissionID: String, response: PermissionResponse) async throws {
+        struct Body: Encodable {
+            let response: PermissionResponse
+        }
+        let data = try JSONEncoder().encode(Body(response: response))
+        let (_, httpResponse) = try await makeRequest(
+            path: "/session/\(sessionID)/permissions/\(permissionID)",
+            method: "POST",
+            body: data
+        )
+        if let http = httpResponse as? HTTPURLResponse, http.statusCode != 200 {
             throw APIError.httpError(statusCode: http.statusCode, data: Data())
         }
     }

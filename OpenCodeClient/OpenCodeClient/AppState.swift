@@ -882,13 +882,9 @@ final class AppState {
         }
     }
 
-    func respondPermission(_ perm: PendingPermission, approved: Bool) async {
-        guard approved else {
-            pendingPermissions.removeAll { $0.id == perm.id }
-            return
-        }
+    func respondPermission(_ perm: PendingPermission, response: APIClient.PermissionResponse) async {
         do {
-            try await apiClient.respondPermission(sessionID: perm.sessionID, permissionID: perm.permissionID)
+            try await apiClient.respondPermission(sessionID: perm.sessionID, permissionID: perm.permissionID, response: response)
             pendingPermissions.removeAll { $0.id == perm.id }
         } catch {
             connectionError = error.localizedDescription
@@ -1059,13 +1055,54 @@ final class AppState {
                 }
             }
         case "permission.asked":
-            if let sessionID = props["sessionID"]?.value as? String,
-               let permissionID = props["permissionID"]?.value as? String {
-                let desc = (props["description"]?.value as? String) ?? (props["tool"]?.value as? String) ?? "Permission required"
-                let perm = PendingPermission(sessionID: sessionID, permissionID: permissionID, description: desc)
-                if !pendingPermissions.contains(where: { $0.permissionID == permissionID }) {
-                    pendingPermissions.append(perm)
+            let rawProps: [String: Any] = props.mapValues { $0.value }
+            let requestObj = (rawProps["request"] as? [String: Any]) ?? rawProps
+
+            func readString(_ key: String) -> String? {
+                (requestObj[key] as? String) ?? (rawProps[key] as? String)
+            }
+
+            let sessionID = readString("sessionID")
+            let permissionID = readString("permissionID") ?? readString("id")
+
+            guard let sessionID, let permissionID else { break }
+
+            let permission = requestObj["permission"] as? String
+            let allowAlways = (requestObj["always"] as? Bool) ?? false
+
+            let patterns: [String] = {
+                if let arr = requestObj["patterns"] as? [String] { return arr }
+                if let anyArr = requestObj["patterns"] as? [Any] { return anyArr.compactMap { $0 as? String } }
+                return []
+            }()
+
+            let tool: String? = {
+                if let t = requestObj["tool"] as? String { return t }
+                if let t = requestObj["tool"] as? [String: Any] {
+                    return (t["name"] as? String)
+                        ?? (t["tool"] as? String)
+                        ?? (t["id"] as? String)
                 }
+                return nil
+            }()
+
+            let desc = (requestObj["description"] as? String)
+                ?? tool
+                ?? permission
+                ?? "Permission required"
+
+            let perm = PendingPermission(
+                sessionID: sessionID,
+                permissionID: permissionID,
+                permission: permission,
+                patterns: patterns,
+                allowAlways: allowAlways,
+                tool: tool,
+                description: desc
+            )
+
+            if !pendingPermissions.contains(where: { $0.id == perm.id }) {
+                pendingPermissions.append(perm)
             }
         case "todo.updated":
             if let sessionID = props["sessionID"]?.value as? String,
@@ -1185,5 +1222,9 @@ struct PendingPermission: Identifiable {
     var id: String { "\(sessionID)/\(permissionID)" }
     let sessionID: String
     let permissionID: String
+    let permission: String?
+    let patterns: [String]
+    let allowAlways: Bool
+    let tool: String?
     let description: String
 }

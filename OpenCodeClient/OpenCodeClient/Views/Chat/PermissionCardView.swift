@@ -7,7 +7,7 @@ import SwiftUI
 
 struct PermissionCardView: View {
     let permission: PendingPermission
-    let onRespond: (Bool) -> Void
+    let onRespond: (APIClient.PermissionResponse) -> Void
 
     private let accent = Color.orange
     private let cornerRadius: CGFloat = 12
@@ -22,21 +22,49 @@ struct PermissionCardView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(accent)
             }
+
+            if let name = permission.permission, !name.isEmpty {
+                Text(name)
+                    .font(.callout.weight(.semibold))
+            }
+
             Text(permission.description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 10) {
-                Button {
-                    onRespond(true)
-                } label: {
-                    Text("Approve")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
+
+            if !permission.patterns.isEmpty {
+                Text(permission.patterns.joined(separator: ", "))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    Button {
+                        onRespond(.once)
+                    } label: {
+                        Text("Allow Once")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+
+                    Button {
+                        onRespond(.always)
+                    } label: {
+                        Text("Allow Always")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.blue)
+                    .disabled(!permission.allowAlways)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
+
                 Button {
-                    onRespond(false)
+                    onRespond(.reject)
                 } label: {
                     Text("Reject")
                         .font(.subheadline.weight(.semibold))
