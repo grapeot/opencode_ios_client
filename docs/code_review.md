@@ -112,6 +112,67 @@
 - 仅当监控证实存在漏事件，再增加“短窗口、低频、可停机”的增量补偿。
 - 增量同步必须带停止条件，避免再次演化为常驻轮询。
 
+## Refactor Plan（AppState 拆分，Test First）
+
+> 说明：这里的迭代方案专指 AppState 重构执行方案，不是整体 backlog 的执行顺序。
+
+### 目标与原则
+
+- 目标：把 `AppState` 中“运行时编排逻辑”拆到独立组件（如 `SessionRuntimeCoordinator`、`ActivityTracker`、`PermissionController`），同时保持现有 UI 行为不变。
+- 原则：每一轮重构都先补测试，再改结构；没有测试护栏不做下一步。
+
+### Iteration A - 建立测试基线（先测后拆）
+
+- 新增 `AppState` 行为级测试（黑盒）：
+  - session 切换后消息清理与加载顺序。
+  - SSE 到达后的状态合并优先级（SSE 不被旧轮询覆盖）。
+  - permission 丢事件时，首次 `GET /permission` 能补齐卡片。
+  - activity row 逐 turn 规则（running/completed、时长来源）
+- 引入可注入测试替身（API/SSE 协议化），避免依赖真实网络。
+- **Gate**：上述关键路径测试全部稳定通过后，才进入组件拆分。
+
+### Iteration B - 拆 PermissionController（低耦合先行）
+
+- 把 permission 相关状态机与补偿同步逻辑从 `AppState` 抽离。
+- 保持外部接口不变（`pendingPermissions`、respond flow）。
+- 测试新增：
+  - permission.asked 各 payload 形态解析一致性。
+  - once/always/reject 回写与 UI 状态收敛。
+  - 首次补偿同步仅触发一次，不产生重复卡片。
+- **Gate**：本轮新增 + 原有回归测试全绿。
+
+### Iteration C - 拆 ActivityTracker（中等耦合）
+
+- 抽离 activity label 推导、2.5s debounce、per-turn 计时计算。
+- 测试新增：
+  - reasoning/tool/text 映射一致性。
+  - debounce 行为（避免标签抖动）。
+  - completed 时长优先级（completed > fallback）与边界场景。
+- **Gate**：activity 相关 snapshot/行为测试全绿，且无 UI flapping 回归。
+
+### Iteration D - 拆 SessionRuntimeCoordinator（高耦合最后做）
+
+- 负责 SSE 生命周期、首次全量同步、session status 合并策略。
+- 测试新增：
+  - 前后台切换后重连与首次同步触发点。
+  - 重连期间事件顺序错位时的一致性。
+  - 无常驻轮询下的最终一致性（手动刷新兜底仍可用）。
+- **Gate**：端到端回归（消息流、权限、activity）全部通过。
+
+### Test Plan（覆盖与验收）
+
+- 覆盖目标：
+  - 关键状态机/编排逻辑行覆盖率 `>= 80%`。
+  - permission/activity/runtime 三块新增代码分支覆盖 `>= 70%`。
+- 测试层次：
+  - Unit：纯逻辑（映射、去抖、状态转移、时间计算）。
+  - Integration：`AppState + fake API/SSE` 的异步事件流。
+  - UI 回归：最小关键路径（permission 卡片可见性、activity row 末行保留）。
+- 执行门禁：
+  - 每轮必须跑 `xcodebuild test ... -parallel-testing-enabled NO`。
+  - 失败禁止进入下一轮重构。
+  - 每轮在 `docs/WORKING.md` 记录“测试新增点 + 风险结论”。
+
 ## Final Verdict
 
 - 代码整体方向正确，近期 UX 修复有效。
