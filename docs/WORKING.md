@@ -101,7 +101,7 @@
 - [x] **4.2 Race Condition**：Session 切换添加 `sessionLoadingID` 防止快速切换时竞态
 - [x] **3.2 Error Presentation**：统一错误处理模式
 - [x] **3.3 Magic Numbers**：提取常量（列宽比例、动画时长等）
-- [ ] **3.4 Test Coverage**：添加 AppState 层面测试
+- [x] **3.4 Test Coverage**：添加 AppState 层面测试
 - [ ] **3.5 View Decomposition**：拆分 ChatTabView
 - [ ] **3.1 AppState Size**：继续提取 Coordinator
 - [ ] **4.1 Memory Leaks**：SSE 连接 deinit 处理

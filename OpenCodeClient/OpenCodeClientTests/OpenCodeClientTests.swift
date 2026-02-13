@@ -14,7 +14,7 @@ import Testing
 struct OpenCodeClientTests {
 
     @Test func defaultServerAddress() {
-        #expect(APIClient.defaultServer == "192.168.180.128:4096")
+        #expect(APIClient.defaultServer == "localhost:4096")
     }
 
     @Test func sessionDecoding() throws {
@@ -591,5 +591,105 @@ struct APIResponseModelTests {
         let entry = try JSONDecoder().decode(FileStatusEntry.self, from: data)
         #expect(entry.path == "src/app.swift")
         #expect(entry.status == "modified")
+    }
+}
+
+// MARK: - AppError Tests
+
+struct AppErrorTests {
+    
+    @Test func appErrorConnectionFailed() {
+        let error = AppError.connectionFailed("Network unreachable")
+        #expect(error.localizedDescription.contains("连接失败"))
+        #expect(error.isConnectionError == true)
+        #expect(error.isRecoverable == true)
+    }
+    
+    @Test func appErrorUnauthorized() {
+        let error = AppError.unauthorized
+        #expect(error.localizedDescription.contains("未授权"))
+        #expect(error.isRecoverable == true)
+    }
+    
+    @Test func appErrorFromFileNotFound() {
+        let error = AppError.fileNotFound("/path/to/file.swift")
+        #expect(error.localizedDescription.contains("文件不存在"))
+        #expect(error.isRecoverable == false)
+    }
+    
+    @Test func appErrorFromNSError() {
+        let nsError = NSError(domain: NSURLErrorDomain, code: -1001, userInfo: [NSLocalizedDescriptionKey: "Request timed out"])
+        let appError = AppError.from(nsError)
+        if case .connectionFailed = appError {
+            #expect(Bool(true))
+        } else {
+            Issue.record("Expected connectionFailed error")
+        }
+    }
+    
+    @Test func appErrorEquality() {
+        let e1 = AppError.connectionFailed("test")
+        let e2 = AppError.connectionFailed("test")
+        let e3 = AppError.connectionFailed("other")
+        #expect(e1 == e2)
+        #expect(e1 != e3)
+    }
+}
+
+// MARK: - LayoutConstants Tests
+
+struct LayoutConstantsTests {
+    
+    @Test func splitViewFractions() {
+        #expect(LayoutConstants.SplitView.sidebarWidthFraction == 1.0 / 6.0)
+        #expect(LayoutConstants.SplitView.previewWidthFraction == 5.0 / 12.0)
+        #expect(LayoutConstants.SplitView.chatWidthFraction == 5.0 / 12.0)
+    }
+    
+    @Test func splitViewFractionsSum() {
+        let total = LayoutConstants.SplitView.sidebarWidthFraction 
+                  + LayoutConstants.SplitView.previewWidthFraction 
+                  + LayoutConstants.SplitView.chatWidthFraction
+        #expect(total == 1.0)
+    }
+    
+    @Test func splitViewBoundFractions() {
+        #expect(LayoutConstants.SplitView.sidebarMinFraction < LayoutConstants.SplitView.sidebarWidthFraction)
+        #expect(LayoutConstants.SplitView.sidebarMaxFraction > LayoutConstants.SplitView.sidebarWidthFraction)
+        #expect(LayoutConstants.SplitView.paneMinFraction < LayoutConstants.SplitView.previewWidthFraction)
+        #expect(LayoutConstants.SplitView.paneMaxFraction > LayoutConstants.SplitView.previewWidthFraction)
+    }
+    
+    @Test func animationDurations() {
+        #expect(LayoutConstants.Animation.shortDuration < LayoutConstants.Animation.defaultDuration)
+        #expect(LayoutConstants.Animation.defaultDuration < LayoutConstants.Animation.longDuration)
+    }
+    
+    @Test func spacingValues() {
+        #expect(LayoutConstants.Spacing.compact < LayoutConstants.Spacing.standard)
+        #expect(LayoutConstants.Spacing.standard < LayoutConstants.Spacing.comfortable)
+        #expect(LayoutConstants.Spacing.comfortable < LayoutConstants.Spacing.spacious)
+    }
+}
+
+// MARK: - APIConstants Tests
+
+struct APIConstantsTests {
+    
+    @Test func defaultServer() {
+        #expect(APIConstants.defaultServer == "localhost:4096")
+    }
+    
+    @Test func sseEndpoint() {
+        #expect(APIConstants.sseEndpoint == "/global/event")
+    }
+    
+    @Test func healthEndpoint() {
+        #expect(APIConstants.healthEndpoint == "/global/health")
+    }
+    
+    @Test func timeoutValues() {
+        #expect(APIConstants.Timeout.connection > 0)
+        #expect(APIConstants.Timeout.request > APIConstants.Timeout.connection)
     }
 }
