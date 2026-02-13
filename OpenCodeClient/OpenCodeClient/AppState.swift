@@ -602,6 +602,10 @@ final class AppState {
             messages = merged
             partsByMessage = Dictionary(uniqueKeysWithValues: messages.map { ($0.info.id, $0.parts) })
             streamingDraftMessageIDs.subtract(loadedMessageIDs)
+
+            if isBusySession(currentSessionStatus) {
+                refreshSessionActivityText(sessionID: sessionID)
+            }
         } catch let error as DecodingError {
             Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         } catch {
@@ -1045,6 +1049,8 @@ final class AppState {
                                 text: text
                             )
                         }
+
+                        refreshSessionActivityText(sessionID: sessionID)
                     } else {
                         clearStreamingState(messageID: msgID)
                         await loadMessages()
@@ -1134,7 +1140,7 @@ final class AppState {
         let message = current.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         let opText = (message?.isEmpty == false)
             ? message!
-            : (current.type == "retry" ? "Retrying" : "Working")
+            : (current.type == "retry" ? "Retrying" : "Thinking")
 
         if nowBusy {
             if !wasBusy || sessionActivities[sessionID]?.state != .running {
@@ -1165,6 +1171,126 @@ final class AppState {
             }
             sessionActivities[sessionID] = a
         }
+    }
+
+    private func refreshSessionActivityText(sessionID: String) {
+        guard isBusySession(sessionStatuses[sessionID]) else { return }
+        guard var a = sessionActivities[sessionID], a.state == .running else { return }
+        a.text = bestSessionActivityText(sessionID: sessionID) ?? a.text
+        sessionActivities[sessionID] = a
+    }
+
+    private func bestSessionActivityText(sessionID: String) -> String? {
+        if let status = sessionStatuses[sessionID],
+           let msg = status.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !msg.isEmpty {
+            return msg
+        }
+
+        // Prefer currently running tool.
+        if let part = lastAssistantToolPart(sessionID: sessionID, state: "running") {
+            return formatStatusFromPart(part)
+        }
+
+        // Prefer reasoning (streaming first, then last reasoning in messages).
+        if sessionID == currentSessionID {
+            if let part = streamingReasoningPart,
+               part.sessionID == sessionID {
+                let key = "\(part.messageID):\(part.id)"
+                let text = streamingPartTexts[key] ?? ""
+                return formatThinkingFromReasoningText(text)
+            }
+        }
+
+        if let part = lastAssistantPart(sessionID: sessionID) {
+            if part.isReasoning {
+                return formatThinkingFromReasoningText(part.text ?? "")
+            }
+            return formatStatusFromPart(part)
+        }
+
+        return "Thinking"
+    }
+
+    private func lastAssistantPart(sessionID: String) -> Part? {
+        for msg in messages.reversed() where msg.info.sessionID == sessionID {
+            guard msg.info.isAssistant else { continue }
+            for part in msg.parts.reversed() {
+                if part.isStepStart || part.isStepFinish { continue }
+                return part
+            }
+        }
+        return nil
+    }
+
+    private func lastAssistantToolPart(sessionID: String, state: String) -> Part? {
+        for msg in messages.reversed() where msg.info.sessionID == sessionID {
+            guard msg.info.isAssistant else { continue }
+            for part in msg.parts.reversed() {
+                guard part.isTool else { continue }
+                if part.stateDisplay?.lowercased() == state { return part }
+            }
+        }
+        return nil
+    }
+
+    private func formatThinkingFromReasoningText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let topic = extractLeadingBoldTopic(from: trimmed) {
+            return "Thinking - \(topic)"
+        }
+        return "Thinking"
+    }
+
+    private func extractLeadingBoldTopic(from text: String) -> String? {
+        // Matches: **topic** at the start (after optional whitespace)
+        let pattern = "^\\s*\\*\\*(.+?)\\*\\*"
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(location: 0, length: (text as NSString).length)
+        guard let m = re.firstMatch(in: text, range: range), m.numberOfRanges >= 2 else { return nil }
+        let topic = (text as NSString).substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return topic.isEmpty ? nil : topic
+    }
+
+    private func formatStatusFromPart(_ part: Part) -> String? {
+        if part.isTool {
+            let base: String? = {
+                switch part.tool {
+                case "task":
+                    return "Delegating"
+                case "todowrite", "todoread":
+                    return "Planning"
+                case "read":
+                    return "Gathering context"
+                case "list", "grep", "glob":
+                    return "Searching codebase"
+                case "webfetch":
+                    return "Searching web"
+                case "edit", "write":
+                    return "Making edits"
+                case "bash":
+                    return "Running commands"
+                default:
+                    return nil
+                }
+            }()
+
+            let topic = (part.toolReason ?? part.toolInputSummary)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let base, let topic, !topic.isEmpty {
+                return "\(base) - \(topic)"
+            }
+            return base
+        }
+
+        if part.isReasoning {
+            return formatThinkingFromReasoningText(part.text ?? "")
+        }
+
+        if part.isText {
+            return "Gathering thoughts"
+        }
+
+        return nil
     }
 
     private func upsertStreamingMessage(
