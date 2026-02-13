@@ -72,6 +72,7 @@ private struct SessionsSidebarList: View {
             }
         }
         .listStyle(.plain)
+        .tint(.secondary)
         .refreshable {
             await state.refreshSessions()
         }

@@ -191,8 +191,8 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 **Enter 行为调研结论**：OpenCode Web 客户端在空输入时按 Enter 会调用 abort 终止当前运行；有内容时按 Enter 发送消息（通过 prompt，消息由服务端队列处理）。无「智能 steer」机制，仅终止或排队。iOS 端可提供手动 abort 按钮，无需实现额外 steer。
 
-额外操作（通过 Chat 顶部 toolbar 按钮）：
-- 新建 Session、重命名、Session 列表
+额外操作（通过 Chat 顶部 toolbar 按钮，从左到右依次为）：
+- Session 列表、重命名、Compact、新建 Session（按此顺序排列）
 - Compact Session（调用 `POST /session/:id/summarize`，压缩历史以降低 token 超限风险）
 - 中止当前运行（调用 `POST /session/:id/abort`）
 
@@ -201,6 +201,8 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 从 Chat Tab 顶部左侧的按钮进入 Session 列表（slide-over 或 navigation push）。**列出 workspace 下所有已有 Session**，是重要的功能验证手段：可验证连接是否正确、API 解析是否正常、消息/状态能否正确展示。
 
 列表显示所有 Session，按时间倒序。每个条目显示：标题、创建时间、消息数、状态（idle/busy）。支持新建 Session、切换 Session。**删除 Session 暂未实现**。
+
+视觉与交互：列表文本默认使用中性色（灰）以避免 iOS 默认的“链接蓝”。当前活跃 Session 使用轻量背景色高亮，并在右侧显示选中标记。
 
 ### 4.3 Files Tab（文件浏览与 Diff）
 

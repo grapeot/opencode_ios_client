@@ -95,11 +95,9 @@ struct ChatTabView: View {
                 HStack {
                     HStack(spacing: 12) {
                         Button {
-                            Task {
-                                await state.createSession()
-                            }
+                            showSessionList = true
                         } label: {
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "list.bullet.circle.fill")
                                 .font(.title3)
                                 .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(.accentColor)
@@ -114,14 +112,6 @@ struct ChatTabView: View {
                                 .foregroundColor(.accentColor)
                         }
                         Button {
-                            showSessionList = true
-                        } label: {
-                            Image(systemName: "list.bullet.circle.fill")
-                                .font(.title3)
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundColor(.accentColor)
-                        }
-                        Button {
                             Task { await state.summarizeSession() }
                         } label: {
                             Image(systemName: "rectangle.compress.vertical")
@@ -130,6 +120,16 @@ struct ChatTabView: View {
                                 .foregroundColor(.accentColor)
                         }
                         .help("Compact session（压缩历史，避免 token 超限）")
+                        Button {
+                            Task {
+                                await state.createSession()
+                            }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundColor(.accentColor)
+                        }
                     }
                     Spacer()
                     HStack(spacing: 6) {

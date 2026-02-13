@@ -69,7 +69,9 @@
 - [x] **发送/录音按钮上下并排**：iPhone/iPad 均改为 VStack 布局，send 在上、mic 在下、abort（如有）在最下
 - [x] **Session 列表按更新时间排序**：使用 `sortedSessions` 按 `time.updated` 降序排列
 - [x] **Session 行时间显示按更新时间**：Session 列表的“xx 分钟前”改为 `time.updated`
-- [x] **切换 Session 空白 bug 修复**：切换时先清空 messages/parts/streaming 状态再加载新 session 数据
+- [x] **Session 列表去蓝色**：列表文本使用中性色（灰），当前 Session 用背景高亮
++- [x] **Session 操作按钮顺序调整**：Chat 顶部 toolbar 左侧按钮顺序改为 Session 列表 → 重命名 → Compact → 新建 Session
+ - [x] **切换 Session 空白 bug 修复**：切换时先清空 messages/parts/streaming 状态再加载新 session 数据
 - [x] **服务端错误信息展示**：assistant message 带 `error.data.message` 时在消息中以红色卡片显示
 - [x] **iPad 侧边栏上下分区**：左侧改为上 Files（File Tree）下 Sessions（列表点击切换右侧 Chat Session）
 - [x] **Workspace 左栏等高**：iPad Workspace 左栏 Files/Sessions 两块高度 1:1

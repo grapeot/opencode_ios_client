@@ -75,7 +75,7 @@ struct SessionRowView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.title.isEmpty ? "Untitled" : session.title)
                         .font(.headline)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(isSelected ? .primary : .secondary)
 
                     HStack(spacing: 8) {
                         Text(formattedDate(session.time.updated))
@@ -98,11 +98,13 @@ struct SessionRowView: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
         }
+        .buttonStyle(.plain)
+        .listRowBackground(isSelected ? Color.secondary.opacity(0.12) : Color.clear)
     }
 
     private func formattedDate(_ timestamp: Int) -> String {
@@ -122,10 +124,7 @@ struct SessionRowView: View {
     }
 
     private func statusColor(_ status: SessionStatus) -> Color {
-        switch status.type {
-        case "busy": return .blue
-        case "retry": return .orange
-        default: return .secondary
-        }
+        // Keep session list typography neutral; selection uses background highlight.
+        return .secondary
     }
 }

@@ -47,3 +47,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Security notes (local only)
+docs/security.md

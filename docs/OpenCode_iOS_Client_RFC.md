@@ -175,6 +175,7 @@ final class AppState {
 ### 6. 权限与输入
 
 - **Session 列表**：列出 workspace 下所有已有 Session，作为连接与解析的验证手段
+- **Session 列表样式**：避免系统默认链接蓝；文本用中性色，当前 Session 用背景高亮
 - **权限**：`permission.asked` 时展示卡片，用户手动批准/拒绝，调用 `POST /session/:id/permissions/:permissionID`
 - **输入**：支持多行，发送用 `prompt_async`；busy 时消息由服务端排队
 - **草稿**：按 sessionID 持久化未发送输入；切换 session 可恢复；发送成功后清空
@@ -196,7 +197,7 @@ final class AppState {
 - **可拖动**：三栏宽度支持拖动调整；以上为默认 ideal 宽度
 - **文件预览**：iPad 上不使用 sheet。左栏选择文件、或 Chat 中点击 tool/patch 的 file path 时，更新中栏 Preview 预览对应文件
 - **刷新**：Preview 中栏右上角提供刷新按钮（重新加载文件内容），用于外部变更后的手动刷新
-- **Toolbar**：第一行统一：左（新建 Session、重命名、Session 列表）+ 右（模型切换、Context Usage ring、**Settings 按钮**）；Settings 点击以 sheet 打开
+- **Toolbar**：第一行统一：左（Session 列表、重命名、Compact、新建 Session）+ 右（模型切换、Context Usage ring、**Settings 按钮**）；Settings 点击以 sheet 打开
 - **模型标签**：iPhone 上使用短名（`GPT` / `Spark` / `Opus` / `GLM`）以适配窄宽；iPad 上显示全称
 - **实现**：`@Environment(\.horizontalSizeClass)` 分支：regular 时渲染三栏 split，小屏时渲染 `TabView`；iPad 用 `previewFilePath` 驱动中栏预览，iPhone 保留 `fileToOpenInFilesTab` 走 sheet / tab 跳转
 
