@@ -69,32 +69,69 @@ actor SSEClient {
         }
 
         return AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 do {
                     let (bytes, _) = try await URLSession.shared.bytes(for: request)
-                    var buffer = ""
-                    for try await byte in bytes {
-                        let char = Character(Unicode.Scalar(byte))
-                        if char == "\n" {
-                            if buffer.hasPrefix("data: ") {
-                                let json = String(buffer.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-                                if json != "[DONE]", !json.isEmpty,
-                                   let data = json.data(using: .utf8) {
-                                    if let event = try? JSONDecoder().decode(SSEEvent.self, from: data) {
-                                        continuation.yield(event)
-                                    }
-                                }
-                            }
-                            buffer = ""
-                        } else {
-                            buffer.append(char)
+
+                    var lineBuffer = Data()
+                    var eventDataLines: [String] = []
+
+                    func flushEventIfNeeded() {
+                        guard !eventDataLines.isEmpty else { return }
+                        let json = eventDataLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                        eventDataLines.removeAll(keepingCapacity: true)
+
+                        guard !json.isEmpty, json != "[DONE]" else { return }
+                        let data = Data(json.utf8)
+                        if let event = try? JSONDecoder().decode(SSEEvent.self, from: data) {
+                            continuation.yield(event)
                         }
                     }
+
+                    for try await byte in bytes {
+                        try Task.checkCancellation()
+
+                        if byte == 0x0A {  // \n
+                            // Process a single SSE line (UTF-8)
+                            if lineBuffer.last == 0x0D { lineBuffer.removeLast() }  // \r
+                            let line = String(decoding: lineBuffer, as: UTF8.self)
+                            lineBuffer.removeAll(keepingCapacity: true)
+
+                            if line.isEmpty {
+                                // Empty line = event delimiter
+                                flushEventIfNeeded()
+                                continue
+                            }
+
+                            if line.hasPrefix(":") {
+                                // Comment/keep-alive; ignore
+                                continue
+                            }
+
+                            if line.hasPrefix("data:") {
+                                var payload = String(line.dropFirst(5))
+                                if payload.hasPrefix(" ") { payload.removeFirst() }
+                                eventDataLines.append(payload)
+                            }
+
+                            continue
+                        }
+
+                        lineBuffer.append(byte)
+                    }
+
+                    // Stream ended; flush any pending event
+                    flushEventIfNeeded()
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
-                    return
                 }
-                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
             }
         }
     }
