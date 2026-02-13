@@ -140,6 +140,8 @@ RFC/PRD 提到 UserDefaults + Keychain。
 
 - 实现：`MessageRowView` 的 `markdownText` 保留 `.textSelection(.enabled)`；`ScrollView` 移除全局选择；`ToolPartView`、`StreamingReasoningView`、`TodoListInlineView` 不启用
 
+**长按选中调研**：用户反馈长按显示 copy/share 但无法选中文字。可能原因：（1）SwiftUI 的 `.textSelection(.enabled)` 在 iOS 上仅支持「全选」、范围选择仅 macOS 支持；（2）MarkdownUI 的 `Markdown` 内部结构可能影响选择手势；（3）List/ScrollView 内嵌时 iOS 18 曾有 bug（18.1 已修复）。若需更好的选中体验，可考虑 `UITextView` + `UIViewRepresentable` 包装（如 RichText 库），或接受当前「全选 + 复制」能力。
+
 ### 2.3 `ChatTabView.swift` 体积过大，可维护性下降 ✅ 已拆分
 
 已拆至 `Views/Chat/`：`ChatTabView.swift`、`MessageRowView.swift`、`ToolPartView.swift`、`PatchPartView.swift`、`PermissionCardView.swift`、`StreamingReasoningView.swift`、`TodoListInlineView.swift`。原 `Views/ChatTabView.swift` 集中定义了大量子 View（消息行、tool 卡片、patch 卡片、权限卡片、todo 卡片）。
@@ -156,7 +158,7 @@ RFC/PRD 提到 UserDefaults + Keychain。
 
 ### 2.4 Todo 渲染的“重复表达”可能让用户困惑
 
-（当前不是优先项；后续若要强化 todo，建议先确定“权威展示位”再做 UI 统一。）
+（当前不是优先项；按方案 B 仅在 tool 卡片内展示，暂不特别强调。）
 
 ### 2.5 Observability：大量 `print` 不利于线上定位
 

@@ -48,6 +48,8 @@
 - [x] 1.1 AppState 详细规划（code_review 三阶段细化）
 - [x] Bug: tool layout — thinking 并入最后一条 MessageRowView，不另起行打断网格
 - [x] Bug: Diff/文件预览 — 横向滚动、minWidth 填满、textSelection
+- [x] code_review 2.4 更新：按方案 B 暂不强调
+- [x] 最近 commit/push：9b4b842（tool layout、Diff 预览、Settings HTTP info、1.1 规划、2.4）
 
 ## 待办
 
