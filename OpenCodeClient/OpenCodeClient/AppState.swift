@@ -277,21 +277,12 @@ final class AppState {
     var connectionError: String?
     var sendError: String?
 
-    // Chat status bar (latest operation + elapsed time)
-    var currentOperationText: String? = nil
-    var currentOperationStartedAt: Date? = nil
-    var lastOperationText: String? = nil
-    var lastOperationElapsedSeconds: Int? = nil
+    // Session activity (rendered in transcript; session-scoped)
+    var sessionActivities: [String: SessionActivity] = [:]
 
-    func currentOperationElapsedString(now: Date = Date()) -> String? {
-        guard let startedAt = currentOperationStartedAt else { return nil }
-        let secs = max(0, Int(now.timeIntervalSince(startedAt)))
-        return String(format: "%d:%02d", secs / 60, secs % 60)
-    }
-
-    func lastOperationElapsedString() -> String? {
-        guard let secs = lastOperationElapsedSeconds else { return nil }
-        return String(format: "%d:%02d", secs / 60, secs % 60)
+    var currentSessionActivity: SessionActivity? {
+        guard let sid = currentSessionID else { return nil }
+        return sessionActivities[sid]
     }
     
     /// Unified error handling
@@ -978,30 +969,10 @@ final class AppState {
                 if let status = try? JSONSerialization.data(withJSONObject: statusObj),
                     let decoded = try? JSONDecoder().decode(SessionStatus.self, from: status) {
                     let prev = sessionStatuses[sessionID]
-                    let wasBusy = isBusySession(prev)
-                    let nowBusy = isBusySession(decoded)
 
                     sessionStatuses[sessionID] = decoded
 
-                    if sessionID == currentSessionID {
-                        if nowBusy {
-                            if !wasBusy || currentOperationStartedAt == nil {
-                                currentOperationStartedAt = Date()
-                            }
-                            currentOperationText = decoded.message
-                                ?? (decoded.type == "retry" ? "Retrying" : "Working")
-                        } else {
-                            // Preserve last operation + duration after finishing.
-                            if wasBusy {
-                                lastOperationText = currentOperationText
-                                if let startedAt = currentOperationStartedAt {
-                                    lastOperationElapsedSeconds = max(0, Int(Date().timeIntervalSince(startedAt)))
-                                }
-                            }
-                            currentOperationText = nil
-                            currentOperationStartedAt = nil
-                        }
-                    }
+                    updateSessionActivity(sessionID: sessionID, previous: prev, current: decoded)
 
                     if sessionID == currentSessionID, !isBusySession(decoded) {
                         streamingReasoningPart = nil
@@ -1156,6 +1127,46 @@ final class AppState {
         }
     }
 
+    private func updateSessionActivity(sessionID: String, previous: SessionStatus?, current: SessionStatus) {
+        let wasBusy = isBusySession(previous)
+        let nowBusy = isBusySession(current)
+
+        let message = current.message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let opText = (message?.isEmpty == false)
+            ? message!
+            : (current.type == "retry" ? "Retrying" : "Working")
+
+        if nowBusy {
+            if !wasBusy || sessionActivities[sessionID]?.state != .running {
+                // While running, always render as the last row in the transcript.
+                sessionActivities[sessionID] = SessionActivity(
+                    sessionID: sessionID,
+                    state: .running,
+                    text: opText,
+                    startedAt: Date(),
+                    endedAt: nil,
+                    anchorMessageID: nil
+                )
+            } else if var a = sessionActivities[sessionID] {
+                // Still running; update text but keep start time.
+                a.text = opText
+                a.anchorMessageID = nil
+                sessionActivities[sessionID] = a
+            }
+            return
+        }
+
+        // Completed: freeze in-place (anchor to the last message at completion).
+        if wasBusy, var a = sessionActivities[sessionID] {
+            a.state = .completed
+            a.endedAt = Date()
+            if sessionID == currentSessionID {
+                a.anchorMessageID = messages.last?.info.id
+            }
+            sessionActivities[sessionID] = a
+        }
+    }
+
     private func upsertStreamingMessage(
         messageID: String,
         partID: String,
@@ -1267,4 +1278,29 @@ struct PendingPermission: Identifiable {
     let allowAlways: Bool
     let tool: String?
     let description: String
+}
+
+struct SessionActivity: Identifiable {
+    enum State {
+        case running
+        case completed
+    }
+
+    var id: String { sessionID }
+    let sessionID: String
+    var state: State
+    var text: String
+    let startedAt: Date
+    var endedAt: Date?
+    var anchorMessageID: String?
+
+    func elapsedSeconds(now: Date = Date()) -> Int {
+        let end = endedAt ?? now
+        return max(0, Int(end.timeIntervalSince(startedAt)))
+    }
+
+    func elapsedString(now: Date = Date()) -> String {
+        let secs = elapsedSeconds(now: now)
+        return String(format: "%d:%02d", secs / 60, secs % 60)
+    }
 }

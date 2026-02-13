@@ -18,6 +18,13 @@ private enum MessageGroupItem: Identifiable {
         case .assistantMerged(let msgs): return "assistant-\(msgs.map(\.info.id).joined(separator: "-"))"
         }
     }
+
+    var messageIDs: [String] {
+        switch self {
+        case .user(let m): return [m.info.id]
+        case .assistantMerged(let msgs): return msgs.map { $0.info.id }
+        }
+    }
 }
 
 struct ChatTabView: View {
@@ -37,6 +44,25 @@ struct ChatTabView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var useGridCards: Bool { sizeClass == .regular }
+
+    private var currentActivity: SessionActivity? {
+        state.currentSessionActivity
+    }
+
+    private var activityAnchorID: String? {
+        currentActivity?.anchorMessageID
+    }
+
+    private func shouldRenderActivity(after group: MessageGroupItem) -> Bool {
+        guard let activityAnchorID else { return false }
+        return group.messageIDs.contains(activityAnchorID)
+    }
+
+    private var shouldRenderActivityAtEnd: Bool {
+        guard currentActivity != nil else { return false }
+        guard let anchor = activityAnchorID else { return true }
+        return !messageGroups.contains(where: { $0.messageIDs.contains(anchor) })
+    }
 
     private var currentPermissions: [PendingPermission] {
         state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }
@@ -117,15 +143,23 @@ struct ChatTabView: View {
                                         streamingPart: nil
                                     )
                                 }
+
+                                if let activity = currentActivity, shouldRenderActivity(after: group) {
+                                    SessionActivityRowView(activity: activity)
+                                }
                             }
                         }
                         if let streamingPart = state.streamingReasoningPart {
                             StreamingReasoningView(part: streamingPart, state: state)
                                 .padding(.top, 6)
                         }
-                            Color.clear
-                                .frame(height: 1)
-                                .id("bottom")
+
+                        if let activity = currentActivity, shouldRenderActivityAtEnd {
+                            SessionActivityRowView(activity: activity)
+                        }
+                             Color.clear
+                                 .frame(height: 1)
+                                 .id("bottom")
                         }
                         .padding()
                     }
@@ -137,10 +171,8 @@ struct ChatTabView: View {
                     }
                 }
 
-                ChatStatusBarView(state: state)
-
-                Divider()
-                HStack(alignment: .bottom, spacing: 10) {
+                 Divider()
+                 HStack(alignment: .bottom, spacing: 10) {
                     TextField("Ask anything...", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
                         .lineLimit(3...8)
@@ -341,7 +373,8 @@ struct ChatTabView: View {
             .map { "\($0.key)=\($0.value.count)" }
             .sorted()
             .joined(separator: "|")
-        return "\(perm)-\(msg)-\(stream)"
+        let activity = state.currentSessionActivity.map { "\($0.state)-\($0.text)-\($0.anchorMessageID ?? "")" } ?? ""
+        return "\(perm)-\(msg)-\(stream)-\(activity)"
     }
 
     private var isCurrentSessionBusy: Bool {
@@ -357,13 +390,15 @@ struct ChatTabView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 20)
         } else if isCurrentSessionBusy {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("Session 正在运行中，消息尚未可见，正在刷新中…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if currentActivity == nil {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Session 正在运行中，消息尚未可见，正在刷新中…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 18)
             }
-            .padding(.vertical, 18)
         } else {
             Text("暂无消息")
                 .font(.callout)
@@ -389,39 +424,51 @@ struct ChatTabView: View {
     }
 }
 
-private struct ChatStatusBarView: View {
-    @Bindable var state: AppState
+private struct SessionActivityRowView: View {
+    let activity: SessionActivity
 
     var body: some View {
-        if state.isBusy {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let op = state.currentOperationText
-                let elapsed = state.currentOperationElapsedString(now: context.date)
-                if let op, let elapsed {
-                    bar(op: op, elapsed: elapsed)
+        Group {
+            if activity.state == .running {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    row(now: context.date)
                 }
-            }
-        } else {
-            if let op = state.lastOperationText,
-               let elapsed = state.lastOperationElapsedString() {
-                bar(op: op, elapsed: elapsed)
+            } else {
+                row(now: Date())
             }
         }
     }
 
-    @ViewBuilder
-    private func bar(op: String, elapsed: String) -> some View {
-        HStack(spacing: 8) {
-            Text(op)
+    private func row(now: Date) -> some View {
+        let elapsed = activity.elapsedString(now: now)
+        let text: String = {
+            switch activity.state {
+            case .running: return activity.text
+            case .completed: return "Completed — \(activity.text)"
+            }
+        }()
+
+        return HStack(spacing: 8) {
+            Image(systemName: activity.state == .running ? "clock" : "checkmark.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(text)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 12)
             Text(elapsed)
                 .monospacedDigit()
+                .foregroundStyle(.secondary)
         }
         .font(.caption2)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray4).opacity(0.6), lineWidth: 0.5)
+        )
     }
 }
