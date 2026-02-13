@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- **最后更新**：2026-02-12
+- **最后更新**：2026-02-13
 - **Phase**：Phase 3 完成（Think Streaming + iPad 分栏）+ 增强（GLM5、错误显示、录音校验）
-- **编译**：✅ 通过
+- **编译**：✅ 通过（iphonesimulator / generic destination）
 - **测试**：✅ 60 个单元测试通过
 
 ## 已完成
@@ -67,6 +67,10 @@
 - [x] **iPad Workspace 文件预览用 sheet**：在 Workspace 左侧 File Tree 点文件不再 push 到窄栏，改为全局预览 sheet
 - [x] **todowrite 仅渲染 todo**：Tool 卡片不再显示 todowrite 的 raw JSON input/output，只保留渲染后的 todo 列表
 - [x] **Context usage ring**：Chat 顶部模型与齿轮之间新增上下文占用环，点击弹出 token/cost 明细（无数据时灰色空环）
+- [x] **Busy/Retry 会话轮询增强**：将 `retry` 与 `busy` 同等视为 busy；busy 时自动轮询刷新，退出 busy 自动停止
+- [x] **loadMessages 解码兜底**：支持空 body/非数组 payload（`messages`/`data`/`result` 包裹、单对象）以避免轮询因解析失败中断
+- [x] **Streaming 期间消息可见性**：轮询合并保留临时 user 消息与 streaming assistant draft（避免 busy 空列表时 UI 闪回/丢失）
+- [x] **Chat 空状态优化**：无 session / busy(retry) / 空消息分别展示不同提示；scroll anchor 纳入 streaming delta 长度避免滚动不刷新
 
 ## 待办
 
@@ -95,6 +99,8 @@
 5. **Unable to simultaneously satisfy constraints**：键盘相关 (TUIKeyboardContentView, UIKeyboardImpl) 的约束冲突。来自系统键盘，非应用代码，通常无需修复。
 
 6. **术语澄清**：Think streaming 实指 Think（ReasoningPartView）的展开/收起行为，非 Tool。
+
+7. **轮询时 messages 解析噪声**：busy/retry 期间偶发 `The data couldn’t be read because it is missing`（空 body / payload 形态不稳定）。修复：APIClient 增加空 body guard + 多形态解码兜底；AppState 捕获 DecodingError 仅记录日志，避免把 polling 当作连接失败。
 
 ## 决策记录
 

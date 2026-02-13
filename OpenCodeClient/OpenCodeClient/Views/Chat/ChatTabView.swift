@@ -163,17 +163,21 @@ struct ChatTabView: View {
                                     }
                                 }
                             }
-                        ForEach(messageGroups) { group in
-                            switch group {
-                            case .user(let msg):
-                                MessageRowView(message: msg, state: state, streamingPart: nil)
-                            case .assistantMerged(let msgs):
-                                let merged = MessageWithParts(info: msgs.first!.info, parts: msgs.flatMap(\.parts))
-                                MessageRowView(
-                                    message: merged,
-                                    state: state,
-                                    streamingPart: nil
-                                )
+                        if messageGroups.isEmpty {
+                            emptySessionStateView
+                        } else {
+                            ForEach(messageGroups) { group in
+                                switch group {
+                                case .user(let msg):
+                                    MessageRowView(message: msg, state: state, streamingPart: nil)
+                                case .assistantMerged(let msgs):
+                                    let merged = MessageWithParts(info: msgs.first!.info, parts: msgs.flatMap(\.parts))
+                                    MessageRowView(
+                                        message: merged,
+                                        state: state,
+                                        streamingPart: nil
+                                    )
+                                }
                             }
                         }
                         if let streamingPart = state.streamingReasoningPart {
@@ -379,7 +383,39 @@ struct ChatTabView: View {
     private var scrollAnchor: String {
         let perm = state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count
         let msg = state.messages.map { "\($0.info.id)-\($0.parts.count)" }.joined(separator: "|")
-        return "\(perm)-\(msg)"
+        let stream = state.streamingPartTexts
+            .map { "\($0.key)=\($0.value.count)" }
+            .sorted()
+            .joined(separator: "|")
+        return "\(perm)-\(msg)-\(stream)"
+    }
+
+    private var isCurrentSessionBusy: Bool {
+        guard let status = state.currentSessionStatus else { return false }
+        return status.type == "busy" || status.type == "retry"
+    }
+
+    @ViewBuilder
+    private var emptySessionStateView: some View {
+        if state.currentSessionID == nil {
+            Text("请选择一个 Session")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.top, 20)
+        } else if isCurrentSessionBusy {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Session 正在运行中，消息尚未可见，正在刷新中…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 18)
+        } else {
+            Text("暂无消息")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.top, 20)
+        }
     }
 
     private func statusColor(_ status: SessionStatus) -> Color {

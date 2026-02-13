@@ -101,7 +101,103 @@ actor APIClient {
 
     func messages(sessionID: String) async throws -> [MessageWithParts] {
         let (data, _) = try await makeRequest(path: "/session/\(sessionID)/message")
-        return try JSONDecoder().decode([MessageWithParts].self, from: data)
+        guard let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return []
+        }
+        let payloadData = text.data(using: .utf8) ?? data
+        return try decodeMessagesPayload(payloadData)
+    }
+
+    private func decodeMessagesPayload(_ data: Data) throws -> [MessageWithParts] {
+        let decoder = JSONDecoder()
+
+        if let direct = try? decoder.decode([MessageWithParts].self, from: data) {
+            return direct
+        }
+
+        guard let obj = try? JSONSerialization.jsonObject(with: data, options: []) else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Invalid JSON for messages payload"
+                )
+            )
+        }
+
+        if let direct = decodeMessagesFallback(from: obj, decoder: decoder), !direct.isEmpty {
+            return direct
+        }
+
+        throw DecodingError.dataCorrupted(
+            DecodingError.Context(
+                codingPath: [],
+                debugDescription: "Unsupported messages payload shape"
+            )
+        )
+    }
+
+    private func decodeMessagesFallback(from obj: Any, decoder: JSONDecoder) -> [MessageWithParts]? {
+        let containers = extractMessageContainers(from: obj)
+        guard !containers.isEmpty else { return nil }
+
+        let messages = containers.compactMap { decodeMessageRecord(from: $0, decoder: decoder) }
+        return messages.isEmpty ? nil : messages
+    }
+
+    private func extractMessageContainers(from obj: Any) -> [[String: Any]] {
+        if let arr = obj as? [[String: Any]] {
+            return arr
+        }
+
+        guard let dict = obj as? [String: Any] else { return [] }
+
+        if let arr = dict["messages"] as? [[String: Any]] { return arr }
+        if let arr = dict["data"] as? [[String: Any]] { return arr }
+        if let arr = dict["result"] as? [[String: Any]] { return arr }
+
+        if dict["info"] is [String: Any] || dict["message"] is [String: Any] {
+            return [dict]
+        }
+
+        if dict["role"] is String && dict["id"] is String {
+            return [dict]
+        }
+
+        return []
+    }
+
+    private func decodeMessageRecord(from container: [String: Any], decoder: JSONDecoder) -> MessageWithParts? {
+        if let direct = decodeJSON(container, as: MessageWithParts.self, decoder: decoder) {
+            return direct
+        }
+
+        let infoObject = container["info"] ?? container["message"] ?? container
+        let partsObject = container["parts"]
+
+        guard let info = decodeJSON(infoObject, as: Message.self, decoder: decoder) else {
+            return nil
+        }
+
+        let parts = decodeParts(from: partsObject, decoder: decoder)
+        return MessageWithParts(info: info, parts: parts)
+    }
+
+    private func decodeParts(from value: Any?, decoder: JSONDecoder) -> [Part] {
+        guard let value else { return [] }
+
+        if let arr = value as? [[String: Any]] {
+            return arr.compactMap { decodeJSON($0, as: Part.self, decoder: decoder) }
+        }
+
+        return []
+    }
+
+    private func decodeJSON<T: Decodable>(_ value: Any, as type: T.Type, decoder: JSONDecoder) -> T? {
+        guard JSONSerialization.isValidJSONObject(value), let data = try? JSONSerialization.data(withJSONObject: value) else {
+            return nil
+        }
+        return try? decoder.decode(type, from: data)
     }
 
     func promptAsync(sessionID: String, text: String, agent: String = "build", model: Message.ModelInfo?) async throws {

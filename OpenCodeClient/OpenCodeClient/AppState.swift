@@ -249,6 +249,7 @@ final class AppState {
 
     /// Latest streaming reasoning part (for typewriter thinking display)
     var streamingReasoningPart: Part? = nil
+    private var streamingDraftMessageIDs: Set<String> = []
 
     var selectedModel: ModelPreset? {
         guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
@@ -266,7 +267,7 @@ final class AppState {
     }
 
     var isBusy: Bool {
-        currentSessionStatus?.type == "busy"
+        isBusySession(currentSessionStatus)
     }
 
     var currentTodos: [TodoItem] {
@@ -330,10 +331,20 @@ final class AppState {
         partsByMessage = [:]
         currentSessionID = session.id
         Task {
+            await refreshSessions()
             await loadMessages()
             await loadSessionDiff()
             await loadSessionTodos()
+
+            if isBusySession(currentSessionStatus) {
+                startPollingCurrentSession(forBusySession: true)
+            }
         }
+    }
+
+    private func isBusySession(_ status: SessionStatus?) -> Bool {
+        guard let type = status?.type else { return false }
+        return type == "busy" || type == "retry"
     }
 
     func loadSessionTodos() async {
@@ -363,10 +374,30 @@ final class AppState {
         guard let sessionID = currentSessionID else { return }
         do {
             let loaded = try await apiClient.messages(sessionID: sessionID)
-            messages = loaded
-            partsByMessage = Dictionary(uniqueKeysWithValues: loaded.map { ($0.info.id, $0.parts) })
+            let loadedMessageIDs = Set(loaded.map { $0.info.id })
+            let keepPending = isBusySession(currentSessionStatus)
+            let pendingMessages = keepPending ? messages.filter({ $0.info.id.hasPrefix("temp-user-") }) : []
+
+            let draftMessages = messages.filter {
+                streamingDraftMessageIDs.contains($0.info.id) && !loadedMessageIDs.contains($0.info.id)
+            }
+
+            var merged: [MessageWithParts] = loaded
+            for message in pendingMessages where !loadedMessageIDs.contains(message.info.id) {
+                merged.append(message)
+            }
+            for message in draftMessages where !merged.contains(where: { $0.info.id == message.info.id }) {
+                merged.append(message)
+            }
+
+            messages = merged
+            partsByMessage = Dictionary(uniqueKeysWithValues: messages.map { ($0.info.id, $0.parts) })
+            streamingDraftMessageIDs.subtract(loadedMessageIDs)
+        } catch let error as DecodingError {
+            Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         } catch {
             connectionError = error.localizedDescription
+            Self.logger.error("loadMessages failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -510,6 +541,7 @@ final class AppState {
             sendError = "请先选择或创建 Session"
             return false
         }
+        let tempMessageID = appendOptimisticUserMessage(text)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
         do {
             try await apiClient.promptAsync(sessionID: sessionID, text: text, model: model)
@@ -517,22 +549,87 @@ final class AppState {
             return true
         } catch {
             sendError = error.localizedDescription
+            removeMessage(id: tempMessageID)
             return false
         }
     }
 
+    @discardableResult
+    func appendOptimisticUserMessage(_ text: String) -> String {
+        guard let sessionID = currentSessionID else { return "" }
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let messageID = "temp-user-\(UUID().uuidString)"
+        let partID = "temp-part-\(messageID)"
+        let message = Message(
+            id: messageID,
+            sessionID: sessionID,
+            role: "user",
+            parentID: messages.last?.info.id,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: Message.TimeInfo(created: now, completed: now),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        let part = Part(
+            id: partID,
+            messageID: messageID,
+            sessionID: sessionID,
+            type: "text",
+            text: text,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            metadata: nil,
+            files: nil
+        )
+        let row = MessageWithParts(info: message, parts: [part])
+        messages.append(row)
+        partsByMessage[messageID] = [part]
+        return messageID
+    }
+
+    func removeMessage(id: String) {
+        messages.removeAll { $0.info.id == id }
+        partsByMessage[id] = nil
+    }
+
     private func startPollingAfterSend() {
+        startPollingCurrentSession()
+    }
+
+    /// Poll session state and messages in case SSE is delayed/lost.
+    /// If `forBusySession` is true, stop automatically once current session is non-busy.
+    private func startPollingCurrentSession(forBusySession: Bool = false) {
         pollingTask?.cancel()
         pollingTask = Task {
-            for i in 0..<30 {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else { return }
+            var i = 0
+            while !Task.isCancelled {
+                guard let sessionID = currentSessionID else { return }
                 await loadMessages()
 
-                // Refresh sessions a few times after send to pick up server-generated titles.
-                if i == 2 || i == 6 || i == 12 {
+                if forBusySession {
+                    if !isBusySession(currentSessionStatus) {
+                        break
+                    }
+                }
+
+                // Refresh sessions/status a few times to pick up updated status/title.
+                if i == 2 || i == 6 || i == 12 || i == 20 {
+                    if let statuses = try? await apiClient.sessionStatus() {
+                        sessionStatuses = statuses
+                    }
                     await loadSessions()
                 }
+
+                i += 1
+                if i > 90 { break }
+
+                try? await Task.sleep(for: .seconds(2))
+                Self.logger.debug("pollSession session=\(sessionID, privacy: .public) iteration=\(i, privacy: .public)")
             }
         }
     }
@@ -629,13 +726,19 @@ final class AppState {
         switch type {
         case "session.status":
             if let sessionID = props["sessionID"]?.value as? String,
-               let statusObj = props["status"]?.value as? [String: Any] {
+                let statusObj = props["status"]?.value as? [String: Any] {
                 if let status = try? JSONSerialization.data(withJSONObject: statusObj),
-                   let decoded = try? JSONDecoder().decode(SessionStatus.self, from: status) {
+                    let decoded = try? JSONDecoder().decode(SessionStatus.self, from: status) {
                     sessionStatuses[sessionID] = decoded
-                    if sessionID == currentSessionID, decoded.type != "busy" {
+                    if sessionID == currentSessionID, !isBusySession(decoded) {
                         streamingReasoningPart = nil
                         streamingPartTexts = [:]
+                        streamingDraftMessageIDs.removeAll()
+                        pollingTask?.cancel()
+                    }
+
+                    if sessionID == currentSessionID && isBusySession(decoded) {
+                        startPollingCurrentSession(forBusySession: true)
                     }
                 }
             }
@@ -656,6 +759,7 @@ final class AppState {
             if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
                 streamingReasoningPart = nil
                 streamingPartTexts = [:]
+                streamingDraftMessageIDs.removeAll()
                 await loadMessages()
                 await loadSessionDiff()
             }
@@ -665,34 +769,43 @@ final class AppState {
                 let partObj = props["part"]?.value as? [String: Any]
                 let msgID = partObj?["messageID"] as? String
                 let partID = partObj?["id"] as? String
-                let partType = partObj?["type"] as? String
+                let partType = (partObj?["type"] as? String) ?? "text"
 
-                if let msgID, let partID, partType == "reasoning" {
-                    streamingReasoningPart = Part(
-                        id: partID,
-                        messageID: msgID,
-                        sessionID: sessionID,
-                        type: "reasoning",
-                        text: nil,
-                        tool: nil,
-                        callID: nil,
-                        state: nil,
-                        metadata: nil,
-                        files: nil
-                    )
-                }
-
-                if let delta = props["delta"]?.value as? String,
-                   let msgID,
-                   let partID,
-                   !delta.isEmpty {
+                if let msgID,
+                   let partID {
                     let key = "\(msgID):\(partID)"
-                    streamingPartTexts[key] = (streamingPartTexts[key] ?? "") + delta
-                } else {
-                    streamingReasoningPart = nil
-                    streamingPartTexts = [:]
-                    await loadMessages()
-                    await loadSessionDiff()
+
+                    if let delta = props["delta"]?.value as? String,
+                       !delta.isEmpty {
+                        let text = (streamingPartTexts[key] ?? "") + delta
+                        streamingPartTexts[key] = text
+                        if partType == "reasoning" {
+                            streamingReasoningPart = Part(
+                                id: partID,
+                                messageID: msgID,
+                                sessionID: sessionID,
+                                type: "reasoning",
+                                text: nil,
+                                tool: nil,
+                                callID: nil,
+                                state: nil,
+                                metadata: nil,
+                                files: nil
+                            )
+                        } else {
+                            upsertStreamingMessage(
+                                messageID: msgID,
+                                partID: partID,
+                                sessionID: sessionID,
+                                type: partType,
+                                text: text
+                            )
+                        }
+                    } else {
+                        clearStreamingState(messageID: msgID)
+                        await loadMessages()
+                        await loadSessionDiff()
+                    }
                 }
             }
         case "permission.asked":
@@ -715,6 +828,73 @@ final class AppState {
         default:
             break
         }
+    }
+
+    private func upsertStreamingMessage(
+        messageID: String,
+        partID: String,
+        sessionID: String,
+        type: String,
+        text: String
+    ) {
+        let part = Part(
+            id: partID,
+            messageID: messageID,
+            sessionID: sessionID,
+            type: type,
+            text: text,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            metadata: nil,
+            files: nil
+        )
+
+        if let idx = messages.firstIndex(where: { $0.info.id == messageID }) {
+            let current = messages[idx]
+            var updatedParts = current.parts
+            if let partIdx = updatedParts.firstIndex(where: { $0.id == partID }) {
+                updatedParts[partIdx] = part
+            } else {
+                updatedParts.append(part)
+            }
+
+            messages[idx] = MessageWithParts(info: current.info, parts: updatedParts)
+            partsByMessage[messageID] = updatedParts
+            streamingDraftMessageIDs.insert(messageID)
+            return
+        }
+
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let message = Message(
+            id: messageID,
+            sessionID: sessionID,
+            role: "assistant",
+            parentID: messages.last?.info.id,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: Message.TimeInfo(created: now, completed: now),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+
+        messages.append(MessageWithParts(info: message, parts: [part]))
+        partsByMessage[messageID] = [part]
+        streamingDraftMessageIDs.insert(messageID)
+    }
+
+    private func clearStreamingState(messageID: String) {
+        for key in streamingPartTexts.keys where key.hasPrefix("\(messageID):") {
+            streamingPartTexts.removeValue(forKey: key)
+        }
+
+        if streamingReasoningPart?.messageID == messageID {
+            streamingReasoningPart = nil
+        }
+        streamingDraftMessageIDs.remove(messageID)
     }
 
     func refresh() async {
