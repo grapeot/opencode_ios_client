@@ -12,7 +12,10 @@ struct MessageRowView: View {
     var streamingPart: Part? = nil
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    private var useGridCards: Bool { sizeClass == .regular }
+    private var cardGridColumnCount: Int { sizeClass == .regular ? 3 : 2 }
+    private var cardGridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: cardGridColumnCount)
+    }
 
     private enum AssistantBlock: Identifiable {
         case text(Part)
@@ -116,21 +119,13 @@ struct MessageRowView: View {
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .cards(let parts):
-                    if useGridCards {
-                        LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-                            alignment: .leading,
-                            spacing: 10
-                        ) {
-                            ForEach(parts, id: \.id) { part in
-                                cardView(part)
-                            }
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(parts, id: \.id) { part in
-                                cardView(part)
-                            }
+                    LazyVGrid(
+                        columns: cardGridColumns,
+                        alignment: .leading,
+                        spacing: 10
+                    ) {
+                        ForEach(parts, id: \.id) { part in
+                            cardView(part)
                         }
                     }
                 }

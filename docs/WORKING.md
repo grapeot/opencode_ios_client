@@ -161,6 +161,7 @@
 - **Import from Server**：依赖 config/providers，解析修复后应可正常导入。
 
 用户指定模型对应：
+- OpenAI GPT-5.3 Codex：✅ `openai` / `gpt-5.3-codex`
 - OpenAI GPT-5.2：✅ `openai` / `gpt-5.2`
 - POE Opus Claude 4.6：✅ `poe` / `anthropic/claude-opus-4-6`
 - z.ai coding plan GLM5：✅ `zai-coding-plan` / `glm-5`

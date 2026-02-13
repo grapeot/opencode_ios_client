@@ -338,8 +338,8 @@ final class AppState {
 
     /// 固定三个模型，不再从 server 导入
     var modelPresets: [ModelPreset] = [
+        ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
         ModelPreset(displayName: "GPT-5.2", providerID: "openai", modelID: "gpt-5.2"),
-        ModelPreset(displayName: "GPT-5.3 Codex Spark", providerID: "openai", modelID: "gpt-5.3-codex-spark"),
         ModelPreset(displayName: "Opus 4.6", providerID: "poe", modelID: "anthropic/claude-opus-4-6"),
         ModelPreset(displayName: "GLM5", providerID: "zai-coding-plan", modelID: "glm-5"),
     ]
