@@ -1060,7 +1060,10 @@ final class AppState {
             current: current,
             existing: sessionActivities[sessionID],
             messages: messages,
-            currentSessionID: currentSessionID
+            currentSessionID: currentSessionID,
+            hasActiveStreaming: streamingReasoningPart?.sessionID == sessionID
+                || !streamingPartTexts.isEmpty
+                || !streamingDraftMessageIDs.isEmpty
         )
     }
 

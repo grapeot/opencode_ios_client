@@ -1036,6 +1036,42 @@ struct ActivityTrackerTests {
         #expect(text == "Running formatter")
     }
 
+    @Test func updateSessionActivityKeepsRunningWhenStatusIdleButToolStillRunning() throws {
+        let user = makeMessage(id: "u1", sessionID: "s1", role: "user", created: 100_000, completed: nil)
+        let assistant = makeMessage(id: "a1", sessionID: "s1", role: "assistant", created: 110_000, completed: nil)
+        let partJson = """
+        {"id":"p1","messageID":"a1","sessionID":"s1","type":"tool","text":null,"tool":"bash","callID":"c1","state":{"status":"running"},"metadata":null,"files":null}
+        """
+        let runningPart = try JSONDecoder().decode(Part.self, from: Data(partJson.utf8))
+        let rows = [
+            MessageWithParts(info: user, parts: []),
+            MessageWithParts(info: assistant, parts: [runningPart]),
+        ]
+
+        let running = SessionActivity(
+            sessionID: "s1",
+            state: .running,
+            text: "Running commands",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: nil,
+            anchorMessageID: nil
+        )
+
+        let previous = SessionStatus(type: "busy", attempt: 1, message: "Running commands", next: nil)
+        let current = SessionStatus(type: "idle", attempt: nil, message: nil, next: nil)
+        let updated = ActivityTracker.updateSessionActivity(
+            sessionID: "s1",
+            previous: previous,
+            current: current,
+            existing: running,
+            messages: rows,
+            currentSessionID: "s1"
+        )
+
+        #expect(updated?.state == .running)
+        #expect(updated?.endedAt == nil)
+    }
+
     private func makeMessage(id: String, sessionID: String, role: String, created: Int, completed: Int?) -> Message {
         Message(
             id: id,

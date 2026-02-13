@@ -10,6 +10,7 @@ enum ActivityTracker {
         existing: SessionActivity?,
         messages: [MessageWithParts],
         currentSessionID: String?,
+        hasActiveStreaming: Bool = false,
         now: Date = Date()
     ) -> SessionActivity? {
         let wasBusy = isBusyStatus(previous)
@@ -41,8 +42,27 @@ enum ActivityTracker {
         }
 
         if wasBusy, var completed = existing {
+            if hasActiveStreaming || hasRunningAssistantWork(sessionID: sessionID, messages: messages) {
+                completed.state = .running
+                completed.endedAt = nil
+                completed.anchorMessageID = nil
+                return completed
+            }
+
+            let completion = lastAssistantMessageCompletedAtOrAfter(
+                sessionID: sessionID,
+                messages: messages,
+                threshold: completed.startedAt
+            )
+            if completion == nil {
+                completed.state = .running
+                completed.endedAt = nil
+                completed.anchorMessageID = nil
+                return completed
+            }
+
             completed.state = .completed
-            completed.endedAt = lastAssistantMessageCompletedAt(sessionID: sessionID, messages: messages) ?? now
+            completed.endedAt = completion ?? now
             if sessionID == currentSessionID {
                 completed.anchorMessageID = messages.last?.info.id
             }
@@ -158,14 +178,31 @@ enum ActivityTracker {
         return nil
     }
 
-    private static func lastAssistantMessageCompletedAt(sessionID: String, messages: [MessageWithParts]) -> Date? {
+    private static func lastAssistantMessageCompletedAtOrAfter(sessionID: String, messages: [MessageWithParts], threshold: Date) -> Date? {
         for msg in messages.reversed() {
             if msg.info.sessionID != sessionID { continue }
             if msg.info.isAssistant, let completed = msg.info.time.completed {
-                return Date(timeIntervalSince1970: Double(completed) / 1000.0)
+                let date = Date(timeIntervalSince1970: Double(completed) / 1000.0)
+                if date >= threshold {
+                    return date
+                }
             }
         }
         return nil
+    }
+
+    private static func hasRunningAssistantWork(sessionID: String, messages: [MessageWithParts]) -> Bool {
+        for msg in messages.reversed() where msg.info.sessionID == sessionID {
+            guard msg.info.isAssistant else { continue }
+            for part in msg.parts.reversed() {
+                if !part.isTool { continue }
+                let state = part.stateDisplay?.lowercased() ?? ""
+                if state == "running" || state == "pending" {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     private static func lastAssistantPart(sessionID: String, messages: [MessageWithParts]) -> Part? {
