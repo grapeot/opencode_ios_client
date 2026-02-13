@@ -1,266 +1,92 @@
-# OpenCode iOS Client - Code Review
+# OpenCode iOS Client - Code Review (2026-02-13)
 
-**Review Date**: 2026-02-13
-**Reviewer**: AI Assistant
-**Scope**: Full codebase review after Phase 3 completion
+## Scope
 
-## 1. Architecture Overview
+- 目标：只看明显问题，不做细枝末节。
+- 关注：架构可维护性、显著性能风险、显著安全风险。
+- 结论：当前代码可用，但有 2 个高优先级问题（1 安全、1 性能/架构交叉），建议先处理。
 
-The codebase follows a reasonably clean architecture for a SwiftUI iOS application:
+## Executive Summary
 
-```
-├── Models/           # Data models (Message, Session, TodoItem, ModelPreset)
-├── Services/         # Network layer (APIClient, SSEClient, AudioRecorder, AIBuildersAudioClient)
-├── Stores/           # State stores (SessionStore, MessageStore, FileStore, TodoStore)
-├── Utils/            # Utilities (PathNormalizer, KeychainHelper)
-├── Views/
-│   ├── Chat/         # Chat-related views (MessageRowView, ToolPartView, etc.)
-│   └── ...           # Other feature views
-├── AppState.swift    # Main coordinator/observable state
-└── ContentView.swift # Root view with platform-adaptive layout
-```
+- **P0 安全**：SSH 隧道当前使用 `hostKeyValidator: .acceptAnything()`，等于关闭主机身份校验，存在 MITM 风险。见 `OpenCodeClient/OpenCodeClient/Services/SSHTunnelManager.swift:130`。
+- **P1 性能/稳定性**：busy 时采用高频轮询 + 全量消息拉取，长会话下网络与 CPU 压力明显，发热风险高。见 `OpenCodeClient/OpenCodeClient/AppState.swift:834`、`OpenCodeClient/OpenCodeClient/AppState.swift:840`。
+- **P1 架构**：`AppState` 职责过重（状态、网络编排、SSE 解析、活动文案、草稿持久化等混在一起），后续功能迭代成本会持续上升。见 `OpenCodeClient/OpenCodeClient/AppState.swift`（文件整体）。
 
-### Key Patterns Used
+## Findings
 
-- **MVVM-ish**: Views bind to `AppState` which acts as both model and view-model
-- **Observation Framework**: Uses Swift's new `@Observable` macro (iOS 17+)
-- **Store Pattern**: Extracted stores (`SessionStore`, `MessageStore`, etc.) for domain state
-- **Actor-based Networking**: `APIClient` and `SSEClient` use `actor` for thread safety
+### 1) Security
 
----
+#### 1.1 SSH Host Key Trust Model 缺失（P0）
 
-## 2. Strengths
+- 现状：SSH 连接直接接受任意 host key。
+- 证据：`OpenCodeClient/OpenCodeClient/Services/SSHTunnelManager.swift:130`
+- 风险：首次连接和公网环境中，无法识别中间人攻击。
+- 建议：改为 TOFU（首次确认并持久化 fingerprint）或手动 pin fingerprint。
 
-### 2.1 Clean State Management
+#### 1.2 Basic Auth + HTTP（LAN）默认可用（P2）
 
-The recent extraction of domain stores (`SessionStore`, `MessageStore`, `FileStore`, `TodoStore`) from `AppState` is a good architectural improvement:
-- Clear separation of concerns
-- `AppState` acts as a façade, exposing computed properties that delegate to stores
-- Maintains backward compatibility with existing view bindings
+- 现状：API 层支持 Basic Auth；地址可为 `http://`（LAN 允许）。
+- 证据：`OpenCodeClient/OpenCodeClient/Services/APIClient.swift:59`、`OpenCodeClient/OpenCodeClient/AppState.swift:69`
+- 风险：同网段被动抓包即可看到凭证。
+- 建议：保留 LAN 例外，但 UI 上增加更强警示与“一键改 https”引导；文档明确“公网必须 https，LAN 也建议 https”。
 
-### 2.2 Platform-Adaptive UI
+### 2) Performance / Heat
 
-The `ContentView.swift` handles iPhone/iPad differences cleanly:
-- `horizontalSizeClass` determines split vs tab layout
-- iPad uses `NavigationSplitView` with three columns
-- iPhone uses traditional `TabView`
+#### 2.1 Busy 轮询策略偏重（P1）
 
-### 2.3 Robust Error Handling
+- 现状：busy 场景每 2 秒轮询一次，最多 90 次，并每轮调用 `loadMessages()`。
+- 证据：`OpenCodeClient/OpenCodeClient/AppState.swift:834`、`OpenCodeClient/OpenCodeClient/AppState.swift:858`
+- 风险：会话长、消息多时，反复全量解码 + UI 重组，容易带来电量与温度压力。
+- 建议：
+  - 优先用 SSE 驱动；轮询退化为指数退避（2s/4s/8s）。
+  - 增量拉取（基于最后 messageID/time）替代全量拉取。
+  - busy->idle 后立即停止所有兜底轮询（已部分做到，可再收紧）。
 
-- `APIError` enum covers common failure modes
-- `PartStateBridge` handles flexible API response formats gracefully
-- `loadMessages` has multiple fallback paths for decoding edge cases
+#### 2.2 列表锚点仍做全量字符串拼接（P2）
 
-### 2.4 Good Use of Modern Swift
+- 现状：`scrollAnchor` 每次都遍历所有消息和 streaming map 生成大字符串。
+- 证据：`OpenCodeClient/OpenCodeClient/Views/Chat/ChatTabView.swift:525`
+- 影响：长会话会增加主线程 diff 与字符串分配负担。
+- 建议：改为轻量版本号（如 `messageVersion` / `streamVersion` 计数器），避免遍历拼接。
 
-- Async/await throughout
-- Actors for concurrent access
-- `@Observable` macro
-- Structured concurrency with `Task`
+### 3) Architecture / Maintainability
 
----
+#### 3.1 AppState 仍是“超级协调器”（P1）
 
-## 3. Areas for Improvement
+- 现状：虽然已有 Store 拆分，但 AppState 仍承担大量协议细节与生命周期编排。
+- 证据：`OpenCodeClient/OpenCodeClient/AppState.swift`（SSE 处理、轮询、活动文案、权限兜底、模型记忆等均在同一类）。
+- 影响：
+  - 新功能容易相互耦合（例如 activity、polling、session status 交错）。
+  - 单测难写，回归风险上升。
+- 建议：按职责继续拆分为 `SessionRuntimeCoordinator`、`ActivityTracker`、`PermissionController` 三块，并通过协议注入到 AppState。
 
-### 3.1 AppState Still Too Large
+#### 3.2 Activity Row 完整性风险点（P2）
 
-**Issue**: `AppState.swift` is ~500+ lines and handles too many responsibilities:
-- Server configuration and validation
-- Session management
-- Message handling
-- File operations
-- Todo management
-- SSE event processing
-- Audio recording coordination
-- UI state (selected tab, draft inputs, model selection)
+- 现状：completed 行在无 `time.completed` 时会退回到 assistant `time.created` 估算结束时间。
+- 证据：`OpenCodeClient/OpenCodeClient/Views/Chat/ChatTabView.swift:138`、`OpenCodeClient/OpenCodeClient/Views/Chat/ChatTabView.swift:146`
+- 风险：极端事件顺序下时长可能偏小或不稳定。
+- 建议：优先以服务端 completed 时间为准；无 completed 时显示 “--:--” 或 `incomplete`，避免伪精确时长。
 
-**Recommendation**: Consider extracting into separate services/coordinators:
-- `SessionCoordinator` - session CRUD, switching
-- `MessageCoordinator` - message loading, sending, streaming
-- `FileCoordinator` - file tree, content loading
-- Keep `AppState` focused on UI state and coordination
+### 4) Test Coverage
 
-### 3.2 Inconsistent Error Presentation
+#### 4.1 关键路径自动化不足（P2）
 
-**Issue**: Errors are handled differently across the app:
-- `connectionError` string in AppState
-- Alert bindings in views (`showErrorAlert`)
-- Inline error messages in some views
-- Silent failures in some async methods
+- 现状：已有模型/解析/SSH config 测试，但缺 activity row turn 计算与轮询策略回归测试。
+- 证据：`OpenCodeClient/OpenCodeClientTests/OpenCodeClientTests.swift`
+- 建议：
+  - 抽离 turn activity 计算函数并单测（多 turn、retry、缺 completed）。
+  - 给 polling 加 “上限/退避/停止条件” 的纯逻辑测试。
 
-**Recommendation**: Establish a consistent error presentation pattern:
-- Define an `AppError` enum with user-friendly descriptions
-- Create a centralized `ErrorHandling` mechanism
-- Consider a toast/banner system for transient errors
+## Priority Backlog
 
-**Status**: ✅ **COMPLETED** - Added `AppError` enum in `Utils/AppError.swift` with user-friendly descriptions. Added `setError()` and `clearError()` methods to `AppState` for centralized error handling.
+1. **P0**：SSH host key 校验落地（TOFU/pin）。
+2. **P1**：轮询降频 + 增量消息同步，降低发热与流量。
+3. **P1**：继续拆分 AppState（先拆 ActivityTracker 与 PermissionController）。
+4. **P2**：activity row 对缺 completed 的展示策略改为非伪精确。
+5. **P2**：补 activity/polling 关键单测。
 
-### 3.3 Magic Numbers and Strings
+## Final Verdict
 
-**Issue**: Hard-coded values scattered throughout:
-- Column width fractions (`1/6`, `5/12`)
-- Animation durations
-- API paths
-- Color opacity values
-
-**Recommendation**: Extract to constants:
-```swift
-enum LayoutConstants {
-    static let sidebarWidthFraction = 1.0 / 6.0
-    static let previewWidthFraction = 5.0 / 12.0
-}
-```
-
-**Status**: ✅ **COMPLETED** - Created `Utils/LayoutConstants.swift` with `LayoutConstants`, `APIConstants`, and `StorageKeys` enums. Updated `ContentView.swift` and `APIClient.swift` to use these constants.
-
-### 3.4 Test Coverage Gaps
-
-**Current Coverage**: Models and utilities are well-tested
-**Missing**: 
-- UI testing (only placeholder `OpenCodeClientUITests`)
-- Integration tests for SSE handling
-- ViewModel/Coordinator logic tests
-
-**Recommendation**: Add tests for:
-- `AppState` session switching behavior
-- `PathNormalizer` edge cases (already good)
-- SSE event parsing and state updates
-
-**Status**: ✅ **COMPLETED** - Added tests for `AppError`, `LayoutConstants`, and `APIConstants` in `OpenCodeClientTests.swift`.
-
-### 3.5 View Decomposition Opportunities
-
-Some views are large and could benefit from decomposition:
-
-**`ChatTabView.swift`** (~460 lines):
-- Contains toolbar logic, message list, input handling, recording
-- Could extract: `ChatToolbar`, `MessageList`, `ChatInputArea`
-
-**Status**: ✅ **COMPLETED** - Extracted `ChatToolbarView.swift` from `ChatTabView.swift`. ChatTabView reduced from ~480 lines to ~394 lines.
-
-**`MessageRowView.swift`**:
-- Handles many part types inline
-- Could extract part rendering to dedicated views (already partially done with `ToolPartView`, `PatchPartView`)
-
----
-
-## 4. Specific Code Issues
-
-### 4.1 Memory Leaks Risk
-
-**Location**: `AppState.swift` - SSE connection handling
-
-```swift
-func connectSSE() {
-    sseTask = Task { [weak self] in
-        // ...
-    }
-}
-```
-
-**Issue**: The `[weak self]` is correct, but there's no explicit cancellation handling when `AppState` is deallocated.
-
-**Recommendation**: Ensure `disconnectSSE()` is called in `deinit` or use `Task` cancellation more explicitly.
-
-**Status**: ✅ **COMPLETED** - Updated `disconnectSSE()` to also cancel and clear `pollingTask`. Added comment noting that `AppState` is typically held for app lifetime.
-
-### 4.2 Race Condition Potential
-
-**Location**: Session switching and message loading
-
-```swift
-func selectSession(_ session: Session) {
-    // Synchronous state clearing
-    messages = []
-    partsByMessage = [:]
-    currentSessionID = session.id
-    // Then async loading
-    Task {
-        await loadMessages()
-    }
-}
-```
-
-**Issue**: If user rapidly switches sessions, multiple `loadMessages()` tasks could race.
-
-**Recommendation**: Use a task ID or cancellation token:
-```swift
-private var loadTaskID = UUID()
-func selectSession(_ session: Session) {
-    loadTaskID = UUID()
-    let currentID = loadTaskID
-    Task {
-        guard currentID == loadTaskID else { return }
-        await loadMessages()
-    }
-}
-```
-
-**Status**: ✅ **COMPLETED** - Added `sessionLoadingID` property and guard checks throughout `selectSession()` and `createSession()` methods.
-
-### 4.3 Force-Unwrap in PathNormalizer
-
-**Location**: `PathNormalizer.swift`
-
-Generally safe in practice but consider adding guardrails for edge cases.
-
-**Status**: No changes needed - existing implementation handles edge cases adequately.
-
-### 4.4 Hardcoded Default Server
-
-**Location**: `APIClient.swift`
-
-```swift
-static let defaultServer = "192.168.180.128:4096"
-```
-
-**Issue**: Contains a specific LAN IP that may not be relevant for all users.
-
-**Recommendation**: Use `localhost:4096` or make it configurable via build settings.
-
-**Status**: ✅ **COMPLETED** - Changed to `localhost:4096` via `APIConstants.defaultServer`.
-
----
-
-## 5. Refactoring Priorities
-
-### High Priority
-
-1. **Extract coordinators from AppState** - Reduces complexity and improves testability (🔄 PARTIAL - Stores extracted, full coordinator pattern deferred)
-2. **Add session switching race condition protection** - Prevents UI glitches (✅ DONE)
-3. **Standardize error presentation** - Improves UX consistency (✅ DONE)
-
-### Medium Priority
-
-4. **Extract constants** - Improves maintainability (✅ DONE)
-5. **Decompose ChatTabView** - Easier to test and modify (✅ DONE)
-6. **Add integration tests** - Catches regressions (✅ DONE - added tests for new components)
-
-### Low Priority
-
-7. **Review default server handling** - Minor DX improvement (✅ DONE)
-8. **Consider dependency injection** - For better testability (may be overkill for current scope)
-
----
-
-## 6. Positive Observations
-
-- **Documentation**: PRD and RFC are well-maintained and synchronized with code
-- **Incremental Progress**: Clear commit history following the documented phases
-- **Consistent Naming**: Clear naming conventions throughout
-- **Localization Ready**: Chinese UI text is centralized (could be extracted to Localizable.strings if needed)
-- **Accessibility**: `.help()` modifiers on buttons, `.textSelection(.enabled)` where appropriate
-
----
-
-## 7. Conclusion
-
-The codebase is in good shape overall. The architecture is reasonable for the app's complexity, and recent improvements (store extraction, iPad three-column layout) show good iterative development practices.
-
-The main recommendations are:
-1. Continue extracting responsibilities from `AppState`
-2. Add race condition protection for async operations
-3. Establish consistent error handling patterns
-4. Incrementally add test coverage for state management logic
-
-No critical issues were found that require immediate attention. The code is production-ready for personal/small-team use.
+- 代码整体方向正确，近期 UX 修复有效。
+- 真正需要尽快处理的是：**SSH 主机身份校验** 与 **busy 轮询负载**。
+- 这两项处理完，远程使用的安全性和手机温度/续航会明显更稳。

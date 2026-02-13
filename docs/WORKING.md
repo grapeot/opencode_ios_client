@@ -29,6 +29,7 @@
 - [x] **Activity/Busy 状态抖动**：session.status 轮询结果不覆盖近期 SSE；activity 文案更新做 2.5s debounce + debug log
 - [x] **Per-turn Activity 行**：每个 user turn 的末尾保留 completed activity 行（显示耗时）；当前 in-progress turn 在底部显示 running activity 行
 - [x] **iPhone 发热明显热点修复（滚动）**：移除 running activity 每秒计时对 `scrollAnchor` 的影响，避免每秒触发 `scrollTo("bottom")` 动画
+- [x] **全量 Code Review 文档重写（2026-02-13）**：删除并重写 `docs/code_review.md`，聚焦架构/性能/安全的明显问题与优先级
 
 ## 已完成
 
@@ -118,9 +119,9 @@
 - [x] **Code Review 1.4**：PathNormalizer 统一路径规范化（Utils/PathNormalizer.swift）
 - [ ] **Phase 4：iPad / Vision Pro 布局优化**：可考虑（可选）Preview 栏支持“固定/关闭当前文件”等更细粒度控制
 - [x] **模型替换（OpenAI）**：GPT-5.2 替换为 GPT-5.3 Codex Spark（短名 `Spark`），并将 GPT-5.3 Codex 的 iPhone 短名改为 `GPT`
-- [ ] **iPhone 发热排查与优化（持续）**：继续做热点 code review 与 Instruments 复核，确认无其它高频更新/渲染热点
-- [ ] **Activity Row 逐 turn 保留校验**：每个 user message 结束后保留 completed 行作为最后一行；新消息到来再创建新 running 行
-- [ ] **全量 Codebase Review 文档重写**：删除旧 `docs/code_review.md` 并按当前代码重写，聚焦架构/可重构点/明显性能与安全问题
+- [ ] **iPhone 发热排查与优化（暂缓）**：按当前优先级先暂停，后续再做 Instruments 复核与进一步优化
+- [x] **Activity Row 逐 turn 保留校验（代码审查）**：已完成一轮代码级检查（逐 turn completed + 新 turn running 逻辑）；真机交互回归继续跟进
+- [x] **全量 Codebase Review 文档重写**：删除旧 `docs/code_review.md` 并按当前代码重写，聚焦架构/可重构点/明显性能与安全问题
 
 ### Code Review 改进（来自 code_review.md）
 
