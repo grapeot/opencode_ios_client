@@ -102,3 +102,68 @@ curl -s -N -H "Accept: text/event-stream" "http://192.168.180.128:4096/global/ev
 **做法**：对纯逻辑函数加 `nonisolated`，使其可在 test 中同步调用。
 
 **Lesson**：需单测的逻辑尽量抽成 nonisolated 或 static，减少与 MainActor 的耦合。
+
+---
+
+## 9. SSE-first 不等于“只靠 SSE”，要配一次性补偿同步
+
+**场景**：iOS 前后台切换、网络抖动、切 session、重连后都可能错过部分 SSE 事件。
+
+**做法**：
+- 常态只用 SSE 推增量，避免 busy 常驻轮询
+- 在关键时机（如 SSE 重连成功、进入会话）执行一次 bootstrap：`loadMessages + refreshPendingPermissions`
+- 把 bootstrap 触发点和日志打清楚（reason / elapsed / messages / permissions）
+
+**Lesson**：移动端实时系统要用“增量主通道 + 一次性全量补偿”组合，既稳又省电。
+
+---
+
+## 10. SSH 安全默认值：TOFU + mismatch hard fail
+
+**场景**：SSH 隧道若直接 `acceptAnything`，等于关闭主机身份校验。
+
+**做法**：
+- 首次连接：TOFU 记录 host key（按 host:port）
+- 后续连接：指纹不一致立即失败并提示风险（MITM/重装）
+- UI 提供 fingerprint 展示与 reset trusted host
+
+**Lesson**：远程能力一旦上线，安全基线必须先落地；“能连上”不是完成标准，“可信地连上”才是。
+
+---
+
+## 11. 复杂重构采用 Gate 式 Test-First
+
+**场景**：AppState 拆分会跨状态机、SSE、UI 显示规则，回归风险高。
+
+**做法**：
+- 按 Iteration A/B/C/D 分轮，每轮先补测试，再改结构
+- 每轮定义 Gate（例如行为测试全绿）再进入下一轮
+- 每轮结束记录到 `WORKING.md`，说明新增测试与风险结论
+
+**Lesson**：重构不是“大改一把梭”，而是可验证的增量迁移；Gate 比“感觉没问题”更可靠。
+
+---
+
+## 12. Activity 文案要有“防抖语义”，而不是盲目实时
+
+**场景**：tool/reasoning 文案高频切换会导致 UI 抖动与体感噪声。
+
+**做法**：
+- 把文案推导与 debounce 逻辑收敛到统一逻辑层
+- 规则明确：2.5s 窗口内延迟更新，窗口外立即更新
+- 对 completed/running 的时长来源定义优先级，避免伪精确
+
+**Lesson**：可读性是实时体验的一部分；“稳定且可信”的状态比“每次变化都立刻显示”更有价值。
+
+---
+
+## 13. SSH UX 需要把“用户下一步动作”写进界面
+
+**场景**：用户常卡在“开了 SSH 但连不上 / 不知道下一步点哪里”。
+
+**做法**：
+- 提供可直接复制执行的 SSH command（降低脑内拼接成本）
+- 公钥复制入口常驻可见，不与启用状态强耦合
+- 在 SSH 区域明确提示：启用后还要到上方点 `Test Connection`
+
+**Lesson**：配置型功能的核心不是字段齐全，而是“用户能一次走通”。把关键下一步直接写进 UI 文案。
