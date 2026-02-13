@@ -252,7 +252,55 @@ Diff 渲染采用 unified diff 格式（类似 GitHub），绿色背景表示新
 - 连接状态指示：显示 Connected / Disconnected / Connecting
 - "Test Connection" 按钮：调用 `GET /global/health` 验证连接
 
-#### 4.4.2 Model Presets
+#### 4.4.2 SSH Tunnel（远程访问）
+
+用于在非局域网环境下通过 SSH 隧道访问家里的 OpenCode Server。网络拓扑：
+
+```
+iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
+```
+
+前提条件：
+- 家里机器需要先建立反向隧道到 VPS：`ssh -R 127.0.0.1:18080:127.0.0.1:4096 user@vps`
+- 用户需要在 VPS 上配置公钥认证
+
+**配置项**：
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| Enable SSH Tunnel | 开关 | Off |
+| VPS Host | VPS 地址 | - |
+| SSH Port | SSH 端口 | 22 |
+| Username | SSH 用户名 | - |
+| Remote Port | VPS 上转发的端口 | 18080 |
+
+**密钥管理**：
+
+- App 自动生成 Ed25519 密钥对
+- 私钥存储在 iOS Keychain（`kSecAttrAccessibleWhenUnlocked`）
+- 公钥在 Settings 中显示，支持一键复制
+- 支持密钥轮换（重新生成）
+
+**首次设置流程**：
+
+1. 打开 Settings → SSH Tunnel
+2. App 自动生成密钥对
+3. 复制公钥，SSH 到 VPS 添加到 `~/.ssh/authorized_keys`
+4. 填写 VPS 地址、用户名、远程端口
+5. 开启 SSH Tunnel 开关
+6. Server Address 改为 `127.0.0.1:4096`（通过隧道访问）
+
+**连接状态**：
+
+- 显示 Connected / Connecting / Disconnected / Error
+- 错误时显示具体原因（如"公钥未授权"）
+
+**安全要求**：
+
+- 只支持 key-based 认证，不支持密码认证
+- 首次连接显示服务器 fingerprint（TOFU）
+
+#### 4.4.3 Model Presets
 
 **当前实现**：固定 4 个预设（GPT-5.2、GPT-5.3 Codex Spark、Opus 4.6、GLM5），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
 

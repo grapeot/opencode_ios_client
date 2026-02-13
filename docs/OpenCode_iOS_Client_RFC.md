@@ -78,9 +78,51 @@
 | UI | SwiftUI | 原生、声明式，与 iOS 17+ 适配最好 |
 | 状态 | Observation (@Observable) | 替代 ObservableObject，减少样板代码 |
 | 网络 | URLSession | 原生，无需 Alamofire；SSE 用 `URLSession` 的 `Delegate` 或 `AsyncSequence` |
+| SSH 库 | Citadel | 基于 Apple SwiftNIO SSH 封装，支持 Swift 5.10+，API 友好 |
 | Markdown | MarkdownUI | 支持代码块、链接、列表 |
 | Diff | 自建 View（优先 iOS 原生能力） | 基于 `before`/`after` 做 unified diff 渲染，行级高亮 |
 | 持久化 | UserDefaults + Keychain | 连接信息、模型预设；密码存 Keychain |
+
+#### 2.1 SSH 库选型：Citadel
+
+用于实现 SSH 隧道远程访问功能。
+
+| 库 | 语言 | 维护状态 | Swift 版本 | 推荐度 |
+|----|------|----------|------------|--------|
+| **Citadel** | Swift (基于 SwiftNIO SSH) | 活跃 (0.12.0, 2026-01) | 5.10+ | ★★★★★ |
+| SwiftNIO SSH | Swift (Apple 官方) | 活跃 | 6.0+ | ★★★★ |
+| NMSSH | Obj-C wrapper of libssh2 | 活跃 | 5.0+ | ★★★ |
+
+**选择 Citadel 的原因**：
+
+1. **无需升级 Swift 6.0**：支持 Swift 5.10+，避免 Swift 6 的并发安全 breaking changes
+2. **高级 API**：基于 Apple 的 SwiftNIO SSH 封装，比直接用 SwiftNIO SSH 简单
+3. **功能完整**：支持 Ed25519 密钥认证、DirectTCPIP 端口转发、SFTP
+4. **活跃维护**：44 个 release，最近刚加入反向隧道支持
+5. **文档齐全**：有 README 示例 + [官方文档](https://swiftpackageindex.com/orlandos-nl/Citadel/0.12.0/documentation/citadel)
+
+**使用示例**：
+
+```swift
+import Citadel
+
+let settings = SSHClientSettings(
+    host: "your-vps.com",
+    port: 22,
+    authenticationMethod: .publicKey(username: "user", privateKey: ed25519Key),
+    hostKeyValidator: .acceptAnything()
+)
+let client = try await SSHClient.connect(to: settings)
+
+// 本地端口转发：iOS:4096 -> VPS:18080 -> 家里 OpenCode
+let channel = try await client.createDirectTCPIPChannel(
+    using: .init(
+        targetHost: "127.0.0.1",
+        targetPort: 18080,
+        originatorAddress: try SocketAddress(ipAddress: "127.0.0.1", port: 4096)
+    )
+)
+```
 
 ### 3. 网络层设计
 
@@ -114,6 +156,73 @@
 - 解析：API 使用单行 `data:`，当前实现已满足
 - 请求头：建议添加 `Accept: text/event-stream`、`Cache-Control: no-cache`
 - 重连：可选，现有轮询 + 前台恢复已覆盖主要场景
+
+### 3.5 SSH 隧道架构
+
+用于远程访问场景，通过公网 VPS 中转到家里网络。
+
+**网络拓扑**：
+
+```
+┌─────────────┐      SSH Tunnel       ┌─────────────┐      反向隧道      ┌─────────────┐
+│  iOS App    │ ───────────────────▶  │    VPS      │ ─────────────────▶ │  家里 Mac   │
+│ 127.0.0.1   │   DirectTCPIP         │ 127.0.0.1   │    (预先建立)       │ OpenCode    │
+│   :4096     │   :4096 → :18080      │   :18080    │                    │   :4096     │
+└─────────────┘                       └─────────────┘                    └─────────────┘
+```
+
+**数据模型**：
+
+```swift
+struct SSHTunnelConfig: Codable {
+    var isEnabled: Bool = false
+    var host: String = ""           // VPS 地址
+    var port: Int = 22              // SSH 端口
+    var username: String = ""       // SSH 用户名
+    var remotePort: Int = 18080     // VPS 上转发的端口
+}
+
+enum SSHConnectionStatus {
+    case disconnected
+    case connecting
+    case connected
+    case error(String)
+}
+```
+
+**密钥管理**：
+
+```swift
+enum SSHKeyManager {
+    // 生成 Ed25519 密钥对
+    static func generateKeyPair() throws -> (privateKey: Data, publicKey: String)
+    
+    // 私钥存 Keychain
+    static func savePrivateKey(_ key: Data)
+    static func loadPrivateKey() -> Data?
+    
+    // 公钥用于显示/复制
+    static func getPublicKey() -> String?
+    
+    // 密钥轮换
+    static func rotateKey() throws -> String  // 返回新公钥
+}
+```
+
+**安全考虑**：
+
+1. **私钥保护**：使用 `kSecAttrAccessibleWhenUnlocked`，只在设备解锁时可访问
+2. **公钥传输**：用户手动复制，app 不通过网络传输公钥
+3. **TOFU**：首次连接显示服务器 fingerprint，用户确认后保存
+4. **超时**：连接超时 30 秒，自动断开并提示
+
+**错误处理**：
+
+| 错误 | 原因 | 用户提示 |
+|------|------|----------|
+| 密钥未授权 | 公钥未添加到 VPS | "请先添加公钥到服务器的 authorized_keys" |
+| 连接超时 | 网络问题或地址错误 | "连接超时，请检查网络和服务器地址" |
+| 认证失败 | 私钥不匹配 | "认证失败，请确认公钥已正确添加" |
 
 ### 4. 状态管理
 
