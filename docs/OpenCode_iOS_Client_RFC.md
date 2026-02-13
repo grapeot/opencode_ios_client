@@ -224,6 +224,11 @@ enum SSHKeyManager {
 | 连接超时 | 网络问题或地址错误 | "连接超时，请检查网络和服务器地址" |
 | 认证失败 | 私钥不匹配 | "认证失败，请确认公钥已正确添加" |
 
+**SSH UX 补充**：
+- 在 Settings 内生成可复制的 reverse tunnel command（用户可直接在电脑端执行）
+- 公钥复制入口常驻，不依赖 tunnel enable 状态
+- 在 SSH 配置区增加灰字提示：启用 SSH 后仍需到上方 `Server Connection` 点击 `Test Connection`
+
 ### 4. 状态管理
 
 ```swift
@@ -253,6 +258,7 @@ final class AppState {
 - **Part 渲染**：text (Markdown)、reasoning (折叠)、tool (卡片)、patch (跳转 Files)。tool/patch 若含文件路径，点击可「在 File Tree 中打开」预览；其中 `todowrite` tool 需渲染为 Task List（todo）视图，并响应 SSE `todo.updated`。Todo 仅在 tool 卡片内展示，不在 Chat 顶部常驻（方案 B）
 - **iPad 大屏密度**：在 `horizontalSizeClass == .regular` 时，tool/patch/permission 卡片可用三列网格横向填充；text part 仍整行显示（避免阅读断裂）
 - **流式（Think Streaming）**：`message.part.updated` 带 `delta` 时追加到对应 Part，实现打字机效果；无 delta 时全量 reload。Tool 卡片：running 展开、completed 默认收起
+- **Activity Row 收敛**：状态显示采用 "运行证据优先"。若检测到 running/pending tool 或 streaming 增量，即使瞬时收到 `session.status=idle` 也保持 running，避免提前 completed
 - **主题**：跟随 `@Environment(\.colorScheme)`，Light/Dark
 
 #### 5.1.1 Chat 文字选择（textSelection）— 设计

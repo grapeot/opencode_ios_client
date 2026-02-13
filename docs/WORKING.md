@@ -33,6 +33,9 @@
 - [x] **SSH TOFU 安全基线**：替换 `acceptAnything`，首次连接信任 host key，后续强校验并支持重置信任主机
 - [x] **SSE 主通道收敛**：移除 busy 常驻轮询，改为 SSE 重连后一次性 bootstrap 同步（messages + permissions）
 - [x] **AppState 重构（PermissionController）**：权限事件解析/回写与 pending 映射从 AppState 抽离，补行为测试
+- [x] **AppState 重构（Iteration C - ActivityTracker）**：activity 状态推导/防抖/时长规则抽离，补行为测试
+- [x] **Activity Row 提前 completed 修复**：当 session.status 变 idle 但仍有 running/pending tool 或 streaming 时保持 running，不提前停表
+- [x] **SSH UX 完整化**：Settings 增加「Copy Public Key」「Reverse Tunnel Command + Copy」与灰字提示（启用 SSH 后需点上方 Test Connection）
 
 ## 已完成
 

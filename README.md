@@ -55,10 +55,11 @@ iOS App → VPS (SSH) → VPS:18080 → 家里 OpenCode:4096
    ```
 
 2. **iOS App**配置 SSH Tunnel：
-   - Settings → SSH Tunnel → 开启
-   - 填写 VPS 地址、用户名、远程端口（18080）
-   - 复制公钥，添加到 VPS 的 `~/.ssh/authorized_keys`
-   - Server Address 改为 `127.0.0.1:4096`（通过隧道访问）
+    - Settings → SSH Tunnel → 开启
+    - 填写 VPS 地址、用户名、远程端口（18080）
+    - 复制公钥，添加到 VPS 的 `~/.ssh/authorized_keys`
+    - 复制 app 生成的 reverse tunnel command，在电脑端执行
+    - Server Address 改为 `127.0.0.1:4096`（通过隧道访问），然后点 `Test Connection`
 
 **注意**：SSH Tunnel 功能需要添加 Citadel 依赖，目前为预览状态。
 

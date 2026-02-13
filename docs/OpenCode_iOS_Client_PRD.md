@@ -168,6 +168,8 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 
 **流式更新（Think Streaming）**：行为与官方 Web 客户端对齐。SSE 推送 `message.part.updated` 时，若有 `delta` 字段，客户端增量追加到对应 text/reasoning Part，实现打字机效果；若无 delta 则全量 reload。使用 `messageID` + `partID` 定位 Part。**注**：Tool output 的实时流式（如 terminal 输出逐行）当前 API 不支持，output 仅在 completed 时一次性返回。
 
+**Activity Row 一致性规则**：运行态优先级高于 `session.status=idle` 的瞬时抖动。若仍存在 running/pending tool 或 streaming 增量，Activity Row 必须保持 running；仅在确认本轮 assistant 已完成后才进入 completed。
+
 **Session 状态指示器**：消息流顶部显示当前 session 状态（idle / busy / error）。状态来源于 `session.status` SSE 事件。busy 时显示进度动画。
 
 #### 4.2.3 权限通知
@@ -286,9 +288,10 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 1. 打开 Settings → SSH Tunnel
 2. App 自动生成密钥对
 3. 复制公钥，SSH 到 VPS 添加到 `~/.ssh/authorized_keys`
-4. 填写 VPS 地址、用户名、VPS 端口
-5. 开启 SSH Tunnel 开关
-6. Server Address 改为 `127.0.0.1:4096`（通过隧道访问）
+4. 填写 VPS 地址、用户名、SSH 端口、VPS 端口
+5. 复制 app 生成的 reverse tunnel command，在电脑上执行
+6. 开启 SSH Tunnel 开关
+7. Server Address 改为 `127.0.0.1:4096`（通过隧道访问），并在上方点 `Test Connection`
 
 **连接状态**：
 
