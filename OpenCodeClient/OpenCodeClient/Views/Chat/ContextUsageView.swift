@@ -49,6 +49,10 @@ struct ContextUsageButton: View {
     @Bindable var state: AppState
     @State private var showSheet = false
     @State private var isLoadingProviderConfig = false
+    @State private var detent: PresentationDetent = .large
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var preferLargeSheet: Bool { sizeClass == .regular }
 
     private var snapshot: ContextUsageSnapshot? { state.contextUsageSnapshot }
 
@@ -74,6 +78,8 @@ struct ContextUsageButton: View {
                     await MainActor.run { isLoadingProviderConfig = false }
                 }
             }
+
+            detent = preferLargeSheet ? .large : .medium
             showSheet = true
         } label: {
             ZStack {
@@ -105,7 +111,7 @@ struct ContextUsageButton: View {
                         }
                     }
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents(preferLargeSheet ? [.large] : [.medium, .large], selection: $detent)
         }
     }
 }
