@@ -11,6 +11,7 @@ struct SettingsTabView: View {
     @State private var showPublicKeySheet = false
     @State private var showRotateKeyAlert = false
     @State private var copiedPublicKey = false
+    @State private var publicKeyForSheet = ""
     @State private var sshConfig: SSHTunnelConfig = .default
 
     var body: some View {
@@ -140,7 +141,13 @@ struct SettingsTabView: View {
                         }
 
                         Button("View / Copy Public Key") {
-                            showPublicKeySheet = true
+                            do {
+                                publicKeyForSheet = try state.sshTunnelManager.generateOrGetPublicKey()
+                                showPublicKeySheet = true
+                            } catch {
+                                publicKeyForSheet = ""
+                                // Error handled by manager (status)
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -214,7 +221,7 @@ struct SettingsTabView: View {
             }
             .sheet(isPresented: $showPublicKeySheet) {
                 PublicKeySheet(
-                    publicKey: state.sshTunnelManager.getPublicKey() ?? "",
+                    publicKey: publicKeyForSheet,
                     onRotate: {
                         showRotateKeyAlert = true
                     }
@@ -225,6 +232,7 @@ struct SettingsTabView: View {
                 Button("Rotate", role: .destructive) {
                     do {
                         let newKey = try state.sshTunnelManager.rotateKey()
+                        publicKeyForSheet = newKey
                         UIPasteboard.general.string = newKey
                         copiedPublicKey = true
                     } catch {
