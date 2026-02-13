@@ -244,6 +244,31 @@ actor APIClient {
         case reject
     }
 
+    struct PermissionRequest: Codable, Identifiable {
+        struct ToolRef: Codable {
+            let messageID: String?
+            let callID: String?
+        }
+
+        struct Metadata: Codable {
+            let filepath: String?
+            let parentDir: String?
+        }
+
+        let id: String
+        let sessionID: String
+        let permission: String?
+        let patterns: [String]?
+        let metadata: Metadata?
+        let always: [String]?
+        let tool: ToolRef?
+    }
+
+    func pendingPermissions() async throws -> [PermissionRequest] {
+        let (data, _) = try await makeRequest(path: "/permission")
+        return try JSONDecoder().decode([PermissionRequest].self, from: data)
+    }
+
     func respondPermission(sessionID: String, permissionID: String, response: PermissionResponse) async throws {
         struct Body: Encodable {
             let response: PermissionResponse

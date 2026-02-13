@@ -507,6 +507,9 @@ final class AppState {
             
             await self.loadMessages()
             guard self.sessionLoadingID == loadingID else { return }
+
+            await self.refreshPendingPermissions()
+            guard self.sessionLoadingID == loadingID else { return }
             
             self.inferAndStoreModelForCurrentSessionIfMissing()
             await self.loadSessionDiff()
@@ -829,6 +832,7 @@ final class AppState {
             while !Task.isCancelled {
                 guard let sessionID = currentSessionID else { return }
                 await loadMessages()
+                await refreshPendingPermissions()
 
                 if forBusySession {
                     if !isBusySession(currentSessionStatus) {
@@ -886,8 +890,31 @@ final class AppState {
         do {
             try await apiClient.respondPermission(sessionID: perm.sessionID, permissionID: perm.permissionID, response: response)
             pendingPermissions.removeAll { $0.id == perm.id }
+            await refreshPendingPermissions()
         } catch {
             connectionError = error.localizedDescription
+        }
+    }
+
+    /// SSE permission events are not replayed; poll pending permissions so users can enter
+    /// an in-progress session and still see the warning.
+    func refreshPendingPermissions() async {
+        guard isConnected else { return }
+        do {
+            let requests = try await apiClient.pendingPermissions()
+            pendingPermissions = requests.map { req in
+                PendingPermission(
+                    sessionID: req.sessionID,
+                    permissionID: req.id,
+                    permission: req.permission,
+                    patterns: req.patterns ?? [],
+                    allowAlways: !(req.always ?? []).isEmpty,
+                    tool: nil,
+                    description: req.permission ?? "Permission required"
+                )
+            }
+        } catch {
+            // Keep the current list on errors.
         }
     }
 
@@ -1068,7 +1095,12 @@ final class AppState {
             guard let sessionID, let permissionID else { break }
 
             let permission = requestObj["permission"] as? String
-            let allowAlways = (requestObj["always"] as? Bool) ?? false
+            let allowAlways: Bool = {
+                if let b = requestObj["always"] as? Bool { return b }
+                if let arr = requestObj["always"] as? [String] { return !arr.isEmpty }
+                if let arr = requestObj["always"] as? [Any] { return !arr.isEmpty }
+                return false
+            }()
 
             let patterns: [String] = {
                 if let arr = requestObj["patterns"] as? [String] { return arr }
@@ -1103,6 +1135,13 @@ final class AppState {
 
             if !pendingPermissions.contains(where: { $0.id == perm.id }) {
                 pendingPermissions.append(perm)
+            }
+        case "permission.replied":
+            if let sessionID = props["sessionID"]?.value as? String {
+                let permissionID = (props["permissionID"]?.value as? String) ?? (props["id"]?.value as? String)
+                if let permissionID {
+                    pendingPermissions.removeAll { $0.sessionID == sessionID && $0.permissionID == permissionID }
+                }
             }
         case "todo.updated":
             if let sessionID = props["sessionID"]?.value as? String,
@@ -1190,6 +1229,7 @@ final class AppState {
             await loadProvidersConfig()
             await loadSessions()
             await loadMessages()
+            await refreshPendingPermissions()
             await loadSessionDiff()
             await loadSessionTodos()
             await loadFileTree()
