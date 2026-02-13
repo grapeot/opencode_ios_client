@@ -5,9 +5,20 @@
 ## 当前状态
 
 - **最后更新**：2026-02-13
-- **Phase**：Phase 3 完成（Think Streaming + iPad 分栏）+ 增强（GLM5、错误显示、录音校验）
+- **Phase**：Phase 3 完成 + SSH Tunnel 实现
 - **编译**：✅ 通过（iphonesimulator / generic destination）
 - **测试**：✅ 60 个单元测试通过
+
+## 进行中
+
+- [ ] **SSH Tunnel 远程访问**：
+  - [ ] 添加 Citadel 依赖（SPM）
+  - [ ] SSHKeyManager：Ed25519 密钥生成/存储（Keychain）/公钥显示
+  - [ ] SSHTunnelManager：连接/断开/状态
+  - [ ] Settings UI：SSH Tunnel 配置区域
+  - [ ] AppState 集成：SSH 连接状态
+  - [ ] 单元测试
+- [ ] **UI 改进**（低优先级）：busy 状态用菊花代替圆形按钮
 
 ## 已完成
 
