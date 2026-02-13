@@ -23,6 +23,15 @@ struct ToolPartView: View {
         return raw
     }
 
+    private var toolAccentColor: Color {
+        if part.tool == "todowrite" { return .green }
+        return .teal
+    }
+
+    private var toolBackgroundColor: Color {
+        toolAccentColor.opacity(0.07)
+    }
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
@@ -87,7 +96,7 @@ struct ToolPartView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "wrench.and.screwdriver.fill")
-                    .foregroundStyle(.blue.opacity(0.7))
+                    .foregroundStyle(toolAccentColor.opacity(0.85))
                     .font(.caption)
                 Text(toolDisplayName)
                     .fontWeight(.medium)
@@ -130,7 +139,11 @@ struct ToolPartView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(Color.blue.opacity(0.06))
+        .background(toolBackgroundColor)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(toolAccentColor.opacity(0.14), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .contextMenu {
             if !part.filePathsForNavigation.isEmpty {
