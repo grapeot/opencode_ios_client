@@ -39,16 +39,16 @@
 - [x] iPad 消息流密度优化：tool/patch/permission 卡片在 iPad 三列网格横向填充；text part 仍整行显示
 - [x] PathNormalizer 加固：percent-encoding 解码、file:// 兼容、最基本的 ../ 防御、绝对路径 → workspace 相对路径解析（修复 tool read 预览空内容类问题）
 - [x] 文档同步：PRD/RFC 补充 iPad 三列网格说明；lessons.md 增加“PRD/RFC→code→test→build/test”的工作流
-- [x] code_review.md 更新：补齐全 repo review 新发现项 + Security Review（准备推 GitHub 前检查）
+- [x] Code review 已归档
 - [x] 语音输入（AI Builder Speech Recognition）：录音（mic 权限）→ 调用 `/v1/audio/transcriptions` → 文本追加到输入框
 - [x] iPad 外接键盘：回车发送（submitLabel/send + keyboardShortcut Return）
 - [x] 网络安全边界：WAN 禁止 http://（强制 https://）；Settings 展示 scheme 与提示
 - [x] 3.1 apply_patch 显示为 "patch"（ToolPartView.toolDisplayName）
 - [x] 3.2 Settings HTTP 时 scheme 橙色 + info 图标
-- [x] 1.1 AppState 详细规划（code_review 三阶段细化）
+- [x] 1.1 AppState 详细规划
 - [x] Bug: tool layout — thinking 并入最后一条 MessageRowView，不另起行打断网格
 - [x] Bug: Diff/文件预览 — 横向滚动、minWidth 填满、textSelection
-- [x] code_review 2.4 更新：按方案 B 暂不强调
+- [x] Todo 2.4 按方案 B 暂不强调
 - [x] 最近 commit/push：9b4b842（tool layout、Diff 预览、Settings HTTP info、1.1 规划、2.4）
 
 ## 待办
