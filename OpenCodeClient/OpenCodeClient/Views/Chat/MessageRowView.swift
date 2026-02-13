@@ -48,9 +48,9 @@ struct MessageRowView: View {
                 continue
             }
 
-            // step-start/step-finish are currently rendered as separators elsewhere; keep behavior
+            // step-start/step-finish are currently rendered as separators elsewhere.
+            // For iPad card grid density, do not break the current card flow.
             if part.isStepStart || part.isStepFinish {
-                flushBuffer()
                 continue
             }
 

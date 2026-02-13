@@ -28,12 +28,6 @@ enum PathNormalizer {
         if s.hasPrefix("/") {
             s = String(s.dropFirst())
         }
-
-        // Prevent obvious path traversal segments from flowing into API calls.
-        // (Server should enforce this too; this is a defense-in-depth client-side guard.)
-        while s.contains("../") {
-            s = s.replacingOccurrences(of: "../", with: "")
-        }
         if s.hasPrefix("a/") || s.hasPrefix("b/") {
             s = String(s.dropFirst(2))
         }
@@ -43,6 +37,13 @@ enum PathNormalizer {
         if let r = s.range(of: ":[0-9]+(:[0-9]+)?$", options: .regularExpression) {
             s = String(s[..<r.lowerBound])
         }
+
+        // Prevent obvious path traversal segments from flowing into API calls.
+        // (Server should enforce this too; this is a defense-in-depth client-side guard.)
+        let safeSegments = s.split(separator: "/").filter { seg in
+            seg != "." && seg != ".." && !seg.isEmpty
+        }
+        s = safeSegments.joined(separator: "/")
         return s
     }
 

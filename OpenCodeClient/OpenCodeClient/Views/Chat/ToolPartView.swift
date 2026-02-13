@@ -17,6 +17,12 @@ struct ToolPartView: View {
         self._isExpanded = State(initialValue: part.stateDisplay?.lowercased() == "running")
     }
 
+    private var toolDisplayName: String {
+        let raw = part.tool ?? "tool"
+        if raw == "apply_patch" { return "patch" }
+        return raw
+    }
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
@@ -79,7 +85,7 @@ struct ToolPartView: View {
                 Image(systemName: "wrench.and.screwdriver.fill")
                     .foregroundStyle(.blue.opacity(0.7))
                     .font(.caption)
-                Text(part.tool ?? "tool")
+                Text(toolDisplayName)
                     .fontWeight(.medium)
                 if let reason = part.toolReason ?? part.metadata?.title, !reason.isEmpty {
                     Text("·")
@@ -146,6 +152,7 @@ struct ToolPartView: View {
     private func openFile(_ path: String) {
         let raw = path.trimmingCharacters(in: .whitespacesAndNewlines)
         let p = PathNormalizer.resolveWorkspaceRelativePath(raw, workspaceDirectory: state.currentSession?.directory)
+        guard !p.isEmpty else { return }
         state.fileToOpenInFilesTab = p
         state.selectedTab = 1
     }
