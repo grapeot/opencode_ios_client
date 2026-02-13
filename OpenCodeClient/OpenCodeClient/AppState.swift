@@ -280,6 +280,9 @@ final class AppState {
     // Session activity (rendered in transcript; session-scoped)
     var sessionActivities: [String: SessionActivity] = [:]
 
+    // Track when a session status was last updated via SSE.
+    private var sessionStatusUpdatedAt: [String: Date] = [:]
+
     var currentSessionActivity: SessionActivity? {
         guard let sid = currentSessionID else { return nil }
         return sessionActivities[sid]
@@ -838,7 +841,7 @@ final class AppState {
                 // Refresh sessions/status a few times to pick up updated status/title.
                 if i == 2 || i == 6 || i == 12 || i == 20 {
                     if let statuses = try? await apiClient.sessionStatus() {
-                        sessionStatuses = statuses
+                        mergePolledSessionStatuses(statuses)
                     }
                     await loadSessions()
                 }
@@ -975,6 +978,7 @@ final class AppState {
                     let prev = sessionStatuses[sessionID]
 
                     sessionStatuses[sessionID] = decoded
+                    sessionStatusUpdatedAt[sessionID] = Date()
 
                     updateSessionActivity(sessionID: sessionID, previous: prev, current: decoded)
 
@@ -1145,11 +1149,12 @@ final class AppState {
         if nowBusy {
             if !wasBusy || sessionActivities[sessionID]?.state != .running {
                 // While running, always render as the last row in the transcript.
+                let derivedStart = lastUserMessageCreatedAt(sessionID: sessionID) ?? Date()
                 sessionActivities[sessionID] = SessionActivity(
                     sessionID: sessionID,
                     state: .running,
                     text: opText,
-                    startedAt: Date(),
+                    startedAt: derivedStart,
                     endedAt: nil,
                     anchorMessageID: nil
                 )
@@ -1165,12 +1170,42 @@ final class AppState {
         // Completed: freeze in-place (anchor to the last message at completion).
         if wasBusy, var a = sessionActivities[sessionID] {
             a.state = .completed
-            a.endedAt = Date()
+            a.endedAt = lastAssistantMessageCompletedAt(sessionID: sessionID) ?? Date()
             if sessionID == currentSessionID {
                 a.anchorMessageID = messages.last?.info.id
             }
             sessionActivities[sessionID] = a
         }
+    }
+
+    private func mergePolledSessionStatuses(_ statuses: [String: SessionStatus]) {
+        let now = Date()
+        for (sid, st) in statuses {
+            if let updatedAt = sessionStatusUpdatedAt[sid], now.timeIntervalSince(updatedAt) < 5 {
+                continue
+            }
+            sessionStatuses[sid] = st
+        }
+    }
+
+    private func lastUserMessageCreatedAt(sessionID: String) -> Date? {
+        for msg in messages.reversed() {
+            if msg.info.sessionID != sessionID { continue }
+            if msg.info.isUser {
+                return Date(timeIntervalSince1970: Double(msg.info.time.created) / 1000.0)
+            }
+        }
+        return nil
+    }
+
+    private func lastAssistantMessageCompletedAt(sessionID: String) -> Date? {
+        for msg in messages.reversed() {
+            if msg.info.sessionID != sessionID { continue }
+            if msg.info.isAssistant, let completed = msg.info.time.completed {
+                return Date(timeIntervalSince1970: Double(completed) / 1000.0)
+            }
+        }
+        return nil
     }
 
     private func refreshSessionActivityText(sessionID: String) {
@@ -1371,8 +1406,9 @@ final class AppState {
             await loadSessionTodos()
             await loadFileTree()
             await loadFileStatus()
-            let statuses = try? await apiClient.sessionStatus()
-            if let statuses { sessionStatuses = statuses }
+            if let statuses = try? await apiClient.sessionStatus() {
+                mergePolledSessionStatuses(statuses)
+            }
         }
     }
 
