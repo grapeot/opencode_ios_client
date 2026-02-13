@@ -11,6 +11,7 @@ struct SettingsTabView: View {
     @State private var showPublicKeySheet = false
     @State private var showRotateKeyAlert = false
     @State private var copiedPublicKey = false
+    @State private var sshConfig: SSHTunnelConfig = .default
 
     var body: some View {
         NavigationStack {
@@ -66,8 +67,9 @@ struct SettingsTabView: View {
                 }
 
                 Section {
-                    Toggle("Enable SSH Tunnel", isOn: $state.sshTunnelManager.config.isEnabled)
-                        .onChange(of: state.sshTunnelManager.config.isEnabled) { _, newValue in
+                    Toggle("Enable SSH Tunnel", isOn: $sshConfig.isEnabled)
+                        .onChange(of: sshConfig.isEnabled) { _, newValue in
+                            state.sshTunnelManager.config.isEnabled = newValue
                             if newValue {
                                 Task { await state.sshTunnelManager.connect() }
                             } else {
@@ -75,31 +77,43 @@ struct SettingsTabView: View {
                             }
                         }
 
-                    if state.sshTunnelManager.config.isEnabled {
-                        TextField("VPS Host", text: $state.sshTunnelManager.config.host)
+                    if sshConfig.isEnabled {
+                        TextField("VPS Host", text: $sshConfig.host)
                             .textContentType(.URL)
                             .autocapitalization(.none)
+                            .onChange(of: sshConfig.host) { _, newValue in
+                                state.sshTunnelManager.config.host = newValue
+                            }
                         
                         HStack {
                             Text("SSH Port")
                             Spacer()
-                            TextField("", value: $state.sshTunnelManager.config.port, formatter: NumberFormatter())
+                            TextField("", value: $sshConfig.port, formatter: NumberFormatter())
                                 .keyboardType(.numberPad)
                                 .frame(width: 80)
                                 .multilineTextAlignment(.trailing)
+                                .onChange(of: sshConfig.port) { _, newValue in
+                                    state.sshTunnelManager.config.port = newValue
+                                }
                         }
                         
-                        TextField("Username", text: $state.sshTunnelManager.config.username)
+                        TextField("Username", text: $sshConfig.username)
                             .textContentType(.username)
                             .autocapitalization(.none)
+                            .onChange(of: sshConfig.username) { _, newValue in
+                                state.sshTunnelManager.config.username = newValue
+                            }
                         
                         HStack {
                             Text("Remote Port")
                             Spacer()
-                            TextField("", value: $state.sshTunnelManager.config.remotePort, formatter: NumberFormatter())
+                            TextField("", value: $sshConfig.remotePort, formatter: NumberFormatter())
                                 .keyboardType(.numberPad)
                                 .frame(width: 80)
                                 .multilineTextAlignment(.trailing)
+                                .onChange(of: sshConfig.remotePort) { _, newValue in
+                                    state.sshTunnelManager.config.remotePort = newValue
+                                }
                         }
 
                         HStack {
@@ -195,6 +209,9 @@ struct SettingsTabView: View {
                 }
             }
             .navigationTitle("Settings")
+            .onAppear {
+                sshConfig = state.sshTunnelManager.config
+            }
             .sheet(isPresented: $showPublicKeySheet) {
                 PublicKeySheet(
                     publicKey: state.sshTunnelManager.getPublicKey() ?? "",

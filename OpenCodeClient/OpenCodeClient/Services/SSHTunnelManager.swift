@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Combine
 import Network
 
 enum SSHConnectionStatus: Equatable {
