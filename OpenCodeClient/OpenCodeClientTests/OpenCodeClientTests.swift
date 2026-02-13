@@ -791,6 +791,7 @@ struct SSHTunnelTests {
         #expect(SSHError.keyNotFound.errorDescription?.contains("key not found") == true)
         #expect(SSHError.invalidKeyFormat.errorDescription?.contains("Invalid") == true)
         #expect(SSHError.tunnelFailed("x").errorDescription?.contains("Tunnel") == true)
+        #expect(SSHError.hostKeyMismatch(expected: "a", got: "b").errorDescription?.contains("Host key mismatch") == true)
     }
 
     @Test @MainActor func sshTunnelManagerInitialStatus() {
@@ -866,5 +867,23 @@ struct SSHKeyManagerTests {
         
         // Clean up
         SSHKeyManager.deleteKeyPair()
+    }
+}
+
+struct SSHKnownHostStoreTests {
+
+    @Test func knownHostTrustAndClear() throws {
+        let host = "unit-test.example.com"
+        let port = 2222
+        SSHKnownHostStore.clear(host: host, port: port)
+
+        let (_, publicKey) = try SSHKeyManager.generateKeyPair()
+        SSHKnownHostStore.trust(host: host, port: port, openSSHKey: publicKey)
+
+        #expect(SSHKnownHostStore.trustedOpenSSHKey(host: host, port: port) == publicKey)
+        #expect((SSHKnownHostStore.fingerprint(host: host, port: port) ?? "").hasPrefix("SHA256:"))
+
+        SSHKnownHostStore.clear(host: host, port: port)
+        #expect(SSHKnownHostStore.trustedOpenSSHKey(host: host, port: port) == nil)
     }
 }

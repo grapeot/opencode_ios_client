@@ -30,6 +30,7 @@
 - [x] **Per-turn Activity 行**：每个 user turn 的末尾保留 completed activity 行（显示耗时）；当前 in-progress turn 在底部显示 running activity 行
 - [x] **iPhone 发热明显热点修复（滚动）**：移除 running activity 每秒计时对 `scrollAnchor` 的影响，避免每秒触发 `scrollTo("bottom")` 动画
 - [x] **全量 Code Review 文档重写（2026-02-13）**：删除并重写 `docs/code_review.md`，聚焦架构/性能/安全的明显问题与优先级
+- [x] **SSH TOFU 安全基线**：替换 `acceptAnything`，首次连接信任 host key，后续强校验并支持重置信任主机
 
 ## 已完成
 

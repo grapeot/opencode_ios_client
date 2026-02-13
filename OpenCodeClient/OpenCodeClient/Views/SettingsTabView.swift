@@ -145,6 +145,21 @@ struct SettingsTabView: View {
                             }
                         }
 
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Known Host")
+                            Spacer()
+                            Text(state.sshTunnelManager.trustedHostFingerprint ?? "Untrusted")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(state.sshTunnelManager.trustedHostFingerprint == nil ? .secondary : .primary)
+                                .multilineTextAlignment(.trailing)
+                        }
+
+                        Button("Reset Trusted Host") {
+                            state.sshTunnelManager.clearTrustedHost()
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(state.sshTunnelManager.trustedHostFingerprint == nil)
+
                     }
 
                     Button("View / Copy Public Key") {
@@ -160,7 +175,7 @@ struct SettingsTabView: View {
                 } header: {
                     Text("SSH Tunnel")
                 } footer: {
-                    Text("Forwards iOS 127.0.0.1:4096 to VPS 127.0.0.1:<VPS Port>. 1) View/copy your public key and add it to the VPS's ~/.ssh/authorized_keys. 2) Set Server Address to 127.0.0.1:4096.")
+                    Text("Forwards iOS 127.0.0.1:4096 to VPS 127.0.0.1:<VPS Port>. 1) View/copy your public key and add it to the VPS's ~/.ssh/authorized_keys. 2) First connect uses TOFU to trust host key; later connections must match. 3) Set Server Address to 127.0.0.1:4096.")
                         .font(.caption)
                 }
 

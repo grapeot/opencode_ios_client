@@ -31,6 +31,79 @@ enum SSHConnectionStatus: Equatable {
     }
 }
 
+enum SSHKnownHostStore {
+    private static let userDefaultsKey = "sshKnownHosts.openSSH"
+
+    static func trustedOpenSSHKey(host: String, port: Int) -> String? {
+        loadMap()[identity(host: host, port: port)]
+    }
+
+    static func trust(host: String, port: Int, openSSHKey: String) {
+        var map = loadMap()
+        map[identity(host: host, port: port)] = openSSHKey
+        UserDefaults.standard.set(map, forKey: userDefaultsKey)
+    }
+
+    static func clear(host: String, port: Int) {
+        var map = loadMap()
+        map.removeValue(forKey: identity(host: host, port: port))
+        UserDefaults.standard.set(map, forKey: userDefaultsKey)
+    }
+
+    static func fingerprint(host: String, port: Int) -> String? {
+        guard let key = trustedOpenSSHKey(host: host, port: port) else { return nil }
+        return fingerprint(openSSHKey: key)
+    }
+
+    static func fingerprint(openSSHKey: String) -> String {
+        let components = openSSHKey.split(separator: " ")
+        guard components.count >= 2, let keyData = Data(base64Encoded: String(components[1])) else {
+            return "SHA256:invalid"
+        }
+        let digest = SHA256.hash(data: keyData)
+        return "SHA256:\(Data(digest).base64EncodedString())"
+    }
+
+    private static func loadMap() -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: userDefaultsKey) as? [String: String] ?? [:]
+    }
+
+    private static func identity(host: String, port: Int) -> String {
+        "\(host.lowercased()):\(port)"
+    }
+}
+
+private final class SSHTOFUHostKeyValidator: NIOSSHClientServerAuthenticationDelegate {
+    private let host: String
+    private let port: Int
+
+    init(host: String, port: Int) {
+        self.host = host
+        self.port = port
+    }
+
+    func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
+        let presented = String(openSSHPublicKey: hostKey)
+        if let trusted = SSHKnownHostStore.trustedOpenSSHKey(host: host, port: port) {
+            if trusted == presented {
+                validationCompletePromise.succeed(())
+                return
+            }
+            validationCompletePromise.fail(
+                SSHError.hostKeyMismatch(
+                    expected: SSHKnownHostStore.fingerprint(openSSHKey: trusted),
+                    got: SSHKnownHostStore.fingerprint(openSSHKey: presented)
+                )
+            )
+            return
+        }
+
+        // TOFU: trust the first successful host key for this host:port.
+        SSHKnownHostStore.trust(host: host, port: port, openSSHKey: presented)
+        validationCompletePromise.succeed(())
+    }
+}
+
 struct SSHTunnelConfig: Codable, Equatable {
     var isEnabled: Bool = false
     var host: String = ""
@@ -64,8 +137,12 @@ struct SSHTunnelConfig: Codable, Equatable {
 @MainActor
 final class SSHTunnelManager: ObservableObject {
     @Published private(set) var status: SSHConnectionStatus = .disconnected
+    @Published private(set) var trustedHostFingerprint: String?
     @Published var config: SSHTunnelConfig {
-        didSet { saveConfig() }
+        didSet {
+            saveConfig()
+            trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: config.host, port: config.port)
+        }
     }
     
     private var sshClient: SSHClient?
@@ -80,6 +157,7 @@ final class SSHTunnelManager: ObservableObject {
         } else {
             self.config = .default
         }
+        self.trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: self.config.host, port: self.config.port)
     }
     
     private func saveConfig() {
@@ -127,11 +205,12 @@ final class SSHTunnelManager: ObservableObject {
             host: config.host,
             port: config.port,
             authenticationMethod: { .ed25519(username: username, privateKey: privateKey) },
-            hostKeyValidator: .acceptAnything()
+            hostKeyValidator: .custom(SSHTOFUHostKeyValidator(host: config.host, port: config.port))
         )
         
         let client = try await SSHClient.connect(to: settings)
         self.sshClient = client
+        self.trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: config.host, port: config.port)
         
         #if DEBUG
         print("[SSH] Connected successfully")
@@ -264,6 +343,11 @@ final class SSHTunnelManager: ObservableObject {
     func rotateKey() throws -> String {
         try SSHKeyManager.rotateKey()
     }
+
+    func clearTrustedHost() {
+        SSHKnownHostStore.clear(host: config.host, port: config.port)
+        trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: config.host, port: config.port)
+    }
 }
 
 private final class NIOToNWConnectionHandler: ChannelInboundHandler {
@@ -305,6 +389,7 @@ enum SSHError: LocalizedError {
     case keyNotFound
     case invalidKeyFormat
     case tunnelFailed(String)
+    case hostKeyMismatch(expected: String, got: String)
     
     var errorDescription: String? {
         switch self {
@@ -318,6 +403,8 @@ enum SSHError: LocalizedError {
             return "Invalid SSH key format."
         case .tunnelFailed(let reason):
             return "Tunnel failed: \(reason)"
+        case .hostKeyMismatch(let expected, let got):
+            return "Host key mismatch. Expected \(expected), got \(got). This may be a MITM attack or a reinstalled server. Reset trusted host and verify fingerprint before reconnecting."
         }
     }
 }
