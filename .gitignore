@@ -20,6 +20,9 @@ xcuserdata/
 *.xcuserstate
 *.xcscmblueprint
 
+# Local build logs (should not be committed)
+OpenCodeClient/build_log*.txt
+
 # Swift Package Manager
 .build/
 .swiftpm/
