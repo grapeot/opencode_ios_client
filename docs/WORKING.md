@@ -104,7 +104,7 @@
 - [x] **3.4 Test Coverage**：添加 AppState 层面测试
 - [x] **3.5 View Decomposition**：拆分 ChatTabView
 - [ ] **3.1 AppState Size**：继续提取 Coordinator
-- [ ] **4.1 Memory Leaks**：SSE 连接 deinit 处理
+- [x] **4.1 Memory Leaks**：SSE 连接 deinit 处理
 - [x] **4.4 Default Server**：修改默认服务器配置
 
 ## 遇到的问题

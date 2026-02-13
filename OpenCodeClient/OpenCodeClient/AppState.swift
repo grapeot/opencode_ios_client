@@ -878,7 +878,13 @@ final class AppState {
     func disconnectSSE() {
         sseTask?.cancel()
         sseTask = nil
+        pollingTask?.cancel()
+        pollingTask = nil
     }
+    
+    // Note: AppState is typically held for the app's lifetime (as @State in root view),
+    // so deinit-based cleanup is not critical. The disconnectSSE() method above
+    // should be called explicitly when needed (e.g., on background/terminate).
 
     /// 是否应处理 message.updated：有 sessionID 时需匹配当前 session，否则保持原行为
     nonisolated static func shouldProcessMessageEvent(eventSessionID: String?, currentSessionID: String?) -> Bool {
