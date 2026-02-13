@@ -45,27 +45,177 @@ struct ChatTabView: View {
 
     private var useGridCards: Bool { sizeClass == .regular }
 
-    private var currentActivity: SessionActivity? {
-        state.currentSessionActivity
+    fileprivate struct TurnActivity: Identifiable {
+        enum State {
+            case running
+            case completed
+        }
+
+        let id: String  // userMessageID
+        let state: State
+        let text: String
+        let startedAt: Date
+        let endedAt: Date?
+
+        func elapsedSeconds(now: Date = Date()) -> Int {
+            let end = endedAt ?? now
+            return max(0, Int(end.timeIntervalSince(startedAt)))
+        }
+
+        func elapsedString(now: Date = Date()) -> String {
+            let secs = elapsedSeconds(now: now)
+            return String(format: "%d:%02d", secs / 60, secs % 60)
+        }
     }
 
-    private var activityAnchorID: String? {
-        currentActivity?.anchorMessageID
-    }
+    private enum ChatItem: Identifiable {
+        case group(MessageGroupItem)
+        case activity(TurnActivity)
 
-    private func shouldRenderActivity(after group: MessageGroupItem) -> Bool {
-        guard let activityAnchorID else { return false }
-        return group.messageIDs.contains(activityAnchorID)
-    }
-
-    private var shouldRenderActivityAtEnd: Bool {
-        guard currentActivity != nil else { return false }
-        guard let anchor = activityAnchorID else { return true }
-        return !messageGroups.contains(where: { $0.messageIDs.contains(anchor) })
+        var id: String {
+            switch self {
+            case .group(let g): return "g-\(g.id)"
+            case .activity(let a): return "a-\(a.id)"
+            }
+        }
     }
 
     private var currentPermissions: [PendingPermission] {
         state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }
+    }
+
+    private var isCurrentSessionBusy: Bool {
+        guard let status = state.currentSessionStatus else { return false }
+        return status.type == "busy" || status.type == "retry"
+    }
+
+    private var lastUserMessageIDInCurrentSession: String? {
+        guard let sid = state.currentSessionID else { return nil }
+        return state.messages.last(where: { $0.info.sessionID == sid && $0.info.isUser })?.info.id
+    }
+
+    private enum TurnActivityMode {
+        case completedOnly
+        case runningOnly
+    }
+
+    private func turnActivitiesForCurrentSession(_ mode: TurnActivityMode) -> [TurnActivity] {
+        guard let sid = state.currentSessionID else { return [] }
+        let msgs = state.messages
+
+        var userIndices: [Int] = []
+        userIndices.reserveCapacity(64)
+        for (i, m) in msgs.enumerated() {
+            if m.info.sessionID == sid, m.info.isUser {
+                userIndices.append(i)
+            }
+        }
+        if userIndices.isEmpty { return [] }
+
+        let lastUserID = lastUserMessageIDInCurrentSession
+
+        var result: [TurnActivity] = []
+        result.reserveCapacity(userIndices.count)
+
+        for (pos, ui) in userIndices.enumerated() {
+            let userMsg = msgs[ui]
+            let nextUserIndex = (pos + 1 < userIndices.count) ? userIndices[pos + 1] : msgs.count
+
+            var lastAssistant: Message? = nil
+            var lastCompletedAssistant: Message? = nil
+            for j in (ui + 1)..<nextUserIndex {
+                let m = msgs[j]
+                if m.info.isAssistant {
+                    lastAssistant = m.info
+                    if m.info.time.completed != nil {
+                        lastCompletedAssistant = m.info
+                    }
+                }
+            }
+
+            let startedAt = Date(timeIntervalSince1970: Double(userMsg.info.time.created) / 1000.0)
+
+            let completedAt: Date? = {
+                guard let completed = lastCompletedAssistant?.time.completed else { return nil }
+                return Date(timeIntervalSince1970: Double(completed) / 1000.0)
+            }()
+            let fallbackEndAt: Date? = {
+                guard let created = lastAssistant?.time.created else { return nil }
+                return Date(timeIntervalSince1970: Double(created) / 1000.0)
+            }()
+            let endedAt = completedAt ?? fallbackEndAt
+
+            let isActiveTurn = isCurrentSessionBusy && (userMsg.info.id == lastUserID)
+            let isRunning = isActiveTurn && completedAt == nil
+
+            switch mode {
+            case .runningOnly:
+                guard isRunning else { continue }
+                result.append(
+                    TurnActivity(
+                        id: userMsg.info.id,
+                        state: .running,
+                        text: state.activityTextForSession(sid),
+                        startedAt: startedAt,
+                        endedAt: nil
+                    )
+                )
+            case .completedOnly:
+                guard !isRunning else { continue }
+                // Only show a completed row if we have at least one assistant message for this turn.
+                guard lastAssistant != nil else { continue }
+                result.append(
+                    TurnActivity(
+                        id: userMsg.info.id,
+                        state: .completed,
+                        text: "Completed",
+                        startedAt: startedAt,
+                        endedAt: endedAt
+                    )
+                )
+            }
+        }
+
+        return result
+    }
+
+    private var chatItems: [ChatItem] {
+        // Completed activity rows interleaved after each assistant turn.
+        let activities = turnActivitiesForCurrentSession(.completedOnly)
+        let activityByUserID = Dictionary(uniqueKeysWithValues: activities.map { ($0.id, $0) })
+
+        var items: [ChatItem] = []
+        var currentUserID: String? = nil
+        var seenAssistantForCurrentUser = false
+        for group in messageGroups {
+            switch group {
+            case .user(let msg):
+                if let uid = currentUserID,
+                   seenAssistantForCurrentUser,
+                   let a = activityByUserID[uid] {
+                    items.append(.activity(a))
+                }
+                currentUserID = msg.info.id
+                seenAssistantForCurrentUser = false
+                items.append(.group(group))
+            case .assistantMerged:
+                if currentUserID != nil {
+                    seenAssistantForCurrentUser = true
+                }
+                items.append(.group(group))
+            }
+        }
+
+        if let uid = currentUserID,
+           seenAssistantForCurrentUser,
+           let a = activityByUserID[uid] {
+            items.append(.activity(a))
+        }
+        return items
+    }
+
+    private var runningTurnActivity: TurnActivity? {
+        turnActivitiesForCurrentSession(.runningOnly).last
     }
 
     /// 合并同一 assistant turn 的连续 step-only 消息，使 tool 卡片在一个 grid 内连续显示
@@ -112,57 +262,60 @@ struct ChatTabView: View {
                             if messageGroups.isEmpty {
                                 emptySessionStateView
                             } else {
-                                ForEach(messageGroups) { group in
-                                    switch group {
-                                case .user(let msg):
-                                    MessageRowView(message: msg, state: state, streamingPart: nil)
-                                case .assistantMerged(let msgs):
-                                    let merged = MessageWithParts(info: msgs.first!.info, parts: msgs.flatMap(\.parts))
-                                    MessageRowView(
-                                        message: merged,
-                                        state: state,
-                                        streamingPart: nil
-                                    )
-                                }
-
-                                if let activity = currentActivity, shouldRenderActivity(after: group) {
-                                    SessionActivityRowView(activity: activity)
+                                ForEach(chatItems) { item in
+                                    switch item {
+                                    case .group(let group):
+                                        switch group {
+                                        case .user(let msg):
+                                            MessageRowView(message: msg, state: state, streamingPart: nil)
+                                        case .assistantMerged(let msgs):
+                                            let merged = MessageWithParts(info: msgs.first!.info, parts: msgs.flatMap(\.parts))
+                                            MessageRowView(
+                                                message: merged,
+                                                state: state,
+                                                streamingPart: nil
+                                            )
+                                        }
+                                    case .activity(let a):
+                                        TurnActivityRowView(activity: a)
+                                    }
                                 }
                             }
-                        }
-                        if let streamingPart = state.streamingReasoningPart {
-                            StreamingReasoningView(part: streamingPart, state: state)
-                                .padding(.top, 6)
-                        }
+                            if let streamingPart = state.streamingReasoningPart {
+                                StreamingReasoningView(part: streamingPart, state: state)
+                                    .padding(.top, 6)
+                            }
 
-                        // Permissions should be at the bottom so auto-scroll makes them visible.
-                        // Keep them above the activity row.
-                        if useGridCards {
-                            LazyVGrid(
-                                columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-                                alignment: .leading,
-                                spacing: 10
-                            ) {
+                            // Permissions should be at the bottom so auto-scroll makes them visible.
+                            // Keep them above the activity row.
+                            if useGridCards {
+                                LazyVGrid(
+                                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
+                                    alignment: .leading,
+                                    spacing: 10
+                                ) {
+                                    ForEach(currentPermissions) { perm in
+                                        PermissionCardView(permission: perm) { response in
+                                            Task { await state.respondPermission(perm, response: response) }
+                                        }
+                                    }
+                                }
+                            } else {
                                 ForEach(currentPermissions) { perm in
                                     PermissionCardView(permission: perm) { response in
                                         Task { await state.respondPermission(perm, response: response) }
                                     }
                                 }
                             }
-                        } else {
-                            ForEach(currentPermissions) { perm in
-                                PermissionCardView(permission: perm) { response in
-                                    Task { await state.respondPermission(perm, response: response) }
-                                }
-                            }
-                        }
 
-                        if let activity = currentActivity, shouldRenderActivityAtEnd {
-                            SessionActivityRowView(activity: activity)
-                        }
-                             Color.clear
-                                 .frame(height: 1)
-                                 .id("bottom")
+                            // Running activity should be at the very bottom.
+                            if let a = runningTurnActivity {
+                                TurnActivityRowView(activity: a)
+                            }
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottom")
                         }
                         .padding()
                     }
@@ -376,13 +529,10 @@ struct ChatTabView: View {
             .map { "\($0.key)=\($0.value.count)" }
             .sorted()
             .joined(separator: "|")
-        let activity = state.currentSessionActivity.map { "\($0.state)-\($0.text)-\($0.anchorMessageID ?? "")" } ?? ""
-        return "\(perm)-\(msg)-\(stream)-\(activity)"
-    }
-
-    private var isCurrentSessionBusy: Bool {
-        guard let status = state.currentSessionStatus else { return false }
-        return status.type == "busy" || status.type == "retry"
+        let sid = state.currentSessionID ?? ""
+        let status = state.currentSessionStatus?.type ?? ""
+        let activity = runningTurnActivity.map { "\($0.text)-\($0.elapsedSeconds())" } ?? ""
+        return "\(perm)-\(msg)-\(stream)-\(sid)-\(status)-\(activity)"
     }
 
     @ViewBuilder
@@ -393,7 +543,8 @@ struct ChatTabView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 20)
         } else if isCurrentSessionBusy {
-            if currentActivity == nil {
+            // If busy but there is no user turn yet, show a lightweight placeholder.
+            if lastUserMessageIDInCurrentSession == nil {
                 HStack(spacing: 10) {
                     ProgressView()
                     Text("Session 正在运行中，消息尚未可见，正在刷新中…")
@@ -427,8 +578,8 @@ struct ChatTabView: View {
     }
 }
 
-private struct SessionActivityRowView: View {
-    let activity: SessionActivity
+private struct TurnActivityRowView: View {
+    let activity: ChatTabView.TurnActivity
 
     var body: some View {
         Group {
@@ -444,12 +595,7 @@ private struct SessionActivityRowView: View {
 
     private func row(now: Date) -> some View {
         let elapsed = activity.elapsedString(now: now)
-        let text: String = {
-            switch activity.state {
-            case .running: return activity.text
-            case .completed: return "Completed — \(activity.text)"
-            }
-        }()
+        let text = activity.text
 
         return HStack(spacing: 8) {
             Image(systemName: activity.state == .running ? "clock" : "checkmark.circle")

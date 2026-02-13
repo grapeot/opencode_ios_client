@@ -291,6 +291,10 @@ final class AppState {
         guard let sid = currentSessionID else { return nil }
         return sessionActivities[sid]
     }
+
+    func activityTextForSession(_ sessionID: String) -> String {
+        bestSessionActivityText(sessionID: sessionID) ?? "Thinking"
+    }
     
     /// Unified error handling
     var lastAppError: AppError?

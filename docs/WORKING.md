@@ -22,11 +22,12 @@
   - [x] 实现实际 SSH 连接逻辑（本地 127.0.0.1:4096 → SSH DirectTCPIP → VPS 127.0.0.1:remotePort）
   - [x] 修复 project deployment target（避免 UITests 无法在 simulator 上运行）
 - [x] **UI 改进**（低优先级）：busy 状态用菊花代替圆形按钮
-- [ ] **权限请求交互修复**：支持 Allow once / Allow always / Reject，并确保 POST `/session/:id/permissions/:permissionID` 带 body `{"response":...}`
-- [ ] **SSH Public Key UI**：未连接时也应可生成/查看/复制公钥（避免 sheet 内按钮全灰）
-- [ ] **Permission 卡片位置**：permission 对话卡片应渲染在消息流底部（默认滚动到最底可见），并位于 activity/thinking 行的上方
-- [ ] **Activity 计时持久化**：重启 app/切换 session 后，计时不应从 0 重置；需要从 API/消息时间推导或持久化（对齐 web client 行为）
-- [ ] **Activity/Busy 状态抖动**：偶发 busy/idle 或 thinking/gathering 来回切换；加 DEBUG log 并稳定状态来源（SSE vs poll）
+- [x] **权限请求交互修复**：支持 Allow once / Allow always / Reject，并确保 POST `/session/:id/permissions/:permissionID` 带 body `{"response":...}`
+- [x] **SSH Public Key UI**：未连接时也应可生成/查看/复制公钥（避免 sheet 内按钮全灰）
+- [x] **Permission 卡片位置**：permission 对话卡片应渲染在消息流底部（默认滚动到最底可见），并位于 activity/thinking 行的上方
+- [x] **Activity 计时持久化**：计时从消息 `time.created/time.completed` 推导，避免重启 app/切换 session 后从 0 重置
+- [x] **Activity/Busy 状态抖动**：session.status 轮询结果不覆盖近期 SSE；activity 文案更新做 2.5s debounce + debug log
+- [x] **Per-turn Activity 行**：每个 user turn 的末尾保留 completed activity 行（显示耗时）；当前 in-progress turn 在底部显示 running activity 行
 
 ## 已完成
 
