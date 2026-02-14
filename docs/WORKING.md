@@ -36,6 +36,8 @@
 - [x] **AppState 重构（Iteration C - ActivityTracker）**：activity 状态推导/防抖/时长规则抽离，补行为测试
 - [x] **Activity Row 提前 completed 修复**：当 session.status 变 idle 但仍有 running/pending tool 或 streaming 时保持 running，不提前停表
 - [x] **SSH UX 完整化**：Settings 增加「Copy Public Key」「Reverse Tunnel Command + Copy」与灰字提示（启用 SSH 后需点上方 Test Connection）
+- [x] **Session 快速切换竞态修复（全量拉取）**：对 `loadMessages/loadSessionDiff` 增加 requestedSessionID 校验，丢弃过期响应，避免 A→B→A 后被旧 B 结果覆盖
+- [x] **Activity Row 提前 completed（二次）修复**：`running/completed` 判定改为“当前 turn + busy 状态优先”，不再依赖 `completedAt == nil`，避免仍在运行时误显示 completed
 
 ## 已完成
 

@@ -572,6 +572,11 @@ final class AppState {
         guard let sessionID = currentSessionID else { return }
         do {
             let loaded = try await apiClient.messages(sessionID: sessionID)
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                Self.logger.debug("drop stale loadMessages result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
+                return
+            }
+
             let loadedMessageIDs = Set(loaded.map { $0.info.id })
             let keepPending = isBusySession(currentSessionStatus)
             let pendingMessages: [MessageWithParts] = {
@@ -623,6 +628,10 @@ final class AppState {
         } catch let error as DecodingError {
             Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         } catch {
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                Self.logger.debug("ignore stale loadMessages error requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
+                return
+            }
             connectionError = error.localizedDescription
             Self.logger.error("loadMessages failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         }
@@ -631,8 +640,14 @@ final class AppState {
     func loadSessionDiff() async {
         guard let sessionID = currentSessionID else { sessionDiffs = []; return }
         do {
-            sessionDiffs = try await apiClient.sessionDiff(sessionID: sessionID)
+            let loaded = try await apiClient.sessionDiff(sessionID: sessionID)
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                Self.logger.debug("drop stale loadSessionDiff result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
+                return
+            }
+            sessionDiffs = loaded
         } catch {
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return }
             sessionDiffs = []
         }
     }
@@ -933,6 +948,11 @@ final class AppState {
         guard currentSessionID != nil else { return false }
         if let sid = eventSessionID { return sid == currentSessionID }
         return true  // 无 sessionID 时保持原行为（向后兼容）
+    }
+
+    /// Async request result should only apply when requested session is still current.
+    nonisolated static func shouldApplySessionScopedResult(requestedSessionID: String, currentSessionID: String?) -> Bool {
+        requestedSessionID == currentSessionID
     }
 
     private func handleSSEEvent(_ event: SSEEvent) async {

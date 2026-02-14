@@ -198,6 +198,14 @@ struct SessionFilteringTests {
     @Test func shouldProcessWhenNoEventSessionIDForBackwardCompat() {
         #expect(AppState.shouldProcessMessageEvent(eventSessionID: nil, currentSessionID: "s1") == true)
     }
+
+    @Test func shouldApplySessionScopedResultWhenRequestedStillCurrent() {
+        #expect(AppState.shouldApplySessionScopedResult(requestedSessionID: "s1", currentSessionID: "s1") == true)
+    }
+
+    @Test func shouldDropSessionScopedResultWhenSessionChanged() {
+        #expect(AppState.shouldApplySessionScopedResult(requestedSessionID: "s2", currentSessionID: "s1") == false)
+    }
 }
 
 // MARK: - Message & Role Tests

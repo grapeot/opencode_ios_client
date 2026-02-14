@@ -145,8 +145,8 @@ struct ChatTabView: View {
             }()
             let endedAt = completedAt ?? fallbackEndAt
 
-            let isActiveTurn = isCurrentSessionBusy && (userMsg.info.id == lastUserID)
-            let isRunning = isActiveTurn && completedAt == nil
+            let isLatestTurn = (userMsg.info.id == lastUserID)
+            let isRunning = isLatestTurn && isCurrentSessionBusy
 
             switch mode {
             case .runningOnly:
