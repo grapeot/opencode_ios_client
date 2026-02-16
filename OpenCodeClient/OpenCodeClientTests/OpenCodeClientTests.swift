@@ -252,18 +252,18 @@ struct SessionFilteringTests {
 struct MessagePaginationTests {
 
     @Test func normalizedMessageFetchLimitDefaultsToPageSize() {
-        #expect(AppState.normalizedMessageFetchLimit(current: nil) == 6)
+        #expect(AppState.normalizedMessageFetchLimit(current: nil) == 20)
     }
 
     @Test func normalizedMessageFetchLimitUsesAtLeastPageSize() {
-        #expect(AppState.normalizedMessageFetchLimit(current: 2) == 6)
-        #expect(AppState.normalizedMessageFetchLimit(current: 18) == 18)
+        #expect(AppState.normalizedMessageFetchLimit(current: 2) == 20)
+        #expect(AppState.normalizedMessageFetchLimit(current: 24) == 24)
     }
 
     @Test func nextMessageFetchLimitAddsOnePage() {
-        #expect(AppState.nextMessageFetchLimit(current: nil) == 12)
-        #expect(AppState.nextMessageFetchLimit(current: 6) == 12)
-        #expect(AppState.nextMessageFetchLimit(current: 12) == 18)
+        #expect(AppState.nextMessageFetchLimit(current: nil) == 40)
+        #expect(AppState.nextMessageFetchLimit(current: 20) == 40)
+        #expect(AppState.nextMessageFetchLimit(current: 40) == 60)
     }
 }
 

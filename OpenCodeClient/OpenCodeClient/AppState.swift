@@ -396,8 +396,8 @@ final class AppState {
     /// Each selectSession call generates a new ID; async tasks check if they're still current.
     private var sessionLoadingID = UUID()
 
-    // WAN optimization: page message history by 3 turns (user+assistant = 6 messages).
-    static let messagePageSize = 6
+    // WAN optimization: page message history in fixed-size message batches.
+    static let messagePageSize = 20
     private var loadedMessageLimitBySessionID: [String: Int] = [:]
     private var hasMoreHistoryBySessionID: [String: Bool] = [:]
     private var loadingOlderMessagesSessionIDs: Set<String> = []

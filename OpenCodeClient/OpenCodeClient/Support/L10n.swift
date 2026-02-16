@@ -573,12 +573,12 @@ enum L10n {
 
     static func sessionsFiles(_ count: Int) -> String {
         let key: Key = count == 1 ? .sessionsFilesOne : .sessionsFilesMany
-        return t(key, count)
+        return t(key, Int32(clamping: count))
     }
 
     static func patchFilesChanged(_ count: Int) -> String {
         let key: Key = count == 1 ? .patchFilesChangedOne : .patchFilesChangedMany
-        return t(key, count)
+        return t(key, Int32(clamping: count))
     }
 
     static func toolOpenFileLabel(path: String) -> String {
