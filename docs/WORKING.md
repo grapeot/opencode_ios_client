@@ -14,6 +14,7 @@
 - [x] **渲染性能优化 1/3（行级去全局状态订阅）**：`MessageRowView/ToolPartView/PatchPartView` 移除 `@Bindable AppState` 直连，改为最小必要数据 + 文件打开回调，降低长会话下无关状态变更触发的整页重算
 - [x] **渲染性能优化 2/3（Scroll Anchor 轻量化）**：`scrollAnchor` 从“全量拼接所有 message/streaming 字符串”改为基于 `messageCount + lastMessageSignature + streaming chars` 的 O(1)/小常量签名，避免长会话下每次状态变化都全量遍历
 - [x] **渲染性能优化 3/3（Markdown 快速路径）**：对纯文本消息走 `Text` 渲染，仅在检测到 Markdown 语法特征时使用 `MarkdownUI`，降低长会话中大量普通文本消息的解析与布局开销
+- [x] **消息分段加载（3 轮对话）**：默认仅拉取最近 3 轮（6 条）message，聊天页顶部显示“下拉加载更多历史消息”，每次下拉再扩展 3 轮并重新拉取
 - [x] **SSH Tunnel 远程访问**（Citadel 集成完成）：
   - [x] SSHKeyManager：Ed25519 密钥生成/存储（Keychain）/公钥显示
   - [x] SSHTunnelManager：连接/断开/状态

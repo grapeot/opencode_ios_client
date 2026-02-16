@@ -247,6 +247,26 @@ struct SessionFilteringTests {
     }
 }
 
+// MARK: - Message Pagination
+
+struct MessagePaginationTests {
+
+    @Test func normalizedMessageFetchLimitDefaultsToPageSize() {
+        #expect(AppState.normalizedMessageFetchLimit(current: nil) == 6)
+    }
+
+    @Test func normalizedMessageFetchLimitUsesAtLeastPageSize() {
+        #expect(AppState.normalizedMessageFetchLimit(current: 2) == 6)
+        #expect(AppState.normalizedMessageFetchLimit(current: 18) == 18)
+    }
+
+    @Test func nextMessageFetchLimitAddsOnePage() {
+        #expect(AppState.nextMessageFetchLimit(current: nil) == 12)
+        #expect(AppState.nextMessageFetchLimit(current: 6) == 12)
+        #expect(AppState.nextMessageFetchLimit(current: 12) == 18)
+    }
+}
+
 // MARK: - Message & Role Tests
 
 struct MessageRoleTests {
