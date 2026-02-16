@@ -248,7 +248,7 @@ final class SSHTunnelManager: ObservableObject {
             case .failed(let err):
                 Task { @MainActor in
                     self.status = .error("Local listener failed: \(err.localizedDescription)")
-                    self.disconnect()
+                    self.disconnect(updateStatus: false)
                 }
             default:
                 break
@@ -324,7 +324,7 @@ final class SSHTunnelManager: ObservableObject {
         }
     }
     
-    func disconnect() {
+    func disconnect(updateStatus: Bool = true) {
         tunnelTask?.cancel()
         tunnelTask = nil
 
@@ -337,8 +337,10 @@ final class SSHTunnelManager: ObservableObject {
             }
         }
         sshClient = nil
-        
-        status = .disconnected
+
+        if updateStatus {
+            status = .disconnected
+        }
     }
     
     func getPublicKey() -> String? {

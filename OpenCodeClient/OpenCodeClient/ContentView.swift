@@ -106,8 +106,8 @@ struct ContentView: View {
             NavigationStack {
                 SettingsTabView(state: state)
                     .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showSettingsSheet = false }
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Close") { showSettingsSheet = false }
                         }
                     }
             }

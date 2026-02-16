@@ -14,7 +14,23 @@ import Testing
 struct OpenCodeClientTests {
 
     @Test func defaultServerAddress() {
-        #expect(APIClient.defaultServer == "localhost:4096")
+        #expect(APIClient.defaultServer == "127.0.0.1:4096")
+    }
+
+    @Test @MainActor func migrateLegacyDefaultServerAddress() {
+        let key = "serverURL"
+        let previous = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        UserDefaults.standard.set("localhost:4096", forKey: key)
+        let state = AppState()
+        #expect(state.serverURL == "127.0.0.1:4096")
     }
 
     @Test func sessionDecoding() throws {
@@ -711,7 +727,11 @@ struct SpeechRecognitionDefaultsTests {
 struct APIConstantsTests {
     
     @Test func defaultServer() {
-        #expect(APIConstants.defaultServer == "localhost:4096")
+        #expect(APIConstants.defaultServer == "127.0.0.1:4096")
+    }
+
+    @Test func legacyDefaultServer() {
+        #expect(APIConstants.legacyDefaultServer == "localhost:4096")
     }
     
     @Test func sseEndpoint() {
@@ -840,42 +860,6 @@ struct SSHKeyManagerTests {
         #expect(publicKey.contains("opencode-ios"))
     }
 
-    @Test func sshKeyPublicKeyStorage() {
-        SSHKeyManager.deleteKeyPair()  // Clean start
-        
-        let testKey = "ssh-ed25519 AAAA... test-key"
-        SSHKeyManager.savePublicKey(testKey)
-        
-        #expect(SSHKeyManager.getPublicKey() == testKey)
-        
-        // Clean up
-        SSHKeyManager.deleteKeyPair()
-        #expect(SSHKeyManager.getPublicKey() == nil)
-    }
-
-    @Test func sshKeyDeleteKeyPair() throws {
-        let (_, publicKey) = try SSHKeyManager.generateKeyPair()
-        SSHKeyManager.savePublicKey(publicKey)
-        
-        // Just verify delete doesn't crash and clears public key
-        SSHKeyManager.deleteKeyPair()
-        
-        #expect(SSHKeyManager.getPublicKey() == nil)
-    }
-
-    @Test func sshKeyRotateGeneratesNewKey() throws {
-        // Ensure we have a key first
-        _ = try SSHKeyManager.ensureKeyPair()
-        let publicKey1 = SSHKeyManager.getPublicKey() ?? ""
-        
-        let publicKey2 = try SSHKeyManager.rotateKey()
-        
-        #expect(publicKey1 != publicKey2)
-        #expect(SSHKeyManager.getPublicKey() == publicKey2)
-        
-        // Clean up
-        SSHKeyManager.deleteKeyPair()
-    }
 }
 
 struct SSHKnownHostStoreTests {

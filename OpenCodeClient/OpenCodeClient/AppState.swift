@@ -134,7 +134,16 @@ final class AppState {
     private static let selectedModelBySessionKey = "selectedModelBySession"
 
     init() {
-        _serverURL = UserDefaults.standard.string(forKey: Self.serverURLKey) ?? APIClient.defaultServer
+        if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
+            if storedServer == APIConstants.legacyDefaultServer {
+                _serverURL = APIClient.defaultServer
+                UserDefaults.standard.set(APIClient.defaultServer, forKey: Self.serverURLKey)
+            } else {
+                _serverURL = storedServer
+            }
+        } else {
+            _serverURL = APIClient.defaultServer
+        }
         _username = UserDefaults.standard.string(forKey: Self.usernameKey) ?? ""
         _password = KeychainHelper.load(forKey: Self.passwordKeychainKey) ?? ""
 

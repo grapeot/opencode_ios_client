@@ -14,6 +14,7 @@ struct SettingsTabView: View {
     @State private var copiedTunnelCommand = false
     @State private var publicKeyForSheet = ""
     @State private var sshConfig: SSHTunnelConfig = .default
+    @State private var publicKeyLoadError: String?
 
     var body: some View {
         NavigationStack {
@@ -74,7 +75,11 @@ struct SettingsTabView: View {
                         .onChange(of: sshConfig.isEnabled) { _, newValue in
                             state.sshTunnelManager.config.isEnabled = newValue
                             if newValue {
-                                Task { await state.sshTunnelManager.connect() }
+                                _ = try? state.sshTunnelManager.generateOrGetPublicKey()
+                                Task {
+                                    state.sshTunnelManager.disconnect()
+                                    await state.sshTunnelManager.connect()
+                                }
                             } else {
                                 state.sshTunnelManager.disconnect()
                             }
@@ -90,6 +95,7 @@ struct SettingsTabView: View {
                             .autocapitalization(.none)
                             .onChange(of: sshConfig.host) { _, newValue in
                                 state.sshTunnelManager.config.host = newValue
+                                reconnectSSHTunnelIfNeeded()
                             }
                         
                         HStack {
@@ -101,6 +107,7 @@ struct SettingsTabView: View {
                                 .multilineTextAlignment(.trailing)
                                 .onChange(of: sshConfig.port) { _, newValue in
                                     state.sshTunnelManager.config.port = newValue
+                                    reconnectSSHTunnelIfNeeded()
                                 }
                         }
                         
@@ -109,6 +116,7 @@ struct SettingsTabView: View {
                             .autocapitalization(.none)
                             .onChange(of: sshConfig.username) { _, newValue in
                                 state.sshTunnelManager.config.username = newValue
+                                reconnectSSHTunnelIfNeeded()
                             }
                         
                         HStack {
@@ -120,13 +128,17 @@ struct SettingsTabView: View {
                                 .multilineTextAlignment(.trailing)
                                 .onChange(of: sshConfig.remotePort) { _, newValue in
                                     state.sshTunnelManager.config.remotePort = newValue
+                                    reconnectSSHTunnelIfNeeded()
                                 }
                         }
 
-                        Button("Set Server Address to 127.0.0.1:4096") {
+                        Button {
                             state.serverURL = "127.0.0.1:4096"
+                        } label: {
+                            Label("Set Server Address to 127.0.0.1:4096", systemImage: "arrow.right.circle.fill")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
 
                         HStack {
                             Text("Status")
@@ -185,13 +197,7 @@ struct SettingsTabView: View {
                     .buttonStyle(.plain)
 
                     Button("View Public Key") {
-                        do {
-                            publicKeyForSheet = try state.sshTunnelManager.generateOrGetPublicKey()
-                            showPublicKeySheet = true
-                        } catch {
-                            publicKeyForSheet = ""
-                            // Error handled by manager (status)
-                        }
+                        loadPublicKeyForSheet()
                     }
                     .buttonStyle(.plain)
 
@@ -286,6 +292,8 @@ struct SettingsTabView: View {
             .navigationTitle("Settings")
             .onAppear {
                 sshConfig = state.sshTunnelManager.config
+                _ = try? state.sshTunnelManager.generateOrGetPublicKey()
+                reconnectSSHTunnelIfNeeded(force: false)
             }
             .sheet(isPresented: $showPublicKeySheet) {
                 PublicKeySheet(
@@ -310,6 +318,45 @@ struct SettingsTabView: View {
             } message: {
                 Text("This will generate a new key pair. You'll need to update the public key on your VPS.")
             }
+            .alert("Public Key Error", isPresented: Binding(
+                get: { publicKeyLoadError != nil },
+                set: { newValue in
+                    if !newValue { publicKeyLoadError = nil }
+                }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(publicKeyLoadError ?? "Unable to load SSH public key.")
+            }
+        }
+    }
+
+    private func reconnectSSHTunnelIfNeeded(force: Bool = true) {
+        guard sshConfig.isEnabled else { return }
+        if !force {
+            if case .connected = state.sshTunnelManager.status {
+                return
+            }
+        }
+        Task {
+            state.sshTunnelManager.disconnect()
+            await state.sshTunnelManager.connect()
+        }
+    }
+
+    private func loadPublicKeyForSheet() {
+        if let existing = state.sshTunnelManager.getPublicKey(), !existing.isEmpty {
+            publicKeyForSheet = existing
+            showPublicKeySheet = true
+            return
+        }
+
+        do {
+            publicKeyForSheet = try state.sshTunnelManager.generateOrGetPublicKey()
+            showPublicKeySheet = true
+        } catch {
+            publicKeyForSheet = ""
+            publicKeyLoadError = error.localizedDescription
         }
     }
 
