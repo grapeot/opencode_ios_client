@@ -218,6 +218,10 @@ struct ChatTabView: View {
         turnActivitiesForCurrentSession(.runningOnly).last
     }
 
+    private var showLoadMoreHint: Bool {
+        state.isCurrentSessionHistoryTruncated || state.isLoadingOlderMessagesInCurrentSession
+    }
+
     /// 合并同一 assistant turn 的连续 step-only 消息，使 tool 卡片在一个 grid 内连续显示
     private var messageGroups: [MessageGroupItem] {
         var result: [MessageGroupItem] = []
@@ -259,6 +263,24 @@ struct ChatTabView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
+                            if showLoadMoreHint {
+                                HStack(spacing: 8) {
+                                    if state.isLoadingOlderMessagesInCurrentSession {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    }
+                                    Text(
+                                        state.isLoadingOlderMessagesInCurrentSession
+                                            ? L10n.t(.chatLoadingMoreHistory)
+                                            : L10n.t(.chatPullToLoadMore)
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.top, 2)
+                            }
+
                             if messageGroups.isEmpty {
                                 emptySessionStateView
                             } else {
@@ -326,6 +348,9 @@ struct ChatTabView: View {
                                 .id("bottom")
                         }
                         .padding()
+                    }
+                    .refreshable {
+                        await state.loadOlderMessagesForCurrentSession()
                     }
                     .scrollDismissesKeyboard(.immediately)
                     .onChange(of: scrollAnchor) { _, _ in

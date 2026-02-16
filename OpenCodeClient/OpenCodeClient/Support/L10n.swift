@@ -98,6 +98,8 @@ enum L10n {
         case chatSessionStatusBusy
         case chatSessionStatusRetrying
         case chatSessionStatusIdle
+        case chatPullToLoadMore
+        case chatLoadingMoreHistory
 
         case permissionRequired
         case permissionAllowOnce
@@ -278,6 +280,8 @@ enum L10n {
         Key.chatSessionStatusBusy.rawValue: "Running",
         Key.chatSessionStatusRetrying.rawValue: "Retrying",
         Key.chatSessionStatusIdle.rawValue: "Idle",
+        Key.chatPullToLoadMore.rawValue: "Pull down to load more history",
+        Key.chatLoadingMoreHistory.rawValue: "Loading more history...",
 
         Key.permissionRequired.rawValue: "Permission Required",
         Key.permissionAllowOnce.rawValue: "Allow Once",
@@ -461,6 +465,8 @@ enum L10n {
         Key.chatSessionStatusBusy.rawValue: "运行中",
         Key.chatSessionStatusRetrying.rawValue: "重试中",
         Key.chatSessionStatusIdle.rawValue: "空闲",
+        Key.chatPullToLoadMore.rawValue: "下拉加载更多历史消息",
+        Key.chatLoadingMoreHistory.rawValue: "正在加载更多历史消息...",
 
         Key.permissionRequired.rawValue: "需要授权",
         Key.permissionAllowOnce.rawValue: "允许一次",
