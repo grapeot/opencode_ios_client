@@ -99,8 +99,12 @@ actor APIClient {
         return try JSONDecoder().decode(Session.self, from: responseData)
     }
 
-    func messages(sessionID: String) async throws -> [MessageWithParts] {
-        let (data, _) = try await makeRequest(path: "/session/\(sessionID)/message")
+    func messages(sessionID: String, limit: Int? = nil) async throws -> [MessageWithParts] {
+        let queryItems: [URLQueryItem]? = {
+            guard let limit, limit > 0 else { return nil }
+            return [URLQueryItem(name: "limit", value: String(limit))]
+        }()
+        let (data, _) = try await makeRequest(path: "/session/\(sessionID)/message", queryItems: queryItems)
         guard let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else {
             return []

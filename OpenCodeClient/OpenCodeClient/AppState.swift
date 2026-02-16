@@ -396,6 +396,12 @@ final class AppState {
     /// Each selectSession call generates a new ID; async tasks check if they're still current.
     private var sessionLoadingID = UUID()
 
+    // WAN optimization: page message history by 3 turns (user+assistant = 6 messages).
+    static let messagePageSize = 6
+    private var loadedMessageLimitBySessionID: [String: Int] = [:]
+    private var hasMoreHistoryBySessionID: [String: Bool] = [:]
+    private var loadingOlderMessagesSessionIDs: Set<String> = []
+
     /// Latest streaming reasoning part (for typewriter thinking display)
     var streamingReasoningPart: Part? = nil
     private var streamingDraftMessageIDs: Set<String> = []
@@ -403,6 +409,32 @@ final class AppState {
     var selectedModel: ModelPreset? {
         guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
         return modelPresets[selectedModelIndex]
+    }
+
+    var isCurrentSessionHistoryTruncated: Bool {
+        guard let sessionID = currentSessionID else { return false }
+        return hasMoreHistoryBySessionID[sessionID] ?? false
+    }
+
+    var isLoadingOlderMessagesInCurrentSession: Bool {
+        guard let sessionID = currentSessionID else { return false }
+        return loadingOlderMessagesSessionIDs.contains(sessionID)
+    }
+
+    nonisolated static func normalizedMessageFetchLimit(
+        current: Int?,
+        pageSize: Int = messagePageSize
+    ) -> Int {
+        let fallback = max(pageSize, 1)
+        guard let current else { return fallback }
+        return max(current, fallback)
+    }
+
+    nonisolated static func nextMessageFetchLimit(
+        current: Int?,
+        pageSize: Int = messagePageSize
+    ) -> Int {
+        normalizedMessageFetchLimit(current: current, pageSize: pageSize) + max(pageSize, 1)
     }
 
     func setSelectedModelIndex(_ index: Int) {
@@ -578,11 +610,15 @@ final class AppState {
     func loadMessages() async {
         guard let sessionID = currentSessionID else { return }
         do {
-            let loaded = try await apiClient.messages(sessionID: sessionID)
+            let fetchLimit = Self.normalizedMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
+            loadedMessageLimitBySessionID[sessionID] = fetchLimit
+            let loaded = try await apiClient.messages(sessionID: sessionID, limit: fetchLimit)
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
                 Self.logger.debug("drop stale loadMessages result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
                 return
             }
+
+            hasMoreHistoryBySessionID[sessionID] = loaded.count >= fetchLimit
 
             let loadedMessageIDs = Set(loaded.map { $0.info.id })
             let keepPending = isBusySession(currentSessionStatus)
@@ -642,6 +678,17 @@ final class AppState {
             connectionError = error.localizedDescription
             Self.logger.error("loadMessages failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    func loadOlderMessagesForCurrentSession() async {
+        guard let sessionID = currentSessionID else { return }
+        guard hasMoreHistoryBySessionID[sessionID] ?? true else { return }
+        guard !loadingOlderMessagesSessionIDs.contains(sessionID) else { return }
+
+        loadingOlderMessagesSessionIDs.insert(sessionID)
+        loadedMessageLimitBySessionID[sessionID] = Self.nextMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
+        await loadMessages()
+        loadingOlderMessagesSessionIDs.remove(sessionID)
     }
 
     func loadSessionDiff() async {
