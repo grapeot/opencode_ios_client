@@ -11,7 +11,7 @@ struct FilesTabView: View {
     var body: some View {
         NavigationStack {
             FileTreeView(state: state)
-                .searchable(text: $state.fileSearchQuery, prompt: "Search files")
+                .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
                 .onSubmit(of: .search) {
                     Task { await state.searchFiles(query: state.fileSearchQuery) }
                 }
@@ -26,7 +26,7 @@ struct FilesTabView: View {
                         }
                     }
                 }
-            .navigationTitle("Files")
+            .navigationTitle(L10n.t(.navFiles))
             .navigationBarTitleDisplayMode(.inline)
         }
     }

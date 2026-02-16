@@ -24,7 +24,7 @@ struct SplitSidebarView: View {
 
                 VStack(spacing: 0) {
                     FileTreeView(state: state, forceSplitPreview: true)
-                        .searchable(text: $state.fileSearchQuery, prompt: "Search files")
+                        .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
                         .onSubmit(of: .search) {
                             Task { await state.searchFiles(query: state.fileSearchQuery) }
                         }
@@ -48,7 +48,7 @@ struct SplitSidebarView: View {
                         .frame(height: sessionsHeight)
                 }
             }
-            .navigationTitle("Workspace")
+            .navigationTitle(L10n.t(.navWorkspace))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -59,7 +59,7 @@ private struct SessionsSidebarList: View {
 
     var body: some View {
         List {
-            Section("Sessions") {
+            Section(L10n.t(.sessionsTitle)) {
                 ForEach(state.sortedSessions) { session in
                     SessionRowView(
                         session: session,

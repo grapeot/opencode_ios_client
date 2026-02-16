@@ -107,7 +107,7 @@ struct ContentView: View {
                 FileContentView(state: state, filePath: wrapper.path)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
+                            Button(L10n.t(.appClose)) {
                                 state.fileToOpenInFilesTab = nil
                                 if !useSplitLayout { state.selectedTab = 0 }
                             }
@@ -122,7 +122,7 @@ struct ContentView: View {
                 SettingsTabView(state: state)
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
-                            Button("Close") { showSettingsSheet = false }
+                            Button(L10n.t(.appClose)) { showSettingsSheet = false }
                         }
                     }
             }
@@ -136,15 +136,15 @@ struct ContentView: View {
             set: { state.selectedTab = $0 }
         )) {
             ChatTabView(state: state)
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.bubble.right") }
                 .tag(0)
 
             FilesTabView(state: state)
-                .tabItem { Label("Files", systemImage: "folder") }
+                .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(1)
 
             SettingsTabView(state: state)
-                .tabItem { Label("Settings", systemImage: "gear") }
+                .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
                 .tag(2)
         }
     }
@@ -194,11 +194,11 @@ private struct PreviewColumnView: View {
                         .id("\(path)|\(reloadToken.uuidString)")
                 } else {
                     ContentUnavailableView(
-                        "选择文件预览",
+                        L10n.t(.contentPreviewUnavailableTitle),
                         systemImage: "doc.text.magnifyingglass",
-                        description: Text("在左侧 Workspace 选择文件，或在 Chat 的 tool/patch 卡片中点“打开文件”。")
+                        description: Text(L10n.t(.contentPreviewUnavailableDescription))
                     )
-                    .navigationTitle("Preview")
+                    .navigationTitle(L10n.t(.navPreview))
                     .navigationBarTitleDisplayMode(.inline)
                 }
             }
@@ -210,7 +210,7 @@ private struct PreviewColumnView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .disabled((state.previewFilePath ?? "").isEmpty)
-                    .help("刷新预览")
+                    .help(L10n.t(.contentRefreshHelp))
                 }
             }
         }

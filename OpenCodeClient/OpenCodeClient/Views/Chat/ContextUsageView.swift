@@ -96,7 +96,7 @@ struct ContextUsageButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Context usage")
+        .help(L10n.t(.contextUsageHelp))
         .sheet(isPresented: $showSheet) {
             NavigationStack {
                 ContextUsageDetailView(
@@ -107,7 +107,7 @@ struct ContextUsageButton: View {
                 )
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showSheet = false }
+                            Button(L10n.t(.contextUsageClose)) { showSheet = false }
                         }
                     }
             }
@@ -125,38 +125,38 @@ private struct ContextUsageDetailView: View {
     var body: some View {
         List {
             if let s = snapshot {
-                Section("Session") {
-                    LabeledContent("Title", value: s.sessionTitle.isEmpty ? "Untitled" : s.sessionTitle)
-                    LabeledContent("ID", value: s.sessionID)
+                Section(L10n.t(.contextUsageSectionSession)) {
+                    LabeledContent(L10n.t(.contextUsageTitleLabel), value: s.sessionTitle.isEmpty ? L10n.t(.sessionsUntitled) : s.sessionTitle)
+                    LabeledContent(L10n.t(.contextUsageIdLabel), value: s.sessionID)
                 }
 
-                Section("Model") {
-                    LabeledContent("Provider", value: s.providerID)
-                    LabeledContent("Model", value: s.modelID)
-                    LabeledContent("Context limit", value: String(s.contextLimit))
+                Section(L10n.t(.contextUsageSectionModel)) {
+                    LabeledContent(L10n.t(.contextUsageProviderLabel), value: s.providerID)
+                    LabeledContent(L10n.t(.contextUsageModelLabel), value: s.modelID)
+                    LabeledContent(L10n.t(.contextUsageLimitLabel), value: String(s.contextLimit))
                 }
 
-                Section("Tokens") {
-                    LabeledContent("Total", value: String(s.tokens.total))
-                    LabeledContent("Input", value: String(s.tokens.input))
-                    LabeledContent("Output", value: String(s.tokens.output))
-                    LabeledContent("Reasoning", value: String(s.tokens.reasoning))
-                    LabeledContent("Cached read", value: String(s.tokens.cache?.read ?? 0))
-                    LabeledContent("Cached write", value: String(s.tokens.cache?.write ?? 0))
+                Section(L10n.t(.contextUsageSectionTokens)) {
+                    LabeledContent(L10n.t(.contextUsageTotalLabel), value: String(s.tokens.total))
+                    LabeledContent(L10n.t(.contextUsageInputLabel), value: String(s.tokens.input))
+                    LabeledContent(L10n.t(.contextUsageOutputLabel), value: String(s.tokens.output))
+                    LabeledContent(L10n.t(.contextUsageReasoningLabel), value: String(s.tokens.reasoning))
+                    LabeledContent(L10n.t(.contextUsageCachedReadLabel), value: String(s.tokens.cache?.read ?? 0))
+                    LabeledContent(L10n.t(.contextUsageCachedWriteLabel), value: String(s.tokens.cache?.write ?? 0))
                 }
 
-                Section("Cost") {
+                Section(L10n.t(.contextUsageSectionCost)) {
                     if let c = s.totalSessionCost {
-                        LabeledContent("Total", value: String(format: "%.4f", c))
+                        LabeledContent(L10n.t(.contextUsageTotalLabel), value: String(format: "%.4f", c))
                     } else {
-                        Text("No cost data")
+                        Text(L10n.t(.contextUsageNoCostData))
                             .foregroundStyle(.secondary)
                     }
                 }
             } else {
                 Section {
                     if isLoadingProviderConfig {
-                        Text("Loading provider config...")
+                        Text(L10n.t(.contextUsageLoadingConfig))
                             .foregroundStyle(.secondary)
                     } else if let err = providerConfigError, !err.isEmpty {
                         Text(err)
@@ -164,13 +164,13 @@ private struct ContextUsageDetailView: View {
                             .foregroundStyle(.red)
                             .textSelection(.enabled)
                     } else {
-                        Text(hasProviderConfig ? "No usage data" : "Provider config not loaded")
+                        Text(hasProviderConfig ? L10n.t(.contextUsageNoUsageData) : L10n.t(.contextUsageConfigNotLoaded))
                             .foregroundStyle(.secondary)
                     }
                 }
             }
         }
-        .navigationTitle("Context")
+        .navigationTitle(L10n.t(.contextUsageTitle))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

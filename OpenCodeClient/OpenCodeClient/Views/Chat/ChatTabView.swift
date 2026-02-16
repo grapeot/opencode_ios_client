@@ -168,7 +168,7 @@ struct ChatTabView: View {
                     TurnActivity(
                         id: userMsg.info.id,
                         state: .completed,
-                        text: "Completed",
+                        text: L10n.t(.chatTurnCompleted),
                         startedAt: startedAt,
                         endedAt: endedAt
                     )
@@ -329,7 +329,7 @@ struct ChatTabView: View {
 
                  Divider()
                  HStack(alignment: .bottom, spacing: 10) {
-                    TextField("Ask anything...", text: $inputText, axis: .vertical)
+                    TextField(L10n.t(.chatInputPlaceholder), text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
                         .lineLimit(3...8)
                         .submitLabel(.send)
@@ -392,7 +392,7 @@ struct ChatTabView: View {
                 .padding(.vertical, 12)
                 .background(.bar)
             }
-            .navigationTitle(state.currentSession?.title ?? "Chat")
+            .navigationTitle(state.currentSession?.title ?? L10n.t(.appChat))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -405,32 +405,32 @@ struct ChatTabView: View {
             .sheet(isPresented: $showSessionList) {
                 SessionListView(state: state)
             }
-            .alert("发送失败", isPresented: Binding(
+            .alert(L10n.t(.chatSendFailed), isPresented: Binding(
                 get: { state.sendError != nil },
                 set: { if !$0 { state.sendError = nil } }
             )) {
-                Button("确定") { state.sendError = nil }
+                Button(L10n.t(.commonOk)) { state.sendError = nil }
             }             message: {
                 if let error = state.sendError {
                     Text(error)
                 }
             }
-            .alert("重命名 Session", isPresented: $showRenameAlert) {
-                TextField("标题", text: $renameText)
-                Button("取消", role: .cancel) { showRenameAlert = false }
-                Button("确定") {
+            .alert(L10n.t(.chatRenameSession), isPresented: $showRenameAlert) {
+                TextField(L10n.t(.chatTitleField), text: $renameText)
+                Button(L10n.t(.commonCancel), role: .cancel) { showRenameAlert = false }
+                Button(L10n.t(.commonOk)) {
                     guard let id = state.currentSessionID else { return }
                     Task { await state.updateSessionTitle(sessionID: id, title: renameText) }
                     showRenameAlert = false
                 }
             } message: {
-                Text("输入新标题")
+                Text(L10n.t(.chatRenameSessionPlaceholder))
             }
-            .alert("Speech Recognition", isPresented: Binding(
+            .alert(L10n.t(.chatSpeechTitle), isPresented: Binding(
                 get: { speechError != nil },
                 set: { if !$0 { speechError = nil } }
             )) {
-                Button("OK") { speechError = nil }
+                Button(L10n.t(.commonOk)) { speechError = nil }
             } message: {
                 Text(speechError ?? "")
             }
@@ -495,21 +495,21 @@ struct ChatTabView: View {
         } else {
             let token = state.aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
             if token.isEmpty {
-                speechError = "语音识别未配置：请先到 Settings -> Speech Recognition 设置 AI Builder Token，并点击 Test Connection。"
+                speechError = L10n.t(.chatSpeechTokenMissing)
                 return
             }
             if state.isTestingAIBuilderConnection {
-                speechError = "AI Builder 正在测试连接，请稍候。"
+                speechError = L10n.t(.chatSpeechTesting)
                 return
             }
             guard state.aiBuilderConnectionOK else {
-                speechError = "AI Builder 连接未通过测试：请先到 Settings -> Speech Recognition 点击 Test Connection，确认 OK 后再录音。"
+                speechError = L10n.t(.chatSpeechNotPassed)
                 return
             }
 
             let allowed = await recorder.requestPermission()
             guard allowed else {
-                speechError = "Microphone permission denied"
+                speechError = L10n.t(.chatMicrophoneDenied)
                 return
             }
             do {
@@ -541,7 +541,7 @@ struct ChatTabView: View {
     @ViewBuilder
     private var emptySessionStateView: some View {
         if state.currentSessionID == nil {
-            Text("请选择一个 Session")
+            Text(L10n.t(.chatSelectSessionFirst))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .padding(.top, 20)
@@ -550,14 +550,14 @@ struct ChatTabView: View {
             if lastUserMessageIDInCurrentSession == nil {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("Session 正在运行中，消息尚未可见，正在刷新中…")
+                    Text(L10n.t(.chatSessionBusyMessage))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 18)
             }
         } else {
-            Text("暂无消息")
+            Text(L10n.t(.chatNoMessages))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .padding(.top, 20)
@@ -574,9 +574,9 @@ struct ChatTabView: View {
 
     private func statusLabel(_ status: SessionStatus) -> String {
         switch status.type {
-        case "busy": return "Busy"
-        case "retry": return "Retrying..."
-        default: return "Idle"
+        case "busy": return L10n.t(.chatSessionStatusBusy)
+        case "retry": return L10n.t(.chatSessionStatusRetrying)
+        default: return L10n.t(.chatSessionStatusIdle)
         }
     }
 }

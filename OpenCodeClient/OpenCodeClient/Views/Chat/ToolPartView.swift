@@ -38,7 +38,7 @@ struct ToolPartView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let reason = part.toolReason ?? part.metadata?.title, !reason.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Reason")
+                        Text(L10n.t(.toolReason))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Text(reason)
@@ -57,7 +57,7 @@ struct ToolPartView: View {
                    let input = part.toolInputSummary ?? part.metadata?.input,
                    !input.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Command / Input")
+                        Text(L10n.t(.toolCommandInput))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Text(input)
@@ -66,13 +66,13 @@ struct ToolPartView: View {
                     }
                 }
                 if let path = part.metadata?.path {
-                    LabeledContent("Path", value: path)
+                    LabeledContent(L10n.t(.toolPath), value: path)
                 }
                 if part.tool != "todowrite",
                    let output = part.toolOutput,
                    !output.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Output")
+                        Text(L10n.t(.toolOutput))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Text(output)
@@ -85,7 +85,7 @@ struct ToolPartView: View {
                         Button {
                             openFile(path)
                         } label: {
-                            Label("在 File Tree 中打开 \(path)", systemImage: "folder.badge.plus")
+                            Label(L10n.toolOpenFileLabel(path: path), systemImage: "folder.badge.plus")
                                 .font(.caption2)
                         }
                     }
@@ -150,21 +150,21 @@ struct ToolPartView: View {
         .contextMenu {
             if !part.filePathsForNavigation.isEmpty {
                 ForEach(part.filePathsForNavigation, id: \.self) { path in
-                    Button("在 File Tree 中打开 \(path)") {
+                    Button(L10n.toolOpenFileLabel(path: path)) {
                         openFile(path)
                     }
                 }
             }
         }
-        .confirmationDialog("打开文件", isPresented: $showOpenFileSheet) {
+        .confirmationDialog(L10n.t(.toolOpenFile), isPresented: $showOpenFileSheet) {
             ForEach(part.filePathsForNavigation, id: \.self) { path in
-                Button("在 File Tree 中打开 \(path)") {
+                Button(L10n.toolOpenFileLabel(path: path)) {
                     openFile(path)
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(L10n.t(.commonCancel), role: .cancel) {}
         } message: {
-            Text("选择要打开的文件")
+            Text(L10n.t(.toolSelectFile))
         }
     }
 

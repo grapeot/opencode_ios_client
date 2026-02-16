@@ -13,9 +13,9 @@ struct SessionListView: View {
             Group {
                 if state.sessions.isEmpty {
                     ContentUnavailableView(
-                        "暂无 Session",
+                        L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.bubble.right",
-                        description: Text("点击右上角新建，或下拉刷新获取已有 Session")
+                        description: Text(L10n.t(.sessionsEmptyDescription))
                     )
                 } else {
                     List {
@@ -34,11 +34,11 @@ struct SessionListView: View {
                     }
                 }
             }
-            .navigationTitle("Sessions")
+            .navigationTitle(L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(L10n.t(.sessionsClose)) { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -78,7 +78,7 @@ struct SessionRowView: View {
         Button(action: onSelect) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(session.title.isEmpty ? "Untitled" : session.title)
+                    Text(session.title.isEmpty ? L10n.t(.sessionsUntitled) : session.title)
                         .font(.headline)
                         .foregroundStyle(isBusy ? .blue : .primary)
 
@@ -88,7 +88,7 @@ struct SessionRowView: View {
                             .foregroundStyle(.secondary)
 
                         if let summary = session.summary {
-                            Text("\(summary.files) files")
+                            Text(L10n.sessionsFiles(summary.files))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -116,15 +116,15 @@ struct SessionRowView: View {
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        formatter.locale = Locale(identifier: "zh_Hans")
+        formatter.locale = Locale.current
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func statusLabel(_ status: SessionStatus) -> String {
         switch status.type {
-        case "busy": return "运行中"
-        case "retry": return "重试中"
-        default: return "空闲"
+        case "busy": return L10n.t(.sessionsStatusBusy)
+        case "retry": return L10n.t(.sessionsStatusRetry)
+        default: return L10n.t(.sessionsStatusIdle)
         }
     }
 

@@ -19,24 +19,24 @@ struct SettingsTabView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Server Connection") {
+                Section(L10n.t(.settingsServerConnection)) {
                     let info = AppState.serverURLInfo(state.serverURL)
 
-                    TextField("Address", text: $state.serverURL)
+                    TextField(L10n.t(.settingsAddress), text: $state.serverURL)
                         .textContentType(.URL)
                         .autocapitalization(.none)
 
-                    TextField("Username", text: $state.username)
+                    TextField(L10n.t(.settingsUsername), text: $state.username)
                         .textContentType(.username)
                         .autocapitalization(.none)
 
-                    SecureField("Password", text: $state.password)
+                    SecureField(L10n.t(.settingsPassword), text: $state.password)
                         .textContentType(.password)
 
                     if let scheme = info.scheme {
                         let shouldWarnInsecureHTTP = scheme == "http" && !sshConfig.isEnabled
                         HStack(spacing: 4) {
-                            LabeledContent("Scheme", value: scheme.uppercased())
+                            LabeledContent(L10n.t(.settingsScheme), value: scheme.uppercased())
                                 .foregroundStyle(shouldWarnInsecureHTTP ? .red : .secondary)
                             if shouldWarnInsecureHTTP {
                                 Image(systemName: "info.circle.fill")
@@ -47,13 +47,13 @@ struct SettingsTabView: View {
                     }
 
                     HStack {
-                        Text("Status")
+                        Text(L10n.t(.settingsStatus))
                         Spacer()
                         if state.isConnected {
-                            Label("Connected", systemImage: "checkmark.circle.fill")
+                            Label(L10n.t(.settingsConnected), systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                         } else {
-                            Label("Disconnected", systemImage: "xmark.circle.fill")
+                            Label(L10n.t(.settingsDisconnected), systemImage: "xmark.circle.fill")
                                 .foregroundStyle(.red)
                         }
                     }
@@ -64,14 +64,14 @@ struct SettingsTabView: View {
                             .foregroundStyle(.red)
                     }
 
-                    Button("Test Connection") {
+                    Button(L10n.t(.settingsTestConnection)) {
                         Task { await state.refresh() }
                     }
                     .buttonStyle(.plain)
                 }
 
                 Section {
-                    Toggle("Enable SSH Tunnel", isOn: $sshConfig.isEnabled)
+                    Toggle(L10n.t(.settingsEnableSshTunnel), isOn: $sshConfig.isEnabled)
                         .onChange(of: sshConfig.isEnabled) { _, newValue in
                             state.sshTunnelManager.config.isEnabled = newValue
                             if newValue {
@@ -85,12 +85,12 @@ struct SettingsTabView: View {
                             }
                         }
 
-                    Text("After enabling SSH Tunnel, tap Test Connection in Server Connection above.")
+                    Text(L10n.t(.settingsAfterEnableSshTip))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     if sshConfig.isEnabled {
-                        TextField("VPS Host", text: $sshConfig.host)
+                        TextField(L10n.t(.settingsVpsHost), text: $sshConfig.host)
                             .textContentType(.URL)
                             .autocapitalization(.none)
                             .onChange(of: sshConfig.host) { _, newValue in
@@ -99,7 +99,7 @@ struct SettingsTabView: View {
                             }
                         
                         HStack {
-                            Text("SSH Port")
+                            Text(L10n.t(.settingsSshPort))
                             Spacer()
                             TextField("", value: $sshConfig.port, formatter: NumberFormatter())
                                 .keyboardType(.numberPad)
@@ -111,7 +111,7 @@ struct SettingsTabView: View {
                                 }
                         }
                         
-                        TextField("Username", text: $sshConfig.username)
+                        TextField(L10n.t(.settingsUsername), text: $sshConfig.username)
                             .textContentType(.username)
                             .autocapitalization(.none)
                             .onChange(of: sshConfig.username) { _, newValue in
@@ -120,7 +120,7 @@ struct SettingsTabView: View {
                             }
                         
                         HStack {
-                            Text("VPS Port")
+                            Text(L10n.t(.settingsVpsPort))
                             Spacer()
                             TextField("", value: $sshConfig.remotePort, formatter: NumberFormatter())
                                 .keyboardType(.numberPad)
@@ -135,26 +135,26 @@ struct SettingsTabView: View {
                         Button {
                             state.serverURL = "127.0.0.1:4096"
                         } label: {
-                            Label("Set Server Address to 127.0.0.1:4096", systemImage: "arrow.right.circle.fill")
+                            Label(L10n.t(.settingsSetServerAddress), systemImage: "arrow.right.circle.fill")
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.blue)
 
                         HStack {
-                            Text("Status")
+                            Text(L10n.t(.settingsStatus))
                             Spacer()
                             switch state.sshTunnelManager.status {
                             case .disconnected:
-                                Label("Disconnected", systemImage: "xmark.circle.fill")
+                                Label(L10n.t(.settingsDisconnected), systemImage: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
                             case .connecting:
                                 HStack(spacing: 4) {
                                     ProgressView()
                                         .scaleEffect(0.8)
-                                    Text("Connecting...")
+                                    Text(L10n.t(.settingsConnecting))
                                 }
                             case .connected:
-                                Label("Connected", systemImage: "checkmark.circle.fill")
+                                Label(L10n.t(.settingsConnected), systemImage: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
                             case .error(let msg):
                                 Text(msg)
@@ -164,15 +164,15 @@ struct SettingsTabView: View {
                         }
 
                         HStack(alignment: .firstTextBaseline) {
-                            Text("Known Host")
+                            Text(L10n.t(.settingsKnownHost))
                             Spacer()
-                            Text(state.sshTunnelManager.trustedHostFingerprint ?? "Untrusted")
+                            Text(state.sshTunnelManager.trustedHostFingerprint ?? L10n.t(.settingsUntrusted))
                                 .font(.caption.monospaced())
                                 .foregroundStyle(state.sshTunnelManager.trustedHostFingerprint == nil ? .secondary : .primary)
                                 .multilineTextAlignment(.trailing)
                         }
 
-                        Button("Reset Trusted Host") {
+                        Button(L10n.t(.settingsResetTrustedHost)) {
                             state.sshTunnelManager.clearTrustedHost()
                         }
                         .buttonStyle(.plain)
@@ -192,18 +192,18 @@ struct SettingsTabView: View {
                             copiedPublicKey = false
                         }
                     } label: {
-                        Label(copiedPublicKey ? "Public Key Copied" : "Copy Public Key", systemImage: copiedPublicKey ? "checkmark" : "doc.on.doc")
+                        Label(copiedPublicKey ? L10n.t(.settingsPublicKeyCopied) : L10n.t(.settingsCopyPublicKey), systemImage: copiedPublicKey ? "checkmark" : "doc.on.doc")
                     }
                     .buttonStyle(.plain)
 
-                    Button("View Public Key") {
+                    Button(L10n.t(.settingsViewPublicKey)) {
                         loadPublicKeyForSheet()
                     }
                     .buttonStyle(.plain)
 
                     if let command = state.sshTunnelManager.reverseTunnelCommand {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Reverse Tunnel Command")
+                            Text(L10n.t(.settingsReverseTunnelCommand))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Text(command)
@@ -216,42 +216,42 @@ struct SettingsTabView: View {
                                     copiedTunnelCommand = false
                                 }
                             } label: {
-                                Label(copiedTunnelCommand ? "Command Copied" : "Copy Command", systemImage: copiedTunnelCommand ? "checkmark" : "terminal")
+                                Label(copiedTunnelCommand ? L10n.t(.settingsCommandCopied) : L10n.t(.settingsCopyCommand), systemImage: copiedTunnelCommand ? "checkmark" : "terminal")
                             }
                             .buttonStyle(.plain)
                         }
                     } else {
-                        Text("Fill VPS Host, SSH Port, Username, and VPS Port to generate the reverse tunnel command.")
+                        Text(L10n.t(.settingsNoTunnelCommand))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("SSH Tunnel")
+                    Text(L10n.t(.settingsSshTunnel))
                 } footer: {
-                    Text("Forwards iOS 127.0.0.1:4096 to VPS 127.0.0.1:<VPS Port>. 1) Copy public key and add it to VPS ~/.ssh/authorized_keys. 2) Run the generated reverse tunnel command on your computer. 3) First connect uses TOFU to trust host key; later connections must match. 4) Set Server Address to 127.0.0.1:4096 and tap Test Connection above.")
+                    Text(L10n.t(.settingsSshTunnelHelp))
                         .font(.caption)
                 }
 
-                Section("Appearance") {
-                    Picker("Theme", selection: $state.themePreference) {
-                        Text("Auto").tag("auto")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
+                Section(L10n.t(.settingsAppearance)) {
+                    Picker(L10n.t(.settingsTheme), selection: $state.themePreference) {
+                        Text(L10n.t(.settingsAutoTheme)).tag("auto")
+                        Text(L10n.t(.settingsLightTheme)).tag("light")
+                        Text(L10n.t(.settingsDarkTheme)).tag("dark")
                     }
                 }
 
-                Section("Speech Recognition") {
-                    TextField("AI Builder Base URL", text: $state.aiBuilderBaseURL)
+                Section(L10n.t(.settingsSpeechRecognition)) {
+                    TextField(L10n.t(.settingsAiBuilderBaseURL), text: $state.aiBuilderBaseURL)
                         .textContentType(.URL)
                         .autocapitalization(.none)
 
-                    SecureField("AI Builder Token", text: $state.aiBuilderToken)
+                    SecureField(L10n.t(.settingsAiBuilderToken), text: $state.aiBuilderToken)
                         .textContentType(.password)
 
-                    TextField("Custom Prompt", text: $state.aiBuilderCustomPrompt, axis: .vertical)
+                    TextField(L10n.t(.settingsCustomPrompt), text: $state.aiBuilderCustomPrompt, axis: .vertical)
                         .lineLimit(3...6)
 
-                    TextField("Terminology (comma-separated)", text: $state.aiBuilderTerminology)
+                    TextField(L10n.t(.settingsTerminology), text: $state.aiBuilderTerminology)
                         .textContentType(.none)
                         .autocapitalization(.none)
 
@@ -263,10 +263,10 @@ struct SettingsTabView: View {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                         .scaleEffect(0.9)
-                                    Text("Testing...")
+                                    Text(L10n.t(.settingsTesting))
                                 }
                             } else {
-                                Text("Test Connection")
+                                Text(L10n.t(.settingsTestConnection))
                             }
                         }
                         .disabled(
@@ -275,7 +275,7 @@ struct SettingsTabView: View {
                         )
                         Spacer()
                         if state.aiBuilderConnectionOK {
-                            Label("OK", systemImage: "checkmark.circle.fill")
+                            Label(L10n.t(.commonOk), systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                         } else if let err = state.aiBuilderConnectionError {
                             Text(err)
@@ -283,13 +283,13 @@ struct SettingsTabView: View {
                         }
                     }
                 }
-                Section("About") {
+                Section(L10n.t(.settingsAbout)) {
                     if let version = state.serverVersion {
-                        LabeledContent("Server Version", value: version)
+                        LabeledContent(L10n.t(.settingsServerVersion), value: version)
                     }
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle(L10n.t(.settingsTitle))
             .onAppear {
                 sshConfig = state.sshTunnelManager.config
                 _ = try? state.sshTunnelManager.generateOrGetPublicKey()
@@ -303,9 +303,9 @@ struct SettingsTabView: View {
                     }
                 )
             }
-            .alert("Rotate SSH Key?", isPresented: $showRotateKeyAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Rotate", role: .destructive) {
+            .alert(L10n.t(.settingsRotateKeyTitle), isPresented: $showRotateKeyAlert) {
+                Button(L10n.t(.commonCancel), role: .cancel) {}
+                Button(L10n.t(.settingsRotate), role: .destructive) {
                     do {
                         let newKey = try state.sshTunnelManager.rotateKey()
                         publicKeyForSheet = newKey
@@ -316,17 +316,17 @@ struct SettingsTabView: View {
                     }
                 }
             } message: {
-                Text("This will generate a new key pair. You'll need to update the public key on your VPS.")
+                Text(L10n.t(.settingsRotateKeyPrompt))
             }
-            .alert("Public Key Error", isPresented: Binding(
+            .alert(L10n.t(.settingsPublicKeyErrorTitle), isPresented: Binding(
                 get: { publicKeyLoadError != nil },
                 set: { newValue in
                     if !newValue { publicKeyLoadError = nil }
                 }
             )) {
-                Button("OK", role: .cancel) {}
+                Button(L10n.t(.commonOk), role: .cancel) {}
             } message: {
-                Text(publicKeyLoadError ?? "Unable to load SSH public key.")
+                Text(publicKeyLoadError ?? L10n.t(.settingsPublicKeyCopyFailed))
             }
         }
     }
@@ -361,11 +361,7 @@ struct SettingsTabView: View {
     }
 
     private func schemeHelpText(info: AppState.ServerURLInfo) -> String {
-        if info.isLocal {
-            return "LAN: HTTP allowed. Recommended only on trusted networks. Warning: HTTP is insecure."
-        } else {
-            return "WAN: HTTPS required (HTTP will be blocked). Warning: HTTP is insecure."
-        }
+        L10n.helpForURLScheme(info.isLocal)
     }
 }
 
@@ -384,9 +380,9 @@ struct PublicKeySheet: View {
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                 } header: {
-                    Text("Your Public Key")
+                    Text(L10n.t(.settingsPublicKeyTitle))
                 } footer: {
-                    Text("Add this key to your VPS: ~/.ssh/authorized_keys")
+                    Text(L10n.t(.settingsPublicKeyFooter))
                         .font(.caption)
                 }
 
@@ -399,22 +395,22 @@ struct PublicKeySheet: View {
                 } label: {
                     HStack {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        Text(copied ? "Copied!" : "Copy to Clipboard")
+                        Text(copied ? L10n.t(.settingsPublicKeyCopied) : L10n.t(.settingsCopyToClipboard))
                     }
                 }
                 .disabled(publicKey.isEmpty)
 
-                Button("Rotate Key", role: .destructive) {
+                Button(L10n.t(.settingsPublicKeyRotate), role: .destructive) {
                     onRotate()
                     dismiss()
                 }
                 .disabled(publicKey.isEmpty)
             }
-            .navigationTitle("SSH Public Key")
+            .navigationTitle(L10n.t(.settingsPublicKeyTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.t(.appDone)) { dismiss() }
                 }
             }
         }

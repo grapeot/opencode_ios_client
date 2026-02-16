@@ -18,7 +18,7 @@ struct PermissionCardView: View {
                 Image(systemName: "exclamationmark.shield.fill")
                     .foregroundStyle(accent)
                     .font(.title3)
-                Text("Permission Required")
+                Text(L10n.t(.permissionRequired))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(accent)
             }
@@ -44,7 +44,7 @@ struct PermissionCardView: View {
                     Button {
                         onRespond(.once)
                     } label: {
-                        Text("Allow Once")
+                        Text(L10n.t(.permissionAllowOnce))
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                     }
@@ -54,7 +54,7 @@ struct PermissionCardView: View {
                     Button {
                         onRespond(.always)
                     } label: {
-                        Text("Allow Always")
+                        Text(L10n.t(.permissionAllowAlways))
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                     }
@@ -66,7 +66,7 @@ struct PermissionCardView: View {
                 Button {
                     onRespond(.reject)
                 } label: {
-                    Text("Reject")
+                    Text(L10n.t(.permissionReject))
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                 }

@@ -27,7 +27,7 @@ struct PatchPartView: View {
             HStack(spacing: 8) {
                 Image(systemName: "doc.text.fill")
                     .foregroundStyle(accent)
-                Text("\(fileCount) file\(fileCount == 1 ? "" : "s") changed")
+                Text(L10n.patchFilesChanged(fileCount))
                     .fontWeight(.medium)
                     .foregroundStyle(accent)
                 Spacer()
@@ -46,15 +46,15 @@ struct PatchPartView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .confirmationDialog("打开文件", isPresented: $showOpenFileSheet) {
+        .confirmationDialog(L10n.t(.toolOpenFile), isPresented: $showOpenFileSheet) {
             ForEach(part.filePathsForNavigation, id: \.self) { path in
-                Button("在 File Tree 中打开 \(path)") {
+                Button(L10n.toolOpenFileLabel(path: path)) {
                     openFile(path)
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(L10n.t(.commonCancel), role: .cancel) {}
         } message: {
-            Text("选择要打开的文件")
+            Text(L10n.t(.toolSelectFile))
         }
     }
 
