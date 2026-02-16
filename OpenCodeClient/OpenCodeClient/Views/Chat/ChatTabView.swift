@@ -532,18 +532,24 @@ struct ChatTabView: View {
     /// 内容变化时用于触发自动滚动
     private var scrollAnchor: String {
         let perm = state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count
-        let msg = state.messages.map { "\($0.info.id)-\($0.parts.count)" }.joined(separator: "|")
-        let stream = state.streamingPartTexts
-            .map { "\($0.key)=\($0.value.count)" }
-            .sorted()
-            .joined(separator: "|")
+        let messageCount = state.messages.count
+        let lastMessage = state.messages.last
+        let lastMessageSignature = {
+            guard let lastMessage else { return "none" }
+            return "\(lastMessage.info.id)-\(lastMessage.parts.count)-\(lastMessage.info.time.completed ?? -1)"
+        }()
+        let streamKeyCount = state.streamingPartTexts.count
+        let streamCharCount = state.streamingPartTexts.values.reduce(into: 0) { partial, text in
+            partial += text.count
+        }
+        let streamingReasoningID = state.streamingReasoningPart?.id ?? ""
         let sid = state.currentSessionID ?? ""
         let status = state.currentSessionStatus?.type ?? ""
         let activity = runningTurnActivity.map {
             let state = ($0.state == .running) ? "running" : "completed"
             return "\($0.id)-\($0.text)-\(state)"
         } ?? ""
-        return "\(perm)-\(msg)-\(stream)-\(sid)-\(status)-\(activity)"
+        return "\(perm)-\(messageCount)-\(lastMessageSignature)-\(streamKeyCount)-\(streamCharCount)-\(streamingReasoningID)-\(sid)-\(status)-\(activity)"
     }
 
     @ViewBuilder
