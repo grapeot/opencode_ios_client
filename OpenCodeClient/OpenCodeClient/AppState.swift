@@ -30,7 +30,7 @@ final class AppState {
     nonisolated static func serverURLInfo(_ raw: String) -> ServerURLInfo {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return .init(raw: raw, normalized: nil, scheme: nil, host: nil, isLocal: true, isAllowed: false, warning: "Server address is empty")
+            return .init(raw: raw, normalized: nil, scheme: nil, host: nil, isLocal: true, isAllowed: false, warning: L10n.t(.errorServerAddressEmpty))
         }
 
         func parseHost(_ s: String) -> String? {
@@ -74,7 +74,7 @@ final class AppState {
                 host: host,
                 isLocal: false,
                 isAllowed: false,
-                warning: "WAN address must use HTTPS (http:// is only allowed on LAN)"
+                warning: L10n.t(.errorWanRequiresHttps)
             )
         }
 
@@ -87,7 +87,7 @@ final class AppState {
             host: parsed?.host,
             isLocal: isLocal,
             isAllowed: parsed != nil,
-            warning: parsed == nil ? "Invalid server URL" : (scheme == "http" ? "Using HTTP on LAN" : nil)
+            warning: parsed == nil ? L10n.t(.errorInvalidBaseURL) : (scheme == "http" ? L10n.t(.errorUsingLanHttp) : nil)
         )
     }
     private var _serverURL: String = APIClient.defaultServer
@@ -464,7 +464,7 @@ final class AppState {
         let info = Self.serverURLInfo(serverURL)
         guard info.isAllowed, let baseURL = info.normalized else {
             isConnected = false
-            connectionError = info.warning ?? "Invalid server URL"
+            connectionError = info.warning ?? L10n.t(.errorInvalidBaseURL)
             return
         }
 
@@ -745,7 +745,7 @@ final class AppState {
         aiBuilderConnectionOK = false
         let token = aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else {
-            aiBuilderConnectionError = "Token is empty"
+            aiBuilderConnectionError = L10n.t(.errorAiBuilderTokenEmpty)
             aiBuilderLastTestedAt = Date()
             return
         }
@@ -765,11 +765,11 @@ final class AppState {
             UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
             switch error {
             case AIBuildersAudioError.missingToken:
-                aiBuilderConnectionError = "Token is empty"
+                aiBuilderConnectionError = L10n.t(.errorAiBuilderTokenEmpty)
             case AIBuildersAudioError.invalidBaseURL:
-                aiBuilderConnectionError = "Invalid base URL"
+                aiBuilderConnectionError = L10n.t(.errorInvalidBaseURL)
             case AIBuildersAudioError.httpError(let statusCode, _):
-                aiBuilderConnectionError = "HTTP \(statusCode)"
+                aiBuilderConnectionError = L10n.errorMessage(.errorServerError, String(statusCode))
             default:
                 aiBuilderConnectionError = error.localizedDescription
             }
@@ -791,7 +791,7 @@ final class AppState {
     func sendMessage(_ text: String) async -> Bool {
         sendError = nil
         guard let sessionID = currentSessionID else {
-            sendError = "请先选择或创建 Session"
+            sendError = L10n.t(.chatSelectSessionFirst)
             return false
         }
         let tempMessageID = appendOptimisticUserMessage(text)

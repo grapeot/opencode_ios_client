@@ -18,21 +18,21 @@ enum AppError: Error, Equatable {
     var localizedDescription: String {
         switch self {
         case .connectionFailed(let detail):
-            return "连接失败：\(detail)"
+            return L10n.errorMessage(.errorConnectionFailed, detail)
         case .serverError(let detail):
-            return "服务器错误：\(detail)"
+            return L10n.errorMessage(.errorServerError, detail)
         case .invalidResponse:
-            return "服务器返回了无效的响应"
+            return L10n.t(.errorInvalidResponse)
         case .unauthorized:
-            return "未授权，请检查认证信息"
+            return L10n.t(.errorUnauthorized)
         case .sessionNotFound:
-            return "Session 不存在"
+            return L10n.t(.errorSessionNotFound)
         case .fileNotFound(let path):
-            return "文件不存在：\(path)"
+            return L10n.errorMessage(.errorFileNotFound, path)
         case .operationFailed(let detail):
-            return "操作失败：\(detail)"
+            return L10n.errorMessage(.errorOperationFailed, detail)
         case .unknown(let detail):
-            return "未知错误：\(detail)"
+            return L10n.errorMessage(.errorUnknown, detail)
         }
     }
     
@@ -48,7 +48,7 @@ enum AppError: Error, Equatable {
         }
         
         if errorString.contains("invalid URL") || errorString.contains("Invalid URL") {
-            return .operationFailed("无效的 URL")
+            return .operationFailed(L10n.t(.errorInvalidBaseURL))
         }
         
         if errorString.contains("HTTP") {

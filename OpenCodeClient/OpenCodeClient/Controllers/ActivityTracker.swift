@@ -19,7 +19,7 @@ enum ActivityTracker {
         let message = current.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         let opText = (message?.isEmpty == false)
             ? message!
-            : (current.type == "retry" ? "Retrying" : "Thinking")
+            : (current.type == "retry" ? L10n.t(.activityRetrying) : L10n.t(.activityThinking))
 
         if nowBusy {
             if !wasBusy || existing?.state != .running {
@@ -104,7 +104,7 @@ enum ActivityTracker {
             return mapped
         }
 
-        return "Thinking"
+        return L10n.t(.activityThinking)
     }
 
     static func debounceDelay(lastChangeAt: Date?, now: Date, window: TimeInterval = debounceWindowSeconds) -> TimeInterval {
@@ -117,9 +117,9 @@ enum ActivityTracker {
     static func formatThinkingFromReasoningText(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let topic = extractLeadingBoldTopic(from: trimmed) {
-            return "Thinking - \(topic)"
+            return "\(L10n.t(.activityThinking)) - \(topic)"
         }
-        return "Thinking"
+        return L10n.t(.activityThinking)
     }
 
     static func formatStatusFromPart(_ part: Part) -> String? {
@@ -127,19 +127,19 @@ enum ActivityTracker {
             let base: String? = {
                 switch part.tool {
                 case "task":
-                    return "Delegating"
+                    return L10n.t(.activityDelegating)
                 case "todowrite", "todoread":
-                    return "Planning"
+                    return L10n.t(.activityPlanning)
                 case "read":
-                    return "Gathering context"
+                    return L10n.t(.activityGatheringContext)
                 case "list", "grep", "glob":
-                    return "Searching codebase"
+                    return L10n.t(.activitySearchingCodebase)
                 case "webfetch":
-                    return "Searching web"
+                    return L10n.t(.activitySearchingWeb)
                 case "edit", "write":
-                    return "Making edits"
+                    return L10n.t(.activityMakingEdits)
                 case "bash":
-                    return "Running commands"
+                    return L10n.t(.activityRunningCommands)
                 default:
                     return nil
                 }
@@ -157,7 +157,7 @@ enum ActivityTracker {
         }
 
         if part.isText {
-            return "Gathering thoughts"
+            return L10n.t(.activityGatheringThoughts)
         }
 
         return nil

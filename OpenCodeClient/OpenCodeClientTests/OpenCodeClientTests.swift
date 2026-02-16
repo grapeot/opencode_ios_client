@@ -647,20 +647,20 @@ struct AppErrorTests {
     
     @Test func appErrorConnectionFailed() {
         let error = AppError.connectionFailed("Network unreachable")
-        #expect(error.localizedDescription.contains("连接失败"))
+        #expect(error.localizedDescription == L10n.errorMessage(.errorConnectionFailed, "Network unreachable"))
         #expect(error.isConnectionError == true)
         #expect(error.isRecoverable == true)
     }
     
     @Test func appErrorUnauthorized() {
         let error = AppError.unauthorized
-        #expect(error.localizedDescription.contains("未授权"))
+        #expect(error.localizedDescription == L10n.t(.errorUnauthorized))
         #expect(error.isRecoverable == true)
     }
     
     @Test func appErrorFromFileNotFound() {
         let error = AppError.fileNotFound("/path/to/file.swift")
-        #expect(error.localizedDescription.contains("文件不存在"))
+        #expect(error.localizedDescription == L10n.errorMessage(.errorFileNotFound, "/path/to/file.swift"))
         #expect(error.isRecoverable == false)
     }
     
@@ -680,6 +680,14 @@ struct AppErrorTests {
         let e3 = AppError.connectionFailed("other")
         #expect(e1 == e2)
         #expect(e1 != e3)
+    }
+}
+
+struct LocalizationTests {
+
+    @Test func localizationKeyCoverage() {
+        #expect(L10n.missingEnglishKeys.isEmpty)
+        #expect(L10n.missingChineseKeys.isEmpty)
     }
 }
 
@@ -979,7 +987,7 @@ struct ActivityTrackerTests {
 
     @Test func thinkingTopicFromLeadingBoldText() {
         let text = "**Refactor Session Runtime**\nThen continue details"
-        #expect(ActivityTracker.formatThinkingFromReasoningText(text) == "Thinking - Refactor Session Runtime")
+        #expect(ActivityTracker.formatThinkingFromReasoningText(text) == "\(L10n.t(.activityThinking)) - Refactor Session Runtime")
     }
 
     @Test func toolStatusMappingWithReason() throws {
@@ -987,7 +995,7 @@ struct ActivityTrackerTests {
         {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","text":null,"tool":"edit","callID":"c1","state":{"status":"running","title":"Update AppState"},"metadata":null,"files":null}
         """
         let part = try JSONDecoder().decode(Part.self, from: Data(json.utf8))
-        #expect(ActivityTracker.formatStatusFromPart(part) == "Making edits - Update AppState")
+        #expect(ActivityTracker.formatStatusFromPart(part) == "\(L10n.t(.activityMakingEdits)) - Update AppState")
     }
 
     @Test func debounceDelayWithinWindow() {
