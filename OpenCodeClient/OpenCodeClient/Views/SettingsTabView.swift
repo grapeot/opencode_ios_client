@@ -132,13 +132,15 @@ struct SettingsTabView: View {
                                 }
                         }
 
-                        Button {
-                            state.serverURL = "127.0.0.1:4096"
-                        } label: {
-                            Label(L10n.t(.settingsSetServerAddress), systemImage: "arrow.right.circle.fill")
+                        HStack {
+                            Spacer(minLength: 0)
+                            Button(L10n.t(.settingsSetServerAddress)) {
+                                state.serverURL = "127.0.0.1:4096"
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                            Spacer(minLength: 0)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.blue)
 
                         HStack {
                             Text(L10n.t(.settingsStatus))

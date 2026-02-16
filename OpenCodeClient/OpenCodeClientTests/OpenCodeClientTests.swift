@@ -891,6 +891,21 @@ struct SSHKeyManagerTests {
         #expect(publicKey.contains("opencode-ios"))
     }
 
+    @Test func ensureKeyPairRepairsMissingPublicKeyFromPrivateKey() throws {
+        SSHKeyManager.deleteKeyPair()
+        defer { SSHKeyManager.deleteKeyPair() }
+
+        let (privateKey, _) = try SSHKeyManager.generateKeyPair()
+        SSHKeyManager.savePrivateKey(privateKey)
+        SSHKeyManager.savePublicKey("   ")
+
+        let repaired = try SSHKeyManager.ensureKeyPair()
+
+        #expect(!repaired.isEmpty)
+        #expect(repaired.hasPrefix("ssh-ed25519 "))
+        #expect(SSHKeyManager.getPublicKey() == repaired)
+    }
+
 }
 
 struct SSHKnownHostStoreTests {

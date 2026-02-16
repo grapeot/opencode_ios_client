@@ -34,7 +34,11 @@ enum SSHKeyManager {
     }
     
     static func getPublicKey() -> String? {
-        UserDefaults.standard.string(forKey: publicKeyUserDefaultsKey)
+        guard let raw = UserDefaults.standard.string(forKey: publicKeyUserDefaultsKey) else {
+            return nil
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
     
     static func deleteKeyPair() {
@@ -45,10 +49,16 @@ enum SSHKeyManager {
     static func hasKeyPair() -> Bool {
         loadPrivateKey() != nil && getPublicKey() != nil
     }
-    
+
     static func ensureKeyPair() throws -> String {
         if let existing = getPublicKey(), loadPrivateKey() != nil {
             return existing
+        }
+
+        if let privateKeyData = loadPrivateKey() {
+            let repairedPublicKey = try publicKeyLine(fromPrivateKeyData: privateKeyData)
+            savePublicKey(repairedPublicKey)
+            return repairedPublicKey
         }
         
         let (privateKey, publicKey) = try generateKeyPair()
@@ -81,5 +91,11 @@ enum SSHKeyManager {
         withUnsafeBytes(of: &len) { out.append(contentsOf: $0) }
         out.append(data)
         return out
+    }
+
+    private static func publicKeyLine(fromPrivateKeyData privateKeyData: Data) throws -> String {
+        let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privateKeyData)
+        let openSSHPublicKey = makeOpenSSHEd25519PublicKey(publicKeyRaw: Data(privateKey.publicKey.rawRepresentation))
+        return "ssh-ed25519 \(openSSHPublicKey) \(keyComment)"
     }
 }
