@@ -1224,3 +1224,97 @@ struct ActivityTrackerTests {
         )
     }
 }
+
+// MARK: - Agent Info Tests
+
+struct AgentInfoTests {
+
+    @Test func agentInfoDecoding() throws {
+        let json = """
+        {"name":"Sisyphus (Ultraworker)","description":"Powerful orchestrator","mode":"primary","hidden":false,"native":false}
+        """
+        let data = json.data(using: .utf8)!
+        let agent = try JSONDecoder().decode(AgentInfo.self, from: data)
+        #expect(agent.id == "Sisyphus (Ultraworker)")
+        #expect(agent.name == "Sisyphus (Ultraworker)")
+        #expect(agent.description == "Powerful orchestrator")
+        #expect(agent.mode == "primary")
+        #expect(agent.hidden == false)
+        #expect(agent.isVisible == true)
+    }
+
+    @Test func agentInfoShortName() throws {
+        let agent1 = AgentInfo(name: "Sisyphus (Ultraworker)", description: nil, mode: nil, hidden: nil, native: nil)
+        #expect(agent1.shortName == "Sisyphus")
+        
+        let agent2 = AgentInfo(name: "build", description: nil, mode: nil, hidden: nil, native: nil)
+        #expect(agent2.shortName == "build")
+        
+        let agent3 = AgentInfo(name: "explore", description: nil, mode: nil, hidden: nil, native: nil)
+        #expect(agent3.shortName == "explore")
+    }
+
+    @Test func agentInfoHiddenNotVisible() throws {
+        let agent = AgentInfo(name: "hidden_agent", description: nil, mode: nil, hidden: true, native: nil)
+        #expect(agent.isVisible == false)
+    }
+
+    @Test func agentInfoArrayDecoding() throws {
+        let json = """
+        [
+            {"name":"Sisyphus","description":"Orchestrator","mode":"primary","hidden":false},
+            {"name":"build","description":"Default agent","mode":"subagent","hidden":true},
+            {"name":"plan","description":"Planning mode","mode":"subagent","hidden":false}
+        ]
+        """
+        let data = json.data(using: .utf8)!
+        let agents = try JSONDecoder().decode([AgentInfo].self, from: data)
+        #expect(agents.count == 3)
+        #expect(agents[0].name == "Sisyphus")
+        #expect(agents[1].hidden == true)
+        #expect(agents[2].isVisible == true)
+    }
+
+    @Test func agentInfoMinimalFields() throws {
+        let json = """
+        {"name":"minimal"}
+        """
+        let data = json.data(using: .utf8)!
+        let agent = try JSONDecoder().decode(AgentInfo.self, from: data)
+        #expect(agent.name == "minimal")
+        #expect(agent.description == nil)
+        #expect(agent.mode == nil)
+        #expect(agent.hidden == nil)
+        #expect(agent.isVisible == true)
+    }
+}
+
+// MARK: - ModelPreset ShortName Tests
+
+struct ModelPresetShortNameTests {
+    
+    @Test func opusShortName() {
+        let preset = ModelPreset(displayName: "Opus 4.6", providerID: "anthropic", modelID: "claude-opus-4-6")
+        #expect(preset.shortName == "Opus")
+    }
+    
+    @Test func sonnetShortName() {
+        let preset = ModelPreset(displayName: "Sonnet 4.6", providerID: "anthropic", modelID: "claude-sonnet-4-6")
+        #expect(preset.shortName == "Sonnet")
+    }
+    
+    @Test func geminiShortName() {
+        let preset = ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro")
+        #expect(preset.shortName == "Gemini")
+    }
+    
+    @Test func gptShortName() {
+        let preset = ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex")
+        #expect(preset.shortName == "GPT")
+    }
+    
+    @Test func unknownModelFallsBackToDisplayName() {
+        let preset = ModelPreset(displayName: "Custom Model", providerID: "custom", modelID: "custom-1")
+        #expect(preset.shortName == "Custom Model")
+    }
+}
