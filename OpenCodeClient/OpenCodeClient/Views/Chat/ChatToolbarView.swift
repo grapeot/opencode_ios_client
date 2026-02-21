@@ -15,7 +15,7 @@ struct ChatToolbarView: View {
     
     @Environment(\.horizontalSizeClass) private var sizeClass
     
-    private var useCompactModelLabels: Bool {
+    private var useCompactLabels: Bool {
 #if canImport(UIKit)
         return UIDevice.current.userInterfaceIdiom == .phone
 #else
@@ -68,10 +68,11 @@ struct ChatToolbarView: View {
         }
     }
     
-    // MARK: - Right Side Buttons (Model + Settings)
+    // MARK: - Right Side Buttons (Model + Agent + Settings)
     private var rightButtons: some View {
         HStack(spacing: LayoutConstants.Toolbar.modelButtonSpacing) {
-            modelSelectionButtons
+            modelMenu
+            agentMenu
             ContextUsageButton(state: state)
             
             if showSettingsInToolbar, let onSettingsTap {
@@ -86,38 +87,79 @@ struct ChatToolbarView: View {
         }
     }
     
-    // MARK: - Model Selection Buttons
-    private var modelSelectionButtons: some View {
-        ForEach(Array(state.modelPresets.enumerated()), id: \.element.id) { index, preset in
-            Button {
-                state.setSelectedModelIndex(index)
-            } label: {
-                Text(useCompactModelLabels ? preset.compactLabel : preset.displayName)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(
-                        state.selectedModelIndex == index
-                            ? AnyShapeStyle(Color.accentColor.gradient)
-                            : AnyShapeStyle(Color(.systemGray5))
-                    )
-                    .foregroundColor(state.selectedModelIndex == index ? .white : .secondary)
-                    .clipShape(Capsule())
+    // MARK: - Model Selection Menu
+    private var modelMenu: some View {
+        Menu {
+            ForEach(Array(state.modelPresets.enumerated()), id: \.element.id) { index, preset in
+                Button {
+                    state.setSelectedModelIndex(index)
+                } label: {
+                    HStack {
+                        Text(preset.displayName)
+                        if state.selectedModelIndex == index {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
             }
-            .buttonStyle(.plain)
+        } label: {
+            HStack(spacing: 4) {
+                Text(useCompactLabels ? (state.selectedModel?.shortName ?? "Model") : (state.selectedModel?.displayName ?? "Model"))
+                    .font(.caption.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.accentColor.gradient)
+            .foregroundColor(.white)
+            .clipShape(Capsule())
         }
+        .menuStyle(.borderlessButton)
     }
-}
-
-private extension ModelPreset {
-    var compactLabel: String {
-        switch modelID {
-        case "gpt-5.3-codex": return "GPT"
-        case "gpt-5.3-codex-spark": return "Spark"
-        case "anthropic/claude-opus-4-6": return "Opus"
-        case "glm-5": return "GLM"
-        default:
-            return displayName
+    
+    // MARK: - Agent Selection Menu
+    private var agentMenu: some View {
+        Menu {
+            if state.isLoadingAgents {
+                ProgressView()
+            } else if state.visibleAgents.isEmpty {
+                Text("No agents available")
+            } else {
+                ForEach(Array(state.visibleAgents.enumerated()), id: \.element.id) { index, agent in
+                    Button {
+                        state.setSelectedAgentIndex(index)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(agent.shortName)
+                                if !useCompactLabels, let desc = agent.description, !desc.isEmpty {
+                                    Text(desc)
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            if state.selectedAgentIndex == index {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(useCompactLabels ? (state.selectedAgent?.shortName ?? "Agent") : (state.selectedAgent?.name ?? "Agent"))
+                    .font(.caption.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color(.systemGray5))
+            .foregroundColor(.secondary)
+            .clipShape(Capsule())
         }
+        .menuStyle(.borderlessButton)
     }
 }

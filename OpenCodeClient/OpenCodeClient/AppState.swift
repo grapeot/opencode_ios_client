@@ -352,14 +352,19 @@ final class AppState {
     var partsByMessage: [String: [Part]] { get { messageStore.partsByMessage } set { messageStore.partsByMessage = newValue } }
     var streamingPartTexts: [String: String] { get { messageStore.streamingPartTexts } set { messageStore.streamingPartTexts = newValue } }
 
-    /// 固定四个模型，不再从 server 导入
     var modelPresets: [ModelPreset] = [
+        ModelPreset(displayName: "Opus 4.6", providerID: "anthropic", modelID: "claude-opus-4-6"),
+        ModelPreset(displayName: "Sonnet 4.6", providerID: "anthropic", modelID: "claude-sonnet-4-6"),
         ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
-        ModelPreset(displayName: "GPT-5.3 Codex Spark", providerID: "openai", modelID: "gpt-5.3-codex-spark"),
-        ModelPreset(displayName: "Opus 4.6", providerID: "poe", modelID: "anthropic/claude-opus-4-6"),
-        ModelPreset(displayName: "GLM5", providerID: "zai-coding-plan", modelID: "glm-5"),
+        ModelPreset(displayName: "GPT-5.2", providerID: "openai", modelID: "gpt-5.2"),
+        ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro"),
+        ModelPreset(displayName: "Gemini 3 Flash", providerID: "google", modelID: "gemini-3-flash"),
     ]
     var selectedModelIndex: Int = 0
+    
+    var agents: [AgentInfo] = []
+    var selectedAgentIndex: Int = 0
+    var isLoadingAgents: Bool = false
 
     var pendingPermissions: [PendingPermission] = []
 
@@ -410,6 +415,16 @@ final class AppState {
         guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
         return modelPresets[selectedModelIndex]
     }
+    
+    var selectedAgent: AgentInfo? {
+        let visibleAgents = agents.filter { $0.isVisible }
+        guard visibleAgents.indices.contains(selectedAgentIndex) else { return nil }
+        return visibleAgents[selectedAgentIndex]
+    }
+    
+    var visibleAgents: [AgentInfo] {
+        agents.filter { $0.isVisible }
+    }
 
     var isCurrentSessionHistoryTruncated: Bool {
         guard let sessionID = currentSessionID else { return false }
@@ -455,6 +470,12 @@ final class AppState {
         guard let sessionID = currentSessionID else { return }
         selectedModelIDBySessionID[sessionID] = modelPresets[index].id
         persistSelectedModelMap()
+    }
+    
+    func setSelectedAgentIndex(_ index: Int) {
+        let visibleAgents = agents.filter { $0.isVisible }
+        guard visibleAgents.indices.contains(index) else { return }
+        selectedAgentIndex = index
     }
 
     private func applySavedModelForCurrentSession() {
@@ -541,6 +562,21 @@ final class AppState {
         } catch {
             connectionError = error.localizedDescription
         }
+    }
+    
+    func loadAgents() async {
+        guard isConnected else { return }
+        isLoadingAgents = true
+        do {
+            let loaded = try await apiClient.agents()
+            agents = loaded
+            if selectedAgentIndex >= visibleAgents.count && !visibleAgents.isEmpty {
+                selectedAgentIndex = 0
+            }
+        } catch {
+            Self.logger.warning("loadAgents failed: \(error.localizedDescription)")
+        }
+        isLoadingAgents = false
     }
 
     func refreshSessions() async {
@@ -924,8 +960,9 @@ final class AppState {
         }
         let tempMessageID = appendOptimisticUserMessage(text)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
+        let agentName = selectedAgent?.name ?? "build"
         do {
-            try await apiClient.promptAsync(sessionID: sessionID, text: text, model: model)
+            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
             return true
         } catch {
             let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
@@ -1500,8 +1537,11 @@ final class AppState {
     func refresh() async {
         await testConnection()
         if isConnected {
-            await loadProvidersConfig()
+            async let agentsTask = loadAgents()
+            async let providersTask = loadProvidersConfig()
             await loadSessions()
+            _ = await agentsTask
+            _ = await providersTask
             await loadMessages()
             await refreshPendingPermissions()
             await loadSessionDiff()

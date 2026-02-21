@@ -297,6 +297,11 @@ actor APIClient {
         return try JSONDecoder().decode(ProvidersResponse.self, from: data)
     }
 
+    func agents() async throws -> [AgentInfo] {
+        let (data, _) = try await makeRequest(path: "/agent")
+        return try JSONDecoder().decode([AgentInfo].self, from: data)
+    }
+
     func sessionDiff(sessionID: String) async throws -> [FileDiff] {
         let (data, _) = try await makeRequest(path: "/session/\(sessionID)/diff")
         return try JSONDecoder().decode([FileDiff].self, from: data)
