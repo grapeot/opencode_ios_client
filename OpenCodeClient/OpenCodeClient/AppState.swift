@@ -363,7 +363,13 @@ final class AppState {
     ]
     var selectedModelIndex: Int = 0
     
-    var agents: [AgentInfo] = []
+    var agents: [AgentInfo] = [
+        AgentInfo(name: "OpenCode-Builder", description: "Build agent (OpenCode default)", mode: "all", hidden: false, native: false),
+        AgentInfo(name: "Sisyphus (Ultraworker)", description: "Powerful AI orchestrator", mode: "primary", hidden: false, native: false),
+        AgentInfo(name: "Hephaestus (Deep Agent)", description: "Autonomous Deep Worker", mode: "primary", hidden: false, native: false),
+        AgentInfo(name: "Prometheus (Plan Builder)", description: "Plan agent", mode: "all", hidden: false, native: false),
+        AgentInfo(name: "Atlas (Plan Executor)", description: "Plan Executor", mode: "primary", hidden: false, native: false),
+    ]
     var selectedAgentIndex: Int = 0
     var isLoadingAgents: Bool = false
 
