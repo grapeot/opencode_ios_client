@@ -353,12 +353,13 @@ final class AppState {
     var streamingPartTexts: [String: String] { get { messageStore.streamingPartTexts } set { messageStore.streamingPartTexts = newValue } }
 
     var modelPresets: [ModelPreset] = [
+        ModelPreset(displayName: "GLM-5", providerID: "zai-coding-plan", modelID: "glm-5"),
         ModelPreset(displayName: "Opus 4.6", providerID: "anthropic", modelID: "claude-opus-4-6"),
         ModelPreset(displayName: "Sonnet 4.6", providerID: "anthropic", modelID: "claude-sonnet-4-6"),
         ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
         ModelPreset(displayName: "GPT-5.2", providerID: "openai", modelID: "gpt-5.2"),
-        ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro"),
-        ModelPreset(displayName: "Gemini 3 Flash", providerID: "google", modelID: "gemini-3-flash"),
+        ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro-preview"),
+        ModelPreset(displayName: "Gemini 3 Flash", providerID: "google", modelID: "gemini-3-flash-preview"),
     ]
     var selectedModelIndex: Int = 0
     

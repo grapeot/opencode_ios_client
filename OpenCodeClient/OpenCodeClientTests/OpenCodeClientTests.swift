@@ -1272,7 +1272,7 @@ struct AgentInfoTests {
         #expect(agents.count == 3)
         #expect(agents[0].name == "Sisyphus")
         #expect(agents[1].hidden == true)
-        #expect(agents[2].isVisible == true)
+        #expect(agents[2].isVisible == false)
     }
 
     @Test func agentInfoMinimalFields() throws {
@@ -1286,6 +1286,20 @@ struct AgentInfoTests {
         #expect(agent.mode == nil)
         #expect(agent.hidden == nil)
         #expect(agent.isVisible == true)
+    }
+
+    @Test func agentInfoModeFiltering() throws {
+        let primary = AgentInfo(name: "Sisyphus", description: nil, mode: "primary", hidden: false, native: nil)
+        let all = AgentInfo(name: "Prometheus", description: nil, mode: "all", hidden: false, native: nil)
+        let subagent = AgentInfo(name: "explore", description: nil, mode: "subagent", hidden: false, native: nil)
+        let hiddenPrimary = AgentInfo(name: "hidden", description: nil, mode: "primary", hidden: true, native: nil)
+        let noMode = AgentInfo(name: "noMode", description: nil, mode: nil, hidden: false, native: nil)
+        
+        #expect(primary.isVisible == true)
+        #expect(all.isVisible == true)
+        #expect(subagent.isVisible == false)
+        #expect(hiddenPrimary.isVisible == false)
+        #expect(noMode.isVisible == true)
     }
 }
 

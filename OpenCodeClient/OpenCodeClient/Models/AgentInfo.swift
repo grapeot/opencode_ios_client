@@ -29,7 +29,10 @@ struct AgentInfo: Codable, Identifiable, Hashable {
     }
     
     /// Whether this agent should be shown in the UI selector
+    /// Filters out hidden agents and subagents (only primary/all modes shown)
     var isVisible: Bool {
-        hidden != true
+        guard hidden != true else { return false }
+        guard let mode = mode else { return true }
+        return mode == "primary" || mode == "all"
     }
 }

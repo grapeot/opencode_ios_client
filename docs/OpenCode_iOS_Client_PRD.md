@@ -1,6 +1,6 @@
 # OpenCode iOS Client — Product Requirements Document
 
-> Version 0.1 · Draft · Feb 2026
+> Version 0.2 · Draft · Feb 2026
 
 ## 1. 产品定位
 
@@ -127,12 +127,13 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 
 | 显示名称 | providerID | modelID |
 |----------|------------|---------|
+| GLM-5 | `zai-coding-plan` | `glm-5` |
 | Opus 4.6 | `anthropic` | `claude-opus-4-6` |
 | Sonnet 4.6 | `anthropic` | `claude-sonnet-4-6` |
 | GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
 | GPT-5.2 | `openai` | `gpt-5.2` |
-| Gemini 3.1 Pro | `google` | `gemini-3.1-pro` |
-| Gemini 3 Flash | `google` | `gemini-3-flash` |
+| Gemini 3.1 Pro | `google` | `gemini-3.1-pro-preview` |
+| Gemini 3 Flash | `google` | `gemini-3-flash-preview` |
 
 **Agent 选择器**：下拉列表，内容从 `GET /agent` API 动态获取。过滤 `hidden != true` 的 agents 后显示。每个选项显示 agent 名称（如 `Sisyphus`），description 可作为 tooltip 或 subtitle。
 
