@@ -4,22 +4,27 @@
 
 ## 当前状态
 
-- **最后更新**：2026-02-20
-- **Phase**：Phase 3 完成 + SSH Tunnel 基础设施 + Agent 选择功能（进行中）
+- **最后更新**：2026-02-21
+- **Phase**：Phase 3 完成 + SSH Tunnel 基础设施 + Agent 选择功能（已完成）
 - **编译**：✅ 通过（iphonesimulator / generic destination）
 - **测试**：✅ 所有测试通过（含 SSH tunnel 相关测试）
 
 ## 进行中
 
-- [ ] **Agent 选择功能（2026-02-20 新增）**：
-  - [x] RFC/PRD 更新：添加 Agent 数据模型、API、UI 设计
-  - [ ] 实现 `AgentInfo` 数据模型
-  - [ ] 实现 `APIClient.agents()` 方法
-  - [ ] 更新 `AppState`：添加 agents 列表、selectedAgentIndex、loadAgents()
-  - [ ] 更新模型列表：Opus 4.6 / Sonnet 4.6 / GPT-5.3 Codex / GPT-5.2 / Gemini 3.1 Pro / Gemini 3 Flash
-  - [ ] 更新 `ChatToolbarView`：chip 横向滚动改为下拉列表（Model + Agent）
-  - [ ] 更新 `promptAsync`：传递选中的 agent
-  - [ ] 单元测试：Agent API 解码
+（无）
+
+## 已完成（近期）
+
+- [x] **Agent 选择功能（2026-02-21 完成）**：
+  - [x] RFC/PRD 更新：添加 Agent 数据模型、API、UI 设计（v0.2 / RFC-002）
+  - [x] 实现 `AgentInfo` 数据模型（含 mode 过滤：primary/all 显示，subagent 隐藏）
+  - [x] 实现 `APIClient.agents()` 方法
+  - [x] 更新 `AppState`：添加 agents 列表（prefill 5 个默认 agent）、selectedAgentIndex、loadAgents()
+  - [x] 更新模型列表：GLM-5（默认）/ Opus 4.6 / Sonnet 4.6 / GPT-5.3 Codex / GPT-5.2 / Gemini 3.1 Pro / Gemini 3 Flash
+  - [x] 更新 `ChatToolbarView`：chip 横向滚动改为下拉列表（Model + Agent）
+  - [x] 更新 `promptAsync`：传递选中的 agent
+  - [x] 单元测试：Agent API 解码 + mode 过滤测试
+  - [x] OpenCode-Builder 设为默认 agent
 - [x] **渲染性能优化 1/3（行级去全局状态订阅）**：`MessageRowView/ToolPartView/PatchPartView` 移除 `@Bindable AppState` 直连，改为最小必要数据 + 文件打开回调，降低长会话下无关状态变更触发的整页重算
 - [x] **渲染性能优化 2/3（Scroll Anchor 轻量化）**：`scrollAnchor` 从“全量拼接所有 message/streaming 字符串”改为基于 `messageCount + lastMessageSignature + streaming chars` 的 O(1)/小常量签名，避免长会话下每次状态变化都全量遍历
 - [x] **渲染性能优化 3/3（Markdown 快速路径）**：对纯文本消息走 `Text` 渲染，仅在检测到 Markdown 语法特征时使用 `MarkdownUI`，降低长会话中大量普通文本消息的解析与布局开销
@@ -198,17 +203,30 @@
 
 （记录实现过程中的技术决策）
 
-## API 验证（192.168.180.128:4096）
+## API 验证（localhost:4096）
 
 - **GET /global/health**：✅ `{ healthy, version }`
 - **GET /config/providers**：✅ 返回 `providers: array`（非 dict），每项含 `id`, `name`, `models: { modelID: ModelInfo }`。已修复 iOS 解析。
+- **GET /agent**：✅ 返回 `[AgentInfo]`，含 name/description/mode/hidden/native 字段。iOS 端过滤 mode=subagent。
 - **Import from Server**：依赖 config/providers，解析修复后应可正常导入。
 
-用户指定模型对应：
-- OpenAI GPT-5.3 Codex：✅ `openai` / `gpt-5.3-codex`
-- OpenAI GPT-5.3 Codex Spark：✅ `openai` / `gpt-5.3-codex-spark`
-- POE Opus Claude 4.6：✅ `poe` / `anthropic/claude-opus-4-6`
-- z.ai coding plan GLM5：✅ `zai-coding-plan` / `glm-5`
+当前模型预设（7 个）：
+| 显示名称 | providerID | modelID |
+|----------|------------|---------|
+| GLM-5（默认） | `zai-coding-plan` | `glm-5` |
+| Opus 4.6 | `anthropic` | `claude-opus-4-6` |
+| Sonnet 4.6 | `anthropic` | `claude-sonnet-4-6` |
+| GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
+| GPT-5.2 | `openai` | `gpt-5.2` |
+| Gemini 3.1 Pro | `google` | `gemini-3.1-pro-preview` |
+| Gemini 3 Flash | `google` | `gemini-3-flash-preview` |
+
+Agent prefill（5 个，OpenCode-Builder 默认）：
+- OpenCode-Builder (mode=all)
+- Sisyphus (Ultraworker) (mode=primary)
+- Hephaestus (Deep Agent) (mode=primary)
+- Prometheus (Plan Builder) (mode=all)
+- Atlas (Plan Executor) (mode=primary)
 
 ## Diff 问题
 
