@@ -151,6 +151,10 @@ enum L10n {
         case sessionsStatusBusy
         case sessionsStatusRetry
         case sessionsStatusIdle
+        case sessionsDelete
+        case sessionsDeleteConfirmTitle
+        case sessionsDeleteConfirmMessage
+        case sessionsDeleteFailedTitle
 
         case fileLoading
         case fileError
@@ -333,6 +337,10 @@ enum L10n {
         Key.sessionsStatusBusy.rawValue: "Running",
         Key.sessionsStatusRetry.rawValue: "Retrying",
         Key.sessionsStatusIdle.rawValue: "Idle",
+        Key.sessionsDelete.rawValue: "Delete",
+        Key.sessionsDeleteConfirmTitle.rawValue: "Delete Session",
+        Key.sessionsDeleteConfirmMessage.rawValue: "Delete this session and all its messages? This cannot be undone.",
+        Key.sessionsDeleteFailedTitle.rawValue: "Delete Failed",
 
         Key.fileLoading.rawValue: "Loading...",
         Key.fileError.rawValue: "Error",
@@ -518,6 +526,10 @@ enum L10n {
         Key.sessionsStatusBusy.rawValue: "运行中",
         Key.sessionsStatusRetry.rawValue: "重试中",
         Key.sessionsStatusIdle.rawValue: "空闲",
+        Key.sessionsDelete.rawValue: "删除",
+        Key.sessionsDeleteConfirmTitle.rawValue: "删除会话",
+        Key.sessionsDeleteConfirmMessage.rawValue: "确认删除这个会话及其全部消息吗？此操作无法撤销。",
+        Key.sessionsDeleteFailedTitle.rawValue: "删除失败",
 
         Key.fileLoading.rawValue: "加载中...",
         Key.fileError.rawValue: "错误",

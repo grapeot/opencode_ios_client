@@ -99,6 +99,10 @@ actor APIClient {
         return try JSONDecoder().decode(Session.self, from: responseData)
     }
 
+    func deleteSession(sessionID: String) async throws {
+        _ = try await makeRequest(path: "/session/\(sessionID)", method: "DELETE")
+    }
+
     func messages(sessionID: String, limit: Int? = nil) async throws -> [MessageWithParts] {
         let queryItems: [URLQueryItem]? = {
             guard let limit, limit > 0 else { return nil }

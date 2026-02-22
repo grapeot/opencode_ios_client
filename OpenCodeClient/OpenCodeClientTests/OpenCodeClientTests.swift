@@ -267,6 +267,68 @@ struct MessagePaginationTests {
     }
 }
 
+// MARK: - Session Deletion Selection
+
+struct SessionDeletionSelectionTests {
+
+    @Test func keepCurrentWhenDeletingDifferentSession() {
+        let sessions = [
+            makeSession(id: "s1", updated: 3),
+            makeSession(id: "s2", updated: 2),
+            makeSession(id: "s3", updated: 1),
+        ]
+
+        let next = AppState.nextSessionIDAfterDeleting(
+            deletedSessionID: "s2",
+            currentSessionID: "s1",
+            remainingSessions: sessions.filter { $0.id != "s2" }
+        )
+
+        #expect(next == "s1")
+    }
+
+    @Test func pickMostRecentlyUpdatedWhenDeletingCurrentSession() {
+        let sessions = [
+            makeSession(id: "older", updated: 10),
+            makeSession(id: "newer", updated: 30),
+            makeSession(id: "middle", updated: 20),
+        ]
+
+        let next = AppState.nextSessionIDAfterDeleting(
+            deletedSessionID: "older",
+            currentSessionID: "older",
+            remainingSessions: sessions.filter { $0.id != "older" }
+        )
+
+        #expect(next == "newer")
+    }
+
+    @Test func clearCurrentWhenDeletingLastSession() {
+        let next = AppState.nextSessionIDAfterDeleting(
+            deletedSessionID: "only",
+            currentSessionID: "only",
+            remainingSessions: []
+        )
+
+        #expect(next == nil)
+    }
+
+    private func makeSession(id: String, updated: Int) -> Session {
+        Session(
+            id: id,
+            slug: id,
+            projectID: "p1",
+            directory: "/tmp",
+            parentID: nil,
+            title: id,
+            version: "1",
+            time: .init(created: 0, updated: updated),
+            share: nil,
+            summary: nil
+        )
+    }
+}
+
 // MARK: - Message & Role Tests
 
 struct MessageRoleTests {

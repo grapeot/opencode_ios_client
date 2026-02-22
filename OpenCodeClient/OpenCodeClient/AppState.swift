@@ -437,6 +437,18 @@ final class AppState {
         normalizedMessageFetchLimit(current: current, pageSize: pageSize) + max(pageSize, 1)
     }
 
+    nonisolated static func nextSessionIDAfterDeleting(
+        deletedSessionID: String,
+        currentSessionID: String?,
+        remainingSessions: [Session]
+    ) -> String? {
+        guard currentSessionID == deletedSessionID else { return currentSessionID }
+        return remainingSessions
+            .sorted { $0.time.updated > $1.time.updated }
+            .first?
+            .id
+    }
+
     func setSelectedModelIndex(_ index: Int) {
         guard modelPresets.indices.contains(index) else { return }
         selectedModelIndex = index
@@ -515,6 +527,13 @@ final class AppState {
         guard isConnected else { return }
         do {
             sessions = try await apiClient.sessions()
+
+            if let selectedID = currentSessionID,
+               !sessions.contains(where: { $0.id == selectedID }) {
+                currentSessionID = nil
+                clearCurrentSessionViewState()
+            }
+
             if currentSessionID == nil, let first = sessions.first {
                 currentSessionID = first.id
                 applySavedModelForCurrentSession()
@@ -579,6 +598,9 @@ final class AppState {
             let todos = try await apiClient.sessionTodos(sessionID: sessionID)
             sessionTodos[sessionID] = todos
         } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
             // keep previous value if any
         }
     }
@@ -604,6 +626,39 @@ final class AppState {
         } catch {
             guard sessionLoadingID == loadingID else { return }
             connectionError = error.localizedDescription
+        }
+    }
+
+    func deleteSession(sessionID: String) async throws {
+        let previousCurrentSessionID = currentSessionID
+        try await apiClient.deleteSession(sessionID: sessionID)
+
+        sessions.removeAll { $0.id == sessionID }
+        clearSessionScopedCaches(sessionID: sessionID)
+
+        let nextSessionID = Self.nextSessionIDAfterDeleting(
+            deletedSessionID: sessionID,
+            currentSessionID: previousCurrentSessionID,
+            remainingSessions: sessions
+        )
+
+        guard previousCurrentSessionID == sessionID else {
+            currentSessionID = nextSessionID
+            return
+        }
+
+        clearCurrentSessionViewState()
+        if let nextSessionID {
+            currentSessionID = nextSessionID
+            applySavedModelForCurrentSession()
+            await loadMessages()
+            await refreshPendingPermissions()
+            await loadSessionDiff()
+            await loadSessionTodos()
+            inferAndStoreModelForCurrentSessionIfMissing()
+        } else {
+            currentSessionID = nil
+            pendingPermissions = []
         }
     }
 
@@ -688,6 +743,9 @@ final class AppState {
         } catch let error as DecodingError {
             Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
                 Self.logger.debug("ignore stale loadMessages error requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
                 return
@@ -718,6 +776,9 @@ final class AppState {
             }
             sessionDiffs = loaded
         } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return }
             sessionDiffs = []
         }
@@ -867,7 +928,8 @@ final class AppState {
             try await apiClient.promptAsync(sessionID: sessionID, text: text, model: model)
             return true
         } catch {
-            sendError = error.localizedDescription
+            let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
+            sendError = recovered ? L10n.t(.errorSessionNotFound) : error.localizedDescription
             removeMessage(id: tempMessageID)
             return false
         }
@@ -937,6 +999,9 @@ final class AppState {
         do {
             try await apiClient.abort(sessionID: sessionID)
         } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
             connectionError = error.localizedDescription
         }
 
@@ -950,6 +1015,9 @@ final class AppState {
             _ = try await apiClient.updateSession(sessionID: sessionID, title: title)
             await refreshSessions()
         } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
             connectionError = error.localizedDescription
         }
     }
@@ -1072,6 +1140,12 @@ final class AppState {
                 } else {
                     sessions.insert(session, at: 0)
                 }
+            }
+        case "session.deleted":
+            if let sessionID = (props["sessionID"]?.value as? String) ?? (props["id"]?.value as? String) {
+                await handleRemoteSessionDeleted(sessionID: sessionID)
+            } else {
+                await loadSessions()
             }
         case "message.updated":
             let eventSessionID = props["sessionID"]?.value as? String
@@ -1330,6 +1404,97 @@ final class AppState {
             streamingReasoningPart = nil
         }
         streamingDraftMessageIDs.remove(messageID)
+    }
+
+    private func clearCurrentSessionViewState() {
+        sessionLoadingID = UUID()
+        streamingReasoningPart = nil
+        streamingPartTexts = [:]
+        streamingDraftMessageIDs = []
+        messages = []
+        partsByMessage = [:]
+        sessionDiffs = []
+    }
+
+    private func clearSessionScopedCaches(sessionID: String) {
+        sessionStatuses[sessionID] = nil
+        sessionTodos[sessionID] = nil
+        sessionActivities[sessionID] = nil
+        sessionStatusUpdatedAt[sessionID] = nil
+        activityTextLastChangeAt[sessionID] = nil
+        activityTextPendingTask[sessionID]?.cancel()
+        activityTextPendingTask[sessionID] = nil
+        loadedMessageLimitBySessionID[sessionID] = nil
+        hasMoreHistoryBySessionID[sessionID] = nil
+        loadingOlderMessagesSessionIDs.remove(sessionID)
+        pendingPermissions.removeAll { $0.sessionID == sessionID }
+
+        if streamingReasoningPart?.sessionID == sessionID {
+            streamingReasoningPart = nil
+        }
+
+        draftInputsBySessionID[sessionID] = nil
+        if draftInputsBySessionID.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
+        } else if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
+            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
+        }
+
+        selectedModelIDBySessionID[sessionID] = nil
+        persistSelectedModelMap()
+    }
+
+    private func isSessionNotFoundError(_ error: Error) -> Bool {
+        guard case APIError.httpError(let statusCode, _) = error else { return false }
+        return statusCode == 404
+    }
+
+    private func recoverFromMissingCurrentSessionIfNeeded(
+        error: Error,
+        requestedSessionID: String
+    ) async -> Bool {
+        guard requestedSessionID == currentSessionID else { return false }
+        guard isSessionNotFoundError(error) else { return false }
+
+        await loadSessions()
+
+        guard currentSessionID != nil else {
+            pendingPermissions = []
+            return true
+        }
+
+        await loadMessages()
+        await refreshPendingPermissions()
+        await loadSessionDiff()
+        await loadSessionTodos()
+        inferAndStoreModelForCurrentSessionIfMissing()
+        return true
+    }
+
+    private func handleRemoteSessionDeleted(sessionID: String) async {
+        let deletedCurrentSession = (sessionID == currentSessionID)
+
+        sessions.removeAll { $0.id == sessionID }
+        clearSessionScopedCaches(sessionID: sessionID)
+
+        if deletedCurrentSession {
+            clearCurrentSessionViewState()
+        }
+
+        await loadSessions()
+
+        if deletedCurrentSession, currentSessionID != nil {
+            await loadMessages()
+            await refreshPendingPermissions()
+            await loadSessionDiff()
+            await loadSessionTodos()
+            inferAndStoreModelForCurrentSessionIfMissing()
+        } else if currentSessionID == nil {
+            pendingPermissions = []
+        } else {
+            let validSessionIDs = Set(sessions.map(\.id))
+            pendingPermissions.removeAll { !validSessionIDs.contains($0.sessionID) }
+        }
     }
 
     func refresh() async {

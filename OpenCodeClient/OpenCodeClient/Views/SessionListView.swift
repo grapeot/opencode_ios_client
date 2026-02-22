@@ -8,6 +8,10 @@ import SwiftUI
 struct SessionListView: View {
     @Bindable var state: AppState
     @Environment(\.dismiss) private var dismiss
+    @State private var pendingDeleteSession: Session?
+    @State private var deletingSessionID: String?
+    @State private var deleteError: String?
+
     var body: some View {
         NavigationStack {
             Group {
@@ -23,9 +27,19 @@ struct SessionListView: View {
                             SessionRowView(
                                 session: session,
                                 status: state.sessionStatuses[session.id],
-                                isSelected: state.currentSessionID == session.id
+                                isSelected: state.currentSessionID == session.id,
+                                isDeleting: deletingSessionID == session.id
                             ) {
                                 selectSession(session)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    pendingDeleteSession = session
+                                } label: {
+                                    Label(L10n.t(.sessionsDelete), systemImage: "trash")
+                                }
+                                .tint(.red)
+                                .disabled(deletingSessionID != nil)
                             }
                         }
                     }
@@ -52,6 +66,36 @@ struct SessionListView: View {
                 }
             }
         }
+        .alert(
+            L10n.t(.sessionsDeleteConfirmTitle),
+            isPresented: Binding(
+                get: { pendingDeleteSession != nil },
+                set: { if !$0 { pendingDeleteSession = nil } }
+            ),
+            presenting: pendingDeleteSession
+        ) { session in
+            Button(L10n.t(.commonCancel), role: .cancel) {}
+            Button(L10n.t(.sessionsDelete), role: .destructive) {
+                confirmDelete(session)
+            }
+        } message: { session in
+            Text(L10n.t(.sessionsDeleteConfirmMessage))
+        }
+        .alert(
+            L10n.t(.sessionsDeleteFailedTitle),
+            isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )
+        ) {
+            Button(L10n.t(.commonOk)) {
+                deleteError = nil
+            }
+        } message: {
+            if let deleteError {
+                Text(deleteError)
+            }
+        }
         .task {
             await state.refreshSessions()
         }
@@ -61,12 +105,26 @@ struct SessionListView: View {
         state.selectSession(session)
         dismiss()
     }
+
+    private func confirmDelete(_ session: Session) {
+        guard deletingSessionID == nil else { return }
+        deletingSessionID = session.id
+        Task {
+            do {
+                try await state.deleteSession(sessionID: session.id)
+            } catch {
+                deleteError = error.localizedDescription
+            }
+            deletingSessionID = nil
+        }
+    }
 }
 
 struct SessionRowView: View {
     let session: Session
     let status: SessionStatus?
     let isSelected: Bool
+    let isDeleting: Bool
     let onSelect: () -> Void
     
     private var isBusy: Bool {
@@ -95,13 +153,17 @@ struct SessionRowView: View {
                     }
                 }
                 Spacer()
-                if isSelected {
+                if isDeleting {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
         }
+        .disabled(isDeleting)
         .buttonStyle(.plain)
         .listRowBackground(isSelected ? Color.blue.opacity(0.08) : Color.clear)
     }

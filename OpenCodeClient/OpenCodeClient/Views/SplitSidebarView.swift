@@ -60,6 +60,9 @@ struct SplitSidebarView: View {
 
 private struct SessionsSidebarList: View {
     @Bindable var state: AppState
+    @State private var pendingDeleteSession: Session?
+    @State private var deletingSessionID: String?
+    @State private var deleteError: String?
 
     var body: some View {
         List {
@@ -68,9 +71,19 @@ private struct SessionsSidebarList: View {
                     SessionRowView(
                         session: session,
                         status: state.sessionStatuses[session.id],
-                        isSelected: state.currentSessionID == session.id
+                        isSelected: state.currentSessionID == session.id,
+                        isDeleting: deletingSessionID == session.id
                     ) {
                         state.selectSession(session)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            pendingDeleteSession = session
+                        } label: {
+                            Label(L10n.t(.sessionsDelete), systemImage: "trash")
+                        }
+                        .tint(.red)
+                        .disabled(deletingSessionID != nil)
                     }
                 }
             }
@@ -79,6 +92,49 @@ private struct SessionsSidebarList: View {
         .tint(.secondary)
         .refreshable {
             await state.refreshSessions()
+        }
+        .alert(
+            L10n.t(.sessionsDeleteConfirmTitle),
+            isPresented: Binding(
+                get: { pendingDeleteSession != nil },
+                set: { if !$0 { pendingDeleteSession = nil } }
+            ),
+            presenting: pendingDeleteSession
+        ) { session in
+            Button(L10n.t(.commonCancel), role: .cancel) {}
+            Button(L10n.t(.sessionsDelete), role: .destructive) {
+                confirmDelete(session)
+            }
+        } message: { session in
+            Text(L10n.t(.sessionsDeleteConfirmMessage))
+        }
+        .alert(
+            L10n.t(.sessionsDeleteFailedTitle),
+            isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )
+        ) {
+            Button(L10n.t(.commonOk)) {
+                deleteError = nil
+            }
+        } message: {
+            if let deleteError {
+                Text(deleteError)
+            }
+        }
+    }
+
+    private func confirmDelete(_ session: Session) {
+        guard deletingSessionID == nil else { return }
+        deletingSessionID = session.id
+        Task {
+            do {
+                try await state.deleteSession(sessionID: session.id)
+            } catch {
+                deleteError = error.localizedDescription
+            }
+            deletingSessionID = nil
         }
     }
 }
