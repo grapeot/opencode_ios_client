@@ -437,6 +437,18 @@ final class AppState {
         normalizedMessageFetchLimit(current: current, pageSize: pageSize) + max(pageSize, 1)
     }
 
+    nonisolated static func nextSessionIDAfterDeleting(
+        deletedSessionID: String,
+        currentSessionID: String?,
+        remainingSessions: [Session]
+    ) -> String? {
+        guard currentSessionID == deletedSessionID else { return currentSessionID }
+        return remainingSessions
+            .sorted { $0.time.updated > $1.time.updated }
+            .first?
+            .id
+    }
+
     func setSelectedModelIndex(_ index: Int) {
         guard modelPresets.indices.contains(index) else { return }
         selectedModelIndex = index
@@ -618,17 +630,26 @@ final class AppState {
     }
 
     func deleteSession(sessionID: String) async throws {
-        let deletedCurrentSession = currentSessionID == sessionID
+        let previousCurrentSessionID = currentSessionID
         try await apiClient.deleteSession(sessionID: sessionID)
 
         sessions.removeAll { $0.id == sessionID }
         clearSessionScopedCaches(sessionID: sessionID)
 
-        guard deletedCurrentSession else { return }
+        let nextSessionID = Self.nextSessionIDAfterDeleting(
+            deletedSessionID: sessionID,
+            currentSessionID: previousCurrentSessionID,
+            remainingSessions: sessions
+        )
+
+        guard previousCurrentSessionID == sessionID else {
+            currentSessionID = nextSessionID
+            return
+        }
 
         clearCurrentSessionViewState()
-        if let nextSession = sortedSessions.first {
-            currentSessionID = nextSession.id
+        if let nextSessionID {
+            currentSessionID = nextSessionID
             applySavedModelForCurrentSession()
             await loadMessages()
             await refreshPendingPermissions()

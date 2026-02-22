@@ -109,7 +109,7 @@ private struct SessionsSidebarList: View {
             Text(L10n.t(.sessionsDeleteConfirmMessage))
         }
         .alert(
-            L10n.t(.fileError),
+            L10n.t(.sessionsDeleteFailedTitle),
             isPresented: Binding(
                 get: { deleteError != nil },
                 set: { if !$0 { deleteError = nil } }
