@@ -326,6 +326,12 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 3. `loadSessions()` 时：若 `selectedProjectWorktree != nil`，请求 `GET /session?directory=xxx&limit=100`；否则 `GET /session`（无参数）
 4. 持久化：`selectedProjectWorktree`、`customProjectPath` 存 UserDefaults
 
+#### 4.3.1 Session 与 Project 不匹配时的防御性处理
+
+**背景**：`POST /session` 不支持传 directory，server 在其 current project 下创建 session。iOS 用 `effectiveProjectDirectory` 过滤列表。当 server current project ≠ 用户所选 project 时，新建的 session 不在 GET 结果中，直接覆盖会导致新 session 消失。详见 [session_disappear_investigation.md](session_disappear_investigation.md)。
+
+**实现**：`loadSessions()` 中，若 `currentSessionID` 不在 server 返回列表，单独 `GET /session/:id` 拉取该 session 并 prepend 到 `sessions`，保证 `currentSession` 仍可解析。404 时不做 merge（session 可能已删除）。
+
 ### 5. 消息与文档 UI
 
 #### 5.1 消息流

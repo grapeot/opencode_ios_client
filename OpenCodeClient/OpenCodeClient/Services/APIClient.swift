@@ -11,9 +11,9 @@ actor APIClient {
     private var password: String?
 
     // Default to localhost to avoid leaking a personal LAN IP in open source repos.
-    static let defaultServer = APIConstants.defaultServer
+    nonisolated(unsafe) static let defaultServer = APIConstants.defaultServer
 
-    init(baseURL: String = defaultServer, username: String? = nil, password: String? = nil) {
+    init(baseURL: String = APIConstants.defaultServer, username: String? = nil, password: String? = nil) {
         self.baseURL = baseURL.hasPrefix("http") ? baseURL : "http://\(baseURL)"
         self.username = username
         self.password = password
@@ -98,6 +98,11 @@ actor APIClient {
             queryItems: queryItems.isEmpty ? nil : queryItems
         )
         return try JSONDecoder().decode([Session].self, from: data)
+    }
+
+    func session(sessionID: String) async throws -> Session {
+        let (data, _) = try await makeRequest(path: "/session/\(sessionID)")
+        return try JSONDecoder().decode(Session.self, from: data)
     }
 
     func createSession(title: String? = nil) async throws -> Session {

@@ -193,3 +193,16 @@ curl -s -N -H "Accept: text/event-stream" "http://192.168.180.128:4096/global/ev
 - 在产品文档（PRD/RFC）中明确该语义，避免后续对“3 轮=6 条”的误解
 
 **Lesson**：分页策略之前必须先统一计数口径。否则体验讨论会反复卡在“看起来像一条/实际上几条”的语义分歧上。
+
+
+---
+
+## 16. Session 与 Project 的 directory 过滤不匹配
+
+**场景**：新建 session 后，点 Session List 或切后台回前台，新 session 消失。见 [session_disappear_investigation.md](session_disappear_investigation.md)。
+
+**根因**：`POST /session` 不支持传 directory，server 在其 current project 下创建；iOS 的 `loadSessions()` 用 `effectiveProjectDirectory`（用户选的 project）过滤。当两者不一致时，新 session 不在 GET 结果中，`sessions = serverResponse` 覆盖后新 session 从列表消失。
+
+**做法**：在 `loadSessions()` 中，若 `currentSessionID` 不在 server 返回列表，单独 `GET /session/:id` 拉取并 prepend，保证 `currentSession` 仍可解析。不依赖「选 project 时设为 server current」：OpenCode API 无 `PUT /project/current`。
+
+**Lesson**：多 project 场景下，创建与列表过滤的 scope 必须一致；若 API 不支持创建时指定 project，客户端需防御性 merge。

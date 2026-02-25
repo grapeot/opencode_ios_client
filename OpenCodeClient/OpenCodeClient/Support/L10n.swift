@@ -587,8 +587,9 @@ enum L10n {
         return (en, languageIsChinese ? zh : en)
     }
 
-    static func t(_ key: Key) -> String {
-        let translations = languageIsChinese ? zh : en
+    nonisolated static func t(_ key: Key) -> String {
+        let preferred = Locale.preferredLanguages.first ?? "en"
+        let translations = preferred.lowercased().hasPrefix("zh") ? zh : en
         return translations[key.rawValue] ?? en[key.rawValue] ?? key.rawValue
     }
 

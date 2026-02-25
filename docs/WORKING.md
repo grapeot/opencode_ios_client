@@ -15,6 +15,12 @@
 
 ## 已完成（近期）
 
+- [x] **Session 消失修复（2026-02-25 完成）**：
+  - [x] 根因：server 在 current project 创建 session，iOS 按 selected project 过滤列表，project 不一致时新 session 不在 GET 结果中
+  - [x] 实现：`loadSessions` 中若 currentSessionID 不在 loaded，单独 `GET /session/:id` 拉取并 prepend
+  - [x] `APIClient.session(sessionID:)`、`AppState.mergeCurrentSessionIfMissing`
+  - [x] 单元测试：`SessionMergePreserveCurrentTests`
+  - [x] 文档：session_disappear_investigation.md、RFC §4.3.1、lessons §16
 - [x] **Project 选择功能（2026-02-25 完成）**：
   - [x] PRD/RFC 更新：添加 Project (Workspace) 设计
   - [x] 实现 `Project` 数据模型、`APIClient.projects()`、`sessions(directory:limit:)`

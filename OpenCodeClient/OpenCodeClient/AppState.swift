@@ -461,7 +461,7 @@ final class AppState {
     private var sessionLoadingID = UUID()
 
     // WAN optimization: page message history in fixed-size message batches.
-    static let messagePageSize = 20
+    private static let messagePageSize = APIConstants.messagePageSize
     private var loadedMessageLimitBySessionID: [String: Int] = [:]
     private var hasMoreHistoryBySessionID: [String: Bool] = [:]
     private var loadingOlderMessagesSessionIDs: Set<String> = []
@@ -497,7 +497,7 @@ final class AppState {
 
     nonisolated static func normalizedMessageFetchLimit(
         current: Int?,
-        pageSize: Int = messagePageSize
+        pageSize: Int = APIConstants.messagePageSize
     ) -> Int {
         let fallback = max(pageSize, 1)
         guard let current else { return fallback }
@@ -506,7 +506,7 @@ final class AppState {
 
     nonisolated static func nextMessageFetchLimit(
         current: Int?,
-        pageSize: Int = messagePageSize
+        pageSize: Int = APIConstants.messagePageSize
     ) -> Int {
         normalizedMessageFetchLimit(current: current, pageSize: pageSize) + max(pageSize, 1)
     }
@@ -521,6 +521,22 @@ final class AppState {
             .sorted { $0.time.updated > $1.time.updated }
             .first?
             .id
+    }
+
+    /// When currentSessionID is not in loaded (e.g. project mismatch), prepend fetchedCurrent if it matches.
+    /// Used by loadSessions for session-disappear fix. See docs/session_disappear_investigation.md
+    nonisolated static func mergeCurrentSessionIfMissing(
+        loaded: [Session],
+        currentSessionID: String?,
+        fetchedCurrent: Session?
+    ) -> [Session] {
+        guard let sid = currentSessionID, let current = fetchedCurrent, current.id == sid else {
+            return loaded
+        }
+        guard !loaded.contains(where: { $0.id == sid }) else { return loaded }
+        var result = loaded
+        result.insert(current, at: 0)
+        return result
     }
 
     func setSelectedModelIndex(_ index: Int) {
@@ -619,21 +635,25 @@ final class AppState {
         guard isConnected else { return }
         do {
             let directory = effectiveProjectDirectory
-            let loaded = try await apiClient.sessions(directory: directory, limit: 100)
-            let currentWasInList = currentSessionID.map { sid in loaded.contains(where: { $0.id == sid }) } ?? false
-            Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) count=\(loaded.count, privacy: .public) currentID=\(self.currentSessionID ?? "nil", privacy: .public) currentInList=\(currentWasInList, privacy: .public)")
-            sessions = loaded
+            var loaded = try await apiClient.sessions(directory: directory, limit: 100)
+            let selectedID = currentSessionID
+            let currentWasInList = selectedID.map { sid in loaded.contains(where: { $0.id == sid }) } ?? false
+            let archivedCount = loaded.filter { $0.time.archived != nil }.count
+            Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) currentID=\(selectedID ?? "nil", privacy: .public) currentInList=\(currentWasInList, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
 
-            // Only clear currentSessionID if it's definitively deleted (not just missing from this page)
-            // We trust the persisted value from UserDefaults, so don't auto-switch on refresh.
-            // The session may exist on server but not in the top 100 results, or may be newly created.
-            if let selectedID = currentSessionID {
-                let stillExists = sessions.contains(where: { $0.id == selectedID })
-                if !stillExists {
-                    // Don't immediately clear - the session might just not be in the returned list.
-                    // Only clear if we get explicit confirmation it was deleted (via 404 elsewhere).
-                }
+            // Preserve current session when not in filtered list (project mismatch: server creates in its
+            // current project, iOS filters by selected project). Fetch by ID and prepend so currentSession
+            // remains resolvable. See docs/session_disappear_investigation.md
+            if let sid = selectedID, !currentWasInList {
+                let fetched = try? await apiClient.session(sessionID: sid)
+                loaded = Self.mergeCurrentSessionIfMissing(
+                    loaded: loaded,
+                    currentSessionID: sid,
+                    fetchedCurrent: fetched
+                )
             }
+
+            sessions = loaded
 
             // Only auto-select first session if there's no persisted selection at all
             // This handles the case of fresh install or after all sessions are deleted
@@ -1256,6 +1276,8 @@ final class AppState {
                JSONSerialization.isValidJSONObject(infoObj),
                let data = try? JSONSerialization.data(withJSONObject: infoObj),
                let session = try? JSONDecoder().decode(Session.self, from: data) {
+                let wasUpdate = sessions.contains(where: { $0.id == session.id })
+                Self.logger.debug("session.updated id=\(session.id, privacy: .public) archived=\(session.time.archived.map { String($0) } ?? "nil", privacy: .public) dir=\(session.directory, privacy: .public) op=\(wasUpdate ? "replace" : "insert", privacy: .public)")
                 if let idx = sessions.firstIndex(where: { $0.id == session.id }) {
                     sessions[idx] = session
                 } else {
@@ -1264,6 +1286,7 @@ final class AppState {
             }
         case "session.deleted":
             if let sessionID = (props["sessionID"]?.value as? String) ?? (props["id"]?.value as? String) {
+                Self.logger.debug("session.deleted id=\(sessionID, privacy: .public)")
                 await handleRemoteSessionDeleted(sessionID: sessionID)
             } else {
                 await loadSessions()
@@ -1621,13 +1644,13 @@ final class AppState {
     func refresh() async {
         await testConnection()
         if isConnected {
-            async let agentsTask = loadAgents()
-            async let providersTask = loadProvidersConfig()
-            async let projectsTask = loadProjects()
+            async let agentsResult = loadAgents()
+            async let providersResult = loadProvidersConfig()
+            async let projectsResult = loadProjects()
             await loadSessions()
-            _ = await agentsTask
-            _ = await providersTask
-            _ = await projectsTask
+            _ = await agentsResult
+            _ = await providersResult
+            _ = await projectsResult
             await loadMessages()
             await refreshPendingPermissions()
             await loadSessionDiff()

@@ -2,6 +2,11 @@
 
 > 2026-02-25
 
+## 状态
+
+- **已修复**（2026-02-25）：采用方案 A（防御性修复），见下方「已实现修复」
+- **相关文档**：RFC §4.3.1、lessons.md §16
+
 ## 问题现象
 
 1. **点 New Session 后切到 Session List**：新建的 session 在列表里不见了，从汉堡菜单返回后之前打的字也没了，整个 new session 消失
@@ -57,9 +62,13 @@
 
 ## 修复方向
 
-### A. iOS 端防御性修复（推荐，可立即做）
+### A. iOS 端防御性修复（推荐，已实现）
 
-在 `loadSessions()` 中：当 `currentSessionID` 指向的 session **不在** server 返回列表时，**保留**该 session 在本地 `sessions` 中（可单独 fetch `GET /session/:id` 补全），避免新建 session 被覆盖掉。
+在 `loadSessions()` 中：当 `currentSessionID` 指向的 session **不在** server 返回列表时，**保留**该 session 在本地 `sessions` 中（单独 fetch `GET /session/:id` 补全并 prepend），避免新建 session 被覆盖掉。
+
+**已实现**：
+- `APIClient.session(sessionID:)`：GET /session/:id 拉取单条 session
+- `loadSessions()`：若 currentSessionID 不在 loaded 中，fetch 该 session 并 prepend 到 sessions，保证 currentSession 仍可解析
 
 ### B. 创建时对齐 project（需 API 支持）
 
@@ -69,11 +78,52 @@
 
 当 `effectiveProjectDirectory == nil`（用户选 Server default）时，`GET /session` 不带 directory，会返回所有 project 的 sessions，新 session 会出现在列表中，问题不触发。
 
-## 建议的验证步骤
+## 测试
 
-1. 在 iOS 中加 log（见下节），复现时确认：
-   - `createSession` 返回的 session 的 `directory`
-   - `loadSessions` 使用的 `effectiveProjectDirectory`
-   - `loadSessions` 后 `currentSessionID` 是否仍在 `sessions` 中
-2. 在 Settings 中切换 Project 选项（Server default vs 指定 project），对比行为
-3. 确认 server 的 current project（`GET /project/current`）与 iOS 所选 project 是否一致
+### 单元测试
+
+`SessionMergePreserveCurrentTests` 覆盖 `mergeCurrentSessionIfMissing` 逻辑：
+
+```bash
+cd OpenCodeClient && xcodebuild test -scheme OpenCodeClient \
+  -destination 'platform=iOS Simulator,id=302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8' \
+  -only-testing:OpenCodeClientTests/SessionMergePreserveCurrentTests
+```
+
+### 手动验证
+
+1. 确保 OpenCode server 运行，且 server 的 current project（`GET /project/current`）与 iOS Settings 所选 project **不同**
+2. 在 iOS 中：Settings → Project 选一个 project（如 knowledge_working）
+3. 点 New Session，输入一些文字（不发送）
+4. 点 Session List：新 session 应仍在列表顶部
+5. 切后台再回前台：新 session 应仍在
+6. 若仍有问题，在 Console.app 中过滤 `OpenCodeClient` / `AppState`，查看 `loadSessions` / `createSession` 的 debug log
+
+---
+
+## 间歇性消失（刷新后出现、过一会儿又消失）
+
+### 现象
+
+新建 session、发送消息正常，点 Session List 时不见 → 刷新后出现 → 过一会儿又消失，**Web 端也消失**。
+
+### 可能原因（待 log 验证）
+
+1. **session.updated 带 archived**：OpenCode 的 compact/summarize 可能将 session 标记为 archived。iOS 收到 `session.updated` 后替换本地 session；`sortedSessions` 默认过滤 `archived != nil`，session 从列表消失。若 Web 端也过滤 archived，则两端一致消失。
+2. **session.deleted**：某处触发删除（如 compact 的副作用、或 server 端逻辑），SSE 推送 `session.deleted`，客户端移除。
+3. **GET /session 服务端过滤**：`roots`、`archived` 等 query 可能影响返回结果；不同时刻、不同 client 传参不同，导致时有时无。
+4. **Project/directory 竞态**：server 的 current project 或 instance 状态变化，导致同一 session 有时在、有时不在 filtered 结果中。
+
+### 快速验证：archived 假设
+
+若怀疑是 archived 导致：Settings → 打开「Show archived sessions」，看消失的 session 是否重新出现。若出现，则说明 server 将其标记为 archived，iOS 默认过滤掉了。
+
+### 诊断 log（已添加）
+
+复现时用 Console.app 过滤 `OpenCodeClient` 或 `AppState`，关注：
+
+- `session.updated`：收到时打 id、archived、dir、op（replace/insert）
+- `session.deleted`：收到时打 sessionID
+- `loadSessions`：打 directory、count、archived 数量、currentInList、前 5 个 session id
+
+若看到 `session.updated` 的 archived 从 nil 变为有值，或收到 `session.deleted`，即可定位触发源。

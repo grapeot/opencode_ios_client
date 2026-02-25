@@ -58,6 +58,7 @@ enum LayoutConstants {
 enum APIConstants {
     static let defaultServer = "127.0.0.1:4096"
     static let legacyDefaultServer = "localhost:4096"
+    static let messagePageSize = 20
     static let sseEndpoint = "/global/event"
     static let healthEndpoint = "/global/health"
     
