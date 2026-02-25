@@ -619,14 +619,24 @@ final class AppState {
         guard isConnected else { return }
         do {
             let directory = effectiveProjectDirectory
-            sessions = try await apiClient.sessions(directory: directory, limit: 100)
+            let loaded = try await apiClient.sessions(directory: directory, limit: 100)
+            let currentWasInList = currentSessionID.map { sid in loaded.contains(where: { $0.id == sid }) } ?? false
+            Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) count=\(loaded.count, privacy: .public) currentID=\(self.currentSessionID ?? "nil", privacy: .public) currentInList=\(currentWasInList, privacy: .public)")
+            sessions = loaded
 
-            if let selectedID = currentSessionID,
-               !sessions.contains(where: { $0.id == selectedID }) {
-                currentSessionID = nil
-                clearCurrentSessionViewState()
+            // Only clear currentSessionID if it's definitively deleted (not just missing from this page)
+            // We trust the persisted value from UserDefaults, so don't auto-switch on refresh.
+            // The session may exist on server but not in the top 100 results, or may be newly created.
+            if let selectedID = currentSessionID {
+                let stillExists = sessions.contains(where: { $0.id == selectedID })
+                if !stillExists {
+                    // Don't immediately clear - the session might just not be in the returned list.
+                    // Only clear if we get explicit confirmation it was deleted (via 404 elsewhere).
+                }
             }
 
+            // Only auto-select first session if there's no persisted selection at all
+            // This handles the case of fresh install or after all sessions are deleted
             if currentSessionID == nil, let first = sessions.first {
                 currentSessionID = first.id
                 applySavedModelForCurrentSession()
@@ -722,6 +732,8 @@ final class AppState {
         do {
             let session = try await apiClient.createSession()
             guard sessionLoadingID == loadingID else { return }
+            
+            Self.logger.debug("createSession: created id=\(session.id, privacy: .public) directory=\(session.directory, privacy: .public) effectiveProjectDir=\(self.effectiveProjectDirectory ?? "nil", privacy: .public)")
             
             sessions.insert(session, at: 0)
             currentSessionID = session.id
