@@ -11,6 +11,7 @@ struct SessionListView: View {
     @State private var pendingDeleteSession: Session?
     @State private var deletingSessionID: String?
     @State private var deleteError: String?
+    @State private var showCreateDisabledAlert = false
 
     var body: some View {
         NavigationStack {
@@ -55,13 +56,26 @@ struct SessionListView: View {
                     Button(L10n.t(.sessionsClose)) { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        Task {
-                            await state.createSession()
-                            dismiss()
+                    HStack(spacing: 8) {
+                        Button {
+                            Task {
+                                await state.createSession()
+                                dismiss()
+                            }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
                         }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
+                        .disabled(!state.canCreateSession)
+                        .foregroundColor(state.canCreateSession ? .accentColor : .gray)
+
+                        if !state.canCreateSession {
+                            Button {
+                                showCreateDisabledAlert = true
+                            } label: {
+                                Image(systemName: "info.circle")
+                            }
+                            .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
@@ -98,6 +112,9 @@ struct SessionListView: View {
         }
         .task {
             await state.refreshSessions()
+        }
+        .alert(L10n.t(.chatCreateDisabledHint), isPresented: $showCreateDisabledAlert) {
+            Button(L10n.t(.commonOk)) {}
         }
     }
 

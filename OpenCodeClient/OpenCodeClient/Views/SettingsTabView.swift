@@ -96,6 +96,14 @@ struct SettingsTabView: View {
                     Task { await state.refreshSessions() }
                 }
 
+                if let warning = state.projectMismatchWarning {
+                    Section {
+                        Label(warning, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+
                 Section {
                     Toggle(L10n.t(.settingsEnableSshTunnel), isOn: $sshConfig.isEnabled)
                         .onChange(of: sshConfig.isEnabled) { _, newValue in

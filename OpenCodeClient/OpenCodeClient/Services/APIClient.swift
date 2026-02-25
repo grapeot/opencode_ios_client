@@ -85,6 +85,11 @@ actor APIClient {
         return try JSONDecoder().decode([Project].self, from: data)
     }
 
+    func projectCurrent() async throws -> Project? {
+        let (data, _) = try await makeRequest(path: "/project/current")
+        return try? JSONDecoder().decode(Project.self, from: data)
+    }
+
     func sessions(directory: String? = nil, limit: Int = 100) async throws -> [Session] {
         var queryItems: [URLQueryItem] = []
         if let directory, !directory.isEmpty {

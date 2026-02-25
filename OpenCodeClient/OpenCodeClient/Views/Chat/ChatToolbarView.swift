@@ -13,6 +13,7 @@ struct ChatToolbarView: View {
     var showSettingsInToolbar: Bool
     var onSettingsTap: (() -> Void)?
     
+    @State private var showCreateDisabledAlert = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     
     private var useCompactLabels: Bool {
@@ -56,15 +57,28 @@ struct ChatToolbarView: View {
             }
             
             Button {
-                Task {
-                    await state.createSession()
-                }
+                Task { await state.createSession() }
             } label: {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(state.canCreateSession ? .accentColor : .gray)
             }
+            .disabled(!state.canCreateSession)
+
+            if !state.canCreateSession {
+                Button {
+                    showCreateDisabledAlert = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .alert(L10n.t(.chatCreateDisabledHint), isPresented: $showCreateDisabledAlert) {
+            Button(L10n.t(.commonOk)) {}
         }
     }
     

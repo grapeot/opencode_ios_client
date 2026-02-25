@@ -82,6 +82,8 @@ enum L10n {
         case settingsProjectServerDefault
         case settingsProjectCustomPath
         case settingsProjectCustomPathPlaceholder
+        case settingsProjectMismatchWarning
+        case chatCreateDisabledHint
 
         case chatInputPlaceholder
         case chatSendFailed
@@ -273,6 +275,8 @@ enum L10n {
         Key.settingsProjectServerDefault.rawValue: "Server default",
         Key.settingsProjectCustomPath.rawValue: "Custom path",
         Key.settingsProjectCustomPathPlaceholder.rawValue: "/path/to/project",
+        Key.settingsProjectMismatchWarning.rawValue: "Server default project is {server}. New sessions will be created there, not in {effective}. To create sessions in {effective}, switch project in Web client first.",
+        Key.chatCreateDisabledHint.rawValue: "New sessions can only be created when using Server default project. To create sessions in another project, switch the server's working directory (e.g. via Web client) and select Server default here.",
 
         Key.chatInputPlaceholder.rawValue: "Ask anything...",
         Key.chatSendFailed.rawValue: "Send failed",
@@ -467,6 +471,8 @@ enum L10n {
         Key.settingsProjectServerDefault.rawValue: "服务器默认",
         Key.settingsProjectCustomPath.rawValue: "自定义路径",
         Key.settingsProjectCustomPathPlaceholder.rawValue: "/path/to/project",
+        Key.settingsProjectMismatchWarning.rawValue: "Server 默认 project 为 {server}。新建 session 会落在 {server}，而非 {effective}。要在 {effective} 下创建，请先在 Web 端切换 project。",
+        Key.chatCreateDisabledHint.rawValue: "新建 session 仅在选择 Server default 时可用。要在其他 project 下创建，请先在服务器端切换工作目录（如通过 Web 客户端），然后在此选择 Server default。",
 
         Key.chatInputPlaceholder.rawValue: "输入你的问题...",
         Key.chatSendFailed.rawValue: "发送失败",

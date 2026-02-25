@@ -197,12 +197,18 @@ curl -s -N -H "Accept: text/event-stream" "http://192.168.180.128:4096/global/ev
 
 ---
 
-## 16. Session 与 Project 的 directory 过滤不匹配
+## 16. Session 与 Project：创建仅限 Server default
 
-**场景**：新建 session 后，点 Session List 或切后台回前台，新 session 消失。见 [session_disappear_investigation.md](session_disappear_investigation.md)。
+**场景**：新建 session 后，点 Session List 或切后台回前台，新 session 消失。
 
-**根因**：`POST /session` 不支持传 directory，server 在其 current project 下创建；iOS 的 `loadSessions()` 用 `effectiveProjectDirectory`（用户选的 project）过滤。当两者不一致时，新 session 不在 GET 结果中，`sessions = serverResponse` 覆盖后新 session 从列表消失。
+**根因**：`POST /session` 不支持传 directory，server 在其 current project（由启动位置或 Web/TUI 最后使用决定）下创建。iOS 的 Project 选择器只影响 `GET /session?directory=X` 的列表过滤，不改变创建目标。当用户选的 project ≠ server default 时，新建的 session 落在 server default，不在过滤结果中，覆盖后消失。
 
-**做法**：在 `loadSessions()` 中，若 `currentSessionID` 不在 server 返回列表，单独 `GET /session/:id` 拉取并 prepend，保证 `currentSession` 仍可解析。不依赖「选 project 时设为 server current」：OpenCode API 无 `PUT /project/current`。
+**做过的尝试**：
+1. **mergeCurrentSessionIfMissing**：loadSessions 时若 current 不在列表，单独 fetch 并 prepend → 治标不治本，且 GET /session/:id 可能对跨 project 返回 404
+2. **session.updated 按 project 过滤**：避免其他 project 的 session 混入列表 → 保留，正确
+3. **Settings 警告 + 引导去 Web 切换** → 依赖用户主动操作，体验割裂
+4. **移除 Project 选择（回滚）** → 未采用，保留过滤能力
 
-**Lesson**：多 project 场景下，创建与列表过滤的 scope 必须一致；若 API 不支持创建时指定 project，客户端需防御性 merge。
+**最终做法**：仅在 Server default 时提供创建按钮。当用户选了具体 project 时，新建按钮置灰，旁加 info 图标，点击显示提示：建议去服务器端（如 Web 客户端）切换启动目录，然后在此选 Server default 再创建。
+
+**Lesson**：多 project 场景下，若 API 不支持创建时指定 project，应限制创建入口而非事后补救；过滤与创建语义分离，避免用户误以为「选了 project 就能在那创建」。

@@ -326,11 +326,11 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 3. `loadSessions()` 时：若 `selectedProjectWorktree != nil`，请求 `GET /session?directory=xxx&limit=100`；否则 `GET /session`（无参数）
 4. 持久化：`selectedProjectWorktree`、`customProjectPath` 存 UserDefaults
 
-#### 4.3.1 Session 与 Project 不匹配时的防御性处理
+#### 4.3.1 Session 创建仅限 Server default
 
-**背景**：`POST /session` 不支持传 directory，server 在其 current project 下创建 session。iOS 用 `effectiveProjectDirectory` 过滤列表。当 server current project ≠ 用户所选 project 时，新建的 session 不在 GET 结果中，直接覆盖会导致新 session 消失。详见 [session_disappear_investigation.md](session_disappear_investigation.md)。
+**背景**：`POST /session` 不支持传 directory，server 在其 current project（由启动位置或 Web/TUI 最后使用决定）下创建 session。iOS 的 Project 选择器只影响列表过滤，不改变创建目标。若允许在「选了具体 project」时创建，新 session 会落在 server default，不在过滤结果中，导致消失。
 
-**实现**：`loadSessions()` 中，若 `currentSessionID` 不在 server 返回列表，单独 `GET /session/:id` 拉取该 session 并 prepend 到 `sessions`，保证 `currentSession` 仍可解析。404 时不做 merge（session 可能已删除）。
+**实现**：仅当 `effectiveProjectDirectory == nil`（用户选 Server default）时允许创建。当用户选了具体 project 时，新建按钮置灰，旁加 info 图标，点击显示提示：建议去服务器端（如 Web 客户端）切换启动目录，然后在此选 Server default 再创建。`canCreateSession` 控制按钮可用性。
 
 ### 5. 消息与文档 UI
 

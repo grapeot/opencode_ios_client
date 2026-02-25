@@ -342,6 +342,8 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 
 **默认行为**：未选择时调用 `GET /session` 不传 `directory` 参数，使用服务器当前项目（与 Web 端一致）。选择后调用 `GET /session?directory=xxx&limit=100`。
 
+**创建限制**：新建 session 仅在选择 Server default 时可用。`POST /session` 不支持传 directory，新 session 始终落在 server 的 current project。当用户选了具体 project 时，新建按钮置灰，旁加 info 图标，提示去服务器端（如 Web 客户端）切换启动目录后再创建。
+
 #### 4.4.4 外观
 
 - **主题跟随系统**（Light/Dark/Auto）：根据系统 theme 切换明暗两种格式

@@ -394,6 +394,30 @@ final class AppState {
 
     var projects: [Project] = []
     var isLoadingProjects: Bool = false
+    /// Server's current project worktree (from GET /project/current). Used to detect mismatch with user selection.
+    var serverCurrentProjectWorktree: String? = nil
+
+    /// When user selected a project but server's default differs: new sessions will be created in server's project.
+    /// User should switch project in Web client first.
+    var projectMismatchWarning: String? {
+        guard let effective = effectiveProjectDirectory, !effective.isEmpty else { return nil }
+        guard let server = serverCurrentProjectWorktree else { return nil }
+        guard effective != server else { return nil }
+        let effectiveName = (effective as NSString).lastPathComponent
+        let serverName = (server as NSString).lastPathComponent
+        return L10n.t(.settingsProjectMismatchWarning).replacingOccurrences(of: "{effective}", with: effectiveName).replacingOccurrences(of: "{server}", with: serverName)
+    }
+
+    /// Only allow creating sessions when using server default project. When a specific project is selected,
+    /// new sessions would go to server default (API limitation), so we disable create and show hint.
+    var canCreateSession: Bool {
+        effectiveProjectDirectory == nil
+    }
+
+    /// Hint shown when create is disabled (user selected a project ≠ server default).
+    var createSessionDisabledHint: String {
+        L10n.t(.chatCreateDisabledHint)
+    }
 
     var selectedProjectWorktree: String? {
         get { _selectedProjectWorktree }
@@ -523,22 +547,6 @@ final class AppState {
             .id
     }
 
-    /// When currentSessionID is not in loaded (e.g. project mismatch), prepend fetchedCurrent if it matches.
-    /// Used by loadSessions for session-disappear fix. See docs/session_disappear_investigation.md
-    nonisolated static func mergeCurrentSessionIfMissing(
-        loaded: [Session],
-        currentSessionID: String?,
-        fetchedCurrent: Session?
-    ) -> [Session] {
-        guard let sid = currentSessionID, let current = fetchedCurrent, current.id == sid else {
-            return loaded
-        }
-        guard !loaded.contains(where: { $0.id == sid }) else { return loaded }
-        var result = loaded
-        result.insert(current, at: 0)
-        return result
-    }
-
     func setSelectedModelIndex(_ index: Int) {
         guard modelPresets.indices.contains(index) else { return }
         selectedModelIndex = index
@@ -624,6 +632,7 @@ final class AppState {
         isLoadingProjects = true
         do {
             projects = try await apiClient.projects()
+            serverCurrentProjectWorktree = (try? await apiClient.projectCurrent())?.worktree
         } catch {
             Self.logger.warning("loadProjects failed: \(error.localizedDescription)")
             projects = []
@@ -635,23 +644,9 @@ final class AppState {
         guard isConnected else { return }
         do {
             let directory = effectiveProjectDirectory
-            var loaded = try await apiClient.sessions(directory: directory, limit: 100)
-            let selectedID = currentSessionID
-            let currentWasInList = selectedID.map { sid in loaded.contains(where: { $0.id == sid }) } ?? false
+            let loaded = try await apiClient.sessions(directory: directory, limit: 100)
             let archivedCount = loaded.filter { $0.time.archived != nil }.count
-            Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) currentID=\(selectedID ?? "nil", privacy: .public) currentInList=\(currentWasInList, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
-
-            // Preserve current session when not in filtered list (project mismatch: server creates in its
-            // current project, iOS filters by selected project). Fetch by ID and prepend so currentSession
-            // remains resolvable. See docs/session_disappear_investigation.md
-            if let sid = selectedID, !currentWasInList {
-                let fetched = try? await apiClient.session(sessionID: sid)
-                loaded = Self.mergeCurrentSessionIfMissing(
-                    loaded: loaded,
-                    currentSessionID: sid,
-                    fetchedCurrent: fetched
-                )
-            }
+            Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
 
             sessions = loaded
 
@@ -1276,12 +1271,20 @@ final class AppState {
                JSONSerialization.isValidJSONObject(infoObj),
                let data = try? JSONSerialization.data(withJSONObject: infoObj),
                let session = try? JSONDecoder().decode(Session.self, from: data) {
-                let wasUpdate = sessions.contains(where: { $0.id == session.id })
-                Self.logger.debug("session.updated id=\(session.id, privacy: .public) archived=\(session.time.archived.map { String($0) } ?? "nil", privacy: .public) dir=\(session.directory, privacy: .public) op=\(wasUpdate ? "replace" : "insert", privacy: .public)")
-                if let idx = sessions.firstIndex(where: { $0.id == session.id }) {
-                    sessions[idx] = session
+                let dir = effectiveProjectDirectory
+                let isCurrent = (session.id == currentSessionID)
+                let matchesProject = dir == nil || session.directory == dir
+                let shouldApply = matchesProject || isCurrent
+                if shouldApply {
+                    let wasUpdate = sessions.contains(where: { $0.id == session.id })
+                    Self.logger.debug("session.updated id=\(session.id, privacy: .public) archived=\(session.time.archived.map { String($0) } ?? "nil", privacy: .public) dir=\(session.directory, privacy: .public) op=\(wasUpdate ? "replace" : "insert", privacy: .public)")
+                    if let idx = sessions.firstIndex(where: { $0.id == session.id }) {
+                        sessions[idx] = session
+                    } else {
+                        sessions.insert(session, at: 0)
+                    }
                 } else {
-                    sessions.insert(session, at: 0)
+                    Self.logger.debug("session.updated skip id=\(session.id, privacy: .public) dir=\(session.directory, privacy: .public) effectiveDir=\(dir ?? "nil", privacy: .public)")
                 }
             }
         case "session.deleted":
