@@ -36,6 +36,24 @@ struct Message: Codable, Identifiable {
             let read: Int
             let write: Int
         }
+
+        private enum CodingKeys: String, CodingKey {
+            case total
+            case input
+            case output
+            case reasoning
+            case cache
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            input = try c.decodeIfPresent(Int.self, forKey: .input) ?? 0
+            output = try c.decodeIfPresent(Int.self, forKey: .output) ?? 0
+            reasoning = try c.decodeIfPresent(Int.self, forKey: .reasoning) ?? 0
+            cache = try c.decodeIfPresent(CacheInfo.self, forKey: .cache)
+            // Newer OpenCode server payloads may omit `total`.
+            total = try c.decodeIfPresent(Int.self, forKey: .total) ?? (input + output + reasoning)
+        }
     }
 
     struct TimeInfo: Codable {

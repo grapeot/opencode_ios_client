@@ -53,6 +53,19 @@ struct OpenCodeClientTests {
         #expect(message.isUser == true)
     }
 
+    @Test func messageDecodingWithoutTokenTotal() throws {
+        let json = """
+        {"id":"m2","sessionID":"s1","role":"assistant","parentID":"m1","providerID":"openai","modelID":"gpt-5.2","time":{"created":0,"completed":1},"finish":"stop","tokens":{"input":10,"output":2,"reasoning":3,"cache":{"read":0,"write":0}}}
+        """
+        let data = json.data(using: .utf8)!
+        let message = try JSONDecoder().decode(Message.self, from: data)
+        #expect(message.isAssistant == true)
+        #expect(message.tokens?.input == 10)
+        #expect(message.tokens?.output == 2)
+        #expect(message.tokens?.reasoning == 3)
+        #expect(message.tokens?.total == 15)
+    }
+
     // Regression: server.connected event has no directory; SSEEvent.directory must be optional
     @Test func sseEventDecodingWithoutDirectory() throws {
         let json = """
