@@ -20,7 +20,7 @@
   - [x] 实现 `Project` 数据模型、`APIClient.projects()`、`sessions(directory:limit:)`
   - [x] 更新 `AppState`：projects、selectedProjectWorktree、customProjectPath、effectiveProjectDirectory
   - [x] Settings UI：Project Picker（Server default / 项目列表 / Custom path）
-  - [x] 单元测试：Project 解码、effectiveProjectDirectory 逻辑
+  - [x] 单元测试：Project 解码、effectiveProjectDirectory 逻辑；修复 SessionDeletionSelectionTests.makeSession 缺 archived 参数
   - [x] 解决「手机端只能看两周前 sessions」根因：Web 与 iOS 默认看的 project 不同，现支持按 project 过滤
 - [x] **Agent 选择功能（2026-02-21 完成）**：
   - [x] RFC/PRD 更新：添加 Agent 数据模型、API、UI 设计（v0.2 / RFC-002）
