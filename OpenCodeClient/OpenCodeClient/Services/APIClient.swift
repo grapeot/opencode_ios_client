@@ -80,8 +80,23 @@ actor APIClient {
         return try JSONDecoder().decode(HealthResponse.self, from: data)
     }
 
-    func sessions() async throws -> [Session] {
-        let (data, _) = try await makeRequest(path: "/session")
+    func projects() async throws -> [Project] {
+        let (data, _) = try await makeRequest(path: "/project")
+        return try JSONDecoder().decode([Project].self, from: data)
+    }
+
+    func sessions(directory: String? = nil, limit: Int = 100) async throws -> [Session] {
+        var queryItems: [URLQueryItem] = []
+        if let directory, !directory.isEmpty {
+            queryItems.append(URLQueryItem(name: "directory", value: directory))
+        }
+        if limit > 0 {
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        let (data, _) = try await makeRequest(
+            path: "/session",
+            queryItems: queryItems.isEmpty ? nil : queryItems
+        )
         return try JSONDecoder().decode([Session].self, from: data)
     }
 

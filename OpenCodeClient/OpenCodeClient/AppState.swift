@@ -133,6 +133,8 @@ final class AppState {
     private static let draftInputsBySessionKey = "draftInputsBySession"
     private static let selectedModelBySessionKey = "selectedModelBySession"
     private static let showArchivedSessionsKey = "showArchivedSessions"
+    private static let selectedProjectWorktreeKey = "selectedProjectWorktree"
+    private static let customProjectPathKey = "customProjectPath"
 
     init() {
         if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
@@ -153,6 +155,8 @@ final class AppState {
         _aiBuilderCustomPrompt = UserDefaults.standard.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
         _aiBuilderTerminology = UserDefaults.standard.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
         _showArchivedSessions = UserDefaults.standard.bool(forKey: Self.showArchivedSessionsKey)
+        _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
+        _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
         let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
@@ -388,6 +392,39 @@ final class AppState {
     }
     private var _showArchivedSessions: Bool = false
 
+    var projects: [Project] = []
+    var isLoadingProjects: Bool = false
+
+    var selectedProjectWorktree: String? {
+        get { _selectedProjectWorktree }
+        set {
+            _selectedProjectWorktree = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.selectedProjectWorktreeKey)
+        }
+    }
+    private var _selectedProjectWorktree: String?
+
+    var customProjectPath: String {
+        get { _customProjectPath }
+        set {
+            _customProjectPath = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.customProjectPathKey)
+        }
+    }
+    private var _customProjectPath: String = ""
+
+    /// Effective directory for session fetch: selected project or custom path, nil = server default
+    var effectiveProjectDirectory: String? {
+        guard let sel = selectedProjectWorktree, !sel.isEmpty else { return nil }
+        if sel == Self.customProjectSentinel {
+            let path = customProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            return path.isEmpty ? nil : path
+        }
+        return sel
+    }
+    /// Sentinel value when user selects "Custom path" option
+    static let customProjectSentinel = "__custom__"
+
     var pendingPermissions: [PendingPermission] = []
 
     var themePreference: String = "auto"  // "auto" | "light" | "dark"
@@ -566,10 +603,23 @@ final class AppState {
         }
     }
 
+    func loadProjects() async {
+        guard isConnected else { return }
+        isLoadingProjects = true
+        do {
+            projects = try await apiClient.projects()
+        } catch {
+            Self.logger.warning("loadProjects failed: \(error.localizedDescription)")
+            projects = []
+        }
+        isLoadingProjects = false
+    }
+
     func loadSessions() async {
         guard isConnected else { return }
         do {
-            sessions = try await apiClient.sessions()
+            let directory = effectiveProjectDirectory
+            sessions = try await apiClient.sessions(directory: directory, limit: 100)
 
             if let selectedID = currentSessionID,
                !sessions.contains(where: { $0.id == selectedID }) {
@@ -1561,9 +1611,11 @@ final class AppState {
         if isConnected {
             async let agentsTask = loadAgents()
             async let providersTask = loadProvidersConfig()
+            async let projectsTask = loadProjects()
             await loadSessions()
             _ = await agentsTask
             _ = await providersTask
+            _ = await projectsTask
             await loadMessages()
             await refreshPendingPermissions()
             await loadSessionDiff()

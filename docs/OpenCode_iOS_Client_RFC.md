@@ -284,6 +284,48 @@ struct AgentInfo: Codable, Identifiable {
 - 过滤 `hidden != true` 的 agents 后显示在 UI
 - 默认选择第一个 primary agent（通常是 `Sisyphus`）
 
+#### 4.3 Project 选择（Workspace 过滤）
+
+**背景**：OpenCode Server 支持多项目，`GET /session` 默认返回 server 当前项目的 sessions。Web 端可切换项目，iOS 端需支持按项目过滤，否则只能看到 server 当前项目的 sessions。
+
+**API**：
+
+| 方法 | 路径 | 说明 | 响应 |
+|------|------|------|------|
+| GET | `/project` | 列出服务器已知的项目 | `Project[]` |
+| GET | `/project/current` | 当前项目 | `Project` |
+| GET | `/session?directory=<path>&limit=<n>` | 按 worktree 过滤 sessions | `Session[]` |
+
+**数据模型**：
+
+```swift
+struct Project: Codable, Identifiable {
+    let id: String           // 通常为 git commit hash
+    let worktree: String     // 绝对路径，如 /Users/xxx/co/knowledge_working
+    let vcs: String?         // "git" 等
+    let time: ProjectTime?
+}
+
+// 展示名称：worktree 最后一段，如 knowledge_working
+func projectDisplayName(_ worktree: String) -> String {
+    (worktree as NSString).lastPathComponent
+}
+```
+
+**状态**：
+
+```swift
+var projects: [Project] = []              // 从 GET /project 拉取
+var selectedProjectWorktree: String?      // nil = 使用 server 默认（不传 directory）
+var customProjectPath: String = ""        // "Custom path" 时用户输入的路径
+```
+
+**流程**：
+1. 连接成功后调用 `GET /project` 填充 Picker
+2. 用户选择：从列表选 → `selectedProjectWorktree = project.worktree`；选 "Custom path" → 展开 TextField，`selectedProjectWorktree = customProjectPath`
+3. `loadSessions()` 时：若 `selectedProjectWorktree != nil`，请求 `GET /session?directory=xxx&limit=100`；否则 `GET /session`（无参数）
+4. 持久化：`selectedProjectWorktree`、`customProjectPath` 存 UserDefaults
+
 ### 5. 消息与文档 UI
 
 #### 5.1 消息流

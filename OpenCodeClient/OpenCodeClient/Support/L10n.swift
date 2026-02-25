@@ -78,6 +78,10 @@ enum L10n {
 
         case settingsShowArchivedSessions
         case settingsConnecting
+        case settingsProject
+        case settingsProjectServerDefault
+        case settingsProjectCustomPath
+        case settingsProjectCustomPathPlaceholder
 
         case chatInputPlaceholder
         case chatSendFailed
@@ -265,6 +269,10 @@ enum L10n {
         Key.settingsRotate.rawValue: "Rotate",
         Key.settingsShowArchivedSessions.rawValue: "Show Archived Sessions",
         Key.settingsConnecting.rawValue: "Connecting...",
+        Key.settingsProject.rawValue: "Project (Workspace)",
+        Key.settingsProjectServerDefault.rawValue: "Server default",
+        Key.settingsProjectCustomPath.rawValue: "Custom path",
+        Key.settingsProjectCustomPathPlaceholder.rawValue: "/path/to/project",
 
         Key.chatInputPlaceholder.rawValue: "Ask anything...",
         Key.chatSendFailed.rawValue: "Send failed",
@@ -455,6 +463,10 @@ enum L10n {
         Key.errorUsingLanHttp.rawValue: "正在使用 LAN HTTP",
         Key.settingsShowArchivedSessions.rawValue: "显示已归档会话",
         Key.settingsConnecting.rawValue: "连接中...",
+        Key.settingsProject.rawValue: "项目 (Workspace)",
+        Key.settingsProjectServerDefault.rawValue: "服务器默认",
+        Key.settingsProjectCustomPath.rawValue: "自定义路径",
+        Key.settingsProjectCustomPathPlaceholder.rawValue: "/path/to/project",
 
         Key.chatInputPlaceholder.rawValue: "输入你的问题...",
         Key.chatSendFailed.rawValue: "发送失败",

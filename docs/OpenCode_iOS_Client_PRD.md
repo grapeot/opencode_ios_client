@@ -326,9 +326,21 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 
 **当前实现**：固定 4 个预设（GPT-5.3 Codex、GPT-5.3 Codex Spark、Opus 4.6、GLM5），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
 
-#### 4.4.3 Workspace
+#### 4.4.3 Project (Workspace)
 
-**暂未实现**。当前使用当前 session 的 `directory` 作为 workspace，未调用 `GET /project` / `GET /project/current`，无项目切换。未来将支持多 workspace。
+用于指定要查看的 OpenCode 项目。OpenCode Server 支持多项目，每个项目有独立的 session 列表。iOS 客户端通过 `GET /session?directory=<worktree>` 按项目过滤 sessions。
+
+**选择已有项目**：
+- 调用 `GET /project` 获取服务器已知的项目列表
+- Picker 展示项目，显示名称取 worktree 路径的最后一段（如 `knowledge_working`、`agentic_trading`）
+- 选中项持久化到 UserDefaults
+
+**自定义路径**：
+- 提供「Custom path」选项，用户可手动输入任意 worktree 路径
+- 适用于服务器有 sessions 但未在 project 列表中展示的目录
+- 输入错误时 `/session?directory=xxx` 返回 0 个 session，用户可感知
+
+**默认行为**：未选择时调用 `GET /session` 不传 `directory` 参数，使用服务器当前项目（与 Web 端一致）。选择后调用 `GET /session?directory=xxx&limit=100`。
 
 #### 4.4.4 外观
 
@@ -348,6 +360,11 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
     var serverURL: String
     var isConnected: Bool
     var serverVersion: String?
+    
+    // Project (workspace filter)
+    var projects: [Project]
+    var selectedProjectWorktree: String?   // nil = use server current
+    var customProjectPath: String         // for "Custom path" option
     
     // Sessions
     var sessions: [Session]
@@ -412,7 +429,7 @@ App 进入前台
 |------|------|------|
 | GET | `/global/health` | 连接测试、获取 server 版本 |
 | GET | `/global/event` | SSE 事件流 |
-| GET | `/session` | Session 列表 |
+| GET | `/session` | Session 列表（支持 `directory`、`limit` 参数按项目过滤） |
 | POST | `/session` | 创建 Session |
 | GET | `/session/:id` | Session 详情 |
 | DELETE | `/session/:id` | 删除 Session |

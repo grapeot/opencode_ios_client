@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- **最后更新**：2026-02-21
-- **Phase**：Phase 3 完成 + SSH Tunnel 基础设施 + Agent 选择功能（已完成）
+- **最后更新**：2026-02-25
+- **Phase**：Phase 3 完成 + SSH Tunnel 基础设施 + Agent 选择功能 + Project 选择功能（已完成）
 - **编译**：✅ 通过（iphonesimulator / generic destination）
-- **测试**：✅ 所有测试通过（含 SSH tunnel 相关测试）
+- **测试**：✅ 所有测试通过（含 Project 选择相关测试）
 
 ## 进行中
 
@@ -15,6 +15,13 @@
 
 ## 已完成（近期）
 
+- [x] **Project 选择功能（2026-02-25 完成）**：
+  - [x] PRD/RFC 更新：添加 Project (Workspace) 设计
+  - [x] 实现 `Project` 数据模型、`APIClient.projects()`、`sessions(directory:limit:)`
+  - [x] 更新 `AppState`：projects、selectedProjectWorktree、customProjectPath、effectiveProjectDirectory
+  - [x] Settings UI：Project Picker（Server default / 项目列表 / Custom path）
+  - [x] 单元测试：Project 解码、effectiveProjectDirectory 逻辑
+  - [x] 解决「手机端只能看两周前 sessions」根因：Web 与 iOS 默认看的 project 不同，现支持按 project 过滤
 - [x] **Agent 选择功能（2026-02-21 完成）**：
   - [x] RFC/PRD 更新：添加 Agent 数据模型、API、UI 设计（v0.2 / RFC-002）
   - [x] 实现 `AgentInfo` 数据模型（含 mode 过滤：primary/all 显示，subagent 隐藏）
@@ -205,6 +212,8 @@
 
 ## API 验证（localhost:4096）
 
+- **GET /project**：✅ 返回 `Project[]`，含 id/worktree/vcs/time
+- **GET /session?directory=&limit=**：✅ 按 worktree 过滤 sessions，limit 默认 100
 - **GET /global/health**：✅ `{ healthy, version }`
 - **GET /config/providers**：✅ 返回 `providers: array`（非 dict），每项含 `id`, `name`, `models: { modelID: ModelInfo }`。已修复 iOS 解析。
 - **GET /agent**：✅ 返回 `[AgentInfo]`，含 name/description/mode/hidden/native 字段。iOS 端过滤 mode=subagent。

@@ -725,6 +725,17 @@ struct APIResponseModelTests {
         #expect(health.version == "1.2.3")
     }
 
+    @Test func projectDecoding() throws {
+        let json = """
+        {"id":"abc123","worktree":"/Users/me/co/knowledge_working","vcs":"git","icon":{"color":"pink"},"time":{"created":1770951645865,"updated":1771000000360},"sandboxes":[]}
+        """
+        let data = json.data(using: .utf8)!
+        let project = try JSONDecoder().decode(Project.self, from: data)
+        #expect(project.id == "abc123")
+        #expect(project.worktree == "/Users/me/co/knowledge_working")
+        #expect(project.displayName == "knowledge_working")
+    }
+
     @Test func fileStatusEntryDecoding() throws {
         let json = """
         {"path":"src/app.swift","status":"modified"}
@@ -1392,5 +1403,33 @@ struct ArchivedSessionTests {
             share: nil,
             summary: nil
         )
+    }
+}
+
+struct ProjectSelectionTests {
+    @Test @MainActor func effectiveProjectDirectoryNilWhenNotSelected() {
+        let state = AppState()
+        state.selectedProjectWorktree = nil
+        #expect(state.effectiveProjectDirectory == nil)
+    }
+
+    @Test @MainActor func effectiveProjectDirectoryReturnsSelectedWorktree() {
+        let state = AppState()
+        state.selectedProjectWorktree = "/Users/me/co/knowledge_working"
+        #expect(state.effectiveProjectDirectory == "/Users/me/co/knowledge_working")
+    }
+
+    @Test @MainActor func effectiveProjectDirectoryCustomPathWhenCustomSelected() {
+        let state = AppState()
+        state.selectedProjectWorktree = AppState.customProjectSentinel
+        state.customProjectPath = "/Users/me/custom/project"
+        #expect(state.effectiveProjectDirectory == "/Users/me/custom/project")
+    }
+
+    @Test @MainActor func effectiveProjectDirectoryNilWhenCustomSelectedButEmpty() {
+        let state = AppState()
+        state.selectedProjectWorktree = AppState.customProjectSentinel
+        state.customProjectPath = ""
+        #expect(state.effectiveProjectDirectory == nil)
     }
 }

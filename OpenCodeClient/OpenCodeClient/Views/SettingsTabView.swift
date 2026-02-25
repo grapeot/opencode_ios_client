@@ -70,6 +70,32 @@ struct SettingsTabView: View {
                     .buttonStyle(.plain)
                 }
 
+                Section(L10n.t(.settingsProject)) {
+                    Picker(L10n.t(.settingsProject), selection: Binding(
+                        get: { state.selectedProjectWorktree ?? "" },
+                        set: { state.selectedProjectWorktree = $0.isEmpty ? nil : $0 }
+                    )) {
+                        Text(L10n.t(.settingsProjectServerDefault)).tag("")
+                        ForEach(state.projects) { project in
+                            Text(project.displayName).tag(project.worktree)
+                        }
+                        Text(L10n.t(.settingsProjectCustomPath)).tag(AppState.customProjectSentinel)
+                    }
+                    .disabled(!state.isConnected || state.isLoadingProjects)
+
+                    if state.selectedProjectWorktree == AppState.customProjectSentinel {
+                        TextField(L10n.t(.settingsProjectCustomPathPlaceholder), text: $state.customProjectPath)
+                            .textContentType(.URL)
+                            .autocapitalization(.none)
+                            .onChange(of: state.customProjectPath) { _, _ in
+                                Task { await state.refreshSessions() }
+                            }
+                    }
+                }
+                .onChange(of: state.selectedProjectWorktree) { _, _ in
+                    Task { await state.refreshSessions() }
+                }
+
                 Section {
                     Toggle(L10n.t(.settingsEnableSshTunnel), isOn: $sshConfig.isEnabled)
                         .onChange(of: sshConfig.isEnabled) { _, newValue in
