@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — OpenCode Remote</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.6; }
+        h1 { font-size: 1.4em; }
+        h2 { font-size: 1.1em; margin-top: 2em; }
+        footer { margin-top: 3em; font-size: 0.85em; color: #888; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy</h1>
+    <p><strong>Effective date:</strong> March 1, 2026</p>
+
+    <h2>Overview</h2>
+    <p>OpenCode Remote ("the App") is a companion client for the OpenCode AI coding assistant. It connects directly to a server that you own and operate. The App does not collect, store, or transmit any personal data to the developer or any third party.</p>
+
+    <h2>Data Collection</h2>
+    <p>The App does not collect any user data. Specifically:</p>
+    <ul>
+        <li>No analytics or tracking frameworks are included.</li>
+        <li>No crash reporting SDKs are included.</li>
+        <li>No advertising identifiers are used.</li>
+        <li>No personal information is sent to the developer or any third party.</li>
+    </ul>
+
+    <h2>Network Communication</h2>
+    <p>All network traffic occurs exclusively between your device and your self-hosted OpenCode server. The App communicates over HTTP (local network) or HTTPS (public network) depending on your configuration. No data passes through any intermediary service controlled by the developer.</p>
+
+    <h2>Local Storage</h2>
+    <p>The App stores your server address, username, and connection preferences in local device storage (UserDefaults). Passwords and API tokens are stored in the iOS Keychain. SSH private keys, if generated, are also stored in the Keychain. None of this data leaves your device.</p>
+
+    <h2>Microphone</h2>
+    <p>The App may request microphone access for optional voice input. Audio is recorded locally and sent to a speech-to-text service that you configure yourself. The developer has no access to your audio recordings.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy is updated, the new version will be posted at this URL.</p>
+
+    <h2>Contact</h2>
+    <p>If you have questions about this policy, please open an issue at <a href="https://github.com/grapeot/opencode_ios_client/issues">github.com/grapeot/opencode_ios_client/issues</a>.</p>
+
+    <footer>© 2026 Yan Wang</footer>
+</body>
+</html>
