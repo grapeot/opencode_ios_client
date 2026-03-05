@@ -53,3 +53,7 @@ docs/security.md
 
 # Environment variables (contains credentials)
 .env
+
+# Local-only: keep personal Xcode config/signing changes out of commits
+OpenCodeClient/Info.plist
+OpenCodeClient/OpenCodeClient.xcodeproj/project.pbxproj
