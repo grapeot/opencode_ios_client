@@ -84,6 +84,10 @@ struct ChatTabView: View {
         state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }
     }
 
+    private var currentQuestions: [PendingQuestion] {
+        state.pendingQuestions.filter { $0.sessionID == state.currentSessionID }
+    }
+
     private var isCurrentSessionBusy: Bool {
         guard let status = state.currentSessionStatus else { return false }
         return status.type == "busy" || status.type == "retry"
@@ -320,7 +324,7 @@ struct ChatTabView: View {
                                     .padding(.top, 6)
                             }
 
-                            // Permissions should be at the bottom so auto-scroll makes them visible.
+                            // Question/permission cards should be at the bottom so auto-scroll makes them visible.
                             // Keep them above the activity row.
                             if useGridCards {
                                 LazyVGrid(
@@ -328,6 +332,17 @@ struct ChatTabView: View {
                                     alignment: .leading,
                                     spacing: 10
                                 ) {
+                                    ForEach(currentQuestions) { request in
+                                        QuestionCardView(
+                                            request: request,
+                                            onReply: { answers in
+                                                Task { await state.respondQuestion(request, answers: answers) }
+                                            },
+                                            onReject: {
+                                                Task { await state.rejectQuestion(request) }
+                                            }
+                                        )
+                                    }
                                     ForEach(currentPermissions) { perm in
                                         PermissionCardView(permission: perm) { response in
                                             Task { await state.respondPermission(perm, response: response) }
@@ -335,6 +350,17 @@ struct ChatTabView: View {
                                     }
                                 }
                             } else {
+                                ForEach(currentQuestions) { request in
+                                    QuestionCardView(
+                                        request: request,
+                                        onReply: { answers in
+                                            Task { await state.respondQuestion(request, answers: answers) }
+                                        },
+                                        onReject: {
+                                            Task { await state.rejectQuestion(request) }
+                                        }
+                                    )
+                                }
                                 ForEach(currentPermissions) { perm in
                                     PermissionCardView(permission: perm) { response in
                                         Task { await state.respondPermission(perm, response: response) }
@@ -565,6 +591,7 @@ struct ChatTabView: View {
     /// 内容变化时用于触发自动滚动
     private var scrollAnchor: String {
         let perm = state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count
+        let question = state.pendingQuestions.filter { $0.sessionID == state.currentSessionID }.count
         let messageCount = state.messages.count
         let lastMessage = state.messages.last
         let lastMessageSignature = {
@@ -582,7 +609,7 @@ struct ChatTabView: View {
             let state = ($0.state == .running) ? "running" : "completed"
             return "\($0.id)-\($0.text)-\(state)"
         } ?? ""
-        return "\(perm)-\(messageCount)-\(lastMessageSignature)-\(streamKeyCount)-\(streamCharCount)-\(streamingReasoningID)-\(sid)-\(status)-\(activity)"
+        return "\(perm)-\(question)-\(messageCount)-\(lastMessageSignature)-\(streamKeyCount)-\(streamCharCount)-\(streamingReasoningID)-\(sid)-\(status)-\(activity)"
     }
 
     @ViewBuilder

@@ -402,8 +402,8 @@ final class AppState {
 
     var modelPresets: [ModelPreset] = [
         ModelPreset(displayName: "GLM-5", providerID: "zai-coding-plan", modelID: "glm-5"),
-        ModelPreset(displayName: "Opus 4.6", providerID: "anthropic", modelID: "claude-opus-4-6"),
-        ModelPreset(displayName: "Sonnet 4.6", providerID: "anthropic", modelID: "claude-sonnet-4-6"),
+        ModelPreset(displayName: "Opus 4.6", providerID: "amazon-bedrock", modelID: "us.anthropic.claude-opus-4-6-v1"),
+        ModelPreset(displayName: "Sonnet 4.6", providerID: "amazon-bedrock", modelID: "us.anthropic.claude-sonnet-4-6"),
         ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
         ModelPreset(displayName: "GPT-5.2", providerID: "openai", modelID: "gpt-5.2"),
         ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro-preview"),
@@ -489,6 +489,7 @@ final class AppState {
     static let customProjectSentinel = "__custom__"
 
     var pendingPermissions: [PendingPermission] = []
+    var pendingQuestions: [PendingQuestion] = []
 
     var themePreference: String = "auto"  // "auto" | "light" | "dark"
 
@@ -785,6 +786,9 @@ final class AppState {
 
             await self.refreshPendingPermissions()
             guard self.sessionLoadingID == loadingID else { return }
+
+            await self.refreshPendingQuestions()
+            guard self.sessionLoadingID == loadingID else { return }
             
             self.inferAndStoreModelForCurrentSessionIfMissing()
             await self.loadSessionDiff()
@@ -864,12 +868,14 @@ final class AppState {
             applySavedModelForCurrentSession()
             await loadMessages()
             await refreshPendingPermissions()
+            await refreshPendingQuestions()
             await loadSessionDiff()
             await loadSessionTodos()
             inferAndStoreModelForCurrentSessionIfMissing()
         } else {
             currentSessionID = nil
             pendingPermissions = []
+            pendingQuestions = []
         }
     }
 
@@ -1195,9 +1201,10 @@ final class AppState {
         let start = Date()
         await loadMessages()
         await refreshPendingPermissions()
+        await refreshPendingQuestions()
         await syncSessionStatusesFromPoll()
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
-        Self.logger.debug("bootstrapSync reason=\(reason, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public) messages=\(self.messages.count, privacy: .public) permissions=\(self.pendingPermissions.count, privacy: .public)")
+        Self.logger.debug("bootstrapSync reason=\(reason, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public) messages=\(self.messages.count, privacy: .public) permissions=\(self.pendingPermissions.count, privacy: .public) questions=\(self.pendingQuestions.count, privacy: .public)")
     }
 
     private func syncSessionStatusesFromPoll(markMissingBusyAsIdle: Bool = true) async {
@@ -1244,6 +1251,26 @@ final class AppState {
         }
     }
 
+    func respondQuestion(_ request: PendingQuestion, answers: [[String]]) async {
+        do {
+            try await apiClient.replyQuestion(requestID: request.questionID, answers: answers)
+            pendingQuestions.removeAll { $0.id == request.id }
+            await refreshPendingQuestions()
+        } catch {
+            connectionError = error.localizedDescription
+        }
+    }
+
+    func rejectQuestion(_ request: PendingQuestion) async {
+        do {
+            try await apiClient.rejectQuestion(requestID: request.questionID)
+            pendingQuestions.removeAll { $0.id == request.id }
+            await refreshPendingQuestions()
+        } catch {
+            connectionError = error.localizedDescription
+        }
+    }
+
     /// SSE permission events are not replayed; poll pending permissions so users can enter
     /// an in-progress session and still see the warning.
     func refreshPendingPermissions() async {
@@ -1251,6 +1278,18 @@ final class AppState {
         do {
             let requests = try await apiClient.pendingPermissions()
             pendingPermissions = PermissionController.fromPendingRequests(requests)
+        } catch {
+            // Keep the current list on errors.
+        }
+    }
+
+    /// SSE question events are not replayed; poll pending questions so users can enter
+    /// an in-progress session and still see pending question cards.
+    func refreshPendingQuestions() async {
+        guard isConnected else { return }
+        do {
+            let requests = try await apiClient.pendingQuestions()
+            pendingQuestions = QuestionController.fromPendingRequests(requests)
         } catch {
             // Keep the current list on errors.
         }
@@ -1433,6 +1472,16 @@ final class AppState {
             }
         case "permission.replied":
             PermissionController.applyRepliedEvent(properties: props, to: &pendingPermissions)
+        case "question.asked":
+            if let question = QuestionController.parseAskedEvent(properties: props) {
+                if let existingIndex = pendingQuestions.firstIndex(where: { $0.id == question.id }) {
+                    pendingQuestions[existingIndex] = question
+                } else {
+                    pendingQuestions.append(question)
+                }
+            }
+        case "question.replied", "question.rejected":
+            QuestionController.applyResolvedEvent(properties: props, to: &pendingQuestions)
         case "todo.updated":
             if let sessionID = props["sessionID"]?.value as? String,
                let todosObj = props["todos"]?.value,
@@ -1651,6 +1700,7 @@ final class AppState {
         hasMoreHistoryBySessionID[sessionID] = nil
         loadingOlderMessagesSessionIDs.remove(sessionID)
         pendingPermissions.removeAll { $0.sessionID == sessionID }
+        pendingQuestions.removeAll { $0.sessionID == sessionID }
 
         if streamingReasoningPart?.sessionID == sessionID {
             streamingReasoningPart = nil
@@ -1683,11 +1733,13 @@ final class AppState {
 
         guard currentSessionID != nil else {
             pendingPermissions = []
+            pendingQuestions = []
             return true
         }
 
         await loadMessages()
         await refreshPendingPermissions()
+        await refreshPendingQuestions()
         await loadSessionDiff()
         await loadSessionTodos()
         inferAndStoreModelForCurrentSessionIfMissing()
@@ -1709,14 +1761,17 @@ final class AppState {
         if deletedCurrentSession, currentSessionID != nil {
             await loadMessages()
             await refreshPendingPermissions()
+            await refreshPendingQuestions()
             await loadSessionDiff()
             await loadSessionTodos()
             inferAndStoreModelForCurrentSessionIfMissing()
         } else if currentSessionID == nil {
             pendingPermissions = []
+            pendingQuestions = []
         } else {
             let validSessionIDs = Set(sessions.map(\.id))
             pendingPermissions.removeAll { !validSessionIDs.contains($0.sessionID) }
+            pendingQuestions.removeAll { !validSessionIDs.contains($0.sessionID) }
         }
     }
 
@@ -1732,6 +1787,7 @@ final class AppState {
             _ = await projectsResult
             await loadMessages()
             await refreshPendingPermissions()
+            await refreshPendingQuestions()
             await loadSessionDiff()
             await loadSessionTodos()
             await loadFileTree()
@@ -1767,6 +1823,29 @@ struct PendingPermission: Identifiable {
     let patterns: [String]
     let allowAlways: Bool
     let tool: String?
+    let description: String
+}
+
+struct PendingQuestion: Identifiable {
+    var id: String { "\(sessionID)/\(questionID)" }
+    let sessionID: String
+    let questionID: String
+    let questions: [PendingQuestionItem]
+    let tool: String?
+}
+
+struct PendingQuestionItem: Identifiable {
+    let id: String
+    let header: String
+    let question: String
+    let options: [PendingQuestionOption]
+    let multiple: Bool
+    let custom: Bool
+}
+
+struct PendingQuestionOption: Identifiable {
+    let id: String
+    let label: String
     let description: String
 }
 

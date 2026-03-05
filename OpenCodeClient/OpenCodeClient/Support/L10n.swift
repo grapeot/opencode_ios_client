@@ -113,6 +113,11 @@ enum L10n {
         case permissionAllowAlways
         case permissionReject
 
+        case questionNeedsReply
+        case questionSubmit
+        case questionReject
+        case questionCustomAnswerPlaceholder
+
         case toolReason
         case toolCommandInput
         case toolPath
@@ -306,6 +311,10 @@ enum L10n {
         Key.permissionAllowOnce.rawValue: "Allow Once",
         Key.permissionAllowAlways.rawValue: "Allow Always",
         Key.permissionReject.rawValue: "Reject",
+        Key.questionNeedsReply.rawValue: "Your Input Needed",
+        Key.questionSubmit.rawValue: "Submit",
+        Key.questionReject.rawValue: "Reject",
+        Key.questionCustomAnswerPlaceholder.rawValue: "Custom answer",
 
         Key.toolReason.rawValue: "Reason",
         Key.toolCommandInput.rawValue: "Command / Input",
@@ -503,6 +512,10 @@ enum L10n {
         Key.permissionAllowOnce.rawValue: "允许一次",
         Key.permissionAllowAlways.rawValue: "始终允许",
         Key.permissionReject.rawValue: "拒绝",
+        Key.questionNeedsReply.rawValue: "需要你的输入",
+        Key.questionSubmit.rawValue: "提交",
+        Key.questionReject.rawValue: "拒绝",
+        Key.questionCustomAnswerPlaceholder.rawValue: "自定义答案",
 
         Key.toolReason.rawValue: "原因",
         Key.toolCommandInput.rawValue: "命令 / 输入",

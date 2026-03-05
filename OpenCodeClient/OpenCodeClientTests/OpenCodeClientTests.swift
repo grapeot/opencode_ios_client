@@ -1349,12 +1349,12 @@ struct AgentInfoTests {
 struct ModelPresetShortNameTests {
     
     @Test func opusShortName() {
-        let preset = ModelPreset(displayName: "Opus 4.6", providerID: "anthropic", modelID: "claude-opus-4-6")
+        let preset = ModelPreset(displayName: "Opus 4.6", providerID: "amazon-bedrock", modelID: "us.anthropic.claude-opus-4-6-v1")
         #expect(preset.shortName == "Opus")
     }
     
     @Test func sonnetShortName() {
-        let preset = ModelPreset(displayName: "Sonnet 4.6", providerID: "anthropic", modelID: "claude-sonnet-4-6")
+        let preset = ModelPreset(displayName: "Sonnet 4.6", providerID: "amazon-bedrock", modelID: "us.anthropic.claude-sonnet-4-6")
         #expect(preset.shortName == "Sonnet")
     }
     
