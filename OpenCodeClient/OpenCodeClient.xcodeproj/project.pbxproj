@@ -414,6 +414,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "OpenCode Remote needs local network access to connect to your OpenCode server on the same network.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenCode Remote uses the microphone to record voice input, which is transcribed to text and added to the message input field.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -425,7 +427,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yage.OpenCodeClient;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClient;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -448,6 +450,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "OpenCode Remote needs local network access to connect to your OpenCode server on the same network.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenCode Remote uses the microphone to record voice input, which is transcribed to text and added to the message input field.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -459,7 +463,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yage.OpenCodeClient;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClient;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -481,7 +485,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yage.OpenCodeClientTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClientTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -503,7 +507,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yage.OpenCodeClientTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClientTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -523,7 +527,7 @@
 				DEVELOPMENT_TEAM = Y2T99LVU9E;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yage.OpenCodeClientUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClientUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -543,7 +547,7 @@
 				DEVELOPMENT_TEAM = Y2T99LVU9E;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yage.OpenCodeClientUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClientUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
