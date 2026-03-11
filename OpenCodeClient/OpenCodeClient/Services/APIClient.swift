@@ -233,11 +233,12 @@ actor APIClient {
         return try? decoder.decode(type, from: data)
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String = "build", model: Message.ModelInfo?) async throws {
+    func promptAsync(sessionID: String, text: String, agent: String = "build", model: Message.ModelInfo?, variant: String?) async throws {
         struct PromptBody: Encodable {
             let parts: [PartInput]
             let agent: String
             let model: ModelInput?
+            let variant: String?
             struct PartInput: Encodable {
                 let type = "text"
                 let text: String
@@ -250,7 +251,8 @@ actor APIClient {
         let body = PromptBody(
             parts: [.init(text: text)],
             agent: agent,
-            model: model.map { .init(providerID: $0.providerID, modelID: $0.modelID) }
+            model: model.map { .init(providerID: $0.providerID, modelID: $0.modelID) },
+            variant: variant
         )
         let bodyData = try JSONEncoder().encode(body)
         let (_, response) = try await makeRequest(path: "/session/\(sessionID)/prompt_async", method: "POST", body: bodyData)
@@ -561,6 +563,7 @@ struct ProviderModel: Decodable {
     let name: String?
     let providerID: String?
     let limit: ProviderModelLimit?
+    let variants: [String]
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -568,13 +571,15 @@ struct ProviderModel: Decodable {
         case providerID
         case providerId
         case limit
+        case variants
     }
 
-    init(id: String, name: String?, providerID: String?, limit: ProviderModelLimit?) {
+    init(id: String, name: String?, providerID: String?, limit: ProviderModelLimit?, variants: [String] = []) {
         self.id = id
         self.name = name
         self.providerID = providerID
         self.limit = limit
+        self.variants = variants
     }
 
     init(from decoder: Decoder) throws {
@@ -583,6 +588,7 @@ struct ProviderModel: Decodable {
         name = try? c.decode(String.self, forKey: .name)
         providerID = (try? c.decode(String.self, forKey: .providerID)) ?? (try? c.decode(String.self, forKey: .providerId))
         limit = try? c.decode(ProviderModelLimit.self, forKey: .limit)
+        variants = (try? c.decode([String: AnyCodable].self, forKey: .variants).keys.sorted()) ?? []
     }
 }
 
