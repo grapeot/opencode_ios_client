@@ -86,6 +86,9 @@ struct ChatToolbarView: View {
     private var rightButtons: some View {
         HStack(spacing: LayoutConstants.Toolbar.modelButtonSpacing) {
             modelMenu
+            if !state.selectedModelVariants.isEmpty {
+                effortMenu
+            }
             agentMenu
             ContextUsageButton(state: state)
             
@@ -127,6 +130,47 @@ struct ChatToolbarView: View {
             .padding(.vertical, 7)
             .background(Color.accentColor.gradient)
             .foregroundColor(.white)
+            .clipShape(Capsule())
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private var effortMenu: some View {
+        Menu {
+            Button {
+                state.setSelectedVariant(nil)
+            } label: {
+                HStack {
+                    Text("Auto")
+                    if state.selectedVariant == nil {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+
+            ForEach(state.selectedModelVariants, id: \.self) { variant in
+                Button {
+                    state.setSelectedVariant(variant)
+                } label: {
+                    HStack {
+                        Text(AppState.displayName(forVariant: variant))
+                        if state.selectedVariant == variant {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(state.selectedVariantDisplayName)
+                    .font(.caption.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color(.systemGray5))
+            .foregroundColor(.primary)
             .clipShape(Capsule())
         }
         .menuStyle(.borderlessButton)
