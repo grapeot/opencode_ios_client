@@ -1061,7 +1061,7 @@ final class AppState {
         return fc
     }
 
-    func transcribeAudio(audioFileURL: URL, language: String? = nil) async throws -> String {
+    func transcribeAudio(audioFileURL: URL, language: String? = nil, onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
         let token = aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else { throw AIBuildersAudioError.missingToken }
 
@@ -1078,7 +1078,8 @@ final class AppState {
                 audioFileURL: audioFileURL,
                 language: language,
                 prompt: prompt.isEmpty ? nil : prompt,
-                terms: terms.isEmpty ? nil : terms
+                terms: terms.isEmpty ? nil : terms,
+                onPartialTranscript: onPartialTranscript
             )
             let elapsedMs = max(0, Int((ProcessInfo.processInfo.systemUptime - start) * 1000))
             Self.logger.notice("[SpeechProfile] appState.transcribe done ms=\(elapsedMs, privacy: .public) textChars=\(resp.text.count, privacy: .public) requestID=\(resp.requestID, privacy: .public)")

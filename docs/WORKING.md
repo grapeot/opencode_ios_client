@@ -15,6 +15,11 @@
 
 ## 已完成（近期）
 
+- [x] **语音转写 partial transcript 实时展示（2026-03-11）**：
+  - [x] AIBuildersAudioClient：`transcribe` 新增可选 `onPartialTranscript` 回调，`streamPCMOverRealtimeWebSocket` 收到 `transcript_delta` 时累积并回调
+  - [x] AppState.transcribeAudio：透传 onPartialTranscript
+  - [x] ChatTabView：转写过程中将 partial 实时写入输入框，完成后用 final 替换；失败时恢复 prefix
+
 - [x] **Markdown 大文件/长行崩溃修复（2026-03-11）**：
   - [x] 根因：MarkdownUI 对超长单行（如 transcript 段落 3000+ 字符）或大文件会 freeze/crash（GH #426、#396）
   - [x] 修复：FileContentView 在渲染前检测 `maxLineLength > 1500` 或 `totalLength > 60KB`，满足时直接用 RawTextView 跳过 MarkdownUI

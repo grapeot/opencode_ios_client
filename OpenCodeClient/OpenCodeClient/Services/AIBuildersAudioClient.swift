@@ -106,7 +106,8 @@ enum AIBuildersAudioClient {
         audioFileURL: URL,
         language: String? = nil,
         prompt: String? = nil,
-        terms: String? = nil
+        terms: String? = nil,
+        onPartialTranscript: (@Sendable (String) -> Void)? = nil
     ) async throws -> TranscriptionResponse {
         let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedBase.isEmpty else { throw AIBuildersAudioError.invalidBaseURL }
@@ -140,7 +141,8 @@ enum AIBuildersAudioClient {
         logger.notice("[SpeechProfile] realtime ws_url=\(sessionResponse.wsURL, privacy: .public) resolved=\(websocketURL.absoluteString, privacy: .public)")
         let transcript = try await streamPCMOverRealtimeWebSocket(
             websocketURL: websocketURL,
-            pcmAudio: pcmAudio
+            pcmAudio: pcmAudio,
+            onPartialTranscript: onPartialTranscript
         )
         logger.notice("[SpeechProfile] realtime transcribe done ms=\(elapsedMs(since: transcribeStart), privacy: .public) textChars=\(transcript.count, privacy: .public) requestID=\(sessionResponse.sessionID, privacy: .public)")
         return TranscriptionResponse(requestID: sessionResponse.sessionID, text: transcript)
@@ -227,12 +229,15 @@ enum AIBuildersAudioClient {
         }
         if let prompt, !prompt.isEmpty {
             payload["prompt"] = prompt
+            logger.notice("[SpeechProfile] realtime session payload includes prompt len=\(prompt.count, privacy: .public)")
         }
         if let terms, !terms.isEmpty {
-            payload["terms"] = terms
+            let termsArray = terms
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
+            payload["terms"] = termsArray
+            logger.notice("[SpeechProfile] realtime session payload includes terms count=\(termsArray.count, privacy: .public)")
         }
         payload["vad"] = false
         payload["silence_duration_ms"] = 1200
@@ -274,7 +279,8 @@ enum AIBuildersAudioClient {
 
     private static func streamPCMOverRealtimeWebSocket(
         websocketURL: URL,
-        pcmAudio: Data
+        pcmAudio: Data,
+        onPartialTranscript: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         logger.notice("[SpeechProfile] realtime websocket connect url=\(websocketURL.absoluteString, privacy: .public)")
         let session = URLSession(configuration: .default)
@@ -295,10 +301,16 @@ enum AIBuildersAudioClient {
             try await webSocketTask.send(.string("{\"type\":\"commit\"}"))
 
             var finalTranscript: String?
+            var partialAccumulator = ""
             while true {
                 let event = try await receiveSocketEvent(task: webSocketTask)
                 switch event.type {
-                case "transcript_delta", "speech_started", "speech_stopped", "usage":
+                case "transcript_delta":
+                    if let delta = event.text, !delta.isEmpty {
+                        partialAccumulator += delta
+                        onPartialTranscript?(partialAccumulator)
+                    }
+                case "speech_started", "speech_stopped", "usage":
                     continue
                 case "transcript_completed":
                     finalTranscript = event.text?.trimmingCharacters(in: .whitespacesAndNewlines)

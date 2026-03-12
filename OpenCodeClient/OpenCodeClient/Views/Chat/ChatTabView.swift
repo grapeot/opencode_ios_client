@@ -574,20 +574,20 @@ struct ChatTabView: View {
 
             isTranscribing = true
             defer { isTranscribing = false }
+            let prefix = inputText
             let transcribeStart = ProcessInfo.processInfo.systemUptime
             do {
-                let transcript = try await state.transcribeAudio(audioFileURL: url)
-                let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                Self.logger.notice("[SpeechProfile] chat transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
-                if !cleaned.isEmpty {
-                    if inputText.isEmpty {
-                        inputText = cleaned
-                    } else {
-                        inputText += " " + cleaned
+                let transcript = try await state.transcribeAudio(audioFileURL: url) { partial in
+                    Task { @MainActor in
+                        inputText = prefix + (partial.isEmpty ? "" : " " + partial)
                     }
                 }
+                let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                Self.logger.notice("[SpeechProfile] chat transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
+                inputText = prefix + (cleaned.isEmpty ? "" : " " + cleaned)
             } catch {
                 Self.logger.error("[SpeechProfile] chat transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                inputText = prefix
                 speechError = error.localizedDescription
             }
         } else {
