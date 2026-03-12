@@ -2,6 +2,21 @@
 
 ## Recent Changes
 
+### 语音转写句首空格修复（2026-03-11）
+
+排查后确认，realtime 语音转写里“句首多一个空格”主要不是服务端问题，而是 iOS 客户端在把 partial/final transcript 填回聊天输入框时，无论当前输入框是否为空，都会强行在 transcript 前面补一个空格。
+
+**本次修改：**
+
+- `OpenCodeClient/OpenCodeClient/Views/Chat/ChatTabView.swift` — 新增 `mergedSpeechInput(prefix:transcript:)`，统一处理语音转写结果和现有输入框内容的拼接；当 `prefix` 为空时不再补分隔空格，当 `prefix` 非空时仍保留单个空格分隔
+- `OpenCodeClient/OpenCodeClient/Views/Chat/ChatTabView.swift` — partial transcript 和 final transcript 两条路径都改为走同一个 helper，避免行为漂移
+- `OpenCodeClient/OpenCodeClientTests/OpenCodeClientTests.swift` — 新增两个测试：一个验证空前缀时不会产生句首空格，一个验证已有草稿时仍会正确插入单个分隔空格
+
+**验证：**
+
+- `xcodebuild test -scheme "OpenCodeClient" -project "OpenCodeClient/OpenCodeClient.xcodeproj" -destination 'platform=iOS Simulator,id=302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8' -only-testing:OpenCodeClientTests`
+- `xcodebuild -scheme "OpenCodeClient" -project "OpenCodeClient/OpenCodeClient.xcodeproj" -destination 'generic/platform=iOS Simulator' build`
+
 ### Streaming Auto-Scroll Overshoot Fix (2026-03-11)
 
 Fixed a chat auto-scroll bug where the view could scroll past the real bottom into blank space while an agent was streaming thinking text or tool output. Static inspection plus SwiftUI references pointed to a fragile combination: `ScrollViewReader.scrollTo("bottom")` was firing on every streaming update while the chat content lived inside a `LazyVStack`, so SwiftUI could scroll against an unstable content height and land below the rendered content.
