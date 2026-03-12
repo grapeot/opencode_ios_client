@@ -6,6 +6,8 @@
 	<string>连接同一局域网内的 OpenCode Server 需要访问本地网络</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>用于语音输入：录音后转写成文本并追加到输入框</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save images from OpenCode file previews and tool results to your photo library</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -6,6 +6,17 @@
 import SwiftUI
 import MarkdownUI
 
+enum ImageFileUtils {
+    static let extensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "ico", "svg",
+    ]
+
+    static func isImage(_ path: String) -> Bool {
+        let ext = path.lowercased().split(separator: ".").last.map(String.init) ?? ""
+        return extensions.contains(ext)
+    }
+}
+
 struct FileContentView: View {
     @Bindable var state: AppState
     let filePath: String
@@ -15,11 +26,8 @@ struct FileContentView: View {
     @State private var loadError: String?
     @State private var showPreview = true
 
-    private static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "heic", "heif", "ico"]
-
     private var isImage: Bool {
-        let ext = filePath.lowercased().split(separator: ".").last.map(String.init) ?? ""
-        return Self.imageExtensions.contains(ext)
+        ImageFileUtils.isImage(filePath)
     }
 
     private var isMarkdown: Bool {
@@ -119,19 +127,29 @@ struct FileContentView: View {
             do {
                 let fc = try await state.loadFileContent(path: filePath)
                 await MainActor.run {
-                    if let text = fc.text {
-                        print("[FileContentView] loaded text: len=\(text.count) isMarkdown=\(isMarkdown)")
-                        content = text
-                    } else if let base64 = fc.content, fc.type == "binary" {
-                        if isImage {
-                            if let data = Data(base64Encoded: base64) {
+                    if isImage {
+                        if let rawContent = fc.content {
+                            if let data = Data(base64Encoded: rawContent), UIImage(data: data) != nil {
                                 imageData = data
                             } else {
-                                loadError = "Failed to decode image data"
+                                let cleaned = rawContent
+                                    .replacingOccurrences(of: "\n", with: "")
+                                    .replacingOccurrences(of: "\r", with: "")
+                                    .replacingOccurrences(of: " ", with: "")
+                                if let data = Data(base64Encoded: cleaned), UIImage(data: data) != nil {
+                                    imageData = data
+                                } else {
+                                    loadError = "Failed to decode image"
+                                }
                             }
                         } else {
-                            loadError = "Binary file"
+                            loadError = "No image data"
                         }
+                    } else if let text = fc.text {
+                        print("[FileContentView] loaded text: len=\(text.count) isMarkdown=\(isMarkdown)")
+                        content = text
+                    } else if fc.content != nil, fc.type == "binary" {
+                        loadError = "Binary file"
                     }
                     isLoading = false
                 }
@@ -232,7 +250,6 @@ struct RawTextView: View {
     }
 }
 
-/// Image view with zoom support
 struct ImageView: View {
     let uiImage: UIImage
     @State private var scale: CGFloat = 1.0
@@ -242,50 +259,78 @@ struct ImageView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ScrollView([.horizontal, .vertical]) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(
-                        SimultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    let newScale = lastScale * value
-                                    scale = min(max(newScale, 0.5), 5.0)
-                                }
-                                .onEnded { _ in
+            let fittedSize = fittedImageSize(in: geometry.size)
+            Image(uiImage: uiImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: fittedSize.width, height: fittedSize.height)
+                .scaleEffect(scale)
+                .offset(offset)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .contentShape(Rectangle())
+                .gesture(
+                    MagnificationGesture()
+                        .onChanged { value in
+                            scale = min(max(lastScale * value, 0.5), 5.0)
+                        }
+                        .onEnded { _ in
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                if scale < 1.0 {
+                                    scale = 1.0
+                                    lastScale = 1.0
+                                    offset = .zero
+                                    lastOffset = .zero
+                                } else {
                                     lastScale = scale
-                                },
-                            DragGesture()
-                                .onChanged { value in
-                                    offset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
                                 }
-                                .onEnded { _ in
-                                    lastOffset = offset
+                            }
+                        }
+                )
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = CGSize(
+                                width: lastOffset.width + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in
+                            lastOffset = offset
+                        }
+                )
+                .gesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                if scale > 1.01 {
+                                    scale = 1.0
+                                    lastScale = 1.0
+                                    offset = .zero
+                                    lastOffset = .zero
+                                } else {
+                                    let native = nativeScale(in: geometry.size)
+                                    scale = min(max(native, 2.0), 5.0)
+                                    lastScale = scale
+                                    offset = .zero
+                                    lastOffset = .zero
                                 }
-                        )
-                    )
-                    .frame(
-                        width: max(uiImage.size.width * scale, geometry.size.width),
-                        height: max(uiImage.size.height * scale, geometry.size.height)
-                    )
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    withAnimation { scale = 1.0; lastScale = 1.0; offset = .zero; lastOffset = .zero }
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                }
-            }
+                            }
+                        }
+                )
         }
     }
+
+    private func fittedImageSize(in geoSize: CGSize) -> CGSize {
+        let imageSize = uiImage.size
+        guard imageSize.width > 0, imageSize.height > 0 else { return geoSize }
+        let ratio = min(geoSize.width / imageSize.width, geoSize.height / imageSize.height)
+        return CGSize(width: imageSize.width * ratio, height: imageSize.height * ratio)
+    }
+
+    private func nativeScale(in geoSize: CGSize) -> CGFloat {
+        let imageSize = uiImage.size
+        guard imageSize.width > 0, imageSize.height > 0 else { return 2.0 }
+        let fitRatio = min(geoSize.width / imageSize.width, geoSize.height / imageSize.height)
+        return 1.0 / fitRatio
+    }
 }
-
-

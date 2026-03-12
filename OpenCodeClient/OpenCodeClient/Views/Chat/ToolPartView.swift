@@ -12,6 +12,8 @@ struct ToolPartView: View {
     let onOpenResolvedPath: (String) -> Void
     @State private var isExpanded: Bool
     @State private var showOpenFileSheet = false
+    @State private var decodedImage: UIImage? = nil
+    @State private var showImageSheet: Bool = false
 
     init(
         part: Part,
@@ -39,6 +41,26 @@ struct ToolPartView: View {
 
     private var toolBackgroundColor: Color {
         toolAccentColor.opacity(0.07)
+    }
+
+    private var imageCandidatePaths: [String] {
+        var candidates = part.filePathsForNavigation
+        if let path = part.state?.pathFromInput, !path.isEmpty {
+            candidates.append(path)
+        }
+        if let path = part.metadata?.path, !path.isEmpty {
+            candidates.append(path)
+        }
+        return candidates
+    }
+
+    private var isImageFile: Bool {
+        imageCandidatePaths.contains { ImageFileUtils.isImage($0) }
+    }
+
+    private var imageDisplayName: String {
+        let raw = imageCandidatePaths.first(where: { ImageFileUtils.isImage($0) }) ?? "Image"
+        return raw.split(separator: "/").last.map(String.init) ?? raw
     }
 
     var body: some View {
@@ -83,9 +105,28 @@ struct ToolPartView: View {
                         Text(L10n.t(.toolOutput))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Text(output)
-                            .font(.system(.caption2, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if isImageFile {
+                            if let img = decodedImage {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxHeight: 200)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .onTapGesture { showImageSheet = true }
+                            } else {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "photo")
+                                        .foregroundStyle(.secondary)
+                                    Text("Image file")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } else {
+                            Text(output)
+                                .font(.system(.caption2, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
                 if !part.filePathsForNavigation.isEmpty {
@@ -147,6 +188,22 @@ struct ToolPartView: View {
                 isExpanded = false
             }
         }
+        .task(id: part.id) {
+            decodedImage = nil
+            if isImageFile, let output = part.toolOutput {
+                if let data = Data(base64Encoded: output), let img = UIImage(data: data) {
+                    decodedImage = img
+                } else {
+                    let cleaned = output
+                        .replacingOccurrences(of: "\n", with: "")
+                        .replacingOccurrences(of: "\r", with: "")
+                        .replacingOccurrences(of: " ", with: "")
+                    if let data = Data(base64Encoded: cleaned), let img = UIImage(data: data) {
+                        decodedImage = img
+                    }
+                }
+            }
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(toolBackgroundColor)
@@ -173,6 +230,30 @@ struct ToolPartView: View {
             Button(L10n.t(.commonCancel), role: .cancel) {}
         } message: {
             Text(L10n.t(.toolSelectFile))
+        }
+        .sheet(isPresented: $showImageSheet) {
+            if let img = decodedImage {
+                NavigationStack {
+                    ImageView(uiImage: img)
+                        .navigationTitle(imageDisplayName)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                ShareLink(
+                                    item: Image(uiImage: img),
+                                    preview: SharePreview(imageDisplayName, image: Image(uiImage: img))
+                                ) {
+                                    Image(systemName: "square.and.arrow.up")
+                                }
+                            }
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Close") {
+                                    showImageSheet = false
+                                }
+                            }
+                        }
+                }
+            }
         }
     }
 

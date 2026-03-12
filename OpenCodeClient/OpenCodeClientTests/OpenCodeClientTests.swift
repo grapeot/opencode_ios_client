@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Testing
 @testable import OpenCodeClient
 
@@ -245,6 +246,34 @@ struct OpenCodeClientTests {
         let data = partJson.data(using: .utf8)!
         let part = try JSONDecoder().decode(Part.self, from: data)
         #expect(part.filePathsForNavigation.contains("research/deepseek-news-2026-02.md"))
+    }
+
+    @Test func testImageExtensionDetection() {
+        #expect(ImageFileUtils.isImage("image.png") == true)
+        #expect(ImageFileUtils.isImage("photo.jpg") == true)
+        #expect(ImageFileUtils.isImage("photo.jpeg") == true)
+        #expect(ImageFileUtils.isImage("animation.gif") == true)
+        #expect(ImageFileUtils.isImage("asset.webp") == true)
+        #expect(ImageFileUtils.isImage("capture.heic") == true)
+
+        #expect(ImageFileUtils.isImage("file.swift") == false)
+        #expect(ImageFileUtils.isImage("README.md") == false)
+        #expect(ImageFileUtils.isImage("notes.txt") == false)
+        #expect(ImageFileUtils.isImage("payload.json") == false)
+
+        #expect(ImageFileUtils.isImage("ICON.PNG") == true)
+        #expect(ImageFileUtils.isImage("photo.Jpg") == true)
+        #expect(ImageFileUtils.isImage("archive.tar.gz") == false)
+        #expect(ImageFileUtils.isImage("photo.edit.png") == true)
+    }
+
+    @Test func testBase64ImageDecoding() {
+        let base64PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WZfQAAAAASUVORK5CYII="
+        let data = Data(base64Encoded: base64PNG)
+        #expect(data != nil)
+        if let data {
+            #expect(UIImage(data: data) != nil)
+        }
     }
 }
 
