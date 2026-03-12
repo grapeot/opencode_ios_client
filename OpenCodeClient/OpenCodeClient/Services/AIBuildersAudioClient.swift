@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioToolbox
 import Foundation
 import os
 
@@ -118,7 +119,13 @@ enum AIBuildersAudioClient {
         logger.notice("[SpeechProfile] realtime transcribe begin host=\(normalizedBase.host ?? "unknown", privacy: .public) file=\(fileName, privacy: .public) fileBytes=\(fileBytes, privacy: .public)")
 
         let conversionStart = ProcessInfo.processInfo.systemUptime
-        let pcmAudio = try convertAudioFileToPCM(audioFileURL)
+        let pcmAudio: Data
+        do {
+            pcmAudio = try convertAudioFileToPCM(audioFileURL)
+        } catch {
+            logger.error("[SpeechProfile] realtime convertAudio failed error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
         logger.notice("[SpeechProfile] realtime transcribe convertAudio ms=\(elapsedMs(since: conversionStart), privacy: .public) bytes=\(pcmAudio.count, privacy: .public)")
 
         let sessionResponse = try await createRealtimeSession(
@@ -130,6 +137,7 @@ enum AIBuildersAudioClient {
         )
 
         let websocketURL = try realtimeWebSocketURL(baseURL: normalizedBase, relativePath: sessionResponse.wsURL)
+        logger.notice("[SpeechProfile] realtime ws_url=\(sessionResponse.wsURL, privacy: .public) resolved=\(websocketURL.absoluteString, privacy: .public)")
         let transcript = try await streamPCMOverRealtimeWebSocket(
             websocketURL: websocketURL,
             pcmAudio: pcmAudio
@@ -144,7 +152,7 @@ enum AIBuildersAudioClient {
         guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIBuildersAudioError.missingToken }
 
         let normalizedBase = normalizedBaseURL(from: trimmedBase)
-        guard let url = URL(string: "/v1/embeddings", relativeTo: normalizedBase) else {
+        guard let url = buildAPIURL(base: normalizedBase, path: "/v1/embeddings") else {
             throw AIBuildersAudioError.invalidBaseURL
         }
 
@@ -171,6 +179,20 @@ enum AIBuildersAudioClient {
         return URL(string: normalizedBase) ?? URL(string: "https://invalid.example")!
     }
 
+    /// Builds API URL by appending path to base (preserves mount path like /backend).
+    /// Ensures base path ends with / so relative path appends instead of replacing (RFC 3986).
+    static func buildAPIURL(base: URL, path: String) -> URL? {
+        let relPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        var basePath = components?.path ?? ""
+        if !basePath.isEmpty, !basePath.hasSuffix("/") {
+            basePath += "/"
+            components?.path = basePath
+        }
+        let baseForAppend = components?.url ?? base
+        return URL(string: relPath, relativeTo: baseForAppend)?.absoluteURL
+    }
+
     static func realtimeWebSocketURL(baseURL: URL, relativePath: String) throws -> URL {
         guard let httpURL = URL(string: relativePath, relativeTo: baseURL)?.absoluteURL else {
             throw AIBuildersAudioError.invalidBaseURL
@@ -194,9 +216,10 @@ enum AIBuildersAudioClient {
         prompt: String?,
         terms: String?
     ) async throws -> RealtimeSessionResponse {
-        guard let url = URL(string: "/v1/audio/realtime/sessions", relativeTo: baseURL) else {
+        guard let url = buildAPIURL(base: baseURL, path: "/v1/audio/realtime/sessions") else {
             throw AIBuildersAudioError.invalidBaseURL
         }
+        logger.notice("[SpeechProfile] realtime session POST url=\(url.absoluteString, privacy: .public)")
 
         var payload: [String: Any] = [:]
         if let language, !language.isEmpty {
@@ -222,7 +245,13 @@ enum AIBuildersAudioClient {
 
         let metricsCollector = TaskMetricsCollector()
         let networkStart = ProcessInfo.processInfo.systemUptime
-        let (data, response) = try await URLSession.shared.data(for: request, delegate: metricsCollector)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request, delegate: metricsCollector)
+        } catch {
+            logger.error("[SpeechProfile] realtime session POST failed ms=\(elapsedMs(since: networkStart), privacy: .public) error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
         logger.notice("[SpeechProfile] realtime session create ms=\(elapsedMs(since: networkStart), privacy: .public) responseBytes=\(data.count, privacy: .public)")
         logNetworkMetrics(metricsCollector.metrics)
 
@@ -230,15 +259,24 @@ enum AIBuildersAudioClient {
             throw AIBuildersAudioError.invalidResponse
         }
         guard http.statusCode < 400 else {
+            let bodyPreview = String(data: data.prefix(200), encoding: .utf8) ?? "<non-utf8>"
+            logger.error("[SpeechProfile] realtime session HTTP \(http.statusCode, privacy: .public) body=\(bodyPreview, privacy: .public)")
             throw AIBuildersAudioError.httpError(statusCode: http.statusCode, body: data)
         }
-        return try JSONDecoder().decode(RealtimeSessionResponse.self, from: data)
+        do {
+            return try JSONDecoder().decode(RealtimeSessionResponse.self, from: data)
+        } catch {
+            let bodyPreview = String(data: data.prefix(200), encoding: .utf8) ?? "<non-utf8>"
+            logger.error("[SpeechProfile] realtime session decode failed body=\(bodyPreview, privacy: .public) error=\(String(describing: error), privacy: .public)")
+            throw error
+        }
     }
 
     private static func streamPCMOverRealtimeWebSocket(
         websocketURL: URL,
         pcmAudio: Data
     ) async throws -> String {
+        logger.notice("[SpeechProfile] realtime websocket connect url=\(websocketURL.absoluteString, privacy: .public)")
         let session = URLSession(configuration: .default)
         let webSocketTask = session.webSocketTask(with: websocketURL)
         webSocketTask.resume()
@@ -275,6 +313,7 @@ enum AIBuildersAudioClient {
                 }
             }
         } catch {
+            logger.error("[SpeechProfile] realtime websocket error=\(String(describing: error), privacy: .public)")
             webSocketTask.cancel(with: .goingAway, reason: nil)
             session.invalidateAndCancel()
             throw error
@@ -297,73 +336,58 @@ enum AIBuildersAudioClient {
     }
 
     private static func convertAudioFileToPCM(_ audioFileURL: URL) throws -> Data {
-        let inputFile = try AVAudioFile(forReading: audioFileURL)
-        guard let outputFormat = AVAudioFormat(
-            commonFormat: .pcmFormatInt16,
-            sampleRate: targetSampleRate,
-            channels: targetChannels,
-            interleaved: true
-        ) else {
+        var extFile: ExtAudioFileRef?
+        var err = ExtAudioFileOpenURL(audioFileURL as CFURL, &extFile)
+        guard err == noErr, let file = extFile else {
+            logger.error("[SpeechProfile] ExtAudioFileOpenURL failed err=\(err, privacy: .public)")
             throw AIBuildersAudioError.audioConversionFailed
         }
-        guard let converter = AVAudioConverter(from: inputFile.processingFormat, to: outputFormat) else {
+        defer { ExtAudioFileDispose(file) }
+
+        var clientFormat = AudioStreamBasicDescription(
+            mSampleRate: targetSampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 2,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 2,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: 16,
+            mReserved: 0
+        )
+        err = ExtAudioFileSetProperty(file, kExtAudioFileProperty_ClientDataFormat, UInt32(MemoryLayout<AudioStreamBasicDescription>.size), &clientFormat)
+        guard err == noErr else {
+            logger.error("[SpeechProfile] ExtAudioFileSetProperty failed err=\(err, privacy: .public)")
             throw AIBuildersAudioError.audioConversionFailed
         }
 
-        let inputFrameCapacity = AVAudioFrameCount(max(1024, inputFile.processingFormat.sampleRate / 2))
-        guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: inputFrameCapacity) else {
+        let bufferSize: UInt32 = 32768
+        var bufferList = AudioBufferList(
+            mNumberBuffers: 1,
+            mBuffers: AudioBuffer(
+                mNumberChannels: 1,
+                mDataByteSize: bufferSize,
+                mData: nil
+            )
+        )
+        guard let bufferData = malloc(Int(bufferSize)) else {
             throw AIBuildersAudioError.audioConversionFailed
         }
-
-        let outputFrameCapacity = AVAudioFrameCount(Double(inputFrameCapacity) * (targetSampleRate / inputFile.processingFormat.sampleRate) + 1024)
-        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputFrameCapacity) else {
-            throw AIBuildersAudioError.audioConversionFailed
-        }
+        defer { free(bufferData) }
+        bufferList.mBuffers.mData = bufferData
 
         var pcmData = Data()
-        var reachedEnd = false
-
-        while !reachedEnd {
-            try inputFile.read(into: inputBuffer)
-            if inputBuffer.frameLength == 0 {
-                reachedEnd = true
+        while true {
+            bufferList.mBuffers.mDataByteSize = bufferSize
+            var numFrames: UInt32 = bufferSize / 2
+            err = ExtAudioFileRead(file, &numFrames, &bufferList)
+            guard err == noErr else {
+                logger.error("[SpeechProfile] ExtAudioFileRead failed err=\(err, privacy: .public)")
+                throw AIBuildersAudioError.audioConversionFailed
             }
-
-            var consumedInput = false
-            while !consumedInput {
-                outputBuffer.frameLength = 0
-                var error: NSError?
-                let status = converter.convert(to: outputBuffer, error: &error) { _, outStatus in
-                    if consumedInput || inputBuffer.frameLength == 0 {
-                        outStatus.pointee = .noDataNow
-                        return nil
-                    }
-                    consumedInput = true
-                    outStatus.pointee = .haveData
-                    return inputBuffer
-                }
-
-                if let error {
-                    throw error
-                }
-
-                if outputBuffer.frameLength > 0,
-                   let audioBuffer = outputBuffer.audioBufferList.pointee.mBuffers.mData {
-                    let byteCount = Int(outputBuffer.audioBufferList.pointee.mBuffers.mDataByteSize)
-                    pcmData.append(audioBuffer.assumingMemoryBound(to: UInt8.self), count: byteCount)
-                }
-
-                switch status {
-                case .haveData, .inputRanDry:
-                    continue
-                case .endOfStream:
-                    consumedInput = true
-                case .error:
-                    throw AIBuildersAudioError.audioConversionFailed
-                @unknown default:
-                    throw AIBuildersAudioError.audioConversionFailed
-                }
-            }
+            if numFrames == 0 { break }
+            let byteCount = Int(numFrames * 2)
+            pcmData.append(Data(bytes: bufferData, count: byteCount))
         }
 
         guard !pcmData.isEmpty else {

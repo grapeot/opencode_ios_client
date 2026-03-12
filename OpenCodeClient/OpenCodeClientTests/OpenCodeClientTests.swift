@@ -891,6 +891,27 @@ struct AIBuildersAudioClientTests {
         )
         #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/v1/audio/realtime/ws?ticket=abc123")
     }
+
+    @Test func realtimeWebSocketURLWithMountPath() throws {
+        let baseURL = URL(string: "https://space.ai-builders.com/backend")!
+        let websocketURL = try AIBuildersAudioClient.realtimeWebSocketURL(
+            baseURL: baseURL,
+            relativePath: "/backend/v1/audio/realtime/ws?ticket=abc123"
+        )
+        #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")
+    }
+
+    @Test func buildAPIURLPreservesMountPath() throws {
+        let baseWithMount = URL(string: "https://space.ai-builders.com/backend")!
+        let url = AIBuildersAudioClient.buildAPIURL(base: baseWithMount, path: "/v1/audio/realtime/sessions")
+        #expect(url?.absoluteString == "https://space.ai-builders.com/backend/v1/audio/realtime/sessions")
+    }
+
+    @Test func buildAPIURLWithoutMountPath() throws {
+        let baseNoMount = URL(string: "https://space.ai-builders.com")!
+        let url = AIBuildersAudioClient.buildAPIURL(base: baseNoMount, path: "/v1/audio/realtime/sessions")
+        #expect(url?.absoluteString == "https://space.ai-builders.com/v1/audio/realtime/sessions")
+    }
 }
 
 // MARK: - APIConstants Tests
