@@ -1,6 +1,6 @@
 # OpenCode iOS Client — Product Requirements Document
 
-> Version 0.2 · Draft · Feb 2026
+> Version 0.3 · Working Draft · Mar 2026
 
 ## 1. 产品定位
 
@@ -23,6 +23,15 @@ OpenCode iOS Client 是一个面向 OpenCode 服务端的原生 iOS 远程控制
 **场景 C — 模型 A/B 测试**：想比较不同模型（如 GPT-5.3 Codex / Spark / Opus / GLM5）对同一个任务的表现。在手机上一键切到另一个模型，发送相同的指令，观察差异。
 
 **场景 D — 文档审查**：AI 完成了一轮修改，在手机上浏览 Markdown 文档的 diff，以 Preview 模式为主查看变更，确认文档改动合理后让 AI 继续下一步。代码审查为辅——AI 能力已足够写出好代码，主要需要的是文档审查。
+
+### 2.1 分发方式
+
+为了降低试用门槛，产品同时支持两种分发路径：
+
+- **TestFlight**：面向大多数用户，直接安装即可，不要求 Apple Developer account
+- **源码构建**：面向需要本地改代码、调试或自定义签名的开发者
+
+README 负责承载最新安装入口，PRD 只保留产品层面的分发策略。
 
 ## 3. 技术架构
 
@@ -129,15 +138,14 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 |----------|------------|---------|
 | GLM-5 | `zai-coding-plan` | `glm-5` |
 | Opus 4.6 | `anthropic` | `claude-opus-4-6` |
-| Sonnet 4.6 | `anthropic` | `claude-sonnet-4-6` |
+| GPT-5.4 | `openai` | `gpt-5.4` |
 | GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
-| GPT-5.2 | `openai` | `gpt-5.2` |
 | Gemini 3.1 Pro | `google` | `gemini-3.1-pro-preview` |
 | Gemini 3 Flash | `google` | `gemini-3-flash-preview` |
 
 **Agent 选择器**：下拉列表，内容从 `GET /agent` API 动态获取。过滤 `hidden != true` 的 agents 后显示。每个选项显示 agent 名称（如 `Sisyphus`），description 可作为 tooltip 或 subtitle。
 
-**iPhone 显示策略**：iPhone 上使用短名（`Opus` / `Sonnet` / `GPT` / `Gemini`）以适配窄宽；iPad 上显示全称。
+**iPhone 显示策略**：iPhone 上使用短名（`Opus` / `GPT` / `Gemini` / `GLM`）以适配窄宽；iPad 上显示全称。
 
 **技术实现**：
 - 切换模型/Agent 不需要调用 API，只是改变本地状态
@@ -179,11 +187,13 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 - `tool`（todowrite）— 渲染为 Task List（todo）卡片：展示条目列表与完成进度（completed/total）；todo 的全量内容可来自 tool 输入/metadata，且会通过 SSE `todo.updated` 事件更新。**仅在各 tool 卡片内展示，不在 Chat 顶部常驻（方案 B）**
 - `step-start` / `step-finish` — 渲染为步骤分隔线，显示 token 用量和成本
 - `patch` — 文件变更摘要卡片，显示修改的文件列表，点击可跳转到 Files Tab 的 File Tree 中打开该文件预览
-- `tool`（write/edit/apply_patch/read_file 等）— 若 part 含文件路径（metadata.path、state.input.path、files 数组、或 patchText 解析），点击可弹出选项「在 File Tree 中打开」，直接打开文件预览
+- `tool`（write/edit/apply_patch/read_file 等）— 若 part 含文件路径（metadata.path、state.input.path、files 数组、或 patchText 解析），点击可弹出选项「在 File Tree 中打开」，直接打开文件预览；若目标是图像文件且 tool output 可解码，则直接显示内联缩略图并支持展开查看
 
 **大屏布局（iPad / Vision Pro）补充**：为了利用横向空间，`tool` / `patch` / permission 卡片可采用 **三列网格**横向填充（不足自动换行）；但 `text`（最终回答）仍按整行展示，避免阅读断裂。
 
 **流式更新（Think Streaming）**：行为与官方 Web 客户端对齐。SSE 推送 `message.part.updated` 时，若有 `delta` 字段，客户端增量追加到对应 text/reasoning Part，实现打字机效果；若无 delta 则全量 reload。使用 `messageID` + `partID` 定位 Part。**注**：Tool output 的实时流式（如 terminal 输出逐行）当前 API 不支持，output 仅在 completed 时一次性返回。
+
+**自动滚动规则**：只有当用户当前停留在消息流底部附近时，新的 streaming 文本、tool 卡片、permission card、question card 或 activity row 才会继续带着视图往下滚；如果用户已经向上翻看历史内容，则停止自动跟随，避免阅读被打断。
 
 **历史消息分页加载**：为降低长会话在弱网（如 SSH tunnel / WAN）下的首屏等待，默认只拉取最近 **3 轮对话**（6 条 message：user/assistant 各 3 条）。聊天页顶部显示“下拉加载更多历史消息”，用户每次下拉再向上扩展 3 轮并重新拉取。
 
@@ -199,6 +209,16 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 - 在消息流中插入权限请求卡片，显示待批准的操作（如 "执行 `rm -rf node_modules`"）
 - 用户需手动点击「批准」或「拒绝」，调用 `POST /session/:id/permissions/:permissionID` 响应
 - 不提供自动批准
+
+#### 4.2.3.1 Question 卡片
+
+当服务端通过 `question` tool 主动向用户发起问题时，Chat 流中插入 question card，而不是让 session 卡死等待。
+
+- 监听 SSE：`question.asked`、`question.replied`、`question.rejected`
+- 启动时通过 `GET /question` 拉取当前 session 的 pending questions
+- 用户可选择单选/多选选项，也可填写自定义文本
+- 回答调用 `POST /question/{requestID}/reply`
+- 拒绝调用 `POST /question/{requestID}/reject`
 
 #### 4.2.4 输入框
 
@@ -221,7 +241,7 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 从 Chat Tab 顶部左侧的按钮进入 Session 列表（slide-over 或 navigation push）。**列出 workspace 下所有已有 Session**，是重要的功能验证手段：可验证连接是否正确、API 解析是否正常、消息/状态能否正确展示。
 
-列表显示所有 Session，按时间倒序。每个条目显示：标题、更新时间、`summary.files`（该 session diff 涉及文件数）和状态（idle/busy/retry）。支持新建 Session、切换 Session。**删除 Session 暂未实现**。
+列表显示所有 Session，按时间倒序。每个条目显示：标题、更新时间、`summary.files`（该 session diff 涉及文件数）和状态（idle/busy/retry）。支持新建 Session、切换 Session，也支持删除 Session。
 
 视觉与交互：列表文本默认使用中性色（灰）以避免 iOS 默认的“链接蓝”。当前活跃 Session 使用轻量背景色高亮，并在右侧显示选中标记。
 
@@ -242,9 +262,11 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 - **iPhone**：在 Files Tab 内 push 到内容页
 - **iPad 三栏**：点击文件后在中栏 Preview 内联预览；Chat 中 tool/patch 点击文件同样更新 Preview（不弹 sheet）
 
-文本文件：带语法高亮的代码查看器，显示行号，横向可滚动。字体使用等宽字体（SF Mono 或 Menlo），字号可在 Settings 中调整。
+文本文件：等宽字体代码查看器，显示行号，横向可滚动。当前不做语法高亮，以稳定性和可读性优先。
 
-二进制文件/图片：显示文件类型提示或图片预览（base64 解码）。
+Markdown 文件：支持 Preview / Markdown source 切换。Preview 使用 MarkdownUI，超长行和大文件会自动 fallback 到原始文本，避免渲染卡死。
+
+图片文件：支持 base64 解码预览，初始状态为 fit-to-screen；支持 pinch、drag、double-tap zoom，以及系统 share sheet。若系统权限允许，share sheet 应支持 `Save to Photos`。
 
 #### 4.3.3 Diff 查看与文档预览
 
@@ -325,7 +347,7 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 
 #### 4.4.3 Model Presets
 
-**当前实现**：固定 4 个预设（GPT-5.3 Codex、GPT-5.3 Codex Spark、Opus 4.6、GLM5），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
+**当前实现**：固定预设列表（GLM-5、Opus 4.6、GPT-5.4、GPT-5.3 Codex、Gemini 3.1 Pro、Gemini 3 Flash），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
 
 #### 4.4.3 Project (Workspace)
 
@@ -443,6 +465,9 @@ App 进入前台
 | GET | `/session/:id/diff` | Session diff |
 | GET | `/session/status` | 所有 Session 状态 |
 | POST | `/session/:id/permissions/:pid` | 响应权限请求 |
+| GET | `/question` | 拉取 pending questions |
+| POST | `/question/:id/reply` | 回答 question |
+| POST | `/question/:id/reject` | 拒绝 question |
 | GET | `/file?path=...` | 文件列表 |
 | GET | `/file/content?path=...` | 文件内容 |
 | GET | `/file/status` | 文件 git 状态 |
@@ -673,26 +698,28 @@ App 进入前台
 
 ### 11.1 项目创建
 
-**推荐方式**：使用 Xcode 新建工程
+当前仓库已经包含可直接打开的 Xcode 工程。对新参与者，更推荐这两种方式：
 
-1. 打开 Xcode，选择 **File → New → Project**
-2. 选择 **App** 模板（iOS）
-3. 配置：
-   - Product Name: `OpenCode`
-   - Team: 选择你的开发者账号
-   - Organization Identifier: 如 `com.yourname`
-   - Interface: **SwiftUI**
-   - Language: **Swift**
-   - 勾选 **Include Tests**
-4. 最低部署版本设为 **iOS 17.0**
-5. 存储位置选在合适的目录
+1. 通过 README 中的 TestFlight 链接直接安装可运行版本
+2. clone 仓库后直接打开 `OpenCodeClient/OpenCodeClient.xcodeproj` 本地构建
 
 ### 11.2 依赖与结构
 
 - **网络层**：使用 `URLSession` 原生实现 REST + SSE，无需引入 Alamofire 等第三方库
 - **状态管理**：`@Observable`（iOS 17+）配合 SwiftUI
-- **Markdown**：可选用 [MarkdownUI](https://github.com/gonzalezreal/MarkdownUI) 或自建 `AttributedString` 解析
+- **Markdown**：使用 [MarkdownUI](https://github.com/gonzalezreal/MarkdownUI)
 - **主题**：通过 `@Environment(\.colorScheme)` 跟随系统
+- **SSH Tunnel**：使用 Citadel
+
+当前代码组织采用按职责分层的目录结构：
+
+- `Views/`：Chat、Files、Settings、Split View 相关 UI
+- `Controllers/`：permission / question 等事件控制器
+- `Services/`：API、SSE、SSH tunnel、语音转写、录音
+- `Stores/`：Session、Message、File、Todo 状态存储
+- `Models/`：Session、Message、Project、Question、ModelPreset 等数据模型
+- `Support/`：本地化与通用支持代码
+- `Utils/`：Keychain、PathNormalizer、LayoutConstants 等工具
 
 ### 11.3 建议的实现顺序
 
