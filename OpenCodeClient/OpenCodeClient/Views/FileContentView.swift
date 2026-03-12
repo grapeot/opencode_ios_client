@@ -84,13 +84,25 @@ struct FileContentView: View {
         }
     }
 
+    /// MarkdownUI crashes/freezes on long lines or large content. Skip it entirely for problematic files.
+    private static let markdownMaxLineLength = 1500
+    private static let markdownMaxTotalLength = 60_000
+
+    private func useRawTextForMarkdown(_ text: String) -> Bool {
+        if text.count > Self.markdownMaxTotalLength { return true }
+        let maxLine = text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(\.count).max() ?? 0
+        return maxLine > Self.markdownMaxLineLength
+    }
+
     @ViewBuilder
     private func contentView(text: String) -> some View {
+        let useRaw = isMarkdown ? useRawTextForMarkdown(text) : false
         if isMarkdown {
-            if showPreview {
+            if showPreview && !useRaw {
                 MarkdownPreviewView(text: text)
             } else {
-                RawTextView(text: text, monospaced: true)
+                RawTextView(text: text, monospaced: !showPreview)
             }
         } else {
             CodeView(text: text, path: filePath)
@@ -98,6 +110,7 @@ struct FileContentView: View {
     }
 
     private func loadContent() {
+        print("[FileContentView] loadContent: path=\(filePath)")
         isLoading = true
         loadError = nil
         imageData = nil
@@ -107,6 +120,7 @@ struct FileContentView: View {
                 let fc = try await state.loadFileContent(path: filePath)
                 await MainActor.run {
                     if let text = fc.text {
+                        print("[FileContentView] loaded text: len=\(text.count) isMarkdown=\(isMarkdown)")
                         content = text
                     } else if let base64 = fc.content, fc.type == "binary" {
                         if isImage {
@@ -167,14 +181,37 @@ struct CodeView: View {
 }
 
 /// Markdown preview using MarkdownUI library for full GFM rendering.
+/// Parent FileContentView skips this for large content; this is a secondary fallback.
 struct MarkdownPreviewView: View {
     let text: String
 
+    private static let maxLineLength = 1500
+    private static let maxTotalLength = 60_000
+
+    private var useRawTextFallback: Bool {
+        if text.count > Self.maxTotalLength { return true }
+        let maxLine = text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(\.count).max() ?? 0
+        return maxLine > Self.maxLineLength
+    }
+
     var body: some View {
         ScrollView {
-            Markdown(text)
-                .textSelection(.enabled)
-                .padding()
+            Group {
+                if useRawTextFallback {
+                    Text(text)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Markdown(text)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding()
+        }
+        .onAppear {
+            let fallback = useRawTextFallback
+            print("[MarkdownPreviewView] onAppear len=\(text.count) useRawTextFallback=\(fallback)")
         }
     }
 }

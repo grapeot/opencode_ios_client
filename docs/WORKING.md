@@ -15,6 +15,11 @@
 
 ## 已完成（近期）
 
+- [x] **Markdown 大文件/长行崩溃修复（2026-03-11）**：
+  - [x] 根因：MarkdownUI 对超长单行（如 transcript 段落 3000+ 字符）或大文件会 freeze/crash（GH #426、#396）
+  - [x] 修复：FileContentView 在渲染前检测 `maxLineLength > 1500` 或 `totalLength > 60KB`，满足时直接用 RawTextView 跳过 MarkdownUI
+  - [x] MarkdownPreviewView 内保留二次 fallback；loadContent 与 onAppear 保留调试日志
+
 - [x] **Realtime Speech 语音转写修复（2026-03-11）**：
   - [x] 根因 1：API URL 构造错误——`URL(string: "/v1/...", relativeTo: base)` 会替换 base 的 path，导致 `https://space.ai-builders.com/backend` 请求到 `/v1/...` 而非 `/backend/v1/...`
   - [x] 修复：`buildAPIURL` 确保 base path 以 `/` 结尾，使相对路径正确追加；session 创建、testConnection 均改用该 helper
