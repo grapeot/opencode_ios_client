@@ -14,6 +14,7 @@ struct Message: Codable, Identifiable {
     let providerID: String?
     let modelID: String?
     let model: ModelInfo?
+    let variant: String?
     let error: MessageError?
     let time: TimeInfo
     let finish: String?
