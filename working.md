@@ -1,18 +1,18 @@
-# Working Notes - OpenCode iOS Client
+# 工作记录 - OpenCode iOS 客户端
 
 ## 2026-03-12
 
-- Added real image previews for Files and tool-call outputs instead of showing raw base64 text.
-- Polished the image viewer: fit-to-screen by default, pinch/drag, double-tap zoom, and Photos save support from the share sheet.
-- Rewrote `README.md` for open-source users and added the TestFlight install path.
-- Updated chat auto-scroll so it only follows new content when the user is already at the bottom; scrolling up pauses follow mode.
-- Refreshed the PRD and RFC to match the current app: question cards, image previews, current model presets, install path, and chat behavior.
+- Files Tab 和 Tool Call 输出中的图像文件现在显示真实的图像预览，而不是 base64 文本。
+- 图像查看器优化：默认适应屏幕、双指缩放/拖拽、双击切换缩放、分享菜单支持保存到相册。
+- 重写 README.md，面向开源用户，添加 TestFlight 安装入口。
+- 聊天自动滚动逻辑优化：仅当用户在底部时跟随新内容；向上滚动时暂停跟随。
+- 更新 PRD 和 RFC，与当前应用功能对齐：问题卡片、图像预览、模型列表、安装方式、聊天行为。
 
 ## 2026-03-11
 
-- Fixed speech transcription so empty drafts no longer get a leading space.
-- Stabilized chat auto-scroll during streaming to avoid overshooting into blank space.
+- 修复语音转录：空草稿不再出现前导空格。
+- 稳定聊天自动滚动：流式输出时避免滚动到空白区域。
 
 ## 2026-03-07
 
-- Implemented the Question feature so server-initiated `question` prompts render as interactive cards and the session can continue.
+- 实现 Question 功能：服务器发起的 `question` 提示渲染为交互卡片，会话可继续。
