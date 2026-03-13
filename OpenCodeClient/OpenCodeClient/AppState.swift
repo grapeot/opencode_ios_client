@@ -974,11 +974,22 @@ final class AppState {
                     let text = normalizeComparableText(
                         m.parts.first(where: { $0.isText })?.text ?? ""
                     )
-                    guard !text.isEmpty, text == lastLoadedText else { return true }
+                    guard !text.isEmpty else { return true }
+
+                    let textMatches = text == lastLoadedText || lastLoadedText.hasSuffix(text)
 
                     let created = normalizeEpochMs(m.info.time.created)
-                    if created == 0 || lastLoadedCreated == 0 { return false }
-                    return abs(lastLoadedCreated - created) > 10 * 60 * 1000
+                    let timestampClose: Bool = {
+                        if created == 0 || lastLoadedCreated == 0 { return true }
+                        return abs(lastLoadedCreated - created) <= 60 * 1000
+                    }()
+
+                    // Drop the optimistic row when:
+                    // - texts match exactly or server text ends with optimistic text (plugin prefix), OR
+                    // - timestamps are within 60 s (covers arbitrary server-side text transforms)
+                    // Either signal alone is sufficient; together they're very strong.
+                    if textMatches || timestampClose { return false }
+                    return true
                 }
             }()
 
