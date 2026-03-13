@@ -16,6 +16,8 @@
 - 重新跑通 iOS 客户端完整测试，确认这轮 SSE 测试和小范围下沉没有引入回归。
 - 继续补了两条 SSE 契约测试，把当前 session 的 `message.updated` reload 行为和非当前 session 的 `message.part.updated` 忽略逻辑都锁住。
 - `message.part.updated` 这条链路继续下沉：现在由 `MessageStore` 自己解析并决定 append、finalize 还是 ignore，`AppState` 只保留刷新和 reload 的编排。
+- 左侧 session 列表现在默认不再展示 child/subagent sessions，避免它们把主会话列表挤满。
+- session 列表滚到底后会自动继续拉更多数据；即使前面 100 条里混进了很多 child sessions，也能把后面的主会话继续补出来。
 
 ## 2026-03-11
 
