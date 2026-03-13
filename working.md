@@ -1,5 +1,9 @@
 # 工作记录 - OpenCode iOS 客户端
 
+## 2026-03-13
+
+- 回滚了上一版 root-only session 列表交互：iPhone 和 iPad 的 session 列表重新按完整树状层级展示 child/subagent sessions，避免 stop 等会话上下文在列表里“消失”。
+
 ## 2026-03-12
 
 - Files Tab 和 Tool Call 输出中的图像文件现在显示真实的图像预览，而不是 base64 文本。

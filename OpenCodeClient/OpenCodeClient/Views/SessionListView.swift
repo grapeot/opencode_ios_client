@@ -24,7 +24,7 @@ struct SessionListView: View {
                     )
                 } else {
                     List {
-                        sessionRows
+                        sessionNodes(state.sessionTree)
 
                         if state.isLoadingMoreSessions {
                             HStack {
@@ -122,26 +122,40 @@ struct SessionListView: View {
         dismiss()
     }
 
-    private var sessionRows: some View {
-        ForEach(state.sidebarSessions) { session in
-            SessionRowView(
-                session: session,
-                status: state.sessionStatuses[session.id],
-                isSelected: state.currentSessionID == session.id,
-                isDeleting: deletingSessionID == session.id,
-                onSelect: { selectSession(session) }
-            )
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button {
-                    pendingDeleteSession = session
-                } label: {
-                    Label(L10n.t(.sessionsDelete), systemImage: "trash")
+    private func sessionNodes(_ nodes: [SessionNode], depth: Int = 0) -> AnyView {
+        AnyView(
+            ForEach(nodes) { node in
+                let session = node.session
+                let status = state.sessionStatuses[session.id]
+
+                SessionRowView(
+                    session: session,
+                    status: status,
+                    isSelected: state.currentSessionID == session.id,
+                    isDeleting: deletingSessionID == session.id,
+                    depth: depth,
+                    hasChildren: !node.children.isEmpty,
+                    isCollapsed: !state.expandedSessionIDs.contains(session.id),
+                    onSelect: { selectSession(session) },
+                    onToggleCollapse: { state.toggleSessionExpanded(session.id) }
+                )
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button {
+                        pendingDeleteSession = session
+                    } label: {
+                        Label(L10n.t(.sessionsDelete), systemImage: "trash")
+                    }
+                    .tint(.red)
+                    .disabled(deletingSessionID != nil)
                 }
-                .tint(.red)
-                .disabled(deletingSessionID != nil)
+
+                if state.expandedSessionIDs.contains(session.id) {
+                    sessionNodes(node.children, depth: depth + 1)
+                }
             }
-        }
+        )
     }
+
     private func confirmDelete(_ session: Session) {
         guard deletingSessionID == nil else { return }
         deletingSessionID = session.id
