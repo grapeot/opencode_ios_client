@@ -67,7 +67,24 @@ private struct SessionsSidebarList: View {
     var body: some View {
         List {
             Section(L10n.t(.sessionsTitle)) {
-                sessionNodes(state.sessionTree)
+                sessionRows
+
+                if state.isLoadingMoreSessions {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                    .listRowSeparator(.hidden)
+                } else if state.canLoadMoreSessions, let lastSessionID = state.sidebarSessions.last?.id {
+                    Color.clear
+                        .frame(height: 1)
+                        .listRowSeparator(.hidden)
+                        .onAppear {
+                            Task { await state.loadMoreSessions() }
+                        }
+                        .id("load-more-\(lastSessionID)")
+                }
             }
         }
         .listStyle(.plain)
@@ -120,34 +137,24 @@ private struct SessionsSidebarList: View {
         }
     }
 
-    private func sessionNodes(_ nodes: [SessionNode], depth: Int = 0) -> AnyView {
-        AnyView(
-            ForEach(nodes) { node in
-                SessionRowView(
-                    session: node.session,
-                    status: state.sessionStatuses[node.session.id],
-                    isSelected: state.currentSessionID == node.session.id,
-                    isDeleting: deletingSessionID == node.session.id,
-                    depth: depth,
-                    hasChildren: !node.children.isEmpty,
-                    isCollapsed: !state.expandedSessionIDs.contains(node.session.id),
-                    onSelect: { state.selectSession(node.session) },
-                    onToggleCollapse: { state.toggleSessionExpanded(node.session.id) }
-                )
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button {
-                        pendingDeleteSession = node.session
-                    } label: {
-                        Label(L10n.t(.sessionsDelete), systemImage: "trash")
-                    }
-                    .tint(.red)
-                    .disabled(deletingSessionID != nil)
+    private var sessionRows: some View {
+        ForEach(state.sidebarSessions) { session in
+            SessionRowView(
+                session: session,
+                status: state.sessionStatuses[session.id],
+                isSelected: state.currentSessionID == session.id,
+                isDeleting: deletingSessionID == session.id,
+                onSelect: { state.selectSession(session) }
+            )
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    pendingDeleteSession = session
+                } label: {
+                    Label(L10n.t(.sessionsDelete), systemImage: "trash")
                 }
-
-                if state.expandedSessionIDs.contains(node.session.id) {
-                    sessionNodes(node.children, depth: depth + 1)
-                }
+                .tint(.red)
+                .disabled(deletingSessionID != nil)
             }
-        )
+        }
     }
 }

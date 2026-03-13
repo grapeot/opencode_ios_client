@@ -1643,6 +1643,17 @@ struct SessionTreeTests {
         #expect(tree[0].session.id == "active")
     }
 
+    @Test @MainActor func sidebarSessionsHideChildrenAndSortRootsByUpdatedDesc() {
+        let state = AppState()
+        state.sessions = [
+            makeSession(id: "root-old", updated: 50),
+            makeSession(id: "child", parentID: "root-new", updated: 120),
+            makeSession(id: "root-new", updated: 100),
+        ]
+
+        #expect(state.sidebarSessions.map(\.id) == ["root-new", "root-old"])
+    }
+
     @Test @MainActor func toggleSessionExpandedAddsAndRemovesSessionID() {
         let state = AppState()
         #expect(state.expandedSessionIDs.isEmpty)
@@ -1823,6 +1834,8 @@ actor MockAPIClient: APIClientProtocol {
     var healthResult = HealthResponse(healthy: true, version: "test-version")
     var healthError: Error?
     var sessionsResult: [Session] = []
+    var sessionsByLimit: [Int: [Session]] = [:]
+    var sessionLimitRequests: [Int] = []
     var createSessionResult = Session(
         id: "created-session",
         slug: "created-session",
@@ -1849,6 +1862,10 @@ actor MockAPIClient: APIClientProtocol {
 
     func setSessionsResult(_ sessions: [Session]) {
         sessionsResult = sessions
+    }
+
+    func setSessionsResult(_ sessions: [Session], forLimit limit: Int) {
+        sessionsByLimit[limit] = sessions
     }
 
     func setCreateSessionResult(_ session: Session) {
@@ -1880,7 +1897,10 @@ actor MockAPIClient: APIClientProtocol {
 
     func projects() async throws -> [Project] { [] }
     func projectCurrent() async throws -> Project? { nil }
-    func sessions(directory: String?, limit: Int) async throws -> [Session] { sessionsResult }
+    func sessions(directory: String?, limit: Int) async throws -> [Session] {
+        sessionLimitRequests.append(limit)
+        return sessionsByLimit[limit] ?? sessionsResult
+    }
     func createSession(title: String?) async throws -> Session { createSessionResult }
 
     func updateSession(sessionID: String, title: String) async throws -> Session {
@@ -1985,6 +2005,37 @@ struct AppStateFlowTests {
 
         #expect(state.sessions.count == 2)
         #expect(state.currentSessionID == "s-new")
+    }
+
+    @Test @MainActor func loadMoreSessionsRequestsLargerLimitAndKeepsOnlyRootSidebarSessions() async {
+        let apiClient = MockAPIClient()
+        let firstPageChildren = (0..<99).map { index in
+            Self.makeSession(id: "child-\(index)", parentID: "root-1", updated: 99 - index)
+        }
+        let secondPageChildren = (0..<99).map { index in
+            Self.makeSession(id: "child-\(index)", parentID: "root-1", updated: 99 - index)
+        }
+
+        await apiClient.setSessionsResult([
+            Self.makeSession(id: "root-1", updated: 100),
+        ] + firstPageChildren, forLimit: 100)
+        await apiClient.setSessionsResult([
+            Self.makeSession(id: "root-2", updated: 110),
+            Self.makeSession(id: "root-1", updated: 100),
+        ] + secondPageChildren, forLimit: 200)
+
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+
+        await state.loadSessions()
+        #expect(state.sidebarSessions.map(\.id) == ["root-1"])
+        #expect(state.canLoadMoreSessions == true)
+
+        await state.loadMoreSessions()
+
+        #expect(await apiClient.sessionLimitRequests == [100, 200])
+        #expect(state.sidebarSessions.map(\.id) == ["root-2", "root-1"])
+        #expect(state.canLoadMoreSessions == false)
     }
 
     @Test @MainActor func createSessionAppendsNewCurrentSession() async {
@@ -2194,13 +2245,13 @@ struct AppStateFlowTests {
         #expect(await apiClient.deletedSessionIDs == ["current"])
     }
 
-    private static func makeSession(id: String, updated: Int, directory: String = "/tmp", title: String? = nil) -> Session {
+    private static func makeSession(id: String, parentID: String? = nil, updated: Int, directory: String = "/tmp", title: String? = nil) -> Session {
         Session(
             id: id,
             slug: id,
             projectID: "p1",
             directory: directory,
-            parentID: nil,
+            parentID: parentID,
             title: title ?? id,
             version: "1",
             time: .init(created: 0, updated: updated, archived: nil),

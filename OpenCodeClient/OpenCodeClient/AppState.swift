@@ -396,6 +396,12 @@ final class AppState {
             .filter { showArchivedSessions || $0.time.archived == nil }
             .sorted { $0.time.updated > $1.time.updated }
     }
+    var sidebarSessions: [Session] {
+        sessions
+            .filter { showArchivedSessions || $0.time.archived == nil }
+            .filter { $0.parentID == nil }
+            .sorted { $0.time.updated > $1.time.updated }
+    }
     var sessionTree: [SessionNode] {
         let filtered = sessions.filter { showArchivedSessions || $0.time.archived == nil }
         return Self.buildSessionTree(from: filtered)
@@ -531,6 +537,14 @@ final class AppState {
     /// Guard against race conditions when rapidly switching sessions.
     /// Each selectSession call generates a new ID; async tasks check if they're still current.
     private var sessionLoadingID = UUID()
+    nonisolated private static let sessionPageSize = 100
+    private var loadedSessionLimit = sessionPageSize
+    private var hasMoreSessions = true
+    var isLoadingMoreSessions = false
+
+    var canLoadMoreSessions: Bool {
+        hasMoreSessions && !isLoadingMoreSessions
+    }
 
     // WAN optimization: page message history in fixed-size message batches.
     nonisolated private static let messagePageSize = 20
@@ -589,6 +603,21 @@ final class AppState {
             .sorted { $0.time.updated > $1.time.updated }
             .first?
             .id
+    }
+
+    nonisolated static func nextSessionFetchLimit(
+        current: Int,
+        pageSize: Int = sessionPageSize
+    ) -> Int {
+        max(current, pageSize) + max(pageSize, 1)
+    }
+
+    private func fetchSessions(limit: Int) async throws -> [Session] {
+        let directory = effectiveProjectDirectory
+        let loaded = try await apiClient.sessions(directory: directory, limit: limit)
+        let archivedCount = loaded.filter { $0.time.archived != nil }.count
+        Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) limit=\(limit, privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
+        return loaded
     }
 
     nonisolated static func buildSessionTree(from sessions: [Session]) -> [SessionNode] {
@@ -724,15 +753,36 @@ final class AppState {
     func loadSessions() async {
         guard isConnected else { return }
         do {
-            let directory = effectiveProjectDirectory
-            let loaded = try await apiClient.sessions(directory: directory, limit: 100)
-            let archivedCount = loaded.filter { $0.time.archived != nil }.count
-            Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
-
+            let loaded = try await fetchSessions(limit: loadedSessionLimit)
             sessions = loaded
+            hasMoreSessions = loaded.count >= loadedSessionLimit
 
             // Only auto-select first session if there's no persisted selection at all
             // This handles the case of fresh install or after all sessions are deleted
+            if currentSessionID == nil, let first = sessions.first {
+                currentSessionID = first.id
+                applySavedModelForCurrentSession()
+            }
+        } catch {
+            connectionError = error.localizedDescription
+        }
+    }
+
+    func loadMoreSessions() async {
+        guard isConnected else { return }
+        guard hasMoreSessions else { return }
+        guard !isLoadingMoreSessions else { return }
+
+        isLoadingMoreSessions = true
+        let nextLimit = Self.nextSessionFetchLimit(current: loadedSessionLimit)
+        defer { isLoadingMoreSessions = false }
+
+        do {
+            let loaded = try await fetchSessions(limit: nextLimit)
+            loadedSessionLimit = nextLimit
+            sessions = loaded
+            hasMoreSessions = loaded.count >= loadedSessionLimit
+
             if currentSessionID == nil, let first = sessions.first {
                 currentSessionID = first.id
                 applySavedModelForCurrentSession()
