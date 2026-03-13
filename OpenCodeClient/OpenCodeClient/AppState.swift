@@ -957,14 +957,23 @@ final class AppState {
                     return raw
                 }
 
-                let lastLoadedText = (lastLoadedUser.parts.first(where: { $0.isText })?.text ?? "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                func normalizeComparableText(_ raw: String) -> String {
+                    raw
+                        .components(separatedBy: .whitespacesAndNewlines)
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " ")
+                }
+
+                let lastLoadedText = normalizeComparableText(
+                    lastLoadedUser.parts.first(where: { $0.isText })?.text ?? ""
+                )
                 let lastLoadedCreated = normalizeEpochMs(lastLoadedUser.info.time.created)
 
                 return pending.filter { m in
                     guard m.info.isUser else { return true }
-                    let text = (m.parts.first(where: { $0.isText })?.text ?? "")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let text = normalizeComparableText(
+                        m.parts.first(where: { $0.isText })?.text ?? ""
+                    )
                     guard !text.isEmpty, text == lastLoadedText else { return true }
 
                     let created = normalizeEpochMs(m.info.time.created)

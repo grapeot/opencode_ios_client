@@ -2159,6 +2159,32 @@ struct AppStateFlowTests {
         #expect(state.partsByMessage["m1"]?.first?.text == "hi")
     }
 
+    @Test @MainActor func loadMessagesDedupesOptimisticUserRowWhenPersistedTextNormalizesWhitespace() async {
+        let apiClient = MockAPIClient()
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        await apiClient.setMessagesResult([
+            Self.makeMessageRow(
+                messageID: "m-user",
+                sessionID: "s1",
+                role: "user",
+                text: "hello world",
+                created: now,
+                completed: now
+            ),
+            Self.makeMessageRow(messageID: "m-assistant", sessionID: "s1", text: "reply")
+        ])
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        state.sessionStatuses["s1"] = SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)
+
+        let tempMessageID = state.appendOptimisticUserMessage("hello\n\nworld")
+        await state.loadMessages()
+
+        #expect(state.messages.map(\.info.id) == ["m-user", "m-assistant"])
+        #expect(state.messages.contains(where: { $0.info.id == tempMessageID }) == false)
+        #expect(state.partsByMessage[tempMessageID] == nil)
+    }
+
     @Test @MainActor func messageUpdatedIgnoresOtherSession() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
@@ -2360,17 +2386,24 @@ struct AppStateFlowTests {
         try! JSONDecoder().decode(SSEEvent.self, from: Data(json.utf8))
     }
 
-    private static func makeMessageRow(messageID: String, sessionID: String, text: String) -> MessageWithParts {
+    private static func makeMessageRow(
+        messageID: String,
+        sessionID: String,
+        role: String = "assistant",
+        text: String,
+        created: Int = 0,
+        completed: Int = 1
+    ) -> MessageWithParts {
         let message = Message(
             id: messageID,
             sessionID: sessionID,
-            role: "assistant",
+            role: role,
             parentID: nil,
             providerID: nil,
             modelID: nil,
             model: nil,
             error: nil,
-            time: .init(created: 0, completed: 1),
+            time: .init(created: created, completed: completed),
             finish: "stop",
             tokens: nil,
             cost: nil
