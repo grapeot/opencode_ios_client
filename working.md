@@ -3,6 +3,7 @@
 ## 2026-03-13
 
 - 回滚了上一版 root-only session 列表交互：iPhone 和 iPad 的 session 列表重新按完整树状层级展示 child/subagent sessions，避免 stop 等会话上下文在列表里“消失”。
+- 新增 `docs/testing_strategy_and_behavior_guard_plan.md`，把当前测试体系、behavior guard 分层策略，以及 session 列表这类交互回归该怎么防讲清楚了。
 
 ## 2026-03-12
 
