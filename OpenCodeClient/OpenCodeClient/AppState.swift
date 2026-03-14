@@ -900,6 +900,33 @@ final class AppState {
         }
     }
 
+    func forkSession(messageID: String?) async {
+        guard isConnected else { return }
+        guard let sessionID = currentSessionID else { return }
+
+        let loadingID = UUID()
+        sessionLoadingID = loadingID
+
+        do {
+            let forked = try await apiClient.forkSession(sessionID: sessionID, messageID: messageID)
+            guard sessionLoadingID == loadingID else { return }
+
+            Self.logger.debug("forkSession: created id=\(forked.id, privacy: .public) from=\(sessionID, privacy: .public) messageID=\(messageID ?? "nil", privacy: .public)")
+
+            sessions.insert(forked, at: 0)
+            currentSessionID = forked.id
+            messageStore.resetStreaming()
+            messages = []
+            partsByMessage = [:]
+            await loadMessages()
+            guard sessionLoadingID == loadingID else { return }
+            syncModelFromMessageHistory()
+        } catch {
+            guard sessionLoadingID == loadingID else { return }
+            connectionError = error.localizedDescription
+        }
+    }
+
     func deleteSession(sessionID: String) async throws {
         let previousCurrentSessionID = currentSessionID
         try await apiClient.deleteSession(sessionID: sessionID)

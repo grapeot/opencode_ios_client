@@ -1559,6 +1559,100 @@ struct ProjectSelectionTests {
     }
 }
 
+// MARK: - Fork Session Tests
+
+struct ForkSessionTests {
+
+    private static func makeSession(id: String, parentID: String? = nil, updated: Int = 1) -> Session {
+        Session(
+            id: id,
+            slug: id,
+            projectID: "p1",
+            directory: "/tmp",
+            parentID: parentID,
+            title: id,
+            version: "1",
+            time: .init(created: 0, updated: updated, archived: nil),
+            share: nil,
+            summary: nil
+        )
+    }
+
+    @Test @MainActor func forkSessionCallsAPIAndSwitchesToNewSession() async {
+        let apiClient = MockAPIClient()
+        let forked = Self.makeSession(id: "forked-s1", parentID: "s1", updated: 99)
+        await apiClient.setForkSessionResult(forked)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [Self.makeSession(id: "s1", updated: 10)]
+        state.currentSessionID = "s1"
+
+        await state.forkSession(messageID: "msg-42")
+
+        let calls = await apiClient.forkSessionCalls
+        #expect(calls.count == 1)
+        #expect(calls[0].0 == "s1")
+        #expect(calls[0].1 == "msg-42")
+        #expect(state.sessions.first?.id == "forked-s1")
+        #expect(state.currentSessionID == "forked-s1")
+    }
+
+    @Test @MainActor func forkSessionWithNilMessageIDCallsAPIWithNil() async {
+        let apiClient = MockAPIClient()
+        let forked = Self.makeSession(id: "forked-s2", parentID: "s2", updated: 50)
+        await apiClient.setForkSessionResult(forked)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [Self.makeSession(id: "s2", updated: 5)]
+        state.currentSessionID = "s2"
+
+        await state.forkSession(messageID: nil)
+
+        let calls = await apiClient.forkSessionCalls
+        #expect(calls.count == 1)
+        #expect(calls[0].1 == nil)
+        #expect(state.currentSessionID == "forked-s2")
+    }
+
+    @Test @MainActor func forkSessionDoesNothingWhenNotConnected() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = false
+        state.currentSessionID = "s1"
+
+        await state.forkSession(messageID: "msg-1")
+
+        let calls = await apiClient.forkSessionCalls
+        #expect(calls.isEmpty)
+    }
+
+    @Test @MainActor func forkSessionDoesNothingWhenNoCurrentSession() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.currentSessionID = nil
+
+        await state.forkSession(messageID: "msg-1")
+
+        let calls = await apiClient.forkSessionCalls
+        #expect(calls.isEmpty)
+    }
+
+    @Test @MainActor func forkSessionSetsConnectionErrorOnFailure() async {
+        let apiClient = MockAPIClient()
+        await apiClient.setForkSessionError(APIError.httpError(statusCode: 500, data: Data()))
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [Self.makeSession(id: "s1", updated: 1)]
+        state.currentSessionID = "s1"
+
+        await state.forkSession(messageID: "msg-1")
+
+        #expect(state.currentSessionID == "s1")
+        #expect(state.connectionError != nil)
+    }
+}
+
 // MARK: - Session Tree Tests
 
 struct SessionTreeTests {
@@ -1883,6 +1977,20 @@ actor MockAPIClient: APIClientProtocol {
         share: nil,
         summary: nil
     )
+    var forkSessionResult = Session(
+        id: "forked-session",
+        slug: "forked-session",
+        projectID: "p1",
+        directory: "/tmp",
+        parentID: "original-session",
+        title: "Original (fork #1)",
+        version: "1",
+        time: .init(created: 2, updated: 2, archived: nil),
+        share: nil,
+        summary: nil
+    )
+    var forkSessionError: Error?
+    var forkSessionCalls: [(String, String?)] = []
     var messagesResult: [MessageWithParts] = []
     var messagesCallCount = 0
     var promptError: Error?
@@ -1917,6 +2025,14 @@ actor MockAPIClient: APIClientProtocol {
 
     func setPromptError(_ error: Error?) {
         promptError = error
+    }
+
+    func setForkSessionResult(_ session: Session) {
+        forkSessionResult = session
+    }
+
+    func setForkSessionError(_ error: Error?) {
+        forkSessionError = error
     }
 
     func configure(baseURL: String, username: String?, password: String?) {
@@ -1987,6 +2103,11 @@ actor MockAPIClient: APIClientProtocol {
     func fileContent(path: String) async throws -> FileContent { FileContent(type: "text", content: "") }
     func findFile(query: String, limit: Int) async throws -> [String] { [] }
     func fileStatus() async throws -> [FileStatusEntry] { [] }
+    func forkSession(sessionID: String, messageID: String?) async throws -> Session {
+        forkSessionCalls.append((sessionID, messageID))
+        if let forkSessionError { throw forkSessionError }
+        return forkSessionResult
+    }
 }
 
 actor MockSSEClient: SSEClientProtocol {

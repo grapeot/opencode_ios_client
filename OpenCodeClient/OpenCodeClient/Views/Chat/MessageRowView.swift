@@ -12,6 +12,7 @@ struct MessageRowView: View {
     let workspaceDirectory: String?
     let onOpenResolvedPath: (String) -> Void
     let onOpenFilesTab: () -> Void
+    let onForkFromMessage: ((String) -> Void)?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var cardGridColumnCount: Int { sizeClass == .regular ? 3 : 2 }
@@ -121,12 +122,31 @@ struct MessageRowView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            if let model = message.info.resolvedModel {
-                Text("\(model.providerID)/\(model.modelID)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.leading, 4)
+            HStack {
+                if let model = message.info.resolvedModel {
+                    Text("\(model.providerID)/\(model.modelID)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+                if onForkFromMessage != nil {
+                    Menu {
+                        Button {
+                            onForkFromMessage?(message.info.id)
+                        } label: {
+                            Label("Fork from here", systemImage: "arrow.triangle.branch")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                    }
+                }
             }
+            .padding(.leading, 4)
         }
     }
 

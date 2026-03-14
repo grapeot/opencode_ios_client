@@ -385,6 +385,20 @@ actor APIClient {
         let (data, _) = try await makeRequest(path: "/file/status")
         return try JSONDecoder().decode([FileStatusEntry].self, from: data)
     }
+
+    func forkSession(sessionID: String, messageID: String? = nil) async throws -> Session {
+        struct ForkBody: Encodable {
+            let messageID: String?
+        }
+        let body = ForkBody(messageID: messageID)
+        let data = try JSONEncoder().encode(body)
+        let (responseData, _) = try await makeRequest(
+            path: "/session/\(sessionID)/fork",
+            method: "POST",
+            body: data
+        )
+        return try JSONDecoder().decode(Session.self, from: responseData)
+    }
 }
 
 struct FileNode: Codable, Identifiable {
@@ -619,6 +633,7 @@ protocol APIClientProtocol: Actor {
     func fileContent(path: String) async throws -> FileContent
     func findFile(query: String, limit: Int) async throws -> [String]
     func fileStatus() async throws -> [FileStatusEntry]
+    func forkSession(sessionID: String, messageID: String?) async throws -> Session
 }
 
 extension APIClient: APIClientProtocol {}

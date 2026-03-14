@@ -337,7 +337,10 @@ struct ChatTabView: View {
                                                     sessionTodos: state.sessionTodos[msg.info.sessionID] ?? [],
                                                     workspaceDirectory: state.currentSession?.directory,
                                                     onOpenResolvedPath: openFileInChat,
-                                                    onOpenFilesTab: openFilesTab
+                                                    onOpenFilesTab: openFilesTab,
+                                                    onForkFromMessage: { messageID in
+                                                        Task { await state.forkSession(messageID: messageID) }
+                                                    }
                                                 )
                                             case .assistantMerged(let msgs):
                                                 if let first = msgs.first {
@@ -347,7 +350,10 @@ struct ChatTabView: View {
                                                         sessionTodos: state.sessionTodos[merged.info.sessionID] ?? [],
                                                         workspaceDirectory: state.currentSession?.directory,
                                                         onOpenResolvedPath: openFileInChat,
-                                                        onOpenFilesTab: openFilesTab
+                                                        onOpenFilesTab: openFilesTab,
+                                                        onForkFromMessage: { messageID in
+                                                            Task { await state.forkSession(messageID: messageID) }
+                                                        }
                                                     )
                                                 }
                                             }
