@@ -926,7 +926,7 @@ final class AppState {
             await refreshPendingPermissions()
             await loadSessionDiff()
             await loadSessionTodos()
-            inferAndStoreModelForCurrentSessionIfMissing()
+            syncModelFromMessageHistory()
         } else {
             currentSessionID = nil
             pendingPermissions = []
@@ -1688,7 +1688,7 @@ final class AppState {
         await refreshPendingPermissions()
         await loadSessionDiff()
         await loadSessionTodos()
-        inferAndStoreModelForCurrentSessionIfMissing()
+        syncModelFromMessageHistory()
         return true
     }
 
@@ -1709,7 +1709,7 @@ final class AppState {
             await refreshPendingPermissions()
             await loadSessionDiff()
             await loadSessionTodos()
-            inferAndStoreModelForCurrentSessionIfMissing()
+            syncModelFromMessageHistory()
         } else if currentSessionID == nil {
             pendingPermissions = []
         } else {
