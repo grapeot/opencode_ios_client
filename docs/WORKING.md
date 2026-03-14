@@ -15,10 +15,10 @@
 
 ## 已完成（近期）
 
-- [x] **Context ring 常驻可见（2026-03-14）**：
-  - [x] 根因：`ChatTabView` 在 `state.isBusy` 时向 `.navigationBarTrailing` 注入 `ProgressView`，视觉上与 `ChatToolbarView` 中的 `ContextUsageButton` 冲突，导致 ring 被遮盖/替代
-  - [x] 修复：删除 `ChatTabView` 中的整个 `.toolbar { ToolbarItem(.navigationBarTrailing) { if state.isBusy { ProgressView() } } }` block；busy 状态已由输入栏红色停止按钮明确传达，spinner 冗余
-  - [x] `ChatToolbarView.swift` 与 `ContextUsageView.swift` 不受影响，ring 在 AI 响应期间始终可见
+- [x] **Context ring 常驻可见 + AI 处理中保持数值（2026-03-14）**：
+  - [x] 根因 1：`ChatTabView` 在 `state.isBusy` 时向 `.navigationBarTrailing` 注入 `ProgressView`，视觉上遮盖 ring → 删除该 ProgressView block
+  - [x] 根因 2：AI 处理中服务器创建新 assistant 消息带 `tokens: {total: 0}`，旧过滤 `tokens != nil` 命中该空消息导致 ring 显示 0% → 改为 `tokens != nil && tokens.total > 0`，跳过空 token 消息
+  - [x] 缓存机制：`AppState._cachedContextUsage`（`@ObservationIgnored`）缓存最后一次有效 snapshot；messages 加载中/provider config 缺失时返回缓存值（同 session 限定）；切换 session 时清缓存
 
 - [x] **语音转写 partial transcript 实时展示（2026-03-11）**：
   - [x] AIBuildersAudioClient：`transcribe` 新增可选 `onPartialTranscript` 回调，`streamPCMOverRealtimeWebSocket` 收到 `transcript_delta` 时累积并回调

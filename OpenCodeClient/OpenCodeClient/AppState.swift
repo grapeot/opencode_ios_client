@@ -527,6 +527,8 @@ final class AppState {
     var providerModelsIndex: [String: ProviderModel] = [:]
     var providerConfigError: String? = nil
 
+    @ObservationIgnored var _cachedContextUsage: ContextUsageSnapshot?
+
     private let apiClient: APIClientProtocol
     private let sseClient: SSEClientProtocol
     let sshTunnelManager: SSHTunnelManager
@@ -676,12 +678,14 @@ final class AppState {
         selectedModelIndex = idx
     }
 
-    private func inferAndStoreModelForCurrentSessionIfMissing() {
+    private func syncModelFromMessageHistory() {
         guard let sessionID = currentSessionID else { return }
-        guard selectedModelIDBySessionID[sessionID] == nil else { return }
 
         guard let info = messages.reversed().compactMap({ $0.info.resolvedModel }).first else { return }
-        guard let idx = modelPresets.firstIndex(where: { $0.providerID == info.providerID && $0.modelID == info.modelID }) else { return }
+        guard let idx = modelPresets.firstIndex(where: { $0.providerID == info.providerID && $0.modelID == info.modelID }) else {
+            Self.logger.warning("syncModelFromMessageHistory: model \(info.providerID, privacy: .public)/\(info.modelID, privacy: .public) not in presets, keeping current selection")
+            return
+        }
 
         selectedModelIndex = idx
         selectedModelIDBySessionID[sessionID] = modelPresets[idx].id
@@ -841,7 +845,7 @@ final class AppState {
             await self.refreshPendingQuestions()
             guard self.sessionLoadingID == loadingID else { return }
             
-            self.inferAndStoreModelForCurrentSessionIfMissing()
+            self.syncModelFromMessageHistory()
             await self.loadSessionDiff()
             guard self.sessionLoadingID == loadingID else { return }
             
