@@ -512,14 +512,6 @@ struct ChatTabView: View {
             }
             .navigationTitle(state.currentSession?.title ?? L10n.t(.appChat))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if state.isBusy {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    }
-                }
-            }
             .sheet(isPresented: $showSessionList) {
                 SessionListView(state: state)
             }

@@ -172,6 +172,8 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 
 注：初期不展示 raw messages；context breakdown（system/user/assistant/tool 占比）仅在 server 暴露对应数据或可稳定推导时再做。
 
+- **AI 响应期间可见性**：context ring 在任何状态（idle / busy / streaming）下始终显示，不被 spinner 或其它控件替代。busy 状态由输入栏红色停止按钮传达，toolbar 不再注入额外 `ProgressView`。
+
 #### 4.2.2 消息流
 
 垂直滚动的消息列表，样式参考 OpenCode Web 客户端：**不采用左右气泡**，所有消息统一流式排布，人类消息用灰色背景区分。整体风格类似 OpenCode 的紧凑对话流。

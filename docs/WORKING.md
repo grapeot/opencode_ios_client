@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- **最后更新**：2026-03-11
+- **最后更新**：2026-03-14
 - **Phase**：Phase 3 完成 + Realtime Speech WebSocket（space.ai-builders.com/backend 语音转写已打通）
 - **编译**：✅ 通过（iphonesimulator / generic destination）
 - **测试**：✅ 所有测试通过
@@ -14,6 +14,15 @@
 （无）
 
 ## 已完成（近期）
+
+- [x] **Model selection 切换 session 后显示错误模型修复（2026-03-14）**：
+  - [x] 根因：`inferAndStoreModelForCurrentSessionIfMissing()` 有 `guard selectedModelIDBySessionID[sessionID] == nil` 前置条件，当 persistence 有旧值时直接跳过推断，导致 `selectedModelIndex` 保留上一个 session 的值
+  - [x] 修复：重命名为 `syncModelFromMessageHistory()`，移除 persistence 非空即跳过的 guard，每次加载完 messages 后都从消息历史推断实际模型并更新选择；`applySavedModelForCurrentSession()` 保留为同步快速路径
+
+- [x] **Context ring 常驻可见 + AI 处理中保持数值（2026-03-14）**：
+  - [x] 根因 1：`ChatTabView` 在 `state.isBusy` 时向 `.navigationBarTrailing` 注入 `ProgressView`，视觉上遮盖 ring → 删除该 ProgressView block
+  - [x] 根因 2：AI 处理中服务器创建新 assistant 消息带 `tokens: {total: 0}`，旧过滤 `tokens != nil` 命中该空消息导致 ring 显示 0% → 改为 `tokens != nil && tokens.total > 0`，跳过空 token 消息
+  - [x] 缓存机制：`AppState._cachedContextUsage`（`@ObservationIgnored`）缓存最后一次有效 snapshot；messages 加载中/provider config 缺失时返回缓存值（同 session 限定）；切换 session 时清缓存
 
 - [x] **语音转写 partial transcript 实时展示（2026-03-11）**：
   - [x] AIBuildersAudioClient：`transcribe` 新增可选 `onPartialTranscript` 回调，`streamPCMOverRealtimeWebSocket` 收到 `transcript_delta` 时累积并回调

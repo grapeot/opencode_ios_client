@@ -411,6 +411,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **展示**：Chat 顶部右侧（模型切换条与齿轮之间）显示环形进度（灰色空环表示无数据）。
 - **数据**：从最近一次 assistant message 的 `info.tokens`/`info.cost` 读取 token/cost；context limit 从 `GET /config/providers` 中 `limit.context` 获取。
 - **交互**：点击 ring 弹 sheet 展示 provider/model、context limit、total tokens、token breakdown（input/output/reasoning/cache read/cache write）与 total cost。
+- **常驻可见**：ring 在 idle、busy、streaming 等所有状态下始终显示。`ChatTabView` 不向 `.navigationBarTrailing` 注入 `ProgressView`；busy 状态已由输入栏红色停止按钮传达，toolbar spinner 已移除。
 
 ---
 
