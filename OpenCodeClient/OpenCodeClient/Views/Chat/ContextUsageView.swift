@@ -50,11 +50,24 @@ struct ContextUsageButton: View {
     @State private var showSheet = false
     @State private var isLoadingProviderConfig = false
     @State private var detent: PresentationDetent = .large
+    @State private var cachedSnapshot: ContextUsageSnapshot?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var preferLargeSheet: Bool { sizeClass == .regular }
 
-    private var snapshot: ContextUsageSnapshot? { state.contextUsageSnapshot }
+    // Cache last non-nil snapshot to keep ring visible during AI processing.
+    // When AI is processing a new message, contextUsageSnapshot may return nil
+    // (no assistant message with tokens yet), but we want to show the previous usage.
+    private var snapshot: ContextUsageSnapshot? {
+        if let current = state.contextUsageSnapshot {
+            return current
+        }
+        // Only use cache if it's for the same session
+        if let cached = cachedSnapshot, cached.sessionID == state.currentSessionID {
+            return cached
+        }
+        return nil
+    }
 
     private var progress: Double? {
         guard let s = snapshot else { return nil }
@@ -97,6 +110,12 @@ struct ContextUsageButton: View {
         }
         .buttonStyle(.plain)
         .help(L10n.t(.contextUsageHelp))
+        // Update cache whenever contextUsageSnapshot changes to a non-nil value
+        .onChange(of: state.contextUsageSnapshot) { _, newValue in
+            if let newValue {
+                cachedSnapshot = newValue
+            }
+        }
         .sheet(isPresented: $showSheet) {
             NavigationStack {
                 ContextUsageDetailView(
