@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- **最后更新**：2026-03-11
+- **最后更新**：2026-03-14
 - **Phase**：Phase 3 完成 + Realtime Speech WebSocket（space.ai-builders.com/backend 语音转写已打通）
 - **编译**：✅ 通过（iphonesimulator / generic destination）
 - **测试**：✅ 所有测试通过
@@ -14,6 +14,11 @@
 （无）
 
 ## 已完成（近期）
+
+- [x] **Context ring 常驻可见（2026-03-14）**：
+  - [x] 根因：`ChatTabView` 在 `state.isBusy` 时向 `.navigationBarTrailing` 注入 `ProgressView`，视觉上与 `ChatToolbarView` 中的 `ContextUsageButton` 冲突，导致 ring 被遮盖/替代
+  - [x] 修复：删除 `ChatTabView` 中的整个 `.toolbar { ToolbarItem(.navigationBarTrailing) { if state.isBusy { ProgressView() } } }` block；busy 状态已由输入栏红色停止按钮明确传达，spinner 冗余
+  - [x] `ChatToolbarView.swift` 与 `ContextUsageView.swift` 不受影响，ring 在 AI 响应期间始终可见
 
 - [x] **语音转写 partial transcript 实时展示（2026-03-11）**：
   - [x] AIBuildersAudioClient：`transcribe` 新增可选 `onPartialTranscript` 回调，`streamPCMOverRealtimeWebSocket` 收到 `transcript_delta` 时累积并回调
