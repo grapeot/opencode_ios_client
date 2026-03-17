@@ -1,5 +1,10 @@
 # 工作记录 - OpenCode iOS 客户端
 
+## 2026-03-17
+
+- 全局 oh-my-opencode.json 默认 agent 从 GLM-5 切换为 sisyphus ultraworker（Claude Opus 4.6）。
+- Gemini model ID 修正：`google/gemini-3-flash` → `google/gemini-3-flash-preview`，`google/gemini-3-pro` → `google/gemini-3.1-pro-preview`（Gemini 3 Pro 已于 3/9 下线）。
+
 ## 2026-03-14
 
 - 实现 Fork Session 功能：在用户消息末尾添加 "..." 上下文菜单，支持从指定消息处 fork 对话为新 session。
