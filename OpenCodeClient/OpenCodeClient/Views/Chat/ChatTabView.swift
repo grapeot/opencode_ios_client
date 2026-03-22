@@ -345,6 +345,7 @@ struct ChatTabView: View {
                                             switch group {
                                             case .user(let msg):
                                                 MessageRowView(
+                                                    state: state,
                                                     message: msg,
                                                     sessionTodos: state.sessionTodos[msg.info.sessionID] ?? [],
                                                     workspaceDirectory: state.currentSession?.directory,
@@ -358,6 +359,7 @@ struct ChatTabView: View {
                                                 if let first = msgs.first {
                                                     let merged = MessageWithParts(info: first.info, parts: msgs.flatMap(\.parts))
                                                     MessageRowView(
+                                                        state: state,
                                                         message: merged,
                                                         sessionTodos: state.sessionTodos[merged.info.sessionID] ?? [],
                                                         workspaceDirectory: state.currentSession?.directory,

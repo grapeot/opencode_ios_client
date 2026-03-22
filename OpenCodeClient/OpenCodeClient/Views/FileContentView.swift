@@ -108,7 +108,7 @@ struct FileContentView: View {
         let useRaw = isMarkdown ? useRawTextForMarkdown(text) : false
         if isMarkdown {
             if showPreview && !useRaw {
-                MarkdownPreviewView(text: text)
+                MarkdownPreviewView(text: text, state: state, markdownFilePath: filePath)
             } else {
                 RawTextView(text: text, monospaced: !showPreview)
             }
@@ -202,6 +202,9 @@ struct CodeView: View {
 /// Parent FileContentView skips this for large content; this is a secondary fallback.
 struct MarkdownPreviewView: View {
     let text: String
+    let state: AppState
+    let markdownFilePath: String?
+    @State private var resolvedText: String?
 
     private static let maxLineLength = 1500
     private static let maxTotalLength = 60_000
@@ -221,11 +224,19 @@ struct MarkdownPreviewView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Markdown(text)
+                    Markdown(resolvedText ?? text)
                         .textSelection(.enabled)
                 }
             }
             .padding()
+        }
+        .task {
+            resolvedText = await MarkdownImageResolver.resolveImages(
+                in: text,
+                markdownFilePath: markdownFilePath,
+                workspaceDirectory: state.currentSession?.directory,
+                fetchContent: { path in try await state.loadFileContent(path: path) }
+            )
         }
         .onAppear {
             let fallback = useRawTextFallback

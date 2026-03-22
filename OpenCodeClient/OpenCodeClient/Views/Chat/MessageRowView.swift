@@ -7,6 +7,7 @@ import SwiftUI
 import MarkdownUI
 
 struct MessageRowView: View {
+    @Bindable var state: AppState
     let message: MessageWithParts
     let sessionTodos: [TodoItem]
     let workspaceDirectory: String?
@@ -68,11 +69,29 @@ struct MessageRowView: View {
     @ViewBuilder
     private func markdownText(_ text: String) -> some View {
         if shouldRenderMarkdown(text) {
-            Markdown(text)
+            ResolvedMarkdownView(text: text, state: state, workspaceDirectory: workspaceDirectory)
                 .textSelection(.enabled)
         } else {
             Text(text)
                 .textSelection(.enabled)
+        }
+    }
+
+    private struct ResolvedMarkdownView: View {
+        let text: String
+        let state: AppState
+        let workspaceDirectory: String?
+        @State private var resolvedText: String?
+        
+        var body: some View {
+            Markdown(resolvedText ?? text)
+                .task {
+                    resolvedText = await MarkdownImageResolver.resolveImages(
+                        in: text,
+                        workspaceDirectory: workspaceDirectory,
+                        fetchContent: { path in try await state.loadFileContent(path: path) }
+                    )
+                }
         }
     }
 
