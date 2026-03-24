@@ -83,6 +83,7 @@ final class MessageStore {
             providerID: nil,
             modelID: nil,
             model: nil,
+            variant: nil,
             error: nil,
             time: Message.TimeInfo(created: now, completed: now),
             finish: nil,
