@@ -18,9 +18,9 @@ No Apple Developer account needed. Just tap the link on your iOS device.
 
 ### Hardware keyboard behavior on iPad
 
-- `Enter`: send the current message when text input is not in IME composition
-- `Shift+Enter`: insert a newline
-- Chinese/Japanese IME composition is allowed to commit marked text before any send action fires
+- `Enter`: insert a newline
+- Send: use the circular arrow button on the right side of the composer
+- Chinese/Japanese IME composition is allowed to commit marked text normally
 
 ## Requirements
 

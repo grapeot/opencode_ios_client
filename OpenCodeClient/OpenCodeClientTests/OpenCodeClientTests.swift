@@ -954,8 +954,8 @@ struct AIBuildersAudioClientTests {
         #expect(ChatComposerKeyAction.action(for: "\n", hasMarkedText: true, isShiftReturn: false) == .system)
     }
 
-    @Test func chatComposerPlainReturnSubmitsWhenNoMarkedText() {
-        #expect(ChatComposerKeyAction.action(for: "\n", hasMarkedText: false, isShiftReturn: false) == .submit)
+    @Test func chatComposerPlainReturnInsertsNewlineWhenNoMarkedText() {
+        #expect(ChatComposerKeyAction.action(for: "\n", hasMarkedText: false, isShiftReturn: false) == .insertNewline)
     }
 
     @Test func chatComposerShiftReturnInsertsNewlineWhenNoMarkedText() {

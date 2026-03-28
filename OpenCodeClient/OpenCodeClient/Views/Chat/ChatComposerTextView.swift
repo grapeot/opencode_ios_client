@@ -11,7 +11,7 @@ enum ChatComposerKeyAction: Equatable {
     static func action(for replacementText: String, hasMarkedText: Bool, isShiftReturn: Bool) -> ChatComposerKeyAction {
         guard replacementText == "\n" else { return .system }
         guard !hasMarkedText else { return .system }
-        return isShiftReturn ? .insertNewline : .submit
+        return .insertNewline
     }
 }
 
@@ -44,7 +44,7 @@ struct ChatComposerTextView: UIViewRepresentable {
         textView.textContainer.maximumNumberOfLines = 8
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        textView.returnKeyType = .send
+        textView.returnKeyType = .default
         textView.autocorrectionType = .default
         textView.autocapitalizationType = .sentences
         textView.accessibilityIdentifier = "chat-input"

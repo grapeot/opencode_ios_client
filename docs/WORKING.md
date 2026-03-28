@@ -15,6 +15,12 @@
 
 ## 已完成（近期）
 
+- [x] **Chat Composer 视觉紧凑化与 Return 键行为调整（2026-03-28）**：
+  - [x] 视觉：将 composer 最小高度从 44pt 继续压至 32pt，并将输入框容器/底部栏的垂直 padding 收紧到 5pt/6pt，使输入区高度更接近右侧圆形按钮，不再浪费底部空间
+  - [x] 行为：修改 `ChatComposerTextView` 使 Return 键（含外接键盘 Enter）始终插入换行而非发送，并将键盘 Return 键类型从 `.send` 改回 `.default`
+  - [x] 安全：保留 IME marked text 组合态安全，确保输入法确认操作不触发非预期行为；发送仅通过右侧圆形箭头按钮触发
+  - [x] 测试/文档：更新 `ChatComposerKeyAction` 单元测试以匹配新行为，并同步更新 README 关于 iPad 键盘行为的说明
+
 - [x] **iPad 中文输入法 + 物理键盘 Enter/Shift+Enter 提前发送修复（2026-03-28）**：
   - [x] 根因：Chat composer 使用 `TextField(axis: .vertical)` 的 `.onSubmit`，并额外挂了发送按钮的 `.keyboardShortcut(.return)`；在 iPad 外接键盘场景下，这两条 Return 路径会在中文输入法仍处于 marked text/composition 时抢先触发发送
   - [x] 修复：将 chat 输入框替换为一个局部 `UITextView` bridge，在 delegate 中按 `markedTextRange` 区分 IME 组合态；普通 `Enter` 发送，`Shift+Enter` 插入换行，并移除裸 `Return` keyboard shortcut

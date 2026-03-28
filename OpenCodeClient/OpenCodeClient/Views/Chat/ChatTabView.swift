@@ -484,7 +484,7 @@ struct ChatTabView: View {
                             placeholder: L10n.t(.chatInputPlaceholder),
                             onSubmit: sendCurrentInput
                         )
-                        .frame(minHeight: 44, maxHeight: 144)
+                        .frame(minHeight: 32, maxHeight: 144)
 
                         if inputText.isEmpty {
                             Text(L10n.t(.chatInputPlaceholder))
@@ -494,7 +494,7 @@ struct ChatTabView: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 5)
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                     .overlay(
@@ -545,7 +545,7 @@ struct ChatTabView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 6)
                 .background(.bar)
             }
             .navigationTitle(state.currentSession?.title ?? L10n.t(.appChat))
