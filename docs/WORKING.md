@@ -4,16 +4,21 @@
 
 ## 当前状态
 
-- **最后更新**：2026-03-27
-- **Phase**：Phase 3 完成 + iPhone 左缘右滑打开 Session List
+- **最后更新**：2026-03-28
+- **Phase**：Phase 3 完成 + iPad session duplicate fix
 - **编译**：✅ 通过（iphonesimulator / generic destination）
-- **测试**：⚠️ 新增手势逻辑单元测试通过；`xcodebuild test` 下现有 session list UI smoke 在当前 simulator 环境未稳定通过
+- **测试**：✅ `xcodebuild build` 与完整 `xcodebuild test`（含现有 UI smoke）通过
 
 ## 进行中
 
 （无）
 
 ## 已完成（近期）
+
+- [x] **iPad 新建 session 后 sidebar 重复 entry 修复（2026-03-28）**：
+  - [x] 根因：`createSession()` / `forkSession()` 的 optimistic `sessions.insert(..., at: 0)` 与 SSE `session.updated` 的写入路径都能把同一个 `session.id` 再塞进本地 `sessions`；iPad sidebar 常驻可见，所以重复 row 和双 selected 会立刻暴露；切到别的 session 后 `refreshSessions()` 用服务端 canonical 列表整体覆盖，本地重复随之消失
+  - [x] 修复：在 `AppState` 增加按 `session.id` 去重的 `upsertSession()` helper，并统一用于 `createSession()`、`forkSession()`、`session.updated`，确保本地 session 状态始终满足单 ID 唯一
+  - [x] 测试：新增 create/fork duplicate collapse 回归测试，以及 `session.updated` 收敛重复 session 的状态流测试；验证 `xcodebuild build -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'generic/platform=iOS Simulator'` 与 `xcodebuild test -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'` 全部通过
 
 - [x] **GLM-5-Turbo 预设切换到 GLM-5.1（2026-03-27）**：
   - [x] 将模型预设显示名从 `GLM-5-Turbo` 更新为 `GLM-5.1`

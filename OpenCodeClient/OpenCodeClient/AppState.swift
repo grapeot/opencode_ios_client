@@ -657,6 +657,20 @@ final class AppState {
         }
     }
 
+    private func upsertSession(_ session: Session) {
+        let existingIndex = sessions.firstIndex(where: { $0.id == session.id })
+        sessions.removeAll { $0.id == session.id }
+
+        let targetIndex: Int
+        if let existingIndex {
+            targetIndex = min(existingIndex, sessions.count)
+        } else {
+            targetIndex = 0
+        }
+
+        sessions.insert(session, at: targetIndex)
+    }
+
     func setSelectedModelIndex(_ index: Int) {
         guard modelPresets.indices.contains(index) else { return }
         selectedModelIndex = index
@@ -885,7 +899,7 @@ final class AppState {
             
             Self.logger.debug("createSession: created id=\(session.id, privacy: .public) directory=\(session.directory, privacy: .public) effectiveProjectDir=\(self.effectiveProjectDirectory ?? "nil", privacy: .public)")
             
-            sessions.insert(session, at: 0)
+            upsertSession(session)
             currentSessionID = session.id
             if let m = selectedModel {
                 selectedModelIDBySessionID[session.id] = m.id
@@ -913,7 +927,7 @@ final class AppState {
 
             Self.logger.debug("forkSession: created id=\(forked.id, privacy: .public) from=\(sessionID, privacy: .public) messageID=\(messageID ?? "nil", privacy: .public)")
 
-            sessions.insert(forked, at: 0)
+            upsertSession(forked)
             currentSessionID = forked.id
             messageStore.resetStreaming()
             messages = []
@@ -1486,11 +1500,7 @@ final class AppState {
                 if shouldApply {
                     let wasUpdate = sessions.contains(where: { $0.id == session.id })
                     Self.logger.debug("session.updated id=\(session.id, privacy: .public) archived=\(session.time.archived.map { String($0) } ?? "nil", privacy: .public) dir=\(session.directory, privacy: .public) op=\(wasUpdate ? "replace" : "insert", privacy: .public)")
-                    if let idx = sessions.firstIndex(where: { $0.id == session.id }) {
-                        sessions[idx] = session
-                    } else {
-                        sessions.insert(session, at: 0)
-                    }
+                    upsertSession(session)
                 } else {
                     Self.logger.debug("session.updated skip id=\(session.id, privacy: .public) dir=\(session.directory, privacy: .public) effectiveDir=\(dir ?? "nil", privacy: .public)")
                 }

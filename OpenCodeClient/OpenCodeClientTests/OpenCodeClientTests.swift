@@ -1644,6 +1644,24 @@ struct ForkSessionTests {
         #expect(state.currentSessionID == "forked-s2")
     }
 
+    @Test @MainActor func forkSessionCollapsesExistingSessionWithSameID() async {
+        let apiClient = MockAPIClient()
+        let forked = Self.makeSession(id: "forked-s1", parentID: "s1", updated: 99)
+        await apiClient.setForkSessionResult(forked)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [
+            Self.makeSession(id: "forked-s1", parentID: "s1", updated: 50),
+            Self.makeSession(id: "s1", updated: 10)
+        ]
+        state.currentSessionID = "s1"
+
+        await state.forkSession(messageID: "msg-42")
+
+        #expect(state.sessions.map(\.id) == ["forked-s1", "s1"])
+        #expect(state.currentSessionID == "forked-s1")
+    }
+
     @Test @MainActor func forkSessionDoesNothingWhenNotConnected() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
@@ -2283,6 +2301,24 @@ struct AppStateFlowTests {
         #expect(state.partsByMessage.isEmpty)
     }
 
+    @Test @MainActor func createSessionCollapsesExistingSessionWithSameID() async {
+        let apiClient = MockAPIClient()
+        let created = Self.makeSession(id: "created", updated: 30, title: "Created")
+        await apiClient.setCreateSessionResult(created)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [
+            Self.makeSession(id: "created", updated: 20, title: "Old Created"),
+            Self.makeSession(id: "existing", updated: 10)
+        ]
+
+        await state.createSession()
+
+        #expect(state.sessions.map(\.id) == ["created", "existing"])
+        #expect(state.sessions.first?.title == "Created")
+        #expect(state.currentSessionID == "created")
+    }
+
     @Test @MainActor func sendMessageRollsBackOptimisticMessageOnFailure() async {
         let apiClient = MockAPIClient()
         await apiClient.setPromptError(APIError.invalidURL)
@@ -2404,6 +2440,26 @@ struct AppStateFlowTests {
         #expect(state.sessions.first?.id == "s-current")
         #expect(state.sessions.first?.title == "New Title")
         #expect(state.sessions.first?.directory == "/project/b")
+    }
+
+    @Test @MainActor func sessionUpdatedCollapsesDuplicateSessionEntries() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.selectedProjectWorktree = nil
+        state.currentSessionID = "s-current"
+        state.sessions = [
+            Self.makeSession(id: "s-current", updated: 10, title: "First"),
+            Self.makeSession(id: "s-current", updated: 9, title: "Duplicate"),
+            Self.makeSession(id: "s-other", updated: 8, title: "Other")
+        ]
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"session.updated","properties":{"session":{"id":"s-current","slug":"s-current","projectID":"p1","directory":"/tmp","parentID":null,"title":"Fresh","version":"2","time":{"created":0,"updated":30},"share":null,"summary":null}}}}
+        """))
+
+        #expect(state.sessions.map(\.id) == ["s-current", "s-other"])
+        #expect(state.sessions.first?.title == "Fresh")
+        #expect(state.sessions.first?.version == "2")
     }
 
     @Test @MainActor func messagePartUpdatedAccumulatesStreamingMessageText() async {
