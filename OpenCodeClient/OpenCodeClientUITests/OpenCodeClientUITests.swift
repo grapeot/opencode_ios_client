@@ -38,6 +38,28 @@ final class OpenCodeClientUITests: XCTestCase {
     }
 
     @MainActor
+    func testChatComposerLongInputRemainsScrollable() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let composer = app.textViews["chat-input"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 8), "Chat 输入框应可见")
+
+        composer.tap()
+        composer.typeText((1...18).map { "Line \($0)" }.joined(separator: "\n"))
+        composer.swipeUp()
+
+        let screenshot = composer.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = "chat-composer-long-input"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        let composerValue = composer.value as? String ?? ""
+        XCTAssertTrue(composerValue.contains("Line 18"), "输入框应保留完整长文本内容")
+    }
+
+    @MainActor
     func testSessionListFixtureShowsChildSession() throws {
         let app = XCUIApplication()
         app.launchArguments.append("UITEST_SESSION_TREE_FIXTURE")

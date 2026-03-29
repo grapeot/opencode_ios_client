@@ -41,7 +41,6 @@ struct ChatComposerTextView: UIViewRepresentable {
         textView.isScrollEnabled = true
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
-        textView.textContainer.maximumNumberOfLines = 8
         textView.textContainer.lineBreakMode = .byWordWrapping
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textView.returnKeyType = .default
