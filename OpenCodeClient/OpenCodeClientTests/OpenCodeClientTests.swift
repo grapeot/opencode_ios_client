@@ -1424,6 +1424,7 @@ struct ActivityTrackerTests {
             providerID: nil,
             modelID: nil,
             model: nil,
+            variant: nil,
             error: nil,
             time: .init(created: created, completed: completed),
             finish: nil,
@@ -2156,7 +2157,7 @@ actor MockAPIClient: APIClientProtocol {
         return messagesResult
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws {
+    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?, variant: String?) async throws {
         if let promptError { throw promptError }
     }
 
@@ -2638,6 +2639,7 @@ struct AppStateFlowTests {
             providerID: nil,
             modelID: nil,
             model: nil,
+            variant: nil,
             error: nil,
             time: .init(created: created, completed: completed),
             finish: "stop",

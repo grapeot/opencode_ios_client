@@ -166,6 +166,7 @@ final class AppState {
     private static let aiBuilderLastOKTestedAtKey = "aiBuilderLastOKTestedAt"
     private static let draftInputsBySessionKey = "draftInputsBySession"
     private static let selectedModelBySessionKey = "selectedModelBySession"
+    private static let selectedVariantBySessionKey = "selectedVariantBySession"
     private static let showArchivedSessionsKey = "showArchivedSessions"
     private static let selectedProjectWorktreeKey = "selectedProjectWorktree"
     private static let customProjectPathKey = "customProjectPath"
@@ -218,6 +219,11 @@ final class AppState {
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             selectedModelIDBySessionID = decoded
         }
+
+        if let data = UserDefaults.standard.data(forKey: Self.selectedVariantBySessionKey),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            selectedVariantBySessionID = decoded
+        }
     }
 
     // Unsent composer drafts per session.
@@ -225,6 +231,7 @@ final class AppState {
 
     // Selected model (providerID/modelID) per session.
     private var selectedModelIDBySessionID: [String: String] = [:]
+    private var selectedVariantBySessionID: [String: String] = [:]
 
     private func persistSelectedModelMap() {
         if selectedModelIDBySessionID.isEmpty {
@@ -233,6 +240,16 @@ final class AppState {
         }
         if let data = try? JSONEncoder().encode(selectedModelIDBySessionID) {
             UserDefaults.standard.set(data, forKey: Self.selectedModelBySessionKey)
+        }
+    }
+
+    private func persistSelectedVariantMap() {
+        if selectedVariantBySessionID.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Self.selectedVariantBySessionKey)
+            return
+        }
+        if let data = try? JSONEncoder().encode(selectedVariantBySessionID) {
+            UserDefaults.standard.set(data, forKey: Self.selectedVariantBySessionKey)
         }
     }
 
@@ -556,6 +573,25 @@ final class AppState {
         guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
         return modelPresets[selectedModelIndex]
     }
+
+    var selectedModelVariants: [String] {
+        guard let model = selectedModel else { return [] }
+        let key = "\(model.providerID)/\(model.modelID)"
+        return Self.sortedVariants(providerModelsIndex[key]?.variants ?? [])
+    }
+
+    var selectedVariant: String? {
+        guard let sessionID = currentSessionID else { return nil }
+        guard let saved = selectedVariantBySessionID[sessionID]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !saved.isEmpty else { return nil }
+        let available = selectedModelVariants
+        if available.isEmpty { return saved }
+        return available.contains(saved) ? saved : nil
+    }
+
+    var selectedVariantDisplayName: String {
+        Self.displayName(forVariant: selectedVariant)
+    }
     
     var selectedAgent: AgentInfo? {
         let visibleAgents = agents.filter { $0.isVisible }
@@ -674,9 +710,23 @@ final class AppState {
     func setSelectedModelIndex(_ index: Int) {
         guard modelPresets.indices.contains(index) else { return }
         selectedModelIndex = index
+        normalizeSelectedVariantForCurrentSession()
         guard let sessionID = currentSessionID else { return }
         selectedModelIDBySessionID[sessionID] = modelPresets[index].id
         persistSelectedModelMap()
+    }
+
+    func setSelectedVariant(_ variant: String?) {
+        guard let sessionID = currentSessionID else { return }
+        let cleaned = variant?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cleaned, !cleaned.isEmpty {
+            let available = selectedModelVariants
+            guard available.isEmpty || available.contains(cleaned) else { return }
+            selectedVariantBySessionID[sessionID] = cleaned
+        } else {
+            selectedVariantBySessionID[sessionID] = nil
+        }
+        persistSelectedVariantMap()
     }
     
     func setSelectedAgentIndex(_ index: Int) {
@@ -690,20 +740,95 @@ final class AppState {
         guard let saved = selectedModelIDBySessionID[sessionID] else { return }
         guard let idx = modelPresets.firstIndex(where: { $0.id == saved }) else { return }
         selectedModelIndex = idx
+        normalizeSelectedVariantForCurrentSession()
     }
 
     private func syncModelFromMessageHistory() {
         guard let sessionID = currentSessionID else { return }
-
-        guard let info = messages.reversed().compactMap({ $0.info.resolvedModel }).first else { return }
-        guard let idx = modelPresets.firstIndex(where: { $0.providerID == info.providerID && $0.modelID == info.modelID }) else {
+        if let info = messages.reversed().compactMap({ $0.info.resolvedModel }).first,
+           let idx = modelPresets.firstIndex(where: { $0.providerID == info.providerID && $0.modelID == info.modelID }) {
+            selectedModelIndex = idx
+            selectedModelIDBySessionID[sessionID] = modelPresets[idx].id
+            persistSelectedModelMap()
+        } else if let info = messages.reversed().compactMap({ $0.info.resolvedModel }).first {
             Self.logger.warning("syncModelFromMessageHistory: model \(info.providerID, privacy: .public)/\(info.modelID, privacy: .public) not in presets, keeping current selection")
-            return
         }
 
-        selectedModelIndex = idx
-        selectedModelIDBySessionID[sessionID] = modelPresets[idx].id
-        persistSelectedModelMap()
+        if selectedVariantBySessionID[sessionID] == nil,
+           let variant = messages.reversed()
+            .compactMap({ $0.info.variant?.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) {
+            selectedVariantBySessionID[sessionID] = variant
+            persistSelectedVariantMap()
+        }
+
+        normalizeSelectedVariantForCurrentSession()
+    }
+
+    private func normalizeSelectedVariantForCurrentSession() {
+        guard let sessionID = currentSessionID,
+              let saved = selectedVariantBySessionID[sessionID]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !saved.isEmpty else { return }
+        let available = selectedModelVariants
+        if available.isEmpty {
+            if selectedVariantBySessionID[sessionID] != saved {
+                selectedVariantBySessionID[sessionID] = saved
+                persistSelectedVariantMap()
+            }
+            return
+        }
+        guard available.contains(saved) else {
+            selectedVariantBySessionID[sessionID] = nil
+            persistSelectedVariantMap()
+            return
+        }
+        if selectedVariantBySessionID[sessionID] != saved {
+            selectedVariantBySessionID[sessionID] = saved
+            persistSelectedVariantMap()
+        }
+    }
+
+    nonisolated private static func sortedVariants(_ values: [String]) -> [String] {
+        let order: [String: Int] = [
+            "none": 0,
+            "minimal": 1,
+            "low": 2,
+            "medium": 3,
+            "high": 4,
+            "xhigh": 5,
+            "max": 6,
+        ]
+        return values.sorted {
+            let lhs = order[$0.lowercased()] ?? Int.max
+            let rhs = order[$1.lowercased()] ?? Int.max
+            if lhs == rhs { return $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            return lhs < rhs
+        }
+    }
+
+    nonisolated static func displayName(forVariant variant: String?) -> String {
+        guard let variant else { return "Auto" }
+        switch variant.lowercased() {
+        case "none":
+            return "None"
+        case "minimal":
+            return "Minimal"
+        case "low":
+            return "Low"
+        case "medium":
+            return "Medium"
+        case "high":
+            return "High"
+        case "xhigh":
+            return "Extra High"
+        case "max":
+            return "Max"
+        default:
+            return variant
+                .replacingOccurrences(of: "_", with: " ")
+                .replacingOccurrences(of: "-", with: " ")
+                .capitalized
+        }
     }
 
     var currentSession: Session? {
@@ -896,6 +1021,7 @@ final class AppState {
         do {
             let session = try await apiClient.createSession(title: nil)
             guard sessionLoadingID == loadingID else { return }
+            let variant = selectedVariant
             
             Self.logger.debug("createSession: created id=\(session.id, privacy: .public) directory=\(session.directory, privacy: .public) effectiveProjectDir=\(self.effectiveProjectDirectory ?? "nil", privacy: .public)")
             
@@ -904,6 +1030,10 @@ final class AppState {
             if let m = selectedModel {
                 selectedModelIDBySessionID[session.id] = m.id
                 persistSelectedModelMap()
+            }
+            if let variant {
+                selectedVariantBySessionID[session.id] = variant
+                persistSelectedVariantMap()
             }
             messageStore.resetStreaming()
             messages = []
@@ -1257,9 +1387,10 @@ final class AppState {
         }
         let tempMessageID = appendOptimisticUserMessage(text)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
+        let variant = selectedVariant
         let agentName = selectedAgent?.name ?? "build"
         do {
-            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
+            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model, variant: variant)
             return true
         } catch {
             let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
@@ -1283,6 +1414,7 @@ final class AppState {
             providerID: nil,
             modelID: nil,
             model: nil,
+            variant: nil,
             error: nil,
             time: Message.TimeInfo(created: now, completed: now),
             finish: nil,
@@ -1700,6 +1832,9 @@ final class AppState {
 
         selectedModelIDBySessionID[sessionID] = nil
         persistSelectedModelMap()
+
+        selectedVariantBySessionID[sessionID] = nil
+        persistSelectedVariantMap()
     }
 
     private func isSessionNotFoundError(_ error: Error) -> Bool {
@@ -1788,6 +1923,7 @@ final class AppState {
                 }
             }
             providerModelsIndex = idx
+            normalizeSelectedVariantForCurrentSession()
         } catch {
             providerConfigError = error.localizedDescription
         }
