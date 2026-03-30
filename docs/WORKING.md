@@ -15,6 +15,10 @@
 
 ## 已完成（近期）
 
+- [x] **避免 session 切换时在 view update 内同步改状态（2026-03-30）**：
+  - [x] 将 `ChatTabView` 中响应 `currentSessionID` 变化的草稿同步与滚动状态重置改为 `Task { @MainActor in }`
+  - [x] 降低运行时 `Modifying state during view update` 告警概率，不改变现有 session 切换行为
+
 - [x] **GLM-5.1 预设切回 GLM-5-turbo（2026-03-30）**：
   - [x] 将模型预设显示名从 `GLM-5.1` 更新为 `GLM-5-turbo`
   - [x] 将底层 model ID 从 `glm-5.1` 更新为 `glm-5-turbo`

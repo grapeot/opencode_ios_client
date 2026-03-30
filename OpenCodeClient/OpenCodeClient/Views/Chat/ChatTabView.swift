@@ -586,11 +586,14 @@ struct ChatTabView: View {
                 syncDraftFromState(sessionID: state.currentSessionID)
             }
             .onChange(of: state.currentSessionID) { oldID, newID in
-                state.setDraftText(inputText, for: oldID)
-                syncDraftFromState(sessionID: newID)
-                isNearBottom = true
-                pendingBottomVisibilityTask?.cancel()
-                pendingBottomVisibilityTask = nil
+                let draftText = inputText
+                Task { @MainActor in
+                    state.setDraftText(draftText, for: oldID)
+                    syncDraftFromState(sessionID: newID)
+                    isNearBottom = true
+                    pendingBottomVisibilityTask?.cancel()
+                    pendingBottomVisibilityTask = nil
+                }
             }
             .onChange(of: inputText) { _, newValue in
                 guard !isSyncingDraft else { return }
