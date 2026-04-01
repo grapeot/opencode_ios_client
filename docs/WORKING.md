@@ -8,13 +8,26 @@
 - **分支**：`design-redesign`（from master）
 - **编译**：✅ 通过
 - **测试**：✅ 所有 unit tests + UI tests 通过
-- **Phase**：视觉重设计 — 核心改动已完成，待用户测试
+- **Phase**：视觉重设计 — 全部完成，待 PR 合并
 
 ## 进行中
 
-- [ ] **视觉重设计用户测试** — 核心改动已全部实现并提交（`b6ed2ac`），等待用户真机/模拟器体验反馈
+- [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
 
 ## 已完成（近期）
+
+- [x] **视觉重设计 Phase 2 — Mic 按钮 + 色彩统一 + 交互修复（2026-04-01）**：
+  - [x] Mic 按钮移至发送按钮上方 VStack，添加圆角描边（1.5pt brand blue）使其可识别为可点击按钮
+  - [x] Brand primary 从深蓝 `(0.15, 0.25, 0.55)` 改为系统蓝 `(0.0, 0.478, 1.0)`，与 iOS accent 统一
+  - [x] 全局 7 处 `.accentColor` 替换为 `DesignColors.Brand.primary`（ChatToolbarView 4 处、SessionListView 1 处、ContextUsageView 1 处、ToolPartView 1 处）
+  - [x] Transcribing 状态恢复可见（`surfaceLight`/`surfaceDark` 背景替代 `Color.clear`）
+  - [x] 恢复 AI 工作中仍可发送消息（send 按钮始终可见，stop/abort 在下方同时显示）
+  - **Commit**: `122f29c` — fix: mic button to right side with border, unify brand color to system blue
+  - **Commit**: `4bf2e12` — fix: restore transcribing visual feedback and send-while-busy
+
+- [x] **Design Token 测试覆盖（2026-04-01）**：
+  - [x] 新增 `DesignTokensTests`（9 个测试）：spacing 精确值 + 单调递增、corner radii 正向排序、brand primary/gold RGB 范围、opacity 合法范围 + 暗色 > 亮色、animation slots 存在性、semantic 色互不相同
+  - [x] 所有测试通过，`xcodebuild test` green
 
 - [x] **视觉重设计 Phase 1（2026-04-01）**：
   - [x] `docs/design.md` — 11 个改进方向的完整设计文档

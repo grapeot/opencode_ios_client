@@ -2702,3 +2702,96 @@ struct AppStateFlowTests {
         return MessageWithParts(info: message, parts: [part])
     }
 }
+
+// MARK: - Design Tokens Tests
+
+@MainActor
+struct DesignTokensTests {
+
+    @Test func spacingScaleIsConsistent() {
+        #expect(DesignSpacing.xs == 4)
+        #expect(DesignSpacing.sm == 8)
+        #expect(DesignSpacing.md == 12)
+        #expect(DesignSpacing.lg == 16)
+        #expect(DesignSpacing.xl == 20)
+        #expect(DesignSpacing.xxl == 24)
+        #expect(DesignSpacing.messageVertical == 20)
+        #expect(DesignSpacing.cardPadding == 12)
+        #expect(DesignSpacing.cardGap == 16)
+    }
+
+    @Test func spacingIncreasesMonotonically() {
+        let values = [DesignSpacing.xs, DesignSpacing.sm, DesignSpacing.md, DesignSpacing.lg, DesignSpacing.xl, DesignSpacing.xxl]
+        for i in 0..<(values.count - 1) {
+            #expect(values[i] < values[i + 1])
+        }
+    }
+
+    @Test func cornerRadiiArePositive() {
+        #expect(DesignCorners.small > 0)
+        #expect(DesignCorners.medium > DesignCorners.small)
+        #expect(DesignCorners.large > DesignCorners.medium)
+    }
+
+    @Test func brandPrimaryIsSystemBlueTone() {
+        let brand = DesignColors.Brand.primary
+        let uiColor = UIColor(brand)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        #expect(r < 0.1)
+        #expect(g > 0.3 && g < 0.6)
+        #expect(b > 0.8)
+    }
+
+    @Test func brandGoldIsWarmTone() {
+        let gold = DesignColors.Brand.gold
+        let uiColor = UIColor(gold)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        #expect(r > 0.7)
+        #expect(g > 0.5 && g < 0.8)
+        #expect(b < 0.3)
+    }
+
+    @Test func opacityValuesAreInValidRange() {
+        #expect(DesignColors.Opacity.surfaceFill > 0 && DesignColors.Opacity.surfaceFill < 0.2)
+        #expect(DesignColors.Opacity.surfaceFillDark > 0 && DesignColors.Opacity.surfaceFillDark < 0.2)
+        #expect(DesignColors.Opacity.borderStroke > 0 && DesignColors.Opacity.borderStroke < 0.3)
+        #expect(DesignColors.Opacity.userMessageFill > 0 && DesignColors.Opacity.userMessageFill < 0.2)
+        #expect(DesignColors.Opacity.selectionFill > 0 && DesignColors.Opacity.selectionFill < 0.2)
+    }
+
+    @Test func darkModeOpacityHigherThanLight() {
+        #expect(DesignColors.Opacity.surfaceFillDark > DesignColors.Opacity.surfaceFill)
+        #expect(DesignColors.Opacity.borderStrokeDark > DesignColors.Opacity.borderStroke)
+        #expect(DesignColors.Opacity.userMessageFillDark > DesignColors.Opacity.userMessageFill)
+    }
+
+    @Test func animationPresetSlotsArePopulated() {
+        let all: [String: Animation] = [
+            "quick": DesignAnimation.quick,
+            "standard": DesignAnimation.standard,
+            "spring": DesignAnimation.spring,
+            "gentleSpring": DesignAnimation.gentleSpring,
+            "snappy": DesignAnimation.snappy,
+            "breathing": DesignAnimation.breathing,
+        ]
+        #expect(all.count == 6)
+    }
+
+    @Test func semanticColorsAreDistinct() {
+        let error = UIColor(DesignColors.Semantic.error)
+        let success = UIColor(DesignColors.Semantic.success)
+        let warning = UIColor(DesignColors.Semantic.warning)
+        let info = UIColor(DesignColors.Semantic.info)
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        error.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        success.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        #expect(r1 != r2 || g1 != g2 || b1 != b2)
+        warning.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        #expect(r1 != r2 || g1 != g2 || b1 != b2)
+        info.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        #expect(r1 != r2 || g1 != g2 || b1 != b2)
+    }
+}
