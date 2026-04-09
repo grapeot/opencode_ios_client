@@ -38,12 +38,20 @@ enum PathNormalizer {
             s = String(s[..<r.lowerBound])
         }
 
-        // Prevent obvious path traversal segments from flowing into API calls.
-        // (Server should enforce this too; this is a defense-in-depth client-side guard.)
-        let safeSegments = s.split(separator: "/").filter { seg in
-            seg != "." && seg != ".." && !seg.isEmpty
+        var normalizedSegments: [Substring] = []
+        for segment in s.split(separator: "/", omittingEmptySubsequences: true) {
+            switch segment {
+            case ".":
+                continue
+            case "..":
+                if !normalizedSegments.isEmpty {
+                    normalizedSegments.removeLast()
+                }
+            default:
+                normalizedSegments.append(segment)
+            }
         }
-        s = safeSegments.joined(separator: "/")
+        s = normalizedSegments.joined(separator: "/")
         return s
     }
 

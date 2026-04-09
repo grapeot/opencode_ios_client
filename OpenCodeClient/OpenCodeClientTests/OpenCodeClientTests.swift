@@ -646,8 +646,21 @@ struct PathNormalizerTests {
 
     @Test func stripsDotDotSegments() {
         #expect(PathNormalizer.normalize("../secrets.txt") == "secrets.txt")
-        #expect(PathNormalizer.normalize("src/../app.swift") == "src/app.swift")
+        #expect(PathNormalizer.normalize("src/../app.swift") == "app.swift")
         #expect(PathNormalizer.normalize("a/../b/./c.txt") == "b/c.txt")
+    }
+
+    @Test func foldsParentDirectorySegmentsForMarkdownAssets() {
+        #expect(
+            PathNormalizer.normalize("docs/reports/../assets/timeline_40d.png")
+                == "docs/assets/timeline_40d.png"
+        )
+        #expect(
+            PathNormalizer.resolveWorkspaceRelativePath(
+                "docs/reports/../assets/timeline_40d.png",
+                workspaceDirectory: "/Users/test/workspace"
+            ) == "docs/assets/timeline_40d.png"
+        )
     }
 
     @Test func resolvesWorkspaceRelativeFromAbsolutePath() {
@@ -666,6 +679,26 @@ struct PathNormalizerTests {
         let dir = "/Users/test/workspace"
         let abs = "/Users/test/workspace/src%2Fapp.swift"
         #expect(PathNormalizer.resolveWorkspaceRelativePath(abs, workspaceDirectory: dir) == "src/app.swift")
+    }
+}
+
+struct WorkspaceMarkdownImageProviderTests {
+
+    @Test func imageBaseURLResolvesParentDirectoryAssetPath() {
+        let baseURL = WorkspaceMarkdownImageProvider.imageBaseURL(
+            markdownFilePath: "adhoc_jobs/health_quantification/docs/reports/health_synthesis_report_2026-04-09.md"
+        )
+        let imageURL = URL(string: "../assets/timeline_40d.png", relativeTo: baseURL)
+        #expect(
+            WorkspaceMarkdownImageProvider.workspaceRelativePath(from: imageURL)
+                == "adhoc_jobs/health_quantification/docs/assets/timeline_40d.png"
+        )
+    }
+
+    @Test func decodesBase64DataURL() {
+        let url = URL(string: "data:image/png;base64,aGVsbG8=")
+        let data = WorkspaceMarkdownImageProvider.decodeDataURL(url)
+        #expect(data == Data("hello".utf8))
     }
 }
 

@@ -204,7 +204,6 @@ struct MarkdownPreviewView: View {
     let text: String
     let state: AppState
     let markdownFilePath: String?
-    @State private var resolvedText: String?
 
     private static let maxLineLength = 1500
     private static let maxTotalLength = 60_000
@@ -224,23 +223,24 @@ struct MarkdownPreviewView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Markdown(resolvedText ?? text)
+                    Markdown(
+                        text,
+                        imageBaseURL: WorkspaceMarkdownImageProvider.imageBaseURL(markdownFilePath: markdownFilePath)
+                    )
+                        .markdownImageProvider(
+                            WorkspaceMarkdownImageProvider(
+                                loadFileContent: { path in try await state.loadFileContent(path: path) }
+                            )
+                        )
                         .textSelection(.enabled)
                 }
             }
             .padding()
         }
-        .task {
-            resolvedText = await MarkdownImageResolver.resolveImages(
-                in: text,
-                markdownFilePath: markdownFilePath,
-                workspaceDirectory: state.currentSession?.directory,
-                fetchContent: { path in try await state.loadFileContent(path: path) }
-            )
-        }
         .onAppear {
             let fallback = useRawTextFallback
-            print("[MarkdownPreviewView] onAppear len=\(text.count) useRawTextFallback=\(fallback)")
+            let imageBaseURL = WorkspaceMarkdownImageProvider.imageBaseURL(markdownFilePath: markdownFilePath)?.absoluteString ?? "nil"
+            print("[MarkdownPreviewView] onAppear len=\(text.count) useRawTextFallback=\(fallback) imageBaseURL=\(imageBaseURL)")
         }
     }
 }
