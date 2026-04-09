@@ -646,8 +646,21 @@ struct PathNormalizerTests {
 
     @Test func stripsDotDotSegments() {
         #expect(PathNormalizer.normalize("../secrets.txt") == "secrets.txt")
-        #expect(PathNormalizer.normalize("src/../app.swift") == "src/app.swift")
+        #expect(PathNormalizer.normalize("src/../app.swift") == "app.swift")
         #expect(PathNormalizer.normalize("a/../b/./c.txt") == "b/c.txt")
+    }
+
+    @Test func foldsParentDirectorySegmentsForMarkdownAssets() {
+        #expect(
+            PathNormalizer.normalize("docs/reports/../assets/timeline_40d.png")
+                == "docs/assets/timeline_40d.png"
+        )
+        #expect(
+            PathNormalizer.resolveWorkspaceRelativePath(
+                "docs/reports/../assets/timeline_40d.png",
+                workspaceDirectory: "/Users/test/workspace"
+            ) == "docs/assets/timeline_40d.png"
+        )
     }
 
     @Test func resolvesWorkspaceRelativeFromAbsolutePath() {
