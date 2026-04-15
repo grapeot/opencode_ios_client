@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **最后更新**：2026-04-01
-- **分支**：`design-redesign`（from master）
-- **编译**：✅ 通过
-- **测试**：✅ 所有 unit tests + UI tests 通过
-- **Phase**：视觉重设计 — 全部完成，待 PR 合并
+- **最后更新**：2026-04-15
+- **分支**：`fix/markdown-report-images`（from master）
+- **编译**：✅ `xcodebuild build` 通过
+- **测试**：✅ `xcodebuild test` 通过
+- **Phase**：Markdown 报告图片渲染修复，PR 已更新待合并
 
 ## 默认工作流约定
 
@@ -66,6 +66,16 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
 
 ## 已完成（近期）
+
+- [x] **Markdown 报告图片渲染修复（2026-04-15）**：
+  - [x] 根因确认：Android 能显示报告内图片，不是 markdown 内容问题；Android 会先把相对图片路径解析成 `data:` URI 再渲染，而 iOS 聊天视图原来只做了路径解析，没有把能渲染 `data:` URL 的 image provider 接上
+  - [x] `MessageRowView`：为聊天中的 `ResolvedMarkdownView` 补上 `WorkspaceMarkdownImageProvider`，让已经被 `MarkdownImageResolver` 转换好的 `data:` URI 真正显示出来
+  - [x] `WorkspaceMarkdownImageProvider`：增加 `workspaceDirectory` 参与路径相对化，避免 markdown 图片在文件预览里带着绝对 workspace 前缀走错 `/file/content` API path
+  - [x] `FileContentView`：将 `state.currentSession?.directory` 传入 `MarkdownPreviewView` / `WorkspaceMarkdownImageProvider`，让文件预览与聊天视图在 workspace 路径语义上保持一致
+  - [x] 测试修正：`WorkspaceMarkdownImageProviderTests.decodesBase64DataURL()` 改为使用真实 1x1 PNG 的 base64，而不是无效的 `"hello"` payload；新增 absolute-workspace prefix stripping 覆盖
+  - [x] 验证：`xcodebuild -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' build` 通过；同目标 `test` 通过
+  - **Commit**: `5554fe9` — fix: render markdown report images on ios
+  - **Commit**: `45044d4` — test: align markdown image provider data-url coverage
 
 - [x] **视觉重设计 Phase 2 — Mic 按钮 + 色彩统一 + 交互修复（2026-04-01）**：
   - [x] Mic 按钮移至发送按钮上方 VStack，添加圆角描边（1.5pt brand blue）使其可识别为可点击按钮
