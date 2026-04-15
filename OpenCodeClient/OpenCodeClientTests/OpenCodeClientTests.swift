@@ -696,9 +696,20 @@ struct WorkspaceMarkdownImageProviderTests {
     }
 
     @Test func decodesBase64DataURL() {
-        let url = URL(string: "data:image/png;base64,aGVsbG8=")
+        let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XGZ0AAAAASUVORK5CYII="
+        let url = URL(string: "data:image/png;base64,\(pngBase64)")
         let data = WorkspaceMarkdownImageProvider.decodeDataURL(url)
-        #expect(data == Data("hello".utf8))
+        #expect(data == Data(base64Encoded: pngBase64))
+    }
+
+    @Test func workspaceRelativePathStripsAbsoluteWorkspacePrefix() {
+        let url = URL(string: "opencode-workspace://workspace/Users/test/workspace/docs/assets/chart.png")
+        #expect(
+            WorkspaceMarkdownImageProvider.workspaceRelativePath(
+                from: url,
+                workspaceDirectory: "/Users/test/workspace"
+            ) == "docs/assets/chart.png"
+        )
     }
 }
 
