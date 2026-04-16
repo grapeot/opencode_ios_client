@@ -229,11 +229,44 @@ struct Part: Codable, Identifiable {
     let sessionID: String
     let type: String
     let text: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
     let tool: String?
     let callID: String?
     let state: PartStateBridge?
     let metadata: PartMetadata?
     let files: [FileChange]?
+
+    init(
+        id: String,
+        messageID: String,
+        sessionID: String,
+        type: String,
+        text: String? = nil,
+        mime: String? = nil,
+        filename: String? = nil,
+        url: String? = nil,
+        tool: String? = nil,
+        callID: String? = nil,
+        state: PartStateBridge? = nil,
+        metadata: PartMetadata? = nil,
+        files: [FileChange]? = nil
+    ) {
+        self.id = id
+        self.messageID = messageID
+        self.sessionID = sessionID
+        self.type = type
+        self.text = text
+        self.mime = mime
+        self.filename = filename
+        self.url = url
+        self.tool = tool
+        self.callID = callID
+        self.state = state
+        self.metadata = metadata
+        self.files = files
+    }
 
     /// For UI display; handles both string and object state
     var stateDisplay: String? { state?.displayString }
@@ -316,9 +349,18 @@ struct Part: Codable, Identifiable {
     }
 
     var isText: Bool { type == "text" }
+    var isFile: Bool { type == "file" }
     var isReasoning: Bool { type == "reasoning" }
     var isTool: Bool { type == "tool" }
     var isPatch: Bool { type == "patch" }
+    var displayFilename: String {
+        if let filename, !filename.isEmpty { return filename }
+        if let url, let parsed = URL(string: url) {
+            let candidate = parsed.lastPathComponent
+            if !candidate.isEmpty { return candidate }
+        }
+        return "Attachment"
+    }
 
     /// 可跳转的文件路径列表：来自 files 数组、metadata.path、或 state.input 中的 path/patchText 解析
     var filePathsForNavigation: [String] {

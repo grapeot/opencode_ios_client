@@ -290,6 +290,14 @@ struct SettingsTabView: View {
                     Toggle(L10n.t(.settingsShowArchivedSessions), isOn: $state.showArchivedSessions)
                 }
 
+                Section(L10n.t(.settingsChat)) {
+                    Toggle(L10n.t(.settingsShowAttachmentButton), isOn: $state.showAttachmentButton)
+
+                    Text(L10n.t(.settingsAttachmentButtonHelp))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section(L10n.t(.settingsSpeechRecognition)) {
                     TextField(L10n.t(.settingsAiBuilderBaseURL), text: $state.aiBuilderBaseURL)
                         .textContentType(.URL)

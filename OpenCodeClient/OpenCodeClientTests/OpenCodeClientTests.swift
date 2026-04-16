@@ -1015,16 +1015,20 @@ struct AIBuildersAudioClientTests {
     }
 
     @Test func chatComposerSendGateRejectsMarkedText() {
-        #expect(ChatComposerSendGate.canSend(text: "nihao", isSending: false, hasMarkedText: true) == false)
+        #expect(ChatComposerSendGate.canSend(text: "nihao", hasAttachments: false, isSending: false, hasMarkedText: true) == false)
     }
 
     @Test func chatComposerSendGateRejectsWhitespaceAndActiveSend() {
-        #expect(ChatComposerSendGate.canSend(text: "   ", isSending: false, hasMarkedText: false) == false)
-        #expect(ChatComposerSendGate.canSend(text: "hello", isSending: true, hasMarkedText: false) == false)
+        #expect(ChatComposerSendGate.canSend(text: "   ", hasAttachments: false, isSending: false, hasMarkedText: false) == false)
+        #expect(ChatComposerSendGate.canSend(text: "hello", hasAttachments: false, isSending: true, hasMarkedText: false) == false)
     }
 
     @Test func chatComposerSendGateAllowsCommittedText() {
-        #expect(ChatComposerSendGate.canSend(text: "hello", isSending: false, hasMarkedText: false) == true)
+        #expect(ChatComposerSendGate.canSend(text: "hello", hasAttachments: false, isSending: false, hasMarkedText: false) == true)
+    }
+
+    @Test func chatComposerSendGateAllowsAttachmentsWithoutText() {
+        #expect(ChatComposerSendGate.canSend(text: "   ", hasAttachments: true, isSending: false, hasMarkedText: false) == true)
     }
 }
 
@@ -2243,7 +2247,7 @@ actor MockAPIClient: APIClientProtocol {
         return messagesResult
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws {
+    func promptAsync(sessionID: String, text: String, attachments: [ComposerAttachmentPayload], agent: String, model: Message.ModelInfo?) async throws {
         if let promptError { throw promptError }
     }
 

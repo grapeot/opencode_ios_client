@@ -16,9 +16,9 @@ enum ChatComposerKeyAction: Equatable {
 }
 
 enum ChatComposerSendGate {
-    static func canSend(text: String, isSending: Bool, hasMarkedText: Bool) -> Bool {
+    static func canSend(text: String, hasAttachments: Bool, isSending: Bool, hasMarkedText: Bool) -> Bool {
         guard !isSending, !hasMarkedText else { return false }
-        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return hasAttachments || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

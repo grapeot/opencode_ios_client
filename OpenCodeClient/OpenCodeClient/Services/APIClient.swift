@@ -5,6 +5,14 @@
 
 import Foundation
 
+struct ComposerAttachmentPayload: Sendable, Hashable {
+    let filename: String
+    let mimeType: String
+    let dataURL: String
+    let kind: ChatAttachmentKind
+    let byteCount: Int
+}
+
 actor APIClient {
     private var baseURL: String
     private var username: String?
@@ -233,14 +241,37 @@ actor APIClient {
         return try? decoder.decode(type, from: data)
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String = "build", model: Message.ModelInfo?) async throws {
+    func promptAsync(
+        sessionID: String,
+        text: String,
+        attachments: [ComposerAttachmentPayload] = [],
+        agent: String = "build",
+        model: Message.ModelInfo?
+    ) async throws {
         struct PromptBody: Encodable {
             let parts: [PartInput]
             let agent: String
             let model: ModelInput?
             struct PartInput: Encodable {
-                let type = "text"
-                let text: String
+                let type: String
+                let text: String?
+                let mime: String?
+                let filename: String?
+                let url: String?
+
+                static func text(_ text: String) -> Self {
+                    .init(type: "text", text: text, mime: nil, filename: nil, url: nil)
+                }
+
+                static func file(_ attachment: ComposerAttachmentPayload) -> Self {
+                    .init(
+                        type: "file",
+                        text: nil,
+                        mime: attachment.mimeType,
+                        filename: attachment.filename,
+                        url: attachment.dataURL,
+                    )
+                }
             }
             struct ModelInput: Encodable {
                 let providerID: String
@@ -248,7 +279,7 @@ actor APIClient {
             }
         }
         let body = PromptBody(
-            parts: [.init(text: text)],
+            parts: [.text(text)] + attachments.map(PromptBody.PartInput.file),
             agent: agent,
             model: model.map { .init(providerID: $0.providerID, modelID: $0.modelID) }
         )
@@ -560,6 +591,8 @@ struct ProviderModel: Decodable {
     let id: String
     let name: String?
     let providerID: String?
+    let attachment: Bool?
+    let modalities: ProviderModelModalities?
     let limit: ProviderModelLimit?
 
     private enum CodingKeys: String, CodingKey {
@@ -567,13 +600,24 @@ struct ProviderModel: Decodable {
         case name
         case providerID
         case providerId
+        case attachment
+        case modalities
         case limit
     }
 
-    init(id: String, name: String?, providerID: String?, limit: ProviderModelLimit?) {
+    init(
+        id: String,
+        name: String?,
+        providerID: String?,
+        attachment: Bool? = nil,
+        modalities: ProviderModelModalities? = nil,
+        limit: ProviderModelLimit?
+    ) {
         self.id = id
         self.name = name
         self.providerID = providerID
+        self.attachment = attachment
+        self.modalities = modalities
         self.limit = limit
     }
 
@@ -582,7 +626,30 @@ struct ProviderModel: Decodable {
         id = (try? c.decode(String.self, forKey: .id)) ?? ""
         name = try? c.decode(String.self, forKey: .name)
         providerID = (try? c.decode(String.self, forKey: .providerID)) ?? (try? c.decode(String.self, forKey: .providerId))
+        attachment = try? c.decode(Bool.self, forKey: .attachment)
+        modalities = try? c.decode(ProviderModelModalities.self, forKey: .modalities)
         limit = try? c.decode(ProviderModelLimit.self, forKey: .limit)
+    }
+}
+
+struct ProviderModelModalities: Codable {
+    let input: [String]
+    let output: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case input
+        case output
+    }
+
+    init(input: [String], output: [String]) {
+        self.input = input
+        self.output = output
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        input = try c.decodeIfPresent([String].self, forKey: .input) ?? []
+        output = try c.decodeIfPresent([String].self, forKey: .output) ?? []
     }
 }
 
@@ -617,7 +684,7 @@ protocol APIClientProtocol: Actor {
     func updateSession(sessionID: String, title: String) async throws -> Session
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
-    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws
+    func promptAsync(sessionID: String, text: String, attachments: [ComposerAttachmentPayload], agent: String, model: Message.ModelInfo?) async throws
     func abort(sessionID: String) async throws
     func sessionStatus() async throws -> [String: SessionStatus]
     func pendingPermissions() async throws -> [APIClient.PermissionRequest]
