@@ -136,15 +136,14 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 
 | 显示名称 | providerID | modelID |
 |----------|------------|---------|
-| GLM-5 | `zai-coding-plan` | `glm-5` |
-| Opus 4.6 | `anthropic` | `claude-opus-4-6` |
-| Sonnet 4.6 | `anthropic` | `claude-sonnet-4-6` |
+| GLM-5-turbo | `zai-coding-plan` | `glm-5-turbo` |
 | GPT-5.4 | `openai` | `gpt-5.4` |
 | GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
+| DeepSeek | `deepseek` | `deepseek-v4-pro` |
 
 **Agent 选择器**：下拉列表，内容从 `GET /agent` API 动态获取。过滤 `hidden != true` 的 agents 后显示。每个选项显示 agent 名称（如 `Sisyphus`），description 可作为 tooltip 或 subtitle。
 
-**iPhone 显示策略**：iPhone 上使用短名（`Opus` / `Sonnet` / `GPT` / `GLM`）以适配窄宽；iPad 上显示全称。
+**iPhone 显示策略**：iPhone 上使用短名（`DeepSeek` / `GPT` / `GLM`）以适配窄宽；iPad 上显示全称。
 
 **技术实现**：
 - 切换模型/Agent 不需要调用 API，只是改变本地状态
@@ -362,7 +361,7 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 
 #### 4.4.3 Model Presets
 
-**当前实现**：固定预设列表（GLM-5、Opus 4.6、Sonnet 4.6、GPT-5.4、GPT-5.3 Codex），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
+**当前实现**：固定预设列表（GLM-5-turbo、GPT-5.4、GPT-5.3 Codex、DeepSeek），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
 
 #### 4.4.3 Project (Workspace)
 

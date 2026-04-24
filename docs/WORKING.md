@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **最后更新**：2026-04-15
-- **分支**：`fix/markdown-report-images`（from master）
+- **最后更新**：2026-04-23
+- **分支**：`model/update-deepseek`（from master）
 - **编译**：✅ `xcodebuild build` 通过
 - **测试**：✅ `xcodebuild test` 通过
-- **Phase**：Markdown 报告图片渲染修复，PR 已更新待合并
+- **Phase**：Model 列表更新：删除 Opus/Sonnet，添加 DeepSeek
 
 ## 默认工作流约定
 
@@ -64,6 +64,7 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 ## 进行中
 
 - [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
+- [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
 ## 已完成（近期）
 
@@ -397,16 +398,13 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - **GET /agent**：✅ 返回 `[AgentInfo]`，含 name/description/mode/hidden/native 字段。iOS 端过滤 mode=subagent。
 - **Import from Server**：依赖 config/providers，解析修复后应可正常导入。
 
-当前模型预设（7 个）：
+当前模型预设（4 个）：
 | 显示名称 | providerID | modelID |
 |----------|------------|---------|
-| GLM-5（默认） | `zai-coding-plan` | `glm-5` |
-| Opus 4.6 | `anthropic` | `claude-opus-4-6` |
-| Sonnet 4.6 | `anthropic` | `claude-sonnet-4-6` |
+| GLM-5-turbo | `zai-coding-plan` | `glm-5-turbo` |
+| GPT-5.4 | `openai` | `gpt-5.4` |
 | GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
-| GPT-5.2 | `openai` | `gpt-5.2` |
-| Gemini 3.1 Pro | `google` | `gemini-3.1-pro-preview` |
-| Gemini 3 Flash | `google` | `gemini-3-flash-preview` |
+| DeepSeek | `deepseek` | `deepseek-v4-pro` |
 
 Agent prefill（5 个，OpenCode-Builder 默认）：
 - OpenCode-Builder (mode=all)

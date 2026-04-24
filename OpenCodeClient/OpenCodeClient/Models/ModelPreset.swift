@@ -12,8 +12,7 @@ struct ModelPreset: Codable, Identifiable {
     let modelID: String
     
     var shortName: String {
-        if displayName.contains("Opus") { return "Opus" }
-        if displayName.contains("Sonnet") { return "Sonnet" }
+        if displayName.contains("DeepSeek") { return "DeepSeek" }
         if displayName.contains("Gemini") { return "Gemini" }
         if displayName.contains("GPT") { return "GPT" }
         return displayName
