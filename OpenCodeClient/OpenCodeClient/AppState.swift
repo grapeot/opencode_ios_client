@@ -416,11 +416,11 @@ final class AppState {
 
     var modelPresets: [ModelPreset] = [
         ModelPreset(displayName: "GLM-5-turbo", providerID: "zai-coding-plan", modelID: "glm-5-turbo"),
-        ModelPreset(displayName: "GPT-5.4", providerID: "openai", modelID: "gpt-5.4"),
+        ModelPreset(displayName: "GPT-5.5", providerID: "openai", modelID: "gpt-5.5"),
         ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
         ModelPreset(displayName: "DeepSeek", providerID: "deepseek", modelID: "deepseek-v4-pro"),
     ]
-    var selectedModelIndex: Int = 3
+    var selectedModelIndex: Int = 1
     
     var agents: [AgentInfo] = [
         AgentInfo(name: "OpenCode-Builder", description: "Build agent (OpenCode default)", mode: "all", hidden: false, native: false),
@@ -682,6 +682,8 @@ final class AppState {
         switch savedID {
         case "zai-coding-plan/glm-5.1":
             return "zai-coding-plan/glm-5-turbo"
+        case "openai/gpt-5.4":
+            return "openai/gpt-5.5"
         default:
             return savedID
         }

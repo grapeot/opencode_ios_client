@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **最后更新**：2026-04-23
+- **最后更新**：2026-04-28
 - **分支**：`model/update-deepseek`（from master）
 - **编译**：✅ `xcodebuild build` 通过
 - **测试**：✅ `xcodebuild test` 通过
-- **Phase**：Model 列表更新：删除 Opus/Sonnet，添加 DeepSeek
+- **Phase**：默认模型切换到 GPT，GPT 预设升级到 5.5
 
 ## 默认工作流约定
 
@@ -67,6 +67,12 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
 ## 已完成（近期）
+
+- [x] **默认模型切换到 GPT-5.5（2026-04-28）**：
+  - [x] 默认发送模型从 DeepSeek 切换为 `openai/gpt-5.5`
+  - [x] GPT 预设显示名和 model ID 从 `GPT-5.4` / `gpt-5.4` 升级为 `GPT-5.5` / `gpt-5.5`
+  - [x] 为已保存旧 `openai/gpt-5.4` 选择的 session 增加兼容映射，避免模型 selector 回退
+  - [x] 新增默认选择与旧 GPT 选择迁移测试
 
 - [x] **Markdown 报告图片渲染修复（2026-04-15）**：
   - [x] 根因确认：Android 能显示报告内图片，不是 markdown 内容问题；Android 会先把相对图片路径解析成 `data:` URI 再渲染，而 iOS 聊天视图原来只做了路径解析，没有把能渲染 `data:` URL 的 image provider 接上

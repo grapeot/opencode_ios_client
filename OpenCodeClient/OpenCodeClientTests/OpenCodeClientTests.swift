@@ -1621,6 +1621,52 @@ struct ModelSelectionPersistenceTests {
         #expect(state.selectedModelIndex == 0)
         #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5-turbo")
     }
+
+    @Test @MainActor func legacyGPT54SelectionMapsToCurrentGPT55Preset() {
+        let sessionID = "session-gpt"
+        let defaultsKey = "selectedModelBySession"
+        let legacySelection = [sessionID: "openai/gpt-5.4"]
+        let originalData = UserDefaults.standard.data(forKey: defaultsKey)
+
+        defer {
+            if let originalData {
+                UserDefaults.standard.set(originalData, forKey: defaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: defaultsKey)
+            }
+        }
+
+        let encoded = try! JSONEncoder().encode(legacySelection)
+        UserDefaults.standard.set(encoded, forKey: defaultsKey)
+
+        let state = AppState()
+        let session = Session(
+            id: sessionID,
+            slug: sessionID,
+            projectID: "p1",
+            directory: "/tmp",
+            parentID: nil,
+            title: sessionID,
+            version: "1",
+            time: .init(created: 0, updated: 100, archived: nil),
+            share: nil,
+            summary: nil
+        )
+
+        state.selectSession(session)
+
+        #expect(state.selectedModelIndex == 1)
+        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
+        #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
+    }
+
+    @Test @MainActor func defaultSelectionUsesGPT55Preset() {
+        let state = AppState()
+
+        #expect(state.selectedModelIndex == 1)
+        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
+        #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
+    }
 }
 
 struct ArchivedSessionTests {
