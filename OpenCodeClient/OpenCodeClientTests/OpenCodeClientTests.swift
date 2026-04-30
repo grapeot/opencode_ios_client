@@ -35,6 +35,17 @@ struct OpenCodeClientTests {
         #expect(AppState.ensureServerURLHasScheme("https://example.com:443") == nil)
     }
 
+    @Test func serverURLInfoTreatsCGNATAsLocal() {
+        let cgnat = AppState.serverURLInfo("100.64.1.2:4096")
+        #expect(cgnat.isLocal == true)
+        #expect(cgnat.normalized == "http://100.64.1.2:4096")
+        #expect(cgnat.warning == L10n.t(.errorUsingLanHttp))
+
+        let publicAddress = AppState.serverURLInfo("100.128.1.2:4096")
+        #expect(publicAddress.isLocal == false)
+        #expect(publicAddress.warning == L10n.t(.errorWanRequiresHttps))
+    }
+
     @Test @MainActor func migrateLegacyDefaultServerAddress() {
         let key = "serverURL"
         let previous = UserDefaults.standard.string(forKey: key)
