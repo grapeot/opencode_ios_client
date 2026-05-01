@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **最后更新**：2026-04-30
+- **最后更新**：2026-05-01
 - **分支**：`visionos`（from master）
 - **编译**：✅ `OpenCodeClientVision` xrsimulator build 通过
 - **测试**：✅ iOS build/test 回归验证通过
-- **Phase**：visionOS 原生 target 基线
+- **Phase**：visionOS MarkdownUI package patch 验证完成
 
 ## 默认工作流约定
 
@@ -72,10 +72,18 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
   - [x] 新增 `OpenCodeClientVision` application target，SDK 指向 `xros`，device family 设为 Vision，源码复用现有 `OpenCodeClient/` synchronized root group
   - [x] 保留 iPad 三栏 `NavigationSplitView` 作为 visionOS 的主 layout；不引入 tab-based 顶层导航
   - [x] visionOS 首版不支持 SSH tunnel：`Settings` 中隐藏 SSH Tunnel section，启动/前后台恢复流程不再尝试自动连接 tunnel；底层 `SSHTunnelManager` 在 visionOS 使用 stub，避免链接 Citadel / swift-nio-ssh
-  - [x] visionOS 首版暂不链接 MarkdownUI：聊天和 Markdown 文件预览走系统 `AttributedString(markdown:)` 渲染；iOS/iPadOS 继续使用 MarkdownUI 与 workspace image provider
+  - [x] visionOS 首版先用系统 `AttributedString(markdown:)` 验证 target 能独立编译；后续已切换到本地 patched MarkdownUI / NetworkImage
   - [x] 兼容 visionOS API：将 `scrollDismissesKeyboard(.immediately)` 包装为平台条件修饰符，visionOS 下跳过该 unavailable modifier
   - [x] 验证：`xcodebuild -project "OpenCodeClient.xcodeproj" -target "OpenCodeClientVision" -configuration Debug -sdk xrsimulator CODE_SIGNING_ALLOWED=NO build` 通过
-  - [ ] 后续：如果需要 MarkdownUI 的 workspace image provider 能力，需要 fork/等待上游补齐 MarkdownUI / NetworkImage 的 visionOS package 支持
+  - [x] 后续验证：本地 patched MarkdownUI / NetworkImage 已能让 visionOS target 直接使用 `MarkdownUI.Markdown`
+
+- [x] **MarkdownUI / NetworkImage visionOS package patch（2026-05-01）**：
+  - [x] 新增 `third_party/swift-markdown-ui`（2.4.1）和 `third_party/NetworkImage`（6.0.1）本地 package source，用 Xcode local package reference 替代远端 MarkdownUI reference
+  - [x] `swift-markdown-ui/Package.swift` 升到 Swift tools 5.9，声明 `.visionOS(.v1)`，并把 `NetworkImage` 改为 `../NetworkImage` 本地 package dependency
+  - [x] `NetworkImage/Package.swift` 升到 Swift tools 5.9，声明 `.visionOS(.v1)`；`NetworkImage.swift` 增加 visionOS availability，并用 1x1 transparent `CGImage` 作为空图占位，避开 UIKit/AppKit-only empty image initializer
+  - [x] `MessageRowView` 与 `FileContentView` 在 visionOS 上恢复使用 `MarkdownUI.Markdown`，删除临时 native Markdown fallback
+  - [x] 验证：`xcodebuild -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClientVision" -configuration Debug -sdk xrsimulator CODE_SIGNING_ALLOWED=NO build` 通过
+  - [x] 验证：`xcodebuild -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build` 通过
 
 - [x] **默认模型切换到 GPT-5.5（2026-04-28）**：
   - [x] 默认发送模型从 DeepSeek 切换为 `openai/gpt-5.5`

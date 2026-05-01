@@ -23,7 +23,7 @@ The `OpenCodeClientVision` target is a native visionOS build that reuses the exi
 Current visionOS baseline limitations:
 
 - SSH tunnel settings are hidden and SSH tunneling is not available. Connect directly to a LAN or HTTPS OpenCode server instead.
-- Markdown content uses native `AttributedString` rendering on visionOS while the MarkdownUI dependency remains iOS/iPadOS-only. Workspace image handling still uses the full MarkdownUI renderer on iOS and iPadOS.
+- Markdown rendering uses a local `third_party/` copy of MarkdownUI plus NetworkImage. Both packages are patched only for package-platform support so the same MarkdownUI renderer builds for iOS, iPadOS, and visionOS.
 
 ### Hardware keyboard behavior on iPad
 
@@ -61,6 +61,8 @@ open OpenCodeClient.xcodeproj
 ```
 
 Select the `OpenCodeClient` scheme, pick a simulator or device, and hit Run. Swift Package dependencies resolve automatically on first build.
+
+This repo vendors patched local copies of `swift-markdown-ui` and `NetworkImage` under `third_party/` because the upstream package manifests do not currently advertise visionOS support. The app project points Xcode at those local packages.
 
 For the native visionOS target, build `OpenCodeClientVision`:
 
