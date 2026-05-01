@@ -1,4 +1,5 @@
 import Foundation
+#if !os(visionOS)
 import MarkdownUI
 import NetworkImage
 import SwiftUI
@@ -163,3 +164,4 @@ private struct WorkspaceMarkdownImageView: View {
         }
     }
 }
+#endif

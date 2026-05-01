@@ -4,7 +4,9 @@
 //
 
 import SwiftUI
+#if !os(visionOS)
 import MarkdownUI
+#endif
 
 enum ImageFileUtils {
     static let extensions: Set<String> = [
@@ -224,6 +226,11 @@ struct MarkdownPreviewView: View {
     var body: some View {
         ScrollView {
             Group {
+                #if os(visionOS)
+                Text(text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                #else
                 if useRawTextFallback {
                     Text(text)
                         .textSelection(.enabled)
@@ -241,12 +248,17 @@ struct MarkdownPreviewView: View {
                         )
                         .textSelection(.enabled)
                 }
+                #endif
             }
             .padding()
         }
         .onAppear {
             let fallback = useRawTextFallback
+            #if os(visionOS)
+            let imageBaseURL = "nil"
+            #else
             let imageBaseURL = WorkspaceMarkdownImageProvider.imageBaseURL(markdownFilePath: markdownFilePath)?.absoluteString ?? "nil"
+            #endif
             print("[MarkdownPreviewView] onAppear len=\(text.count) useRawTextFallback=\(fallback) imageBaseURL=\(imageBaseURL)")
         }
     }

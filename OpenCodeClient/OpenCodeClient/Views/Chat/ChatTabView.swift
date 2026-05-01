@@ -450,7 +450,7 @@ struct ChatTabView: View {
                         .refreshable {
                             await state.loadOlderMessagesForCurrentSession()
                         }
-                        .scrollDismissesKeyboard(.immediately)
+                        .opencodeScrollDismissesKeyboard()
                         .onPreferenceChange(BottomMarkerMinYPreferenceKey.self) { bottomMarkerMinY in
                             scheduleBottomVisibilityUpdate(
                                 bottomMarkerMinY: bottomMarkerMinY,
@@ -844,6 +844,17 @@ struct ChatTabView: View {
                 ) else { return }
                 showSessionList = true
             }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func opencodeScrollDismissesKeyboard() -> some View {
+        #if os(visionOS)
+        self
+        #else
+        self.scrollDismissesKeyboard(.immediately)
+        #endif
     }
 }
 

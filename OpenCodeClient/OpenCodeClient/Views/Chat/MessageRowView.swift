@@ -4,7 +4,9 @@
 //
 
 import SwiftUI
+#if !os(visionOS)
 import MarkdownUI
+#endif
 
 struct MessageRowView: View {
     @Bindable var state: AppState
@@ -70,6 +72,11 @@ struct MessageRowView: View {
     @ViewBuilder
     private func markdownText(_ text: String, isUser: Bool) -> some View {
         let font = isUser ? DesignTypography.bodyProminent : DesignTypography.body
+        #if os(visionOS)
+        Text(text)
+            .font(font)
+            .textSelection(.enabled)
+        #else
         if shouldRenderMarkdown(text) {
             ResolvedMarkdownView(text: text, state: state, workspaceDirectory: workspaceDirectory)
                 .font(font)
@@ -79,8 +86,10 @@ struct MessageRowView: View {
                 .font(font)
                 .textSelection(.enabled)
         }
+        #endif
     }
 
+    #if !os(visionOS)
     private struct ResolvedMarkdownView: View {
         let text: String
         let state: AppState
@@ -104,6 +113,7 @@ struct MessageRowView: View {
                 }
         }
     }
+    #endif
 
     private func shouldRenderMarkdown(_ text: String) -> Bool {
         Self.hasMarkdownSyntax(text)
