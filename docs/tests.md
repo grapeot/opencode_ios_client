@@ -247,7 +247,7 @@ xcodebuild -project "OpenCodeClient.xcodeproj" \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-当前 `OpenCodeClientVision` 是编译 smoke target，还没有单独的 visionOS test bundle。它的主要保护面是：Xcode project target 配置正确、共享源码没有引用 visionOS unavailable API、visionOS 不链接 iOS-only/暂不支持的功能依赖。
+当前 `OpenCodeClientVision` 是编译 smoke target，还没有单独的 visionOS test bundle。它的主要保护面是：Xcode project target 配置正确、共享源码没有引用 visionOS unavailable API、visionOS 不链接 iOS-only/暂不支持的功能依赖，并且 visionOS 的 native Markdown fallback 能通过编译。
 
 如果遇到 simulator 本身的 creation / launch 问题，需要明确区分：
 

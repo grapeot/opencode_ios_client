@@ -23,7 +23,7 @@ The `OpenCodeClientVision` target is a native visionOS build that reuses the exi
 Current visionOS baseline limitations:
 
 - SSH tunnel settings are hidden and SSH tunneling is not available. Connect directly to a LAN or HTTPS OpenCode server instead.
-- Markdown content uses raw selectable text rendering while the MarkdownUI dependency is evaluated for visionOS. iOS and iPadOS keep the full MarkdownUI renderer.
+- Markdown content uses native `AttributedString` rendering on visionOS while the MarkdownUI dependency remains iOS/iPadOS-only. Workspace image handling still uses the full MarkdownUI renderer on iOS and iPadOS.
 
 ### Hardware keyboard behavior on iPad
 
