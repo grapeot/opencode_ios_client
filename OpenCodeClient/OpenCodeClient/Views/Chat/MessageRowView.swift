@@ -67,6 +67,14 @@ struct MessageRowView: View {
         return blocks
     }
 
+    private var userTextParts: [Part] {
+        message.parts.filter { $0.isText }
+    }
+
+    private var userFileParts: [Part] {
+        message.parts.filter { $0.isFile }
+    }
+
     @ViewBuilder
     private func markdownText(_ text: String, isUser: Bool) -> some View {
         let font = isUser ? DesignTypography.bodyProminent : DesignTypography.body
@@ -144,10 +152,21 @@ struct MessageRowView: View {
                     .frame(width: 4)
                 
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(message.parts.filter { $0.isText }, id: \.id) { part in
+                    ForEach(userTextParts, id: \.id) { part in
                         markdownText(part.text ?? "", isUser: true)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.top, 10)
+                            .padding(.bottom, userFileParts.isEmpty ? 10 : 6)
+                    }
+
+                    if !userFileParts.isEmpty {
+                        VStack(alignment: .leading, spacing: DesignSpacing.xs) {
+                            ForEach(userFileParts, id: \.id) { part in
+                                UserAttachmentRow(part: part)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
                     }
                 }
             }
@@ -235,5 +254,44 @@ struct MessageRowView: View {
         } else {
             EmptyView()
         }
+    }
+}
+
+private struct UserAttachmentRow: View {
+    let part: Part
+
+    private var iconName: String {
+        guard let mime = part.mime?.lowercased() else { return "paperclip" }
+        if mime.hasPrefix("image/") { return "photo" }
+        if mime == "application/pdf" { return "doc.richtext" }
+        return "doc.text"
+    }
+
+    private var detail: String {
+        guard let mime = part.mime?.lowercased() else { return "" }
+        if mime.hasPrefix("image/") { return L10n.t(.chatAttachmentImageLabel) }
+        if mime == "application/pdf" { return L10n.t(.chatAttachmentPDFLabel) }
+        return L10n.t(.chatAttachmentTextLabel)
+    }
+
+    var body: some View {
+        HStack(spacing: DesignSpacing.sm) {
+            Image(systemName: iconName)
+                .font(.caption)
+                .foregroundStyle(DesignColors.Brand.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(part.displayFilename)
+                    .font(DesignTypography.micro)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(DesignTypography.micro)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.white.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
     }
 }

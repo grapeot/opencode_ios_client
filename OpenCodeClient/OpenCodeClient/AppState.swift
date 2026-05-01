@@ -8,6 +8,21 @@ import CryptoKit
 import Observation
 import os
 
+enum ChatAttachmentKind: String, Codable, Sendable {
+    case image
+    case pdf
+    case text
+}
+
+struct ComposerAttachment: Identifiable, Hashable, Sendable {
+    let id: String
+    let filename: String
+    let mimeType: String
+    let dataURL: String
+    let kind: ChatAttachmentKind
+    let byteCount: Int
+}
+
 struct SessionNode: Identifiable {
     let session: Session
     let children: [SessionNode]
@@ -167,6 +182,7 @@ final class AppState {
     private static let draftInputsBySessionKey = "draftInputsBySession"
     private static let selectedModelBySessionKey = "selectedModelBySession"
     private static let showArchivedSessionsKey = "showArchivedSessions"
+    private static let showAttachmentButtonKey = "showAttachmentButton"
     private static let selectedProjectWorktreeKey = "selectedProjectWorktree"
     private static let customProjectPathKey = "customProjectPath"
 
@@ -196,6 +212,7 @@ final class AppState {
         _aiBuilderCustomPrompt = UserDefaults.standard.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
         _aiBuilderTerminology = UserDefaults.standard.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
         _showArchivedSessions = UserDefaults.standard.bool(forKey: Self.showArchivedSessionsKey)
+        _showAttachmentButton = UserDefaults.standard.bool(forKey: Self.showAttachmentButtonKey)
         _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
 
@@ -222,6 +239,7 @@ final class AppState {
 
     // Unsent composer drafts per session.
     private var draftInputsBySessionID: [String: String] = [:]
+    private var composerAttachmentsBySessionID: [String: [ComposerAttachment]] = [:]
 
     // Selected model (providerID/modelID) per session.
     private var selectedModelIDBySessionID: [String: String] = [:]
@@ -257,6 +275,32 @@ final class AppState {
         if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
             UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
         }
+    }
+
+    func composerAttachments(for sessionID: String?) -> [ComposerAttachment] {
+        guard let sessionID else { return [] }
+        return composerAttachmentsBySessionID[sessionID] ?? []
+    }
+
+    func appendComposerAttachments(_ attachments: [ComposerAttachment], for sessionID: String?) {
+        guard let sessionID, !attachments.isEmpty else { return }
+        composerAttachmentsBySessionID[sessionID, default: []].append(contentsOf: attachments)
+    }
+
+    func removeComposerAttachment(id: String, for sessionID: String?) {
+        guard let sessionID else { return }
+        var existing = composerAttachmentsBySessionID[sessionID] ?? []
+        existing.removeAll { $0.id == id }
+        composerAttachmentsBySessionID[sessionID] = existing.isEmpty ? nil : existing
+    }
+
+    func clearComposerAttachments(for sessionID: String?) {
+        guard let sessionID else { return }
+        composerAttachmentsBySessionID[sessionID] = nil
+    }
+
+    func clearAllComposerAttachments() {
+        composerAttachmentsBySessionID.removeAll()
     }
 
     private static func aiBuilderSignature(baseURL: String, token: String) -> String {
@@ -440,6 +484,17 @@ final class AppState {
         }
     }
     private var _showArchivedSessions: Bool = false
+    var showAttachmentButton: Bool {
+        get { _showAttachmentButton }
+        set {
+            _showAttachmentButton = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.showAttachmentButtonKey)
+            if !newValue {
+                clearAllComposerAttachments()
+            }
+        }
+    }
+    private var _showAttachmentButton: Bool = false
     var expandedSessionIDs: Set<String> = []
 
     var projects: [Project] = []
@@ -554,6 +609,28 @@ final class AppState {
     var selectedModel: ModelPreset? {
         guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
         return modelPresets[selectedModelIndex]
+    }
+
+    func attachmentSupportError(for attachments: [ComposerAttachment], model: Message.ModelInfo?) -> String? {
+        guard !attachments.isEmpty else { return nil }
+        guard let model else { return nil }
+        guard let providerModel = providerModelsIndex["\(model.providerID)/\(model.modelID)"] else { return nil }
+
+        if let attachment = providerModel.attachment, !attachment {
+            return L10n.t(.chatAttachmentUnsupportedModel)
+        }
+
+        let inputModalities = Set(providerModel.modalities?.input ?? [])
+        if !inputModalities.isEmpty {
+            if attachments.contains(where: { $0.kind == .image }) && !inputModalities.contains("image") {
+                return L10n.t(.chatAttachmentUnsupportedImages)
+            }
+            if attachments.contains(where: { $0.kind == .pdf }) && !inputModalities.contains("pdf") {
+                return L10n.t(.chatAttachmentUnsupportedPDFs)
+            }
+        }
+
+        return nil
     }
     
     var selectedAgent: AgentInfo? {
@@ -1271,11 +1348,32 @@ final class AppState {
             sendError = L10n.t(.chatSelectSessionFirst)
             return false
         }
-        let tempMessageID = appendOptimisticUserMessage(text)
+        let attachments = composerAttachments(for: sessionID)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
+        if let supportError = attachmentSupportError(for: attachments, model: model) {
+            sendError = supportError
+            return false
+        }
+
+        let tempMessageID = appendOptimisticUserMessage(text, attachments: attachments)
         let agentName = selectedAgent?.name ?? "build"
         do {
-            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
+            try await apiClient.promptAsync(
+                sessionID: sessionID,
+                text: text,
+                attachments: attachments.map {
+                    ComposerAttachmentPayload(
+                        filename: $0.filename,
+                        mimeType: $0.mimeType,
+                        dataURL: $0.dataURL,
+                        kind: $0.kind,
+                        byteCount: $0.byteCount
+                    )
+                },
+                agent: agentName,
+                model: model
+            )
+            clearComposerAttachments(for: sessionID)
             return true
         } catch {
             let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
@@ -1286,11 +1384,10 @@ final class AppState {
     }
 
     @discardableResult
-    func appendOptimisticUserMessage(_ text: String) -> String {
+    func appendOptimisticUserMessage(_ text: String, attachments: [ComposerAttachment] = []) -> String {
         guard let sessionID = currentSessionID else { return "" }
         let now = Int(Date().timeIntervalSince1970 * 1000)
         let messageID = "temp-user-\(UUID().uuidString)"
-        let partID = "temp-part-\(messageID)"
         let message = Message(
             id: messageID,
             sessionID: sessionID,
@@ -1305,21 +1402,32 @@ final class AppState {
             tokens: nil,
             cost: nil
         )
-        let part = Part(
-            id: partID,
-            messageID: messageID,
-            sessionID: sessionID,
-            type: "text",
-            text: text,
-            tool: nil,
-            callID: nil,
-            state: nil,
-            metadata: nil,
-            files: nil
-        )
-        let row = MessageWithParts(info: message, parts: [part])
+        var parts: [Part] = []
+        if !text.isEmpty {
+            parts.append(
+                Part(
+                    id: "temp-part-text-\(messageID)",
+                    messageID: messageID,
+                    sessionID: sessionID,
+                    type: "text",
+                    text: text
+                )
+            )
+        }
+        parts.append(contentsOf: attachments.map { attachment in
+            Part(
+                id: "temp-part-file-\(attachment.id)",
+                messageID: messageID,
+                sessionID: sessionID,
+                type: "file",
+                mime: attachment.mimeType,
+                filename: attachment.filename,
+                url: attachment.dataURL
+            )
+        })
+        let row = MessageWithParts(info: message, parts: parts)
         messages.append(row)
-        partsByMessage[messageID] = [part]
+        partsByMessage[messageID] = parts
         return messageID
     }
 

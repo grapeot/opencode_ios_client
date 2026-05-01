@@ -78,6 +78,9 @@ enum L10n {
 
         case settingsShowArchivedSessions
         case settingsConnecting
+        case settingsChat
+        case settingsShowAttachmentButton
+        case settingsAttachmentButtonHelp
         case settingsProject
         case settingsProjectServerDefault
         case settingsProjectCustomPath
@@ -107,6 +110,20 @@ enum L10n {
         case chatSessionStatusIdle
         case chatPullToLoadMore
         case chatLoadingMoreHistory
+        case chatChooseAttachment
+        case chatChooseImage
+        case chatChooseFile
+        case chatAttachmentMenuTitle
+        case chatAttachmentUnsupportedModel
+        case chatAttachmentUnsupportedImages
+        case chatAttachmentUnsupportedPDFs
+        case chatAttachmentUnsupportedFileType
+        case chatAttachmentFileTooLarge
+        case chatAttachmentReadFailed
+        case chatAttachmentRemove
+        case chatAttachmentImageLabel
+        case chatAttachmentPDFLabel
+        case chatAttachmentTextLabel
 
         case permissionRequired
         case permissionAllowOnce
@@ -286,6 +303,9 @@ enum L10n {
         Key.settingsRotate.rawValue: "Rotate",
         Key.settingsShowArchivedSessions.rawValue: "Show Archived Sessions",
         Key.settingsConnecting.rawValue: "Connecting...",
+        Key.settingsChat.rawValue: "Chat",
+        Key.settingsShowAttachmentButton.rawValue: "Show Attachment Button",
+        Key.settingsAttachmentButtonHelp.rawValue: "Show an attachment menu in the chat composer for images, PDFs, and text files.",
         Key.settingsProject.rawValue: "Project (Workspace)",
         Key.settingsProjectServerDefault.rawValue: "Server default",
         Key.settingsProjectCustomPath.rawValue: "Custom path",
@@ -315,6 +335,20 @@ enum L10n {
         Key.chatSessionStatusIdle.rawValue: "Idle",
         Key.chatPullToLoadMore.rawValue: "Pull down to load more history",
         Key.chatLoadingMoreHistory.rawValue: "Loading more history...",
+        Key.chatChooseAttachment.rawValue: "Add Attachment",
+        Key.chatChooseImage.rawValue: "Choose Image",
+        Key.chatChooseFile.rawValue: "Choose File",
+        Key.chatAttachmentMenuTitle.rawValue: "Add to message",
+        Key.chatAttachmentUnsupportedModel.rawValue: "The selected model does not support file attachments.",
+        Key.chatAttachmentUnsupportedImages.rawValue: "The selected model does not support image attachments.",
+        Key.chatAttachmentUnsupportedPDFs.rawValue: "The selected model does not support PDF attachments.",
+        Key.chatAttachmentUnsupportedFileType.rawValue: "Only images, PDFs, and text files are supported.",
+        Key.chatAttachmentFileTooLarge.rawValue: "This attachment is too large to send from iPhone.",
+        Key.chatAttachmentReadFailed.rawValue: "Unable to read the selected attachment.",
+        Key.chatAttachmentRemove.rawValue: "Remove attachment",
+        Key.chatAttachmentImageLabel.rawValue: "Image",
+        Key.chatAttachmentPDFLabel.rawValue: "PDF",
+        Key.chatAttachmentTextLabel.rawValue: "Text file",
 
         Key.permissionRequired.rawValue: "Permission Required",
         Key.permissionAllowOnce.rawValue: "Allow Once",
@@ -498,6 +532,9 @@ enum L10n {
         Key.errorUsingLanHttp.rawValue: "正在使用 LAN HTTP",
         Key.settingsShowArchivedSessions.rawValue: "显示已归档会话",
         Key.settingsConnecting.rawValue: "连接中...",
+        Key.settingsChat.rawValue: "聊天",
+        Key.settingsShowAttachmentButton.rawValue: "显示附件按钮",
+        Key.settingsAttachmentButtonHelp.rawValue: "在聊天输入区显示附件入口，可发送图片、PDF 和文本文件。",
         Key.settingsProject.rawValue: "项目 (Workspace)",
         Key.settingsProjectServerDefault.rawValue: "服务器默认",
         Key.settingsProjectCustomPath.rawValue: "自定义路径",
@@ -527,6 +564,20 @@ enum L10n {
         Key.chatSessionStatusIdle.rawValue: "空闲",
         Key.chatPullToLoadMore.rawValue: "下拉加载更多历史消息",
         Key.chatLoadingMoreHistory.rawValue: "正在加载更多历史消息...",
+        Key.chatChooseAttachment.rawValue: "添加附件",
+        Key.chatChooseImage.rawValue: "选择图片",
+        Key.chatChooseFile.rawValue: "选择文件",
+        Key.chatAttachmentMenuTitle.rawValue: "添加到消息",
+        Key.chatAttachmentUnsupportedModel.rawValue: "当前模型不支持文件附件。",
+        Key.chatAttachmentUnsupportedImages.rawValue: "当前模型不支持图片附件。",
+        Key.chatAttachmentUnsupportedPDFs.rawValue: "当前模型不支持 PDF 附件。",
+        Key.chatAttachmentUnsupportedFileType.rawValue: "当前仅支持图片、PDF 和文本文件。",
+        Key.chatAttachmentFileTooLarge.rawValue: "该附件过大，无法从 iPhone 直接发送。",
+        Key.chatAttachmentReadFailed.rawValue: "无法读取所选附件。",
+        Key.chatAttachmentRemove.rawValue: "移除附件",
+        Key.chatAttachmentImageLabel.rawValue: "图片",
+        Key.chatAttachmentPDFLabel.rawValue: "PDF",
+        Key.chatAttachmentTextLabel.rawValue: "文本文件",
 
         Key.permissionRequired.rawValue: "需要授权",
         Key.permissionAllowOnce.rawValue: "允许一次",

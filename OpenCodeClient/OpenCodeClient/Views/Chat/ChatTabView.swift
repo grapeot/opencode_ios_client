@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 import os
 #if canImport(UIKit)
 import UIKit
@@ -25,6 +27,101 @@ private enum MessageGroupItem: Identifiable {
         case .user(let m): return [m.info.id]
         case .assistantMerged(let msgs): return msgs.map { $0.info.id }
         }
+    }
+}
+
+private enum ChatAttachmentPicker {
+    static let allowedFileTypes: [UTType] = [
+        .image,
+        .pdf,
+        .text,
+        .plainText,
+        .sourceCode,
+        .json,
+        .xml,
+        .commaSeparatedText,
+        .tabSeparatedText,
+    ]
+
+    static func byteLimit(for kind: ChatAttachmentKind) -> Int {
+        switch kind {
+        case .image, .pdf:
+            return 8 * 1024 * 1024
+        case .text:
+            return 1 * 1024 * 1024
+        }
+    }
+
+    static func isTextType(_ type: UTType, filename: String) -> Bool {
+        if type.conforms(to: .text) || type.conforms(to: .plainText) || type.conforms(to: .sourceCode) {
+            return true
+        }
+        if type.conforms(to: .json) || type.conforms(to: .xml) || type.conforms(to: .commaSeparatedText) || type.conforms(to: .tabSeparatedText) {
+            return true
+        }
+
+        let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
+        return ["txt", "md", "mdx", "json", "yaml", "yml", "xml", "csv", "log", "swift", "ts", "tsx", "js", "jsx", "py", "rb", "go", "rs", "java", "c", "cpp", "h", "hpp", "sh", "zsh", "toml", "ini"].contains(ext)
+    }
+}
+
+private struct AttachmentChipView: View {
+    let attachment: ComposerAttachment
+    let onRemove: () -> Void
+
+    private var label: String {
+        switch attachment.kind {
+        case .image:
+            return L10n.t(.chatAttachmentImageLabel)
+        case .pdf:
+            return L10n.t(.chatAttachmentPDFLabel)
+        case .text:
+            return L10n.t(.chatAttachmentTextLabel)
+        }
+    }
+
+    private var iconName: String {
+        switch attachment.kind {
+        case .image:
+            return "photo"
+        case .pdf:
+            return "doc.richtext"
+        case .text:
+            return "doc.text"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: DesignSpacing.xs) {
+            Image(systemName: iconName)
+                .font(.caption)
+                .foregroundStyle(DesignColors.Brand.primary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(attachment.filename)
+                    .font(DesignTypography.micro)
+                    .lineLimit(1)
+                Text(label)
+                    .font(DesignTypography.micro)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t(.chatAttachmentRemove))
+        }
+        .padding(.horizontal, DesignSpacing.sm)
+        .padding(.vertical, 6)
+        .background(DesignColors.Brand.primary.opacity(0.08))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke), lineWidth: 1)
+        )
     }
 }
 
@@ -87,6 +184,10 @@ struct ChatTabView: View {
     @State private var isRecording = false
     @State private var isTranscribing = false
     @State private var speechError: String?
+    @State private var showAttachmentOptions = false
+    @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
@@ -94,6 +195,17 @@ struct ChatTabView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var useGridCards: Bool { sizeClass == .regular }
+    private var currentComposerAttachments: [ComposerAttachment] {
+        state.showAttachmentButton ? state.composerAttachments(for: state.currentSessionID) : []
+    }
+    private var canSendCurrentMessage: Bool {
+        ChatComposerSendGate.canSend(
+            text: inputText,
+            hasAttachments: !currentComposerAttachments.isEmpty,
+            isSending: isSending,
+            hasMarkedText: hasMarkedText
+        )
+    }
 
     fileprivate struct TurnActivity: Identifiable {
         enum State {
@@ -479,87 +591,121 @@ struct ChatTabView: View {
                     }
                 }
 
-                 Divider()
-                 HStack(alignment: .bottom, spacing: DesignSpacing.md) {
-                    ZStack(alignment: .topLeading) {
-                        ChatComposerTextView(
-                            text: $inputText,
-                            hasMarkedText: $hasMarkedText,
-                            placeholder: L10n.t(.chatInputPlaceholder),
-                            onSubmit: sendCurrentInput
-                        )
-                        .frame(minHeight: 32, maxHeight: 100)
-                        .accessibilityIdentifier("chat-input")
-
-                        if inputText.isEmpty {
-                            Text(L10n.t(.chatInputPlaceholder))
-                                .foregroundStyle(.secondary)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
+                Divider()
+                VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+                    if state.showAttachmentButton, !currentComposerAttachments.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: DesignSpacing.sm) {
+                                ForEach(currentComposerAttachments) { attachment in
+                                    AttachmentChipView(attachment: attachment) {
+                                        state.removeComposerAttachment(id: attachment.id, for: state.currentSessionID)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 1)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
-                    .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
-                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
 
-                    VStack(spacing: DesignSpacing.sm) {
-                        Button {
-                            Task { await toggleRecording() }
-                        } label: {
-                            ZStack {
-                                if isTranscribing {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                } else {
-                                    Image(systemName: "mic.fill")
-                                        .font(.callout)
-                                        .foregroundStyle(isRecording ? .white : DesignColors.Brand.primary)
-                                }
-                            }
-                            .frame(width: 32, height: 32)
-                            .background(isRecording ? Color.red : (isTranscribing ? (colorScheme == .dark ? DesignColors.Neutral.surfaceDark : DesignColors.Neutral.surfaceLight) : Color.clear))
-                            .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                    .stroke(
-                                        isRecording ? Color.clear : (isTranscribing ? DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke) : DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke)),
-                                        lineWidth: 1.5
+                    HStack(alignment: .bottom, spacing: DesignSpacing.md) {
+                        if state.showAttachmentButton {
+                            Button {
+                                showAttachmentOptions = true
+                            } label: {
+                                Image(systemName: "paperclip")
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(DesignColors.Brand.primary)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.clear)
+                                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                            .stroke(DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke), lineWidth: 1.5)
                                     )
-                            )
+                            }
+                            .accessibilityLabel(L10n.t(.chatChooseAttachment))
+                            .disabled(isSending)
                         }
-                        .disabled(isSending || isTranscribing)
 
-                        Button {
-                            sendCurrentInput()
-                        } label: {
-                            ZStack {
-                                if isSending {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .tint(.white)
-                                } else {
-                                    Image(systemName: "arrow.up")
+                        ZStack(alignment: .topLeading) {
+                            ChatComposerTextView(
+                                text: $inputText,
+                                hasMarkedText: $hasMarkedText,
+                                placeholder: L10n.t(.chatInputPlaceholder),
+                                onSubmit: sendCurrentInput
+                            )
+                            .frame(minHeight: 32, maxHeight: 100)
+                            .accessibilityIdentifier("chat-input")
+
+                            if inputText.isEmpty {
+                                Text(L10n.t(.chatInputPlaceholder))
+                                    .foregroundStyle(.secondary)
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                        .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
+                        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
+
+                        VStack(spacing: DesignSpacing.sm) {
+                            Button {
+                                Task { await toggleRecording() }
+                            } label: {
+                                ZStack {
+                                    if isTranscribing {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    } else {
+                                        Image(systemName: "mic.fill")
+                                            .font(.callout)
+                                            .foregroundStyle(isRecording ? .white : DesignColors.Brand.primary)
+                                    }
+                                }
+                                .frame(width: 32, height: 32)
+                                .background(isRecording ? Color.red : (isTranscribing ? (colorScheme == .dark ? DesignColors.Neutral.surfaceDark : DesignColors.Neutral.surfaceLight) : Color.clear))
+                                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                        .stroke(
+                                            isRecording ? Color.clear : DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke),
+                                            lineWidth: 1.5
+                                        )
+                                )
+                            }
+                            .disabled(isSending || isTranscribing)
+
+                            Button {
+                                sendCurrentInput()
+                            } label: {
+                                ZStack {
+                                    if isSending {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                            .tint(.white)
+                                    } else {
+                                        Image(systemName: "arrow.up")
+                                            .font(.body.bold())
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                                .frame(width: 32, height: 32)
+                                .background(DesignColors.Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                            }
+                            .disabled(!canSendCurrentMessage || isRecording || isTranscribing)
+
+                            if state.isBusy {
+                                Button {
+                                    Task { await state.abortSession() }
+                                } label: {
+                                    Image(systemName: "stop.fill")
                                         .font(.body.bold())
                                         .foregroundStyle(.white)
+                                        .frame(width: 32, height: 32)
+                                        .background(Color.red)
+                                        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
                                 }
-                            }
-                            .frame(width: 32, height: 32)
-                            .background(DesignColors.Brand.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
-                        }
-                        .disabled(!ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) || isRecording || isTranscribing)
-
-                        if state.isBusy {
-                            Button {
-                                Task { await state.abortSession() }
-                            } label: {
-                                Image(systemName: "stop.fill")
-                                    .font(.body.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: 32, height: 32)
-                                    .background(Color.red)
-                                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
                             }
                         }
                     }
@@ -602,6 +748,28 @@ struct ChatTabView: View {
             } message: {
                 Text(speechError ?? "")
             }
+            .confirmationDialog(L10n.t(.chatAttachmentMenuTitle), isPresented: $showAttachmentOptions, titleVisibility: .visible) {
+                Button(L10n.t(.chatChooseImage)) {
+                    showPhotoPicker = true
+                }
+                Button(L10n.t(.chatChooseFile)) {
+                    showFileImporter = true
+                }
+                Button(L10n.t(.commonCancel), role: .cancel) {}
+            }
+            .photosPicker(
+                isPresented: $showPhotoPicker,
+                selection: $selectedPhotoItems,
+                maxSelectionCount: 5,
+                matching: .images
+            )
+            .fileImporter(
+                isPresented: $showFileImporter,
+                allowedContentTypes: ChatAttachmentPicker.allowedFileTypes,
+                allowsMultipleSelection: true
+            ) { result in
+                handleImportedFiles(result)
+            }
             .onAppear {
                 syncDraftFromState(sessionID: state.currentSessionID)
             }
@@ -618,6 +786,15 @@ struct ChatTabView: View {
             .onChange(of: inputText) { _, newValue in
                 guard !isSyncingDraft else { return }
                 state.setDraftText(newValue, for: state.currentSessionID)
+            }
+            .onChange(of: selectedPhotoItems) { _, newValue in
+                guard !newValue.isEmpty else { return }
+                Task {
+                    await importPhotoAttachments(newValue)
+                    await MainActor.run {
+                        selectedPhotoItems = []
+                    }
+                }
             }
         }
     }
@@ -659,8 +836,9 @@ struct ChatTabView: View {
     }
 
     private func sendCurrentInput() {
-        guard ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) else { return }
+        guard canSendCurrentMessage else { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previousAttachments = currentComposerAttachments
 
         inputText = ""
         hasMarkedText = false
@@ -670,7 +848,155 @@ struct ChatTabView: View {
             isSending = false
             if !success {
                 inputText = text
+                if state.showAttachmentButton {
+                    state.clearComposerAttachments(for: state.currentSessionID)
+                    state.appendComposerAttachments(previousAttachments, for: state.currentSessionID)
+                }
             }
+        }
+    }
+
+    private func handleImportedFiles(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            Task {
+                await importFileAttachments(urls)
+            }
+        case .failure:
+            state.sendError = L10n.t(.chatAttachmentReadFailed)
+        }
+    }
+
+    private func importPhotoAttachments(_ items: [PhotosPickerItem]) async {
+        var attachments: [ComposerAttachment] = []
+
+        for item in items {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    await MainActor.run { state.sendError = L10n.t(.chatAttachmentReadFailed) }
+                    continue
+                }
+                let type = item.supportedContentTypes.first(where: { $0.conforms(to: .image) }) ?? .png
+                if let attachment = makeAttachment(
+                    data: data,
+                    filename: generatedFilename(for: .image, type: type),
+                    type: type,
+                    fallbackKind: .image
+                ) {
+                    attachments.append(attachment)
+                }
+            } catch {
+                await MainActor.run { state.sendError = L10n.t(.chatAttachmentReadFailed) }
+            }
+        }
+
+        await MainActor.run {
+            state.appendComposerAttachments(attachments, for: state.currentSessionID)
+        }
+    }
+
+    private func importFileAttachments(_ urls: [URL]) async {
+        var attachments: [ComposerAttachment] = []
+
+        for url in urls {
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            do {
+                let data = try Data(contentsOf: url)
+                let type = inferredType(for: url)
+                if let attachment = makeAttachment(
+                    data: data,
+                    filename: url.lastPathComponent,
+                    type: type,
+                    fallbackKind: nil
+                ) {
+                    attachments.append(attachment)
+                }
+            } catch {
+                await MainActor.run { state.sendError = L10n.t(.chatAttachmentReadFailed) }
+            }
+        }
+
+        await MainActor.run {
+            state.appendComposerAttachments(attachments, for: state.currentSessionID)
+        }
+    }
+
+    private func makeAttachment(
+        data: Data,
+        filename: String,
+        type: UTType,
+        fallbackKind: ChatAttachmentKind?
+    ) -> ComposerAttachment? {
+        let kind = attachmentKind(for: type, filename: filename) ?? fallbackKind
+        guard let kind else {
+            state.sendError = L10n.t(.chatAttachmentUnsupportedFileType)
+            return nil
+        }
+
+        let byteLimit = ChatAttachmentPicker.byteLimit(for: kind)
+        guard data.count <= byteLimit else {
+            state.sendError = L10n.t(.chatAttachmentFileTooLarge)
+            return nil
+        }
+
+        let mimeType = resolvedMimeType(for: type, kind: kind, filename: filename)
+        let encoded = data.base64EncodedString()
+        return ComposerAttachment(
+            id: UUID().uuidString,
+            filename: filename,
+            mimeType: mimeType,
+            dataURL: "data:\(mimeType);base64,\(encoded)",
+            kind: kind,
+            byteCount: data.count
+        )
+    }
+
+    private func inferredType(for url: URL) -> UTType {
+        if let type = UTType(filenameExtension: url.pathExtension) {
+            return type
+        }
+        return .data
+    }
+
+    private func generatedFilename(for kind: ChatAttachmentKind, type: UTType) -> String {
+        let ext = type.preferredFilenameExtension ?? {
+            switch kind {
+            case .image: return "png"
+            case .pdf: return "pdf"
+            case .text: return "txt"
+            }
+        }()
+        return "attachment-\(UUID().uuidString.prefix(8)).\(ext)"
+    }
+
+    private func attachmentKind(for type: UTType, filename: String) -> ChatAttachmentKind? {
+        if type.conforms(to: .image) { return .image }
+        if type.conforms(to: .pdf) { return .pdf }
+        if ChatAttachmentPicker.isTextType(type, filename: filename) { return .text }
+        return nil
+    }
+
+    private func resolvedMimeType(for type: UTType, kind: ChatAttachmentKind, filename: String) -> String {
+        if let mime = type.preferredMIMEType {
+            return mime
+        }
+        switch kind {
+        case .image:
+            let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
+            if ext == "jpg" || ext == "jpeg" { return "image/jpeg" }
+            if ext == "gif" { return "image/gif" }
+            if ext == "webp" { return "image/webp" }
+            return "image/png"
+        case .pdf:
+            return "application/pdf"
+        case .text:
+            return "text/plain"
         }
     }
 
