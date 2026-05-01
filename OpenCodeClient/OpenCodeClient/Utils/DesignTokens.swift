@@ -79,6 +79,10 @@ enum DesignColors {
         static let selectionFill: Double = 0.08
         /// Context usage ring track
         static let ringTrack: Double = 0.20
+        /// Recording action button fill. Keeps the active state visibly red even when solid fills are softened by platform materials.
+        static let recordingActionFill: Double = 0.16
+        /// Recording action button border. Stronger than the default border because it carries active-state color.
+        static let recordingActionBorder: Double = 0.36
     }
 
     /// Returns the appropriate surface fill opacity for the current color scheme.
@@ -149,6 +153,35 @@ enum DesignSpacing {
     static let cardPadding: CGFloat = 12
     /// Card to context gap
     static let cardGap: CGFloat = 16
+}
+
+// MARK: - Control Sizes
+
+enum DesignControls {
+
+    #if os(visionOS)
+    /// Larger chat composer action buttons for gaze interaction on Apple Vision Pro.
+    static let composerActionButtonSize: CGFloat = 48
+    static let composerActionButtonSpacing: CGFloat = DesignSpacing.md
+    static let composerActionIconFont: Font = .title3
+    static let composerContainerHorizontalPadding: CGFloat = 32
+    static let composerContainerVerticalPadding: CGFloat = 20
+    static let composerTextMinHeight: CGFloat = 48
+    static let composerTextMaxHeight: CGFloat = 160
+    static let toolOpenFileIconFont: Font = .title3
+    static let toolOpenFileButtonSize: CGFloat = 44
+    #else
+    /// Compact chat composer action buttons for iPhone and iPad.
+    static let composerActionButtonSize: CGFloat = 32
+    static let composerActionButtonSpacing: CGFloat = DesignSpacing.sm
+    static let composerActionIconFont: Font = .callout
+    static let composerContainerHorizontalPadding: CGFloat = 16
+    static let composerContainerVerticalPadding: CGFloat = 10
+    static let composerTextMinHeight: CGFloat = 32
+    static let composerTextMaxHeight: CGFloat = 100
+    static let toolOpenFileIconFont: Font = DesignTypography.micro
+    static let toolOpenFileButtonSize: CGFloat = 24
+    #endif
 }
 
 // MARK: - Corner Radius

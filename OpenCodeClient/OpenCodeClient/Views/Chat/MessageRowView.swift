@@ -101,7 +101,7 @@ struct MessageRowView: View {
                         workspaceDirectory: workspaceDirectory,
                         fetchContent: { path in try await state.loadFileContent(path: path) }
                     )
-                }
+            }
         }
     }
 

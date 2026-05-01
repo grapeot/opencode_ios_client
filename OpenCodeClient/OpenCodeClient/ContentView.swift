@@ -98,21 +98,25 @@ struct ContentView: View {
             return
         }
 
+        #if !os(visionOS)
         if state.sshTunnelManager.config.isEnabled,
            state.sshTunnelManager.status != .connected {
             await state.sshTunnelManager.connect()
         }
+        #endif
 
         await state.refresh()
 
         // iOS suspend/restore can leave SSH state stale (status still connected but
         // actual tunnel already dropped). If refresh still cannot reach server through
         // localhost after an enabled SSH config, force a tunnel re-establish once.
+        #if !os(visionOS)
         if state.sshTunnelManager.config.isEnabled, !state.isConnected {
             state.sshTunnelManager.disconnect()
             await state.sshTunnelManager.connect()
             await state.refresh()
         }
+        #endif
 
         if state.isConnected {
             state.connectSSE()
@@ -133,9 +137,11 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             state.disconnectSSE()
+            #if !os(visionOS)
             if state.sshTunnelManager.config.isEnabled {
                 state.sshTunnelManager.disconnect()
             }
+            #endif
         }
         .preferredColorScheme(themeColorScheme)
         .onChange(of: sizeClass) { _, newValue in

@@ -1,6 +1,6 @@
 # OpenCode iOS Client 测试体系
 
-日期：2026-03-13
+日期：2026-05-01
 
 ## 文档目的
 
@@ -20,6 +20,7 @@
 | --- | --- | --- | --- |
 | `OpenCodeClientTests` | Swift Testing（`import Testing`） | 单元测试、契约测试、状态流测试 | 主力测试层 |
 | `OpenCodeClientUITests` | XCTest UI Testing | 启动与关键交互 smoke test | 轻量但有效 |
+| `OpenCodeClientVision` | xcodebuild target build | visionOS 原生 target 编译 smoke | 保护平台条件编译与 target 配置 |
 
 ## 主要测试文件
 
@@ -235,6 +236,51 @@ UI smoke tests 应该继续保持少而关键。
 xcodebuild build -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'generic/platform=iOS Simulator'
 xcodebuild test -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'
 ```
+
+涉及 visionOS target、平台条件编译、或共享 SwiftUI view 的改动，还要跑：
+
+```bash
+xcodebuild -project "OpenCodeClient.xcodeproj" \
+  -target "OpenCodeClientVision" \
+  -configuration Debug \
+  -sdk xrsimulator \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+涉及 asset catalog、app icon、或 target resource membership 的改动，要顺序跑 iOS app build 和 visionOS app build。visionOS layered app icon 应放在 visionOS-only asset catalog 里，并且只加入 `OpenCodeClientVision` target；否则 iOS `actool` 会扫描共享 catalog 并把 visionOS layered icon 当成 iOS app icon 错误处理。
+
+visionOS app icon 的结构要让 Xcode 生成或严格仿照 Xcode 生成结果：`AppIcon.solidimagestack` 作为顶层图标 asset，里面包含 `Front/Middle/Back.solidimagestacklayer`，每层实际 PNG 放在内部 `Content.imageset/`。这些 image set 需要使用 `idiom: vision`、`scale: 2x`，1024×1024 PNG 对应 512pt @2x。不要用 `.appiconset` + `.imagestacklayer` 手写 visionOS icon；这种结构可能通过 CLI build，但 Xcode UI 会显示 No Content，真机图标也可能为空。
+
+visionOS icon build 通过后，建议再检查编译产物：
+
+```bash
+xcrun --sdk xros assetutil --info \
+  ~/Library/Developer/Xcode/DerivedData/<DerivedData>/Build/Products/Debug-xrsimulator/OpenCodeClientVision.app/Assets.car
+```
+
+输出里应该能看到 `AssetType: SolidImageStack`、`Name: AppIcon`，以及 `AppIcon/Back/Content`、`AppIcon/Middle/Content`、`AppIcon/Front/Content` 三层。Back 应为 opaque，Middle / Front 可以带 alpha。
+
+当前验证命令是：
+
+```bash
+xcodebuild -project "OpenCodeClient.xcodeproj" \
+  -scheme "OpenCodeClient" \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  CODE_SIGNING_ALLOWED=NO build
+
+xcodebuild -project "OpenCodeClient.xcodeproj" \
+  -scheme "OpenCodeClientVision" \
+  -configuration Debug \
+  -sdk xrsimulator \
+  CODE_SIGNING_ALLOWED=NO build
+```
+
+当前 `OpenCodeClientVision` 是编译 smoke target，还没有单独的 visionOS test bundle。它的主要保护面是：Xcode project target 配置正确、共享源码没有引用 visionOS unavailable API、visionOS 不链接 iOS-only/暂不支持的功能依赖，并且本地 patched MarkdownUI / NetworkImage package 链可以在 visionOS SDK 下完整编译。
+
+Markdown 渲染相关改动还需要同时跑 iOS app build。原因是 iOS 与 visionOS 共用同一套 SPM 依赖（`grapeot/swift-markdown-ui` 与 `grapeot/NetworkImage` 的 pinned revision），visionOS build 只能证明 package patch 对 xrOS 可用，iOS build 才能证明这条依赖图没有破坏原有 iOS target。
+
+visionOS 独有 window scene、default window size、split view width fraction、或 composer / tool-call design token 改动，也需要跑 `OpenCodeClientVision` xrsimulator build。若改动复用共享 SwiftUI view（例如 Markdown image preview、chat composer、tool-call open-file affordance），还需要顺序跑 iOS app build，确认 iPad/iPhone 的 sheet 预览、composer 布局和 tool-call 操作路径没有被 visionOS 条件分支影响。
 
 如果遇到 simulator 本身的 creation / launch 问题，需要明确区分：
 

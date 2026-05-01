@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		3B4F459A2F3FB16A00A4CD74 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 3B4F45992F3FB16A00A4CD74 /* Citadel */; };
 		AA000001AAAAAAAA00000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAAAAAA00000002 /* MarkdownUI */; };
+		AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */ = {isa = PBXBuildFile; productRef = AA000005AAAAAAAA00000005 /* NetworkImage */; };
+		AA2600000000000000000009 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAAAAAA00000002 /* MarkdownUI */; };
+		AA2600000000000000000010 /* NetworkImage in Frameworks */ = {isa = PBXBuildFile; productRef = AA000005AAAAAAAA00000005 /* NetworkImage */; };
+		AA2600000000000000000012 /* OpenCodeClientVisionAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA2600000000000000000011 /* OpenCodeClientVisionAssets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +36,8 @@
 		3B4F44022F3E642500A4CD74 /* OpenCodeClient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenCodeClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B4F440F2F3E642600A4CD74 /* OpenCodeClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B4F44192F3E642600A4CD74 /* OpenCodeClientUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeClientUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA2600000000000000000001 /* OpenCodeClientVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenCodeClientVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA2600000000000000000011 /* OpenCodeClientVisionAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = OpenCodeClientVisionAssets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -58,6 +64,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000001AAAAAAAA00000001 /* MarkdownUI in Frameworks */,
+				AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */,
 				3B4F459A2F3FB16A00A4CD74 /* Citadel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -76,6 +83,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA2600000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA2600000000000000000009 /* MarkdownUI in Frameworks */,
+				AA2600000000000000000010 /* NetworkImage in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,6 +99,7 @@
 			isa = PBXGroup;
 			children = (
 				3B4F44042F3E642500A4CD74 /* OpenCodeClient */,
+				AA2600000000000000000011 /* OpenCodeClientVisionAssets.xcassets */,
 				3B4F44122F3E642600A4CD74 /* OpenCodeClientTests */,
 				3B4F441C2F3E642600A4CD74 /* OpenCodeClientUITests */,
 				3B4F44032F3E642500A4CD74 /* Products */,
@@ -93,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				3B4F44022F3E642500A4CD74 /* OpenCodeClient.app */,
+				AA2600000000000000000001 /* OpenCodeClientVision.app */,
 				3B4F440F2F3E642600A4CD74 /* OpenCodeClientTests.xctest */,
 				3B4F44192F3E642600A4CD74 /* OpenCodeClientUITests.xctest */,
 			);
@@ -120,7 +138,7 @@
 			name = OpenCodeClient;
 			packageProductDependencies = (
 				AA000002AAAAAAAA00000002 /* MarkdownUI */,
-				3B4F45992F3FB16A00A4CD74 /* Citadel */,
+				AA000005AAAAAAAA00000005 /* NetworkImage */,
 			);
 			productName = OpenCodeClient;
 			productReference = 3B4F44022F3E642500A4CD74 /* OpenCodeClient.app */;
@@ -172,6 +190,30 @@
 			productReference = 3B4F44192F3E642600A4CD74 /* OpenCodeClientUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		AA2600000000000000000005 /* OpenCodeClientVision */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA2600000000000000000006 /* Build configuration list for PBXNativeTarget "OpenCodeClientVision" */;
+			buildPhases = (
+				AA2600000000000000000003 /* Sources */,
+				AA2600000000000000000002 /* Frameworks */,
+				AA2600000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3B4F44042F3E642500A4CD74 /* OpenCodeClient */,
+			);
+			name = OpenCodeClientVision;
+			packageProductDependencies = (
+				AA000002AAAAAAAA00000002 /* MarkdownUI */,
+				AA000005AAAAAAAA00000005 /* NetworkImage */,
+			);
+			productName = OpenCodeClientVision;
+			productReference = AA2600000000000000000001 /* OpenCodeClientVision.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -193,6 +235,9 @@
 						CreatedOnToolsVersion = 26.1;
 						TestTargetID = 3B4F44012F3E642500A4CD74;
 					};
+					AA2600000000000000000005 = {
+						CreatedOnToolsVersion = 26.1;
+					};
 				};
 			};
 			buildConfigurationList = 3B4F43FD2F3E642500A4CD74 /* Build configuration list for PBXProject "OpenCodeClient" */;
@@ -206,6 +251,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				AA000006AAAAAAAA00000006 /* XCRemoteSwiftPackageReference "NetworkImage" */,
 				3B4F45982F3FB16A00A4CD74 /* XCRemoteSwiftPackageReference "Citadel" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -214,6 +260,7 @@
 			projectRoot = "";
 			targets = (
 				3B4F44012F3E642500A4CD74 /* OpenCodeClient */,
+				AA2600000000000000000005 /* OpenCodeClientVision */,
 				3B4F440E2F3E642600A4CD74 /* OpenCodeClientTests */,
 				3B4F44182F3E642600A4CD74 /* OpenCodeClientUITests */,
 			);
@@ -242,6 +289,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA2600000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA2600000000000000000012 /* OpenCodeClientVisionAssets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -260,6 +315,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		3B4F44152F3E642600A4CD74 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA2600000000000000000003 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -559,6 +621,78 @@
 			};
 			name = Release;
 		};
+		AA2600000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y2T99LVU9E;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "OpenCode Remote needs local network access to connect to your OpenCode server on the same network.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenCode Remote uses the microphone to record voice input, which is transcribed to text and added to the message input field.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClient.vision;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		AA2600000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y2T99LVU9E;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "OpenCode Remote needs local network access to connect to your OpenCode server on the same network.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenCode Remote uses the microphone to record voice input, which is transcribed to text and added to the message input field.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grapeot.OpenCodeClient.vision;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -598,6 +732,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		AA2600000000000000000006 /* Build configuration list for PBXNativeTarget "OpenCodeClientVision" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA2600000000000000000007 /* Debug */,
+				AA2600000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -611,10 +754,18 @@
 		};
 		AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			repositoryURL = "https://github.com/grapeot/swift-markdown-ui";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.1;
+				kind = exactVersion;
+				version = "2.4.1-visionos.1";
+			};
+		};
+		AA000006AAAAAAAA00000006 /* XCRemoteSwiftPackageReference "NetworkImage" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/grapeot/NetworkImage";
+			requirement = {
+				kind = exactVersion;
+				version = "6.0.1-visionos.1";
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -629,6 +780,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
 			productName = MarkdownUI;
+		};
+		AA000005AAAAAAAA00000005 /* NetworkImage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000006AAAAAAAA00000006 /* XCRemoteSwiftPackageReference "NetworkImage" */;
+			productName = NetworkImage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

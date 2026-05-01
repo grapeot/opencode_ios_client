@@ -61,10 +61,62 @@ struct WorkspaceMarkdownImageProvider: ImageProvider {
     }
 }
 
+struct MarkdownImagePreviewItem: Codable, Hashable, Identifiable {
+    let id: UUID
+    let title: String
+    let imageData: Data
+
+    init(title: String, imageData: Data) {
+        self.id = UUID()
+        self.title = title
+        self.imageData = imageData
+    }
+}
+
+struct MarkdownImagePreviewWindow: View {
+    let item: MarkdownImagePreviewItem
+
+    private var uiImage: UIImage? {
+        UIImage(data: item.imageData)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let uiImage {
+                    ImageView(uiImage: uiImage)
+                } else {
+                    ContentUnavailableView("Unable to load image", systemImage: "photo")
+                }
+            }
+            .navigationTitle(item.title)
+            #if !os(visionOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                if let uiImage {
+                    ToolbarItem(placement: .primaryAction) {
+                        ShareLink(
+                            item: Image(uiImage: uiImage),
+                            preview: SharePreview(item.title, image: Image(uiImage: uiImage))
+                        ) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct WorkspaceMarkdownImageView: View {
     let url: URL?
     let loadFileContent: @Sendable (String) async throws -> FileContent
     let workspaceDirectory: String?
+
+    #if os(visionOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
 
     @State private var imageData: Data?
     @State private var didAttemptLoad = false
@@ -93,7 +145,13 @@ private struct WorkspaceMarkdownImageView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         print("[WorkspaceMarkdownImageProvider] tapped image name=\(imageDisplayName)")
+                        #if os(visionOS)
+                        if let imageData {
+                            openWindow(value: MarkdownImagePreviewItem(title: imageDisplayName, imageData: imageData))
+                        }
+                        #else
                         showImageSheet = true
+                        #endif
                     }
             } else if let url, let scheme = url.scheme, scheme == "http" || scheme == "https" {
                 NetworkImage(url: url) { state in

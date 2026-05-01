@@ -5,11 +5,15 @@
 
 import Foundation
 import Combine
+#if os(visionOS)
+import CryptoKit
+#else
 import Citadel
 import NIOCore
 import Crypto
 import NIOSSH
 import Network
+#endif
 
 enum SSHConnectionStatus: Equatable {
     case disconnected
@@ -73,6 +77,7 @@ enum SSHKnownHostStore {
     }
 }
 
+#if !os(visionOS)
 private final class SSHTOFUHostKeyValidator: NIOSSHClientServerAuthenticationDelegate {
     private let host: String
     private let port: Int
@@ -103,6 +108,7 @@ private final class SSHTOFUHostKeyValidator: NIOSSHClientServerAuthenticationDel
         validationCompletePromise.succeed(())
     }
 }
+#endif
 
 struct SSHTunnelConfig: Codable, Equatable {
     var isEnabled: Bool = false
@@ -134,6 +140,65 @@ struct SSHTunnelConfig: Codable, Equatable {
     static let `default` = SSHTunnelConfig()
 }
 
+#if os(visionOS)
+@MainActor
+final class SSHTunnelManager: ObservableObject {
+    @Published private(set) var status: SSHConnectionStatus = .disconnected
+    @Published private(set) var trustedHostFingerprint: String?
+    @Published var config: SSHTunnelConfig {
+        didSet { saveConfig() }
+    }
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: "sshTunnelConfig"),
+           let decoded = try? JSONDecoder().decode(SSHTunnelConfig.self, from: data) {
+            self.config = decoded
+        } else {
+            self.config = .default
+        }
+    }
+
+    private func saveConfig() {
+        guard let data = try? JSONEncoder().encode(config) else { return }
+        UserDefaults.standard.set(data, forKey: "sshTunnelConfig")
+    }
+
+    var reverseTunnelCommand: String? {
+        let host = config.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let username = config.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty, !username.isEmpty, config.remotePort > 0, config.port > 0 else { return nil }
+
+        let portArg = config.port == 22 ? "" : " -p \(config.port)"
+        return "ssh -N -T -R 127.0.0.1:\(config.remotePort):127.0.0.1:4096\(portArg) \(username)@\(host)"
+    }
+
+    func connect() async {
+        status = .error("SSH tunnels are not available in the visionOS build yet. Connect directly to an OpenCode server instead.")
+    }
+
+    func disconnect(updateStatus: Bool = true) {
+        if updateStatus {
+            status = .disconnected
+        }
+    }
+
+    func getPublicKey() -> String? {
+        SSHKeyManager.getPublicKey()
+    }
+
+    func generateOrGetPublicKey() throws -> String {
+        try SSHKeyManager.ensureKeyPair()
+    }
+
+    func rotateKey() throws -> String {
+        try SSHKeyManager.rotateKey()
+    }
+
+    func clearTrustedHost() {
+        trustedHostFingerprint = nil
+    }
+}
+#else
 @MainActor
 final class SSHTunnelManager: ObservableObject {
     @Published private(set) var status: SSHConnectionStatus = .disconnected
@@ -404,6 +469,7 @@ private final class NIOToNWConnectionHandler: ChannelInboundHandler {
         nwConnection.cancel()
     }
 }
+#endif
 
 enum SSHError: LocalizedError {
     case connectionFailed(String)

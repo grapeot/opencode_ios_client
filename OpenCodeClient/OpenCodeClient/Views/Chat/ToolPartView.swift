@@ -177,7 +177,12 @@ struct ToolPartView: View {
                         }
                     } label: {
                         Image(systemName: "folder.badge.plus")
-                            .font(DesignTypography.micro)
+                            .font(DesignControls.toolOpenFileIconFont)
+                            .frame(
+                                width: DesignControls.toolOpenFileButtonSize,
+                                height: DesignControls.toolOpenFileButtonSize
+                            )
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

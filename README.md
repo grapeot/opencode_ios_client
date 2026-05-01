@@ -1,6 +1,6 @@
 # OpenCode iOS Client
 
-A native iOS client for [OpenCode](https://github.com/opencode-ai/opencode). Connect to your OpenCode server from your iPhone or iPad to chat with AI agents, monitor tool calls in real time, and browse code changes on the go.
+A native iOS, iPadOS, and visionOS client for [OpenCode](https://github.com/opencode-ai/opencode). Connect to your OpenCode server from your iPhone, iPad, or Apple Vision Pro to chat with AI agents, monitor tool calls in real time, and browse code changes on the go.
 
 ## Install via TestFlight
 
@@ -16,6 +16,15 @@ No Apple Developer account needed. Just tap the link on your iOS device.
 - **Files**: file tree browser, session diffs, markdown preview, image preview with zoom/pan, code view with line numbers
 - **Settings**: server connection, Basic Auth, SSH tunnel, theme, voice transcription
 
+### Apple Vision Pro support
+
+The `OpenCodeClientVision` target is a native visionOS build that reuses the existing iPad-style three-column `NavigationSplitView` layout: sidebar, file preview, and chat. It deliberately avoids the iPhone tab-based layout.
+
+Current visionOS baseline limitations:
+
+- SSH tunnel settings are hidden and SSH tunneling is not available. Connect directly to a LAN or HTTPS OpenCode server instead.
+- Markdown rendering uses pinned SPM forks of MarkdownUI and NetworkImage (see **Building from Source** below). Those forks carry the minimal manifest / platform support changes so the same renderer builds for iOS, iPadOS, and visionOS.
+
 ### Hardware keyboard behavior on iPad
 
 - `Enter`: insert a newline
@@ -24,7 +33,7 @@ No Apple Developer account needed. Just tap the link on your iOS device.
 
 ## Requirements
 
-- iOS 17.0+
+- iOS 17.0+ or visionOS 26.0+ for the native Vision target
 - A running OpenCode server (`opencode serve` or `opencode web`)
 - Xcode 16+ (only if building from source)
 
@@ -51,7 +60,24 @@ cd OpenCodeClient/OpenCodeClient
 open OpenCodeClient.xcodeproj
 ```
 
-Select the `OpenCodeClient` scheme, pick a simulator or device, and hit Run. Swift Package dependencies resolve automatically on first build.
+For iPhone and iPad, select the `OpenCodeClient` scheme, pick a simulator or device, and hit Run. For Apple Vision Pro, select the `OpenCodeClientVision` scheme first, then choose the `Apple Vision Pro` run destination. If Xcode shows `Apple Vision Pro — Designed for iPad`, the active scheme is still `OpenCodeClient`, which runs the iPad-compatible app instead of the native visionOS target. Swift Package dependencies resolve automatically on first build.
+
+This repo uses pinned forked Swift Package dependencies for Markdown rendering on visionOS:
+
+- `https://github.com/grapeot/swift-markdown-ui`, exact `2.4.1-visionos.1`
+- `https://github.com/grapeot/NetworkImage`, exact `6.0.1-visionos.1`
+
+Those forks contain the minimal package manifest and placeholder-image changes needed for visionOS while the upstream packages do not advertise visionOS support.
+
+For the native visionOS target, build `OpenCodeClientVision`:
+
+```bash
+xcodebuild -project "OpenCodeClient.xcodeproj" \
+  -target "OpenCodeClientVision" \
+  -configuration Debug \
+  -sdk xrsimulator \
+  CODE_SIGNING_ALLOWED=NO build
+```
 
 ## License
 

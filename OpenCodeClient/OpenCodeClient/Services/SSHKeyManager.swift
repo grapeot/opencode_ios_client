@@ -4,7 +4,11 @@
 //
 
 import Foundation
+#if os(visionOS)
+import CryptoKit
+#else
 import Crypto
+#endif
 
 enum SSHKeyManager {
     private static let privateKeyKeychainKey = "sshPrivateKey.ed25519"

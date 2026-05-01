@@ -95,6 +95,23 @@ struct ChatTabView: View {
 
     private var useGridCards: Bool { sizeClass == .regular }
 
+    private var micButtonBackground: Color {
+        if isRecording {
+            return Color.red.opacity(DesignColors.Opacity.recordingActionFill)
+        }
+        if isTranscribing {
+            return colorScheme == .dark ? DesignColors.Neutral.surfaceDark : DesignColors.Neutral.surfaceLight
+        }
+        return .clear
+    }
+
+    private var micButtonBorder: Color {
+        if isRecording {
+            return Color.red.opacity(DesignColors.Opacity.recordingActionBorder)
+        }
+        return DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke)
+    }
+
     fileprivate struct TurnActivity: Identifiable {
         enum State {
             case running
@@ -450,7 +467,7 @@ struct ChatTabView: View {
                         .refreshable {
                             await state.loadOlderMessagesForCurrentSession()
                         }
-                        .scrollDismissesKeyboard(.immediately)
+                        .opencodeScrollDismissesKeyboard()
                         .onPreferenceChange(BottomMarkerMinYPreferenceKey.self) { bottomMarkerMinY in
                             scheduleBottomVisibilityUpdate(
                                 bottomMarkerMinY: bottomMarkerMinY,
@@ -488,7 +505,10 @@ struct ChatTabView: View {
                             placeholder: L10n.t(.chatInputPlaceholder),
                             onSubmit: sendCurrentInput
                         )
-                        .frame(minHeight: 32, maxHeight: 100)
+                        .frame(
+                            minHeight: DesignControls.composerTextMinHeight,
+                            maxHeight: DesignControls.composerTextMaxHeight
+                        )
                         .accessibilityIdentifier("chat-input")
 
                         if inputText.isEmpty {
@@ -503,7 +523,7 @@ struct ChatTabView: View {
                     .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
                     .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
 
-                    VStack(spacing: DesignSpacing.sm) {
+                    VStack(spacing: DesignControls.composerActionButtonSpacing) {
                         Button {
                             Task { await toggleRecording() }
                         } label: {
@@ -513,22 +533,25 @@ struct ChatTabView: View {
                                         .controlSize(.small)
                                 } else {
                                     Image(systemName: "mic.fill")
-                                        .font(.callout)
-                                        .foregroundStyle(isRecording ? .white : DesignColors.Brand.primary)
+                                        .font(DesignControls.composerActionIconFont)
+                                        .foregroundStyle(isRecording ? Color.red : DesignColors.Brand.primary)
                                 }
                             }
-                            .frame(width: 32, height: 32)
-                            .background(isRecording ? Color.red : (isTranscribing ? (colorScheme == .dark ? DesignColors.Neutral.surfaceDark : DesignColors.Neutral.surfaceLight) : Color.clear))
-                            .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                            .background {
+                                RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                    .fill(micButtonBackground)
+                            }
                             .overlay(
                                 RoundedRectangle(cornerRadius: DesignCorners.medium)
                                     .stroke(
-                                        isRecording ? Color.clear : (isTranscribing ? DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke) : DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke)),
+                                        micButtonBorder,
                                         lineWidth: 1.5
                                     )
                             )
                         }
                         .disabled(isSending || isTranscribing)
+                        .buttonStyle(.plain)
 
                         Button {
                             sendCurrentInput()
@@ -540,13 +563,15 @@ struct ChatTabView: View {
                                         .tint(.white)
                                 } else {
                                     Image(systemName: "arrow.up")
-                                        .font(.body.bold())
+                                        .font(DesignControls.composerActionIconFont.bold())
                                         .foregroundStyle(.white)
                                 }
                             }
-                            .frame(width: 32, height: 32)
-                            .background(DesignColors.Brand.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                            .background {
+                                RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                    .fill(DesignColors.Brand.primary)
+                            }
                         }
                         .disabled(!ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) || isRecording || isTranscribing)
 
@@ -555,17 +580,26 @@ struct ChatTabView: View {
                                 Task { await state.abortSession() }
                             } label: {
                                 Image(systemName: "stop.fill")
-                                    .font(.body.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: 32, height: 32)
-                                    .background(Color.red)
-                                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .font(DesignControls.composerActionIconFont.bold())
+                                    .foregroundStyle(Color.red)
+                                    .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                            .fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
+                                    }
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                            .stroke(
+                                                Color.red.opacity(DesignColors.Opacity.recordingActionBorder),
+                                                lineWidth: 1.5
+                                            )
+                                    )
                             }
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, DesignControls.composerContainerHorizontalPadding)
+                .padding(.vertical, DesignControls.composerContainerVerticalPadding)
                 .background(.bar)
             }
             .navigationTitle(state.currentSession?.title ?? L10n.t(.appChat))
@@ -844,6 +878,17 @@ struct ChatTabView: View {
                 ) else { return }
                 showSessionList = true
             }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func opencodeScrollDismissesKeyboard() -> some View {
+        #if os(visionOS)
+        self
+        #else
+        self.scrollDismissesKeyboard(.immediately)
+        #endif
     }
 }
 
