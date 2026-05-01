@@ -249,7 +249,7 @@ xcodebuild -project "OpenCodeClient.xcodeproj" \
 
 当前 `OpenCodeClientVision` 是编译 smoke target，还没有单独的 visionOS test bundle。它的主要保护面是：Xcode project target 配置正确、共享源码没有引用 visionOS unavailable API、visionOS 不链接 iOS-only/暂不支持的功能依赖，并且本地 patched MarkdownUI / NetworkImage package 链可以在 visionOS SDK 下完整编译。
 
-Markdown 渲染相关改动还需要同时跑 iOS app build。原因是 iOS 与 visionOS 现在共用 `third_party/swift-markdown-ui` 和 `third_party/NetworkImage`，visionOS build 只能证明 package patch 对 xrOS 可用，iOS build 才能证明本地 package reference 没有破坏原有 iOS target。
+Markdown 渲染相关改动还需要同时跑 iOS app build。原因是 iOS 与 visionOS 共用同一套 SPM 依赖（`grapeot/swift-markdown-ui` 与 `grapeot/NetworkImage` 的 pinned revision），visionOS build 只能证明 package patch 对 xrOS 可用，iOS build 才能证明这条依赖图没有破坏原有 iOS target。
 
 如果遇到 simulator 本身的 creation / launch 问题，需要明确区分：
 
