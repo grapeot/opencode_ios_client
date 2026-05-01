@@ -529,6 +529,7 @@ struct ChatTabView: View {
                             )
                         }
                         .disabled(isSending || isTranscribing)
+                        .buttonStyle(.plain)
 
                         Button {
                             sendCurrentInput()
