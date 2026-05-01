@@ -12,6 +12,7 @@
 		AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */ = {isa = PBXBuildFile; productRef = AA000005AAAAAAAA00000005 /* NetworkImage */; };
 		AA2600000000000000000009 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAAAAAA00000002 /* MarkdownUI */; };
 		AA2600000000000000000010 /* NetworkImage in Frameworks */ = {isa = PBXBuildFile; productRef = AA000005AAAAAAAA00000005 /* NetworkImage */; };
+		AA2600000000000000000012 /* OpenCodeClientVisionAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA2600000000000000000011 /* OpenCodeClientVisionAssets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +37,7 @@
 		3B4F440F2F3E642600A4CD74 /* OpenCodeClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B4F44192F3E642600A4CD74 /* OpenCodeClientUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenCodeClientUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA2600000000000000000001 /* OpenCodeClientVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenCodeClientVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA2600000000000000000011 /* OpenCodeClientVisionAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = OpenCodeClientVisionAssets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -97,6 +99,7 @@
 			isa = PBXGroup;
 			children = (
 				3B4F44042F3E642500A4CD74 /* OpenCodeClient */,
+				AA2600000000000000000011 /* OpenCodeClientVisionAssets.xcassets */,
 				3B4F44122F3E642600A4CD74 /* OpenCodeClientTests */,
 				3B4F441C2F3E642600A4CD74 /* OpenCodeClientUITests */,
 				3B4F44032F3E642500A4CD74 /* Products */,
@@ -290,6 +293,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA2600000000000000000012 /* OpenCodeClientVisionAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
