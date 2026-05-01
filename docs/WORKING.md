@@ -8,7 +8,7 @@
 - **分支**：`visionos`（from master）
 - **编译**：✅ `OpenCodeClientVision` xrsimulator build 通过
 - **测试**：✅ iOS build/test 回归验证通过
-- **Phase**：visionOS MarkdownUI package patch 验证完成
+- **Phase**：visionOS UI ergonomics 与 forked package migration
 
 ## 默认工作流约定
 
@@ -67,6 +67,12 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
 ## 已完成（近期）
+
+- [x] **visionOS 输入区交互尺寸与窗口默认大小（2026-05-01）**：
+  - [x] 录音按钮 active 状态改为红色 icon + 红色 tint 背景/描边，避免 visionOS glass/material compositing 把原来的纯红背景洗成白色
+  - [x] composer 右侧 mic / send / stop 三个 action buttons 在 visionOS 上从 32pt 放大到 48pt，并把垂直间距放宽到 12pt，降低 gaze interaction 难度；iPhone/iPad 保持原 32pt 尺寸
+  - [x] `OpenCodeClientVision` 默认窗口尺寸设为 2304×1080，约为系统默认宽度的 180%、高度的 150%，减少首次打开后手动拉大窗口的需求
+  - [x] 验证：`OpenCodeClientVision` xrsimulator build 通过；`OpenCodeClient` iphonesimulator build 通过
 
 - [x] **visionOS 原生 target 基线（2026-04-30）**：
   - [x] 新增 `OpenCodeClientVision` application target，SDK 指向 `xros`，device family 设为 Vision，源码复用现有 `OpenCodeClient/` synchronized root group
