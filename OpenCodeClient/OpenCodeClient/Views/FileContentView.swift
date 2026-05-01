@@ -4,9 +4,7 @@
 //
 
 import SwiftUI
-#if !os(visionOS)
 import MarkdownUI
-#endif
 
 enum ImageFileUtils {
     static let extensions: Set<String> = [
@@ -232,7 +230,7 @@ struct MarkdownPreviewView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     #if os(visionOS)
-                    NativeMarkdownText(text)
+                    Markdown(text)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     #else
@@ -255,7 +253,7 @@ struct MarkdownPreviewView: View {
         .onAppear {
             let fallback = useRawTextFallback
             #if os(visionOS)
-            let imageBaseURL = "native-markdown"
+            let imageBaseURL = "markdownui-no-network-image"
             #else
             let imageBaseURL = WorkspaceMarkdownImageProvider.imageBaseURL(markdownFilePath: markdownFilePath)?.absoluteString ?? "nil"
             #endif

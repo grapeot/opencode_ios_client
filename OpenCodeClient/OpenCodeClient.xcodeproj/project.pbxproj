@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		3B4F459A2F3FB16A00A4CD74 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 3B4F45992F3FB16A00A4CD74 /* Citadel */; };
 		AA000001AAAAAAAA00000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAAAAAA00000002 /* MarkdownUI */; };
+		AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */ = {isa = PBXBuildFile; productRef = AA000005AAAAAAAA00000005 /* NetworkImage */; };
+		AA2600000000000000000009 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAAAAAA00000002 /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +61,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000001AAAAAAAA00000001 /* MarkdownUI in Frameworks */,
+				AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */,
 				3B4F459A2F3FB16A00A4CD74 /* Citadel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -81,6 +84,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA2600000000000000000009 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,6 +133,7 @@
 			name = OpenCodeClient;
 			packageProductDependencies = (
 				AA000002AAAAAAAA00000002 /* MarkdownUI */,
+				AA000005AAAAAAAA00000005 /* NetworkImage */,
 			);
 			productName = OpenCodeClient;
 			productReference = 3B4F44022F3E642500A4CD74 /* OpenCodeClient.app */;
@@ -197,6 +202,7 @@
 			);
 			name = OpenCodeClientVision;
 			packageProductDependencies = (
+				AA000002AAAAAAAA00000002 /* MarkdownUI */,
 			);
 			productName = OpenCodeClientVision;
 			productReference = AA2600000000000000000001 /* OpenCodeClientVision.app */;
@@ -238,7 +244,8 @@
 			mainGroup = 3B4F43F92F3E642500A4CD74;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				AA000003AAAAAAAA00000003 /* XCLocalSwiftPackageReference "../third_party/swift-markdown-ui" */,
+				AA000006AAAAAAAA00000006 /* XCLocalSwiftPackageReference "../third_party/NetworkImage" */,
 				3B4F45982F3FB16A00A4CD74 /* XCRemoteSwiftPackageReference "Citadel" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -729,6 +736,17 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AA000003AAAAAAAA00000003 /* XCLocalSwiftPackageReference "../third_party/swift-markdown-ui" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../third_party/swift-markdown-ui";
+		};
+		AA000006AAAAAAAA00000006 /* XCLocalSwiftPackageReference "../third_party/NetworkImage" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../third_party/NetworkImage;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		3B4F45982F3FB16A00A4CD74 /* XCRemoteSwiftPackageReference "Citadel" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -736,14 +754,6 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 0.12.0;
-			};
-		};
-		AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -756,8 +766,13 @@
 		};
 		AA000002AAAAAAAA00000002 /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			package = AA000003AAAAAAAA00000003 /* XCLocalSwiftPackageReference "../third_party/swift-markdown-ui" */;
 			productName = MarkdownUI;
+		};
+		AA000005AAAAAAAA00000005 /* NetworkImage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000006AAAAAAAA00000006 /* XCLocalSwiftPackageReference "../third_party/NetworkImage" */;
+			productName = NetworkImage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
