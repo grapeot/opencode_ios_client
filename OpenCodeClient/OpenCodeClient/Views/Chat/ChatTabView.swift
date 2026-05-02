@@ -9,6 +9,23 @@ import os
 import UIKit
 #endif
 
+private final class SpeechPartialTranscriptBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var transcript = ""
+
+    func update(_ newValue: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        transcript = newValue
+    }
+
+    func current() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return transcript
+    }
+}
+
 private enum MessageGroupItem: Identifiable {
     case user(MessageWithParts)
     case assistantMerged([MessageWithParts])
@@ -71,6 +88,10 @@ struct ChatTabView: View {
         guard !cleanedTranscript.isEmpty else { return prefix }
         guard !prefix.isEmpty else { return cleanedTranscript }
         return prefix + " " + cleanedTranscript
+    }
+
+    static func speechFailureInput(prefix: String, lastPartialTranscript: String) -> String {
+        mergedSpeechInput(prefix: prefix, transcript: lastPartialTranscript)
     }
 
     @Bindable var state: AppState
@@ -723,9 +744,11 @@ struct ChatTabView: View {
             isTranscribing = true
             defer { isTranscribing = false }
             let prefix = inputText
+            let partialTranscriptBuffer = SpeechPartialTranscriptBuffer()
             let transcribeStart = ProcessInfo.processInfo.systemUptime
             do {
                 let transcript = try await state.transcribeAudio(audioFileURL: url) { partial in
+                    partialTranscriptBuffer.update(partial)
                     Task { @MainActor in
                         inputText = Self.mergedSpeechInput(prefix: prefix, transcript: partial)
                     }
@@ -735,7 +758,7 @@ struct ChatTabView: View {
                 inputText = Self.mergedSpeechInput(prefix: prefix, transcript: cleaned)
             } catch {
                 Self.logger.error("[SpeechProfile] chat transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                inputText = prefix
+                inputText = Self.speechFailureInput(prefix: prefix, lastPartialTranscript: partialTranscriptBuffer.current())
                 speechError = error.localizedDescription
             }
         } else {
