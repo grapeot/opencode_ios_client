@@ -18,7 +18,7 @@ No Apple Developer account needed. Just tap the link on your iOS device.
 
 ### Apple Vision Pro support
 
-The `OpenCodeClientVision` target is a native visionOS build that reuses the existing iPad-style three-column `NavigationSplitView` layout: sidebar, file preview, and chat. It deliberately avoids the iPhone tab-based layout.
+The main `OpenCodeClient` target builds as a single native app for iPhone, iPad, and Apple Vision Pro. On visionOS it reuses the existing iPad-style three-column `NavigationSplitView` layout: sidebar, file preview, and chat. It deliberately avoids the iPhone tab-based layout.
 
 Current visionOS baseline limitations:
 
@@ -33,7 +33,7 @@ Current visionOS baseline limitations:
 
 ## Requirements
 
-- iOS 17.0+ or visionOS 26.0+ for the native Vision target
+- iOS 17.0+ or visionOS 26.0+
 - A running OpenCode server (`opencode serve` or `opencode web`)
 - Xcode 16+ (only if building from source)
 
@@ -60,7 +60,7 @@ cd OpenCodeClient/OpenCodeClient
 open OpenCodeClient.xcodeproj
 ```
 
-For iPhone and iPad, select the `OpenCodeClient` scheme, pick a simulator or device, and hit Run. For Apple Vision Pro, select the `OpenCodeClientVision` scheme first, then choose the `Apple Vision Pro` run destination. If Xcode shows `Apple Vision Pro — Designed for iPad`, the active scheme is still `OpenCodeClient`, which runs the iPad-compatible app instead of the native visionOS target. Swift Package dependencies resolve automatically on first build.
+Select the `OpenCodeClient` scheme, then pick an iPhone, iPad, or Apple Vision Pro destination. The same scheme and bundle identifier are used across iOS, iPadOS, and native visionOS, so TestFlight/App Store distribution remains a single app. Swift Package dependencies resolve automatically on first build.
 
 This repo uses pinned forked Swift Package dependencies for Markdown rendering on visionOS:
 
@@ -69,13 +69,12 @@ This repo uses pinned forked Swift Package dependencies for Markdown rendering o
 
 Those forks contain the minimal package manifest and placeholder-image changes needed for visionOS while the upstream packages do not advertise visionOS support.
 
-For the native visionOS target, build `OpenCodeClientVision`:
+For native visionOS, build the shared `OpenCodeClient` scheme with an Apple Vision Pro destination:
 
 ```bash
 xcodebuild -project "OpenCodeClient.xcodeproj" \
-  -target "OpenCodeClientVision" \
-  -configuration Debug \
-  -sdk xrsimulator \
+  -scheme "OpenCodeClient" \
+  -destination 'platform=visionOS Simulator,name=Apple Vision Pro' \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
