@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **最后更新**：2026-05-01
+- **最后更新**：2026-05-02
 - **分支**：`visionos`（from master）
 - **编译**：✅ `OpenCodeClientVision` xrsimulator build 通过
 - **测试**：✅ iOS build/test 回归验证通过
-- **Phase**：visionOS UI ergonomics、forked package migration 与 layered app icon
+- **Phase**：visionOS speech transcription failure recovery
 
 ## 默认工作流约定
 
@@ -67,6 +67,12 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
 ## 已完成（近期）
+
+- [x] **Speech recognition 失败时保留 partial transcript（2026-05-02）**：
+  - [x] 根因：`ChatTabView.toggleRecording()` 在 transcription catch 路径中把 `inputText` 回滚到录音前的 `prefix`；当 AI Builders realtime WebSocket 已经流式返回 partial transcript 后再报错时，用户已经看到的文本会被覆盖掉，空 prefix 场景表现为输入框被清空
+  - [x] 修复：新增线程安全的 `SpeechPartialTranscriptBuffer`，partial callback 每次同步记录最后一版 transcript；失败时使用 `prefix + lastPartialTranscript` 恢复输入框，没有 partial 时保持原 prefix 行为
+  - [x] 测试：新增 `speechFailureInputPreservesLastPartialTranscript()` 与 `speechFailureInputFallsBackToPrefixWithoutPartialTranscript()`，覆盖失败恢复和无 partial fallback
+  - [x] 验证：`xcodebuild test -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,id=302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8' CODE_SIGNING_ALLOWED=NO` 通过；`xcodebuild build -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClientVision" -destination 'platform=visionOS Simulator,id=FBB8C85C-5EC8-40CC-B2CF-DAEC86BA530B' CODE_SIGNING_ALLOWED=NO` 通过
 
 - [x] **visionOS layered app icon（2026-05-01）**：
   - [x] 基于现有 `OpenCodeClient/Assets.xcassets/AppIcon.appiconset/AppIcon.png` 生成 visionOS 三层 icon：background / middle / foreground

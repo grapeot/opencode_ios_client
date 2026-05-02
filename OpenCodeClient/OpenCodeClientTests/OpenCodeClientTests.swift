@@ -998,6 +998,15 @@ struct AIBuildersAudioClientTests {
         #expect(ChatTabView.mergedSpeechInput(prefix: "Existing draft", transcript: "partial") == "Existing draft partial")
     }
 
+    @Test func speechFailureInputPreservesLastPartialTranscript() {
+        #expect(ChatTabView.speechFailureInput(prefix: "", lastPartialTranscript: "partial result") == "partial result")
+        #expect(ChatTabView.speechFailureInput(prefix: "Existing draft", lastPartialTranscript: "partial result") == "Existing draft partial result")
+    }
+
+    @Test func speechFailureInputFallsBackToPrefixWithoutPartialTranscript() {
+        #expect(ChatTabView.speechFailureInput(prefix: "Existing draft", lastPartialTranscript: "   ") == "Existing draft")
+    }
+
     @Test func chatComposerReturnUsesSystemDuringMarkedTextComposition() {
         #expect(ChatComposerKeyAction.action(for: "\n", hasMarkedText: true, isShiftReturn: false) == .system)
     }
