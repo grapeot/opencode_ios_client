@@ -193,6 +193,7 @@ private struct WorkspaceMarkdownImageView: View {
         .task(id: url?.absoluteString) {
             guard !didAttemptLoad else { return }
             didAttemptLoad = true
+            print("[WorkspaceMarkdownImageProvider] task fired url=\(url?.absoluteString ?? "nil") scheme=\(url?.scheme ?? "nil")")
 
             // 1. Data URI (base64 inline)
             if let data = WorkspaceMarkdownImageProvider.decodeDataURL(url) {
