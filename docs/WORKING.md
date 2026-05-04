@@ -144,6 +144,12 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
   - **Commit**: `5554fe9` — fix: render markdown report images on ios
   - **Commit**: `45044d4` — test: align markdown image provider data-url coverage
 
+- [x] **Markdown caption 图片块预览修复（2026-05-03）**：
+  - [x] 根因确认：`![image](url)` 后紧跟 caption 且中间没有空行时，MarkdownUI 会把图片解析为 paragraph 内的 inline image，绕过 `WorkspaceMarkdownImageProvider`，导致远程大图按原始尺寸显示且无法点击预览。
+  - [x] `MarkdownPreviewView` 渲染前将“单独一行图片 + 下一行非空文本”规范化为 image block，不改原始文件内容；真正的行内图片保持不变。
+  - [x] `WorkspaceMarkdownImageProvider` 为远程 HTTP(S) 图片增加 URLSession 直接下载路径，避免远程图片依赖 OpenCode server 的 base64 文件接口。
+  - [x] 新增 normalizer 测试与 HTTP(S) URL 路径测试；验证 `xcodebuild test` 通过。
+
 - [x] **视觉重设计 Phase 2 — Mic 按钮 + 色彩统一 + 交互修复（2026-04-01）**：
   - [x] Mic 按钮移至发送按钮上方 VStack，添加圆角描边（1.5pt brand blue）使其可识别为可点击按钮
   - [x] Brand primary 从深蓝 `(0.15, 0.25, 0.55)` 改为系统蓝 `(0.0, 0.478, 1.0)`，与 iOS accent 统一
