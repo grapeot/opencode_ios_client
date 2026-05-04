@@ -8,7 +8,6 @@ struct WorkspaceMarkdownImageProvider: ImageProvider {
     let workspaceDirectory: String?
 
     func makeImage(url: URL?) -> some View {
-        print("[WorkspaceMarkdownImageProvider] makeImage url=\(url?.absoluteString ?? "nil") scheme=\(url?.scheme ?? "nil")")
         WorkspaceMarkdownImageView(url: url, loadFileContent: loadFileContent, workspaceDirectory: workspaceDirectory)
     }
 
@@ -114,6 +113,17 @@ private struct WorkspaceMarkdownImageView: View {
     let url: URL?
     let loadFileContent: @Sendable (String) async throws -> FileContent
     let workspaceDirectory: String?
+
+    init(
+        url: URL?,
+        loadFileContent: @escaping @Sendable (String) async throws -> FileContent,
+        workspaceDirectory: String?
+    ) {
+        self.url = url
+        self.loadFileContent = loadFileContent
+        self.workspaceDirectory = workspaceDirectory
+        print("[WorkspaceMarkdownImageProvider] init image url=\(url?.absoluteString ?? "nil") scheme=\(url?.scheme ?? "nil")")
+    }
 
     #if os(visionOS)
     @Environment(\.openWindow) private var openWindow
