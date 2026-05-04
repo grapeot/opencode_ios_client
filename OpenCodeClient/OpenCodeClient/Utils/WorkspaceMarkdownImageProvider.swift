@@ -8,6 +8,7 @@ struct WorkspaceMarkdownImageProvider: ImageProvider {
     let workspaceDirectory: String?
 
     func makeImage(url: URL?) -> some View {
+        print("[WorkspaceMarkdownImageProvider] makeImage url=\(url?.absoluteString ?? "nil") scheme=\(url?.scheme ?? "nil")")
         WorkspaceMarkdownImageView(url: url, loadFileContent: loadFileContent, workspaceDirectory: workspaceDirectory)
     }
 
