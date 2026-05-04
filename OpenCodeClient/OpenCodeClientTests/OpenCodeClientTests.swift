@@ -1628,7 +1628,7 @@ struct ModelSelectionPersistenceTests {
         state.selectSession(session)
 
         #expect(state.selectedModelIndex == 0)
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5-turbo")
+        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.1")
     }
 
     @Test @MainActor func legacyGPT54SelectionMapsToCurrentGPT55Preset() {

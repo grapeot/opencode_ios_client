@@ -136,7 +136,7 @@ iPhone 采用底部 Tab Bar，三个 Tab：
 
 | 显示名称 | providerID | modelID |
 |----------|------------|---------|
-| GLM-5-turbo | `zai-coding-plan` | `glm-5-turbo` |
+| GLM-5.1 | `zai-coding-plan` | `glm-5.1` |
 | GPT-5.4 | `openai` | `gpt-5.4` |
 | GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
 | DeepSeek | `deepseek` | `deepseek-v4-pro` |
@@ -361,7 +361,7 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 
 #### 4.4.3 Model Presets
 
-**当前实现**：固定预设列表（GLM-5-turbo、GPT-5.4、GPT-5.3 Codex、DeepSeek），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
+**当前实现**：固定预设列表（GLM-5.1、GPT-5.4、GPT-5.3 Codex、DeepSeek），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
 
 #### 4.4.3 Project (Workspace)
 

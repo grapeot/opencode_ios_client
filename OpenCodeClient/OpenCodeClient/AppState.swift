@@ -415,7 +415,7 @@ final class AppState {
     var streamingReasoningPart: Part? { get { messageStore.streamingReasoningPart } set { messageStore.streamingReasoningPart = newValue } }
 
     var modelPresets: [ModelPreset] = [
-        ModelPreset(displayName: "GLM-5-turbo", providerID: "zai-coding-plan", modelID: "glm-5-turbo"),
+        ModelPreset(displayName: "GLM-5.1", providerID: "zai-coding-plan", modelID: "glm-5.1"),
         ModelPreset(displayName: "GPT-5.5", providerID: "openai", modelID: "gpt-5.5"),
         ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
         ModelPreset(displayName: "DeepSeek", providerID: "deepseek", modelID: "deepseek-v4-flash"),
@@ -680,8 +680,8 @@ final class AppState {
 
     private func canonicalModelPresetID(for savedID: String) -> String {
         switch savedID {
-        case "zai-coding-plan/glm-5.1":
-            return "zai-coding-plan/glm-5-turbo"
+        case "zai-coding-plan/glm-5.1", "zai-coding-plan/glm-5-turbo":
+            return "zai-coding-plan/glm-5.1"
         case "openai/gpt-5.4":
             return "openai/gpt-5.5"
         default:

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- **最后更新**：2026-05-02
+- **最后更新**：2026-05-03
 - **分支**：`visionos`（from master）
 - **编译**：✅ unified `OpenCodeClient` visionOS Simulator build 通过
 - **测试**：✅ iOS build/test 回归验证通过
@@ -174,6 +174,11 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [x] **避免 session 切换时在 view update 内同步改状态（2026-03-30）**：
   - [x] 将 `ChatTabView` 中响应 `currentSessionID` 变化的草稿同步与滚动状态重置改为 `Task { @MainActor in }`
   - [x] 降低运行时 `Modifying state during view update` 告警概率，不改变现有 session 切换行为
+
+- [x] **GLM-5-turbo 预设切换到 GLM-5.1（2026-05-03）**：
+  - [x] 将模型预设显示名从 `GLM-5-turbo` 更新为 `GLM-5.1`，modelID 从 `glm-5-turbo` 更新为 `glm-5.1`
+  - [x] `canonicalModelPresetID` 遗留迁移：`glm-5-turbo` 和 `glm-5.1` 均映射到新的 `glm-5.1`
+  - [x] 同步更新 PRD、RFC 文档中的模型引用
 
 - [x] **GLM-5.1 预设切回 GLM-5-turbo（2026-03-30）**：
   - [x] 将模型预设显示名从 `GLM-5.1` 更新为 `GLM-5-turbo`
@@ -467,7 +472,7 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 当前模型预设（4 个）：
 | 显示名称 | providerID | modelID |
 |----------|------------|---------|
-| GLM-5-turbo | `zai-coding-plan` | `glm-5-turbo` |
+| GLM-5.1 | `zai-coding-plan` | `glm-5.1` |
 | GPT-5.4 | `openai` | `gpt-5.4` |
 | GPT-5.3 Codex | `openai` | `gpt-5.3-codex` |
 | DeepSeek | `deepseek` | `deepseek-v4-pro` |

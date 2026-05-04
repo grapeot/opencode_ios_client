@@ -429,7 +429,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **文件预览**：iPad 上不使用 sheet。左栏选择文件、或 Chat 中点击 tool/patch 的 file path 时，更新中栏 Preview 预览对应文件
 - **刷新**：Preview 中栏右上角提供刷新按钮（重新加载文件内容），用于外部变更后的手动刷新
 - **Toolbar**：第一行统一：左（Session 列表、重命名、Compact、新建 Session）+ 右（模型下拉列表、Agent 下拉列表、Context Usage ring、**Settings 按钮**）；Settings 点击以 sheet 打开
-- **模型与 Agent 选择器**：原 chip 横向滚动改为下拉列表（Menu + Picker）。模型列表固定（GLM-5-turbo / GPT-5.4 / GPT-5.3 Codex / DeepSeek）；Agent 列表从 `GET /agent` 动态获取（过滤 hidden）
+- **模型与 Agent 选择器**：原 chip 横向滚动改为下拉列表（Menu + Picker）。模型列表固定（GLM-5.1 / GPT-5.4 / GPT-5.3 Codex / DeepSeek）；Agent 列表从 `GET /agent` 动态获取（过滤 hidden）
 - **模型标签**：iPhone 上使用短名（`GLM` / `Opus` / `GPT` / `Gemini`）以适配窄宽；iPad 上显示全称
 - **实现**：`@Environment(\.horizontalSizeClass)` 分支：regular 时渲染三栏 split，小屏时渲染 `TabView`；iPad 用 `previewFilePath` 驱动中栏预览，iPhone 保留 `fileToOpenInFilesTab` 走 sheet / tab 跳转
 
