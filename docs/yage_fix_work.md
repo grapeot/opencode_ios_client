@@ -56,7 +56,9 @@ finalizer 不再 `runners.clear()` —— 因为这个 Map 现在是 process-wid
 
 ### 诊断 trace 已撤
 
-定位期间在 `packages/opencode/src/session/run-state.ts` 加的 `mapId` + `sharedRunners.size` 日志、以及 `packages/opencode/src/project/instance-store.ts` 的 `InstanceStore.load called` 日志，都已在 fix 验证通过后撤掉（commit `ae98a8c7 chore(server): remove sessionID race diagnostics now that fix is verified`）。结构性的 `sharedRunners` 提到 module scope 的 fix 不变。
+定位期间在 `packages/opencode/src/session/run-state.ts` 加的 `mapId` + `sharedRunners.size` 日志、以及 `packages/opencode/src/project/instance-store.ts` 的 `InstanceStore.load called` 日志，都已在 fix 验证通过后撤掉（commit `ae98a8c7 chore(server): remove sessionID race diagnostics now that fix is verified`），并 `bun run build` 重新打包了 `packages/opencode/dist/opencode-darwin-arm64/bin/opencode`。结构性的 `sharedRunners` 提到 module scope 的 fix 不变。
+
+下次启动 opencode web server 默认走的就是这个新二进制。当前没有 server 在跑，需要时手动起一个；起的时候要 cd 到目标 working directory（比如 `/Users/grapeot/co/knowledge_working`），server 会继承这个 cwd 作为初始 InstanceState 的 directory。
 
 ### 还附带的另一处 fix（保留）
 
