@@ -54,14 +54,9 @@ finalizer 不再 `runners.clear()` —— 因为这个 Map 现在是 process-wid
 
 部署后验证：同 main session 连续 prompt，每次单 fiber 跑、单条 user 下 1 条 user → ≤4 条顺序 assistant（中间 tool-calls，末尾 stop），race 消除。
 
-### 同时保留的诊断 trace（暂留 1-2 天观察用）
+### 诊断 trace 已撤
 
-未撤掉的本地诊断改动：
-
-- `packages/opencode/src/session/run-state.ts`：`SessionRunState.state init` / `finalize` 打 `mapId` + `sharedRunners.size`；`SessionRunState.runner reuse/create` 打 `sid / mapId / mapSize / stateTag / busy`。
-- `packages/opencode/src/project/instance-store.ts`：`InstanceStore.load called` 打 `inputDir / resolvedDir / cacheSize / cacheHit / cacheKeys`。
-
-如果短期内 race 复发，这些 log 能立刻指认是 `SessionRunState.runner` 没 reuse 还是 `InstanceStore.load` cache miss，便于定位。观察期过后可以删除。
+定位期间在 `packages/opencode/src/session/run-state.ts` 加的 `mapId` + `sharedRunners.size` 日志、以及 `packages/opencode/src/project/instance-store.ts` 的 `InstanceStore.load called` 日志，都已在 fix 验证通过后撤掉（commit `ae98a8c7 chore(server): remove sessionID race diagnostics now that fix is verified`）。结构性的 `sharedRunners` 提到 module scope 的 fix 不变。
 
 ### 还附带的另一处 fix（保留）
 
@@ -144,9 +139,9 @@ shutdown 路径 `tasks.clear() / ...` 行为保留——shutdown 只在 process 
 
 OMO 走的是本地 file path plugin，配置写死在 `~/.config/opencode/opencode.json` 的 `plugin: ["/Users/grapeot/co/.../oh-my-openagent"]`。后续要升级 OMO 上游版本时，需要在本地 git fetch + rebase + 重新 `bun run build`，并保持这五处 SHARED 化的本地修改。可以考虑后续给上游 OMO 提一个 PR，把 tasks/notifications maps 改成 module-level singleton 或者通过显式 `globalThis.__omoBackgroundManagerState__` 兜底。
 
-### 暂留的本地 trace
+### 诊断 trace 已撤
 
-`__omoMgrId` + `addTask/getTask/removeTask` 的 omo-trace 暂时不删，跟 server 那批 trace 同等地位，留 1-2 天观察期。`/var/folders/.../T/oh-my-opencode.log` 文件已经 170 MB 历史日志，需要的时候 grep `omo-trace` 看本机 race 是否再现。
+`__omoMgrId` + `addTask/getTask/removeTask` 的 omo-trace 已在 fix 验证通过后从源码删掉（commit `d5357f77 chore(background-agent): remove omo-trace diagnostics now that fix is verified`），并 rebuild 了 OMO bundle。本机历史 log 文件 `/var/folders/.../T/oh-my-opencode.log`（已涨到 170 MB）也一并 trash 掉。SHARED 五处共享 Map 的结构性修复保留。
 
 ### 仍存在的更上游问题（未修）
 
