@@ -417,10 +417,10 @@ final class AppState {
     var modelPresets: [ModelPreset] = [
         ModelPreset(displayName: "GLM-5.1", providerID: "zai-coding-plan", modelID: "glm-5.1"),
         ModelPreset(displayName: "GPT-5.5", providerID: "openai", modelID: "gpt-5.5"),
-        ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex"),
-        ModelPreset(displayName: "DeepSeek", providerID: "deepseek", modelID: "deepseek-v4-flash"),
+        ModelPreset(displayName: "DeepSeek V4 Flash", providerID: "deepseek", modelID: "deepseek-v4-flash"),
+        ModelPreset(displayName: "DeepSeek V4 Pro", providerID: "deepseek", modelID: "deepseek-v4-pro"),
     ]
-    var selectedModelIndex: Int = 1
+    var selectedModelIndex: Int = 2
     
     var agents: [AgentInfo] = [
         AgentInfo(name: "OpenCode-Builder", description: "Build agent (OpenCode default)", mode: "all", hidden: false, native: false),

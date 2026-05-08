@@ -12,9 +12,12 @@ struct ModelPreset: Codable, Identifiable {
     let modelID: String
     
     var shortName: String {
-        if displayName.contains("DeepSeek") { return "DeepSeek" }
-        if displayName.contains("Gemini") { return "Gemini" }
-        if displayName.contains("GPT") { return "GPT" }
-        return displayName
+        switch displayName {
+        case "DeepSeek V4 Flash": return "DS-Flash"
+        case "DeepSeek V4 Pro": return "DS-Pro"
+        case let name where name.contains("Gemini"): return "Gemini"
+        case let name where name.contains("GPT"): return "GPT"
+        default: return displayName
+        }
     }
 }
