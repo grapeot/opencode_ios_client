@@ -763,6 +763,9 @@ final class AppState {
             let health = try await apiClient.health()
             isConnected = health.healthy
             serverVersion = health.version
+            if isConnected {
+                connectSSE()
+            }
         } catch {
             isConnected = false
             connectionError = error.localizedDescription
@@ -1331,12 +1334,30 @@ final class AppState {
     private func bootstrapSyncCurrentSession(reason: String) async {
         guard currentSessionID != nil else { return }
         let start = Date()
+
+        await validateAndRecoverCurrentSession()
+
         await loadMessages()
         await refreshPendingPermissions()
         await refreshPendingQuestions()
         await syncSessionStatusesFromPoll()
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         Self.logger.debug("bootstrapSync reason=\(reason, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public) messages=\(self.messages.count, privacy: .public) permissions=\(self.pendingPermissions.count, privacy: .public)")
+    }
+
+    /// Check whether the current session still exists on the server.
+    /// If the session was deleted (e.g. server restarted), reset currentSessionID
+    /// so the next loadSessions call auto-selects a valid session.
+    private func validateAndRecoverCurrentSession() async {
+        guard let sid = currentSessionID else { return }
+        do {
+            _ = try await apiClient.messages(sessionID: sid, limit: 1)
+        } catch {
+            guard case APIError.httpError(let statusCode, _) = error, statusCode == 404 else { return }
+            Self.logger.debug("bootstrapSync: current session \(sid) not found on server, resetting")
+            currentSessionID = nil
+            await loadSessions()
+        }
     }
 
     private func syncSessionStatusesFromPoll(markMissingBusyAsIdle: Bool = true) async {
