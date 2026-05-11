@@ -1643,6 +1643,13 @@ struct ModelPresetShortNameTests {
 }
 
 struct ModelSelectionPersistenceTests {
+    /// Clear UserDefaults keys that persist session/model state between tests.
+    /// Without cleanup, parallel Swift Testing execution can leak state across tests.
+    init() {
+        UserDefaults.standard.removeObject(forKey: "currentSessionID")
+        UserDefaults.standard.removeObject(forKey: "selectedModelBySession")
+    }
+
     @Test @MainActor func legacyGLM51SelectionMapsToCurrentTurboPreset() {
         let sessionID = "session-glm"
         let defaultsKey = "selectedModelBySession"
@@ -1718,12 +1725,12 @@ struct ModelSelectionPersistenceTests {
         #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
     }
 
-    @Test @MainActor func defaultSelectionUsesGPT55Preset() {
+    @Test @MainActor func defaultSelectionUsesDeepSeekV4Flash() {
         let state = AppState()
 
-        #expect(state.selectedModelIndex == 1)
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
-        #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
+        #expect(state.selectedModelIndex == 2)
+        #expect(state.modelPresets[state.selectedModelIndex].displayName == "DeepSeek V4 Flash")
+        #expect(state.modelPresets[state.selectedModelIndex].id == "deepseek/deepseek-v4-flash")
     }
 }
 
