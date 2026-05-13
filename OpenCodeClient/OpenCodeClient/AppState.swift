@@ -77,6 +77,7 @@ final class AppState {
             if a == 10 || a == 127 { return true }
             if a == 192 && b == 168 { return true }
             if a == 172 && (16...31).contains(b) { return true }
+            if a == 100 && (64...127).contains(b) { return true }
             if a == 169 && b == 254 { return true }
             if host == "0.0.0.0" { return true }
             return false
