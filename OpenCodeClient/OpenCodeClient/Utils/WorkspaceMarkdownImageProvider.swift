@@ -4,15 +4,19 @@ import NetworkImage
 import SwiftUI
 
 struct WorkspaceMarkdownImageProvider: ImageProvider {
-    let loadFileContent: @Sendable (String) async throws -> FileContent
+    static let maxBase64ImageCharacters = 80_000_000
+
+    let loadFileContent: @Sendable ([UInt8]) async throws -> FileContent
     let workspaceDirectory: String?
 
     func makeImage(url: URL?) -> some View {
-        WorkspaceMarkdownImageView(url: url, loadFileContent: loadFileContent, workspaceDirectory: workspaceDirectory)
+        return WorkspaceMarkdownImageView(url: url, loadFileContent: loadFileContent, workspaceDirectory: workspaceDirectory)
     }
 
     static func imageBaseURL(markdownFilePath: String?) -> URL? {
-        guard let markdownFilePath, !markdownFilePath.isEmpty else { return nil }
+        guard let markdownFilePath, !markdownFilePath.isEmpty else {
+            return nil
+        }
         let dir = PathNormalizer.normalize((markdownFilePath as NSString).deletingLastPathComponent)
         var components = URLComponents()
         components.scheme = "opencode-workspace"
@@ -21,7 +25,8 @@ struct WorkspaceMarkdownImageProvider: ImageProvider {
         if !components.path.hasSuffix("/") {
             components.path += "/"
         }
-        return components.url
+        let url = components.url
+        return url
     }
 
     static func workspaceRelativePath(from url: URL?, workspaceDirectory: String? = nil) -> String? {
@@ -39,7 +44,12 @@ struct WorkspaceMarkdownImageProvider: ImageProvider {
     }
 
     static func decodeBase64ImageData(_ raw: String?) -> Data? {
-        guard let raw, !raw.isEmpty else { return nil }
+        guard let raw, !raw.isEmpty else {
+            return nil
+        }
+        guard raw.count <= maxBase64ImageCharacters else {
+            return nil
+        }
         if let data = Data(base64Encoded: raw), UIImage(data: data) != nil {
             return data
         }
@@ -47,16 +57,25 @@ struct WorkspaceMarkdownImageProvider: ImageProvider {
             .replacingOccurrences(of: "\n", with: "")
             .replacingOccurrences(of: "\r", with: "")
             .replacingOccurrences(of: " ", with: "")
-        guard let data = Data(base64Encoded: cleaned), UIImage(data: data) != nil else { return nil }
+        guard cleaned.count <= maxBase64ImageCharacters else {
+            return nil
+        }
+        guard let data = Data(base64Encoded: cleaned), UIImage(data: data) != nil else {
+            return nil
+        }
         return data
     }
 
     static func decodeDataURL(_ url: URL?) -> Data? {
         guard let raw = url?.absoluteString, raw.hasPrefix("data:") else { return nil }
-        guard let comma = raw.firstIndex(of: ",") else { return nil }
+        guard let comma = raw.firstIndex(of: ",") else {
+            return nil
+        }
         let metadata = raw[..<comma]
         let payload = String(raw[raw.index(after: comma)...])
-        guard metadata.contains(";base64") else { return nil }
+        guard metadata.contains(";base64") else {
+            return nil
+        }
         return decodeBase64ImageData(payload.removingPercentEncoding ?? payload)
     }
 }
@@ -111,12 +130,12 @@ struct MarkdownImagePreviewWindow: View {
 
 private struct WorkspaceMarkdownImageView: View {
     let url: URL?
-    let loadFileContent: @Sendable (String) async throws -> FileContent
+    let loadFileContent: @Sendable ([UInt8]) async throws -> FileContent
     let workspaceDirectory: String?
 
     init(
         url: URL?,
-        loadFileContent: @escaping @Sendable (String) async throws -> FileContent,
+        loadFileContent: @escaping @Sendable ([UInt8]) async throws -> FileContent,
         workspaceDirectory: String?
     ) {
         self.url = url
@@ -154,7 +173,6 @@ private struct WorkspaceMarkdownImageView: View {
                     .aspectRatio(contentMode: .fit)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        print("[WorkspaceMarkdownImageProvider] tapped image name=\(imageDisplayName)")
                         #if os(visionOS)
                         if let imageData {
                             openWindow(value: MarkdownImagePreviewItem(title: imageDisplayName, imageData: imageData))
@@ -201,30 +219,37 @@ private struct WorkspaceMarkdownImageView: View {
             }
         }
         .task(id: url?.absoluteString) {
-            guard !didAttemptLoad else { return }
+            guard !didAttemptLoad else {
+                return
+            }
             didAttemptLoad = true
 
-            // 1. Data URI (base64 inline)
             if let data = WorkspaceMarkdownImageProvider.decodeDataURL(url) {
                 imageData = data
                 return
             }
 
-            // 2. Workspace-relative file (via OpenCode server API)
             if let path = WorkspaceMarkdownImageProvider.workspaceRelativePath(from: url, workspaceDirectory: workspaceDirectory) {
-                if let content = try? await loadFileContent(path),
-                   let data = WorkspaceMarkdownImageProvider.decodeBase64ImageData(content.content) {
-                    imageData = data
+                let pathBytes = Array(path.utf8)
+                do {
+                    let content = try await loadFileContent(pathBytes)
+                    let contentChars = content.content?.count ?? 0
+                    if contentChars > WorkspaceMarkdownImageProvider.maxBase64ImageCharacters {
+                        return
+                    }
+                    if let data = WorkspaceMarkdownImageProvider.decodeBase64ImageData(content.content) {
+                        imageData = data
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    return
                 }
                 return
             }
 
-            // 3. Remote URL (download directly via URLSession, bypass server base64)
-            if let url, let scheme = url.scheme, (scheme == "http" || scheme == "https") {
-                if let (data, _) = try? await URLSession.shared.data(from: url),
-                   UIImage(data: data) != nil {
-                    imageData = data
-                }
+            if let scheme = url?.scheme, scheme == "http" || scheme == "https" {
+                return
             }
         }
     }
