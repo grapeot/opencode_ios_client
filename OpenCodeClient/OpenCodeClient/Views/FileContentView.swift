@@ -93,7 +93,7 @@ struct FileContentView: View {
     }
 
     /// MarkdownUI crashes/freezes on long lines or large content. Skip it entirely for problematic files.
-    private static let markdownMaxLineLength = 1500
+    private static let markdownMaxLineLength = 5000
     private static let markdownMaxTotalLength = 60_000
 
     private func useRawTextForMarkdown(_ text: String) -> Bool {
@@ -211,7 +211,7 @@ struct MarkdownPreviewView: View {
     let markdownFilePath: String?
     let workspaceDirectory: String?
 
-    private static let maxLineLength = 1500
+    private static let maxLineLength = 5000
     private static let maxTotalLength = 60_000
 
     private var useRawTextFallback: Bool {
