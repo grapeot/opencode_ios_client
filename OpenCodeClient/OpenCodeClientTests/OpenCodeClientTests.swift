@@ -1625,6 +1625,11 @@ struct ModelPresetShortNameTests {
         let preset = ModelPreset(displayName: "DeepSeek", providerID: "deepseek", modelID: "deepseek-v4-flash")
         #expect(preset.shortName == "DeepSeek")
     }
+
+    @Test func deepseekLocalShortName() {
+        let preset = ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash")
+        #expect(preset.shortName == "DS-L")
+    }
     
     @Test func geminiShortName() {
         let preset = ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro")
@@ -1731,6 +1736,14 @@ struct ModelSelectionPersistenceTests {
         #expect(state.selectedModelIndex == 2)
         #expect(state.modelPresets[state.selectedModelIndex].displayName == "DeepSeek V4 Flash")
         #expect(state.modelPresets[state.selectedModelIndex].id == "deepseek/deepseek-v4-flash")
+    }
+
+    @Test @MainActor func defaultPresetsIncludeDeepSeekLocal() {
+        let state = AppState()
+
+        #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
+        let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
+        #expect(preset?.displayName == "DeepSeek Local")
     }
 }
 
