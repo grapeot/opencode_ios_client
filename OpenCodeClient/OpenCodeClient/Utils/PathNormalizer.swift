@@ -10,7 +10,7 @@ enum PathNormalizer {
 
     /// 规范化文件路径：去除 a/b 前缀、# 及后缀、:line:col 后缀
     static func normalize(_ path: String) -> String {
-        var s = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        var s = trimPathWhitespace(path)
 
         // Some tool payloads contain percent-encoded paths (sometimes double-encoded).
         // Decode a few times until stable so `src%2Fapp.swift` -> `src/app.swift`.
@@ -34,9 +34,7 @@ enum PathNormalizer {
         if let hash = s.firstIndex(of: "#") {
             s = String(s[..<hash])
         }
-        if let r = s.range(of: ":[0-9]+(:[0-9]+)?$", options: .regularExpression) {
-            s = String(s[..<r.lowerBound])
-        }
+        s = stripLineColumnSuffix(s)
 
         var normalizedSegments: [Substring] = []
         for segment in s.split(separator: "/", omittingEmptySubsequences: true) {
@@ -55,17 +53,65 @@ enum PathNormalizer {
         return s
     }
 
+    private static func trimPathWhitespace(_ path: String) -> String {
+        let scalars = path.unicodeScalars
+        var start = scalars.startIndex
+        var end = scalars.endIndex
+
+        while start < end, isPathWhitespace(scalars[start]) {
+            start = scalars.index(after: start)
+        }
+        while start < end {
+            let beforeEnd = scalars.index(before: end)
+            guard isPathWhitespace(scalars[beforeEnd]) else { break }
+            end = beforeEnd
+        }
+
+        return String(scalars[start..<end])
+    }
+
+    private static func isPathWhitespace(_ scalar: UnicodeScalar) -> Bool {
+        switch scalar.value {
+        case 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func stripLineColumnSuffix(_ path: String) -> String {
+        guard let lastColon = path.lastIndex(of: ":") else { return path }
+        let lastValue = path[path.index(after: lastColon)...]
+        guard !lastValue.isEmpty, lastValue.allSatisfy(\.isNumber) else { return path }
+
+        let beforeLastColon = path[..<lastColon]
+        let lastSlash = path.lastIndex(of: "/")
+        if let previousColon = beforeLastColon.lastIndex(of: ":"), previousColon > (lastSlash ?? path.startIndex) {
+            let lineValue = path[path.index(after: previousColon)..<lastColon]
+            if !lineValue.isEmpty, lineValue.allSatisfy(\.isNumber) {
+                return String(path[..<previousColon])
+            }
+        }
+
+        return String(path[..<lastColon])
+    }
+
     /// Resolve an absolute/host path to workspace-relative when possible.
     ///
     /// Tool payloads sometimes carry absolute paths (e.g. "/Users/.../repo/file.swift").
     /// OpenCode server APIs generally expect workspace-relative paths.
     static func resolveWorkspaceRelativePath(_ path: String, workspaceDirectory: String?) -> String {
         let p = normalize(path)
-        guard let workspaceDirectory, !workspaceDirectory.isEmpty else { return p }
+        guard let workspaceDirectory, !workspaceDirectory.isEmpty else {
+            return p
+        }
         let dir = normalize(workspaceDirectory)
-        if p == dir { return "" }
+        if p == dir {
+            return ""
+        }
         if p.hasPrefix(dir + "/") {
-            return String(p.dropFirst(dir.count + 1))
+            let resolved = String(p.dropFirst(dir.count + 1))
+            return resolved
         }
         return p
     }
