@@ -1647,103 +1647,109 @@ struct ModelPresetShortNameTests {
     }
 }
 
+@Suite(.serialized)
 struct ModelSelectionPersistenceTests {
-    /// Clear UserDefaults keys that persist session/model state between tests.
-    /// Without cleanup, parallel Swift Testing execution can leak state across tests.
-    init() {
-        UserDefaults.standard.removeObject(forKey: "currentSessionID")
-        UserDefaults.standard.removeObject(forKey: "selectedModelBySession")
+    private let selectedModelDefaultsKey = "selectedModelBySession"
+    private let currentSessionDefaultsKey = "currentSessionID"
+
+    private func withIsolatedModelSelectionDefaults(_ body: () -> Void) {
+        let originalModelData = UserDefaults.standard.data(forKey: selectedModelDefaultsKey)
+        let originalSessionID = UserDefaults.standard.string(forKey: currentSessionDefaultsKey)
+
+        UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
+        defer {
+            if let originalModelData {
+                UserDefaults.standard.set(originalModelData, forKey: selectedModelDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
+            }
+
+            if let originalSessionID {
+                UserDefaults.standard.set(originalSessionID, forKey: currentSessionDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
+            }
+        }
+
+        body()
     }
 
     @Test @MainActor func legacyGLM51SelectionMapsToCurrentTurboPreset() {
-        let sessionID = "session-glm"
-        let defaultsKey = "selectedModelBySession"
-        let legacySelection = [sessionID: "zai-coding-plan/glm-5.1"]
-        let originalData = UserDefaults.standard.data(forKey: defaultsKey)
+        withIsolatedModelSelectionDefaults {
+            let sessionID = "session-glm"
+            let legacySelection = [sessionID: "zai-coding-plan/glm-5.1"]
+            let encoded = try! JSONEncoder().encode(legacySelection)
+            UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
 
-        defer {
-            if let originalData {
-                UserDefaults.standard.set(originalData, forKey: defaultsKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: defaultsKey)
-            }
+            let state = AppState()
+            let session = Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: sessionID,
+                version: "1",
+                time: .init(created: 0, updated: 100, archived: nil),
+                share: nil,
+                summary: nil
+            )
+
+            state.selectSession(session)
+
+            #expect(state.selectedModelIndex == 0)
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.1")
         }
-
-        let encoded = try! JSONEncoder().encode(legacySelection)
-        UserDefaults.standard.set(encoded, forKey: defaultsKey)
-
-        let state = AppState()
-        let session = Session(
-            id: sessionID,
-            slug: sessionID,
-            projectID: "p1",
-            directory: "/tmp",
-            parentID: nil,
-            title: sessionID,
-            version: "1",
-            time: .init(created: 0, updated: 100, archived: nil),
-            share: nil,
-            summary: nil
-        )
-
-        state.selectSession(session)
-
-        #expect(state.selectedModelIndex == 0)
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.1")
     }
 
     @Test @MainActor func legacyGPT54SelectionMapsToCurrentGPT55Preset() {
-        let sessionID = "session-gpt"
-        let defaultsKey = "selectedModelBySession"
-        let legacySelection = [sessionID: "openai/gpt-5.4"]
-        let originalData = UserDefaults.standard.data(forKey: defaultsKey)
+        withIsolatedModelSelectionDefaults {
+            let sessionID = "session-gpt"
+            let legacySelection = [sessionID: "openai/gpt-5.4"]
+            let encoded = try! JSONEncoder().encode(legacySelection)
+            UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
 
-        defer {
-            if let originalData {
-                UserDefaults.standard.set(originalData, forKey: defaultsKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: defaultsKey)
-            }
+            let state = AppState()
+            let session = Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: sessionID,
+                version: "1",
+                time: .init(created: 0, updated: 100, archived: nil),
+                share: nil,
+                summary: nil
+            )
+
+            state.selectSession(session)
+
+            #expect(state.selectedModelIndex == 1)
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
         }
-
-        let encoded = try! JSONEncoder().encode(legacySelection)
-        UserDefaults.standard.set(encoded, forKey: defaultsKey)
-
-        let state = AppState()
-        let session = Session(
-            id: sessionID,
-            slug: sessionID,
-            projectID: "p1",
-            directory: "/tmp",
-            parentID: nil,
-            title: sessionID,
-            version: "1",
-            time: .init(created: 0, updated: 100, archived: nil),
-            share: nil,
-            summary: nil
-        )
-
-        state.selectSession(session)
-
-        #expect(state.selectedModelIndex == 1)
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
-        #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
     }
 
     @Test @MainActor func defaultSelectionUsesDeepSeekV4Flash() {
-        let state = AppState()
+        withIsolatedModelSelectionDefaults {
+            let state = AppState()
 
-        #expect(state.selectedModelIndex == 2)
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "DeepSeek V4 Flash")
-        #expect(state.modelPresets[state.selectedModelIndex].id == "deepseek/deepseek-v4-flash")
+            #expect(state.selectedModelIndex == 2)
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "DeepSeek V4 Flash")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "deepseek/deepseek-v4-flash")
+        }
     }
 
     @Test @MainActor func defaultPresetsIncludeDeepSeekLocal() {
-        let state = AppState()
+        withIsolatedModelSelectionDefaults {
+            let state = AppState()
 
-        #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
-        let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
-        #expect(preset?.displayName == "DeepSeek Local")
+            #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
+            let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
+            #expect(preset?.displayName == "DeepSeek Local")
+        }
     }
 }
 
