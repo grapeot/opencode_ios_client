@@ -1,6 +1,8 @@
 import Foundation
 
 enum MarkdownImageResolver {
+    private static let maxResolvedImageCharacters = 80_000_000
+    private static let maxResolvedMarkdownCharacters = 80_000_000
     
     /// Image extensions that should be fetched as binary content
     private static let imageExtensions: Set<String> = [
@@ -34,6 +36,8 @@ enum MarkdownImageResolver {
         var result = text
         // Process matches in reverse order to maintain correct string indices
         for match in matches.reversed() {
+            if Task.isCancelled { return text }
+
             guard let altRange = Range(match.range(at: 1), in: text),
                   let urlRange = Range(match.range(at: 2), in: text) else { continue }
             
@@ -49,12 +53,9 @@ enum MarkdownImageResolver {
             
             // Resolve relative path
             var resolvedPath = rawUrl
-            if rawUrl.hasPrefix("./") || rawUrl.hasPrefix("../") {
-                // Relative to the markdown file
-                if let mdPath = markdownFilePath {
-                    let mdDir = (mdPath as NSString).deletingLastPathComponent
-                    resolvedPath = (mdDir as NSString).appendingPathComponent(rawUrl)
-                }
+            if let mdPath = markdownFilePath, !rawUrl.hasPrefix("/") {
+                let mdDir = (mdPath as NSString).deletingLastPathComponent
+                resolvedPath = (mdDir as NSString).appendingPathComponent(rawUrl)
             }
             
             // Make workspace-relative
@@ -72,19 +73,35 @@ enum MarkdownImageResolver {
                     .replacingOccurrences(of: "\n", with: "")
                     .replacingOccurrences(of: "\r", with: "")
                     .replacingOccurrences(of: " ", with: "")
-                
-                let mimeType = "image/\(ext == "jpg" ? "jpeg" : ext)"
+
+                guard cleaned.count <= maxResolvedImageCharacters else { continue }
+
+                let mimeType = mimeType(for: ext)
                 let dataUri = "data:\(mimeType);base64,\(cleaned)"
                 
                 let replacement = "![\(alt)](\(dataUri))"
                 guard let matchRange = Range(match.range, in: result) else { continue }
+                let nextCount = result.count - result[matchRange].count + replacement.count
+                guard nextCount <= maxResolvedMarkdownCharacters else { continue }
                 result.replaceSubrange(matchRange, with: replacement)
+            } catch is CancellationError {
+                return text
             } catch {
-                // Fetch failed, leave original URL
                 continue
             }
         }
         
         return result
+    }
+
+    private static func mimeType(for fileExtension: String) -> String {
+        switch fileExtension {
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        case "svg":
+            return "image/svg+xml"
+        default:
+            return "image/\(fileExtension)"
+        }
     }
 }

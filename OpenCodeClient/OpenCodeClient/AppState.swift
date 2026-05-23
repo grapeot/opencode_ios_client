@@ -1180,17 +1180,12 @@ final class AppState {
 
     func loadFileContent(path: String) async throws -> FileContent {
         let resolved = PathNormalizer.resolveWorkspaceRelativePath(path, workspaceDirectory: currentSession?.directory)
-        let fc = try await apiClient.fileContent(path: resolved)
-        if fc.type == "text" {
-            let text = fc.content ?? ""
-            if text.isEmpty {
-                let base = Self.serverURLInfo(serverURL).normalized ?? "nil"
-                Self.logger.warning(
-                    "Empty file content. base=\(base, privacy: .public) raw=\(path, privacy: .public) resolved=\(resolved, privacy: .public) session=\(self.currentSessionID ?? "nil", privacy: .public)"
-                )
-            }
-        }
-        return fc
+        return try await apiClient.fileContent(path: resolved)
+    }
+
+    func loadFileContent(pathBytes: [UInt8]) async throws -> FileContent {
+        let path = String(decoding: pathBytes, as: UTF8.self)
+        return try await loadFileContent(path: path)
     }
 
     func transcribeAudio(audioFileURL: URL, language: String? = nil, onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
@@ -1445,7 +1440,9 @@ final class AppState {
         guard isConnected else { return }
         do {
             pendingQuestions = try await apiClient.pendingQuestions()
-        } catch {}
+        } catch {
+            connectionError = error.localizedDescription
+        }
     }
 
     func connectSSE() {
