@@ -2613,6 +2613,58 @@ struct AppStateFlowTests {
         #expect(state.partsByMessage[tempMessageID] == nil)
     }
 
+    @Test @MainActor func loadMessagesDedupesOptimisticUserRowWhenServerPrependsPluginPrefix() async {
+        let apiClient = MockAPIClient()
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        await apiClient.setMessagesResult([
+            Self.makeMessageRow(
+                messageID: "m-user",
+                sessionID: "s1",
+                role: "user",
+                text: "[analyze-mode]\nANALYSIS MODE. Gather context.\n---\nhello world",
+                created: now,
+                completed: now
+            ),
+            Self.makeMessageRow(messageID: "m-assistant", sessionID: "s1", text: "reply")
+        ])
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        state.sessionStatuses["s1"] = SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)
+
+        let tempMessageID = state.appendOptimisticUserMessage("hello world")
+        await state.loadMessages()
+
+        #expect(state.messages.map(\.info.id) == ["m-user", "m-assistant"])
+        #expect(state.messages.contains(where: { $0.info.id == tempMessageID }) == false)
+        #expect(state.partsByMessage[tempMessageID] == nil)
+    }
+
+    @Test @MainActor func loadMessagesDedupesOptimisticUserRowByTimestampAlone() async {
+        let apiClient = MockAPIClient()
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        await apiClient.setMessagesResult([
+            Self.makeMessageRow(
+                messageID: "m-user",
+                sessionID: "s1",
+                role: "user",
+                text: "different user message",
+                created: now,
+                completed: now
+            ),
+            Self.makeMessageRow(messageID: "m-assistant", sessionID: "s1", text: "reply")
+        ])
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        state.sessionStatuses["s1"] = SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)
+
+        let tempMessageID = state.appendOptimisticUserMessage("original user text")
+        await state.loadMessages()
+
+        #expect(state.messages.map(\.info.id) == ["m-user", "m-assistant"])
+        #expect(state.messages.contains(where: { $0.info.id == tempMessageID }) == false)
+        #expect(state.partsByMessage[tempMessageID] == nil)
+    }
+
     @Test @MainActor func messageUpdatedIgnoresOtherSession() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
