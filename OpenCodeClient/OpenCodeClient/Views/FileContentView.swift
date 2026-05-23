@@ -97,10 +97,8 @@ struct FileContentView: View {
     private static let markdownMaxTotalLength = 60_000
 
     private func useRawTextForMarkdown(_ text: String) -> Bool {
-        if text.count > Self.markdownMaxTotalLength { return true }
-        let maxLine = text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map(\.count).max() ?? 0
-        return maxLine > Self.markdownMaxLineLength
+        let stats = MarkdownPreviewView.diagnostics(for: text)
+        return text.count > Self.markdownMaxTotalLength || stats.maxLineLength > Self.markdownMaxLineLength
     }
 
     @ViewBuilder
@@ -123,7 +121,6 @@ struct FileContentView: View {
     }
 
     private func loadContent() {
-        print("[FileContentView] loadContent: path=\(filePath)")
         isLoading = true
         loadError = nil
         imageData = nil
@@ -151,7 +148,6 @@ struct FileContentView: View {
                             loadError = "No image data"
                         }
                     } else if let text = fc.text {
-                        print("[FileContentView] loaded text: len=\(text.count) isMarkdown=\(isMarkdown)")
                         content = text
                     } else if fc.content != nil, fc.type == "binary" {
                         loadError = "Binary file"
@@ -210,15 +206,61 @@ struct MarkdownPreviewView: View {
     let state: AppState
     let markdownFilePath: String?
     let workspaceDirectory: String?
+    @State private var resolvedPreviewText: String?
 
     private static let maxLineLength = 5000
     private static let maxTotalLength = 60_000
 
+    struct Diagnostics {
+        let lineCount: Int
+        let maxLineLength: Int
+        let markdownImageCount: Int
+        let htmlImageCount: Int
+        let htmlFigureCount: Int
+        let dataURLCount: Int
+        let httpURLCount: Int
+        let firstImageReference: String?
+    }
+
+    static func diagnostics(for text: String) -> Diagnostics {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        let maxLine = lines.map(\.count).max() ?? 0
+        return Diagnostics(
+            lineCount: lines.count,
+            maxLineLength: maxLine,
+            markdownImageCount: countOccurrences(of: "![", in: text),
+            htmlImageCount: countOccurrences(of: "<img", in: text),
+            htmlFigureCount: countOccurrences(of: "<figure", in: text),
+            dataURLCount: countOccurrences(of: "data:image", in: text),
+            httpURLCount: countOccurrences(of: "http://", in: text) + countOccurrences(of: "https://", in: text),
+            firstImageReference: firstImageReference(in: text)
+        )
+    }
+
+    private static func countOccurrences(of needle: String, in text: String) -> Int {
+        guard !needle.isEmpty else { return 0 }
+        var count = 0
+        var searchStart = text.startIndex
+        while let range = text.range(of: needle, range: searchStart..<text.endIndex) {
+            count += 1
+            searchStart = range.upperBound
+        }
+        return count
+    }
+
+    private static func firstImageReference(in text: String) -> String? {
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("![") || trimmed.hasPrefix("<img") || trimmed.hasPrefix("<figure") || trimmed.hasPrefix("<a ") {
+                return String(trimmed.prefix(240))
+            }
+        }
+        return nil
+    }
+
     private var useRawTextFallback: Bool {
-        if text.count > Self.maxTotalLength { return true }
-        let maxLine = text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map(\.count).max() ?? 0
-        return maxLine > Self.maxLineLength
+        let stats = Self.diagnostics(for: text)
+        return text.count > Self.maxTotalLength || stats.maxLineLength > Self.maxLineLength
     }
 
     static func normalizeStandaloneImageBlocks(_ text: String) -> String {
@@ -254,20 +296,24 @@ struct MarkdownPreviewView: View {
 
     var body: some View {
         let previewText = Self.normalizeStandaloneImageBlocks(text)
+        let displayText = resolvedPreviewText ?? previewText
         ScrollView {
             Group {
                 if useRawTextFallback {
                     Text(text)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                } else if resolvedPreviewText == nil {
+                    ProgressView("Loading preview...")
+                        .frame(maxWidth: .infinity, alignment: .center)
                 } else {
                     Markdown(
-                        previewText,
+                        displayText,
                         imageBaseURL: WorkspaceMarkdownImageProvider.imageBaseURL(markdownFilePath: markdownFilePath)
                     )
                         .markdownImageProvider(
                             WorkspaceMarkdownImageProvider(
-                                loadFileContent: { path in try await state.loadFileContent(path: path) },
+                                loadFileContent: { pathBytes in try await state.loadFileContent(pathBytes: pathBytes) },
                                 workspaceDirectory: workspaceDirectory
                             )
                         )
@@ -276,10 +322,18 @@ struct MarkdownPreviewView: View {
             }
             .padding()
         }
-        .onAppear {
-            let fallback = useRawTextFallback
-            let imageBaseURL = WorkspaceMarkdownImageProvider.imageBaseURL(markdownFilePath: markdownFilePath)?.absoluteString ?? "nil"
-            print("[MarkdownPreviewView] onAppear len=\(text.count) useRawTextFallback=\(fallback) imageBaseURL=\(imageBaseURL)")
+        .task(id: "\(markdownFilePath ?? ""):\(previewText.hashValue)") {
+            guard !useRawTextFallback else { return }
+            resolvedPreviewText = nil
+            let sourceText = previewText
+            let resolved = await MarkdownImageResolver.resolveImages(
+                in: sourceText,
+                markdownFilePath: markdownFilePath,
+                workspaceDirectory: workspaceDirectory,
+                fetchContent: { path in try await state.loadFileContent(path: path) }
+            )
+            guard !Task.isCancelled, sourceText == Self.normalizeStandaloneImageBlocks(text) else { return }
+            resolvedPreviewText = resolved
         }
     }
 }

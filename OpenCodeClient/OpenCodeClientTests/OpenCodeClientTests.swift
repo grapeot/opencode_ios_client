@@ -730,6 +730,23 @@ struct WorkspaceMarkdownImageProviderTests {
 
 struct MarkdownPreviewViewTests {
 
+    @Test func resolveImagesUsesMarkdownFileDirectoryForBareRelativePath() async {
+        let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XGZ0AAAAASUVORK5CYII="
+        let markdown = "![chart](execution_model_comparison.jpg)"
+
+        let resolved = await MarkdownImageResolver.resolveImages(
+            in: markdown,
+            markdownFilePath: "contexts/survey_sessions/glm51_highspeed_api.md",
+            workspaceDirectory: "/Users/test/knowledge_working",
+            fetchContent: { path in
+                #expect(path == "contexts/survey_sessions/execution_model_comparison.jpg")
+                return FileContent(type: "text", content: pngBase64)
+            }
+        )
+
+        #expect(resolved.contains("data:image/jpeg;base64,\(pngBase64)"))
+    }
+
     @Test func normalizeStandaloneImageBlocksSeparatesCaption() {
         let markdown = """
         ![雍和宫入口](https://example.com/yonghe.jpg)
