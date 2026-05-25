@@ -1032,7 +1032,7 @@ struct AIBuildersAudioClientTests {
             baseURL: baseURL,
             relativePath: "/v1/audio/realtime/ws?ticket=abc123"
         )
-        #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/v1/audio/realtime/ws?ticket=abc123")
+        #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")
     }
 
     @Test func realtimeWebSocketURLWithMountPath() throws {
@@ -1042,6 +1042,30 @@ struct AIBuildersAudioClientTests {
             relativePath: "/backend/v1/audio/realtime/ws?ticket=abc123"
         )
         #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")
+    }
+
+    @Test func realtimeWebSocketURLRejectsPlaintextRemoteHost() throws {
+        let baseURL = URL(string: "http://space.ai-builders.com/backend")!
+        #expect(throws: AIBuildersAudioError.invalidBaseURL) {
+            try AIBuildersAudioClient.realtimeWebSocketURL(
+                baseURL: baseURL,
+                relativePath: "/v1/audio/realtime/ws?ticket=abc123"
+            )
+        }
+    }
+
+    @Test func realtimeWebSocketURLAllowsPlaintextLocalHost() throws {
+        let baseURL = URL(string: "http://127.0.0.1:8016/backend")!
+        let websocketURL = try AIBuildersAudioClient.realtimeWebSocketURL(
+            baseURL: baseURL,
+            relativePath: "/v1/audio/realtime/ws?ticket=abc123"
+        )
+        #expect(websocketURL.absoluteString == "ws://127.0.0.1:8016/backend/v1/audio/realtime/ws?ticket=abc123")
+    }
+
+    @Test func redactedRealtimeWebSocketLogURLRemovesTicketValue() throws {
+        let url = URL(string: "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")!
+        #expect(AIBuildersAudioClient.redactedRealtimeWebSocketLogURL(url) == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=redacted")
     }
 
     @Test func buildAPIURLPreservesMountPath() throws {
@@ -1054,6 +1078,64 @@ struct AIBuildersAudioClientTests {
         let baseNoMount = URL(string: "https://space.ai-builders.com")!
         let url = AIBuildersAudioClient.buildAPIURL(base: baseNoMount, path: "/v1/audio/realtime/sessions")
         #expect(url?.absoluteString == "https://space.ai-builders.com/v1/audio/realtime/sessions")
+    }
+
+    @Test func realtimeSessionPayloadTrimsTermsAndKeepsManualCommitMode() throws {
+        let payload = AIBuildersAudioClient.realtimeSessionPayload(
+            language: " en ",
+            prompt: " Use snake_case ",
+            terms: " adhoc_jobs, , survey_sessions "
+        )
+
+        #expect(payload.language == "en")
+        #expect(payload.prompt == "Use snake_case")
+        #expect(payload.terms == ["adhoc_jobs", "survey_sessions"])
+        #expect(payload.vad == false)
+        #expect(payload.silenceDurationMs == 1200)
+
+        let json = payload.jsonObject
+        #expect(json["language"] as? String == "en")
+        #expect(json["prompt"] as? String == "Use snake_case")
+        #expect(json["terms"] as? [String] == ["adhoc_jobs", "survey_sessions"])
+        #expect(json["vad"] as? Bool == false)
+        #expect(json["silence_duration_ms"] as? Int == 1200)
+    }
+
+    @Test func realtimeSessionPayloadOmitsEmptyOptionalFields() throws {
+        let payload = AIBuildersAudioClient.realtimeSessionPayload(
+            language: "   ",
+            prompt: "",
+            terms: " , "
+        )
+
+        #expect(payload.language == nil)
+        #expect(payload.prompt == nil)
+        #expect(payload.terms.isEmpty)
+        #expect(payload.jsonObject.keys.contains("language") == false)
+        #expect(payload.jsonObject.keys.contains("prompt") == false)
+        #expect(payload.jsonObject.keys.contains("terms") == false)
+    }
+
+    @Test func realtimeControlMessagesMatchBackendProtocol() {
+        #expect(AIBuildersAudioClient.realtimeCommitMessage == "{\"type\":\"commit\"}")
+        #expect(AIBuildersAudioClient.realtimeStopMessage == "{\"type\":\"stop\"}")
+    }
+
+    @Test func realtimeSocketEventParsesTranscriptDelta() throws {
+        let data = #"{"type":"transcript_delta","text":"hello","code":"c","message":"m"}"#.data(using: .utf8)!
+        let event = try RealtimeSocketEvent(data: data)
+
+        #expect(event.type == "transcript_delta")
+        #expect(event.text == "hello")
+        #expect(event.code == "c")
+        #expect(event.message == "m")
+    }
+
+    @Test func realtimeSocketEventRejectsMissingType() throws {
+        let data = #"{"text":"hello"}"#.data(using: .utf8)!
+        #expect(throws: AIBuildersAudioError.invalidResponse) {
+            try RealtimeSocketEvent(data: data)
+        }
     }
 
     @Test func mergedSpeechInputOmitsLeadingSpaceForEmptyPrefix() {
