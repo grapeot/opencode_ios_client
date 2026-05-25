@@ -10,19 +10,44 @@ import UIKit
 #endif
 
 private final class SpeechPartialTranscriptBuffer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var transcript = ""
+    nonisolated(unsafe) private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.speechPartialTranscript")
+    nonisolated(unsafe) private var transcript = ""
 
-    func update(_ newValue: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        transcript = newValue
+    nonisolated(unsafe) func update(_ newValue: String) {
+        queue.sync {
+            transcript = newValue
+        }
     }
 
-    func current() -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return transcript
+    nonisolated(unsafe) func current() -> String {
+        queue.sync { transcript }
+    }
+}
+
+private final class SpeechAudioChunkDispatcher: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.speechChunkDispatcher")
+    private let session: AIBuildersRealtimeSession
+    private var pendingSend: Task<Void, Error>?
+
+    init(session: AIBuildersRealtimeSession) {
+        self.session = session
+    }
+
+    func enqueue(_ chunk: Data) {
+        queue.sync {
+            let previous = pendingSend
+            pendingSend = Task {
+                if let previous {
+                    try await previous.value
+                }
+                try await session.sendAudioChunk(chunk)
+            }
+        }
+    }
+
+    func flush() async throws {
+        let task = queue.sync { pendingSend }
+        try await task?.value
     }
 }
 
@@ -105,7 +130,11 @@ struct ChatTabView: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var recorder = AudioRecorder()
+    @State private var realtimeSpeechSession: AIBuildersRealtimeSession?
+    @State private var speechChunkDispatcher: SpeechAudioChunkDispatcher?
+    @State private var recordingInputPrefix = ""
     @State private var isRecording = false
+    @State private var isStartingRecording = false
     @State private var isTranscribing = false
     @State private var speechError: String?
     @State private var pendingScrollTask: Task<Void, Never>?
@@ -571,7 +600,7 @@ struct ChatTabView: View {
                                     )
                             )
                         }
-                        .disabled(isSending || isTranscribing)
+                        .disabled(isSending || isTranscribing || isStartingRecording)
                         .buttonStyle(.plain)
 
                         Button {
@@ -732,36 +761,42 @@ struct ChatTabView: View {
     private func toggleRecording() async {
         if isRecording {
             let stopStart = ProcessInfo.processInfo.systemUptime
-            guard let url = recorder.stop() else {
-                isRecording = false
-                Self.logger.error("[SpeechProfile] recorder stop failed: missing file URL")
+            recorder.stop()
+            isRecording = false
+            Self.logger.notice("[SpeechProfile] realtime capture stopped ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - stopStart) * 1000)), privacy: .public)")
+
+            guard let session = realtimeSpeechSession else {
+                Self.logger.error("[SpeechProfile] realtime stop failed: missing session")
                 return
             }
-            isRecording = false
-            let fileBytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
-            Self.logger.notice("[SpeechProfile] recorder stopped ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - stopStart) * 1000)), privacy: .public) file=\(url.lastPathComponent, privacy: .public) bytes=\(fileBytes, privacy: .public)")
+            let dispatcher = speechChunkDispatcher
+            realtimeSpeechSession = nil
+            speechChunkDispatcher = nil
 
             isTranscribing = true
             defer { isTranscribing = false }
-            let prefix = inputText
+            let prefix = recordingInputPrefix
             let partialTranscriptBuffer = SpeechPartialTranscriptBuffer()
             let transcribeStart = ProcessInfo.processInfo.systemUptime
             do {
-                let transcript = try await state.transcribeAudio(audioFileURL: url) { partial in
+                try await dispatcher?.flush()
+                let transcript = try await session.commitAndStop { partial in
                     partialTranscriptBuffer.update(partial)
                     Task { @MainActor in
                         inputText = Self.mergedSpeechInput(prefix: prefix, transcript: partial)
                     }
                 }
                 let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                Self.logger.notice("[SpeechProfile] chat transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
+                Self.logger.notice("[SpeechProfile] chat realtime transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
                 inputText = Self.mergedSpeechInput(prefix: prefix, transcript: cleaned)
             } catch {
-                Self.logger.error("[SpeechProfile] chat transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                await session.cancel()
+                Self.logger.error("[SpeechProfile] chat realtime transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                 inputText = Self.speechFailureInput(prefix: prefix, lastPartialTranscript: partialTranscriptBuffer.current())
                 speechError = error.localizedDescription
             }
         } else {
+            guard !isStartingRecording else { return }
             let token = state.aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
             if token.isEmpty {
                 speechError = L10n.t(.chatSpeechTokenMissing)
@@ -783,13 +818,31 @@ struct ChatTabView: View {
                 speechError = L10n.t(.chatMicrophoneDenied)
                 return
             }
-            let startRecordingStart = ProcessInfo.processInfo.systemUptime
+            isStartingRecording = true
+            defer { isStartingRecording = false }
+            let startSessionStart = ProcessInfo.processInfo.systemUptime
             do {
-                try recorder.start()
+                let session = try await state.startRealtimeSpeechSession()
+                let dispatcher = SpeechAudioChunkDispatcher(session: session)
+                recordingInputPrefix = inputText
+                realtimeSpeechSession = session
+                speechChunkDispatcher = dispatcher
+                Self.logger.notice("[SpeechProfile] realtime session started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startSessionStart) * 1000)), privacy: .public)")
+
+                let startRecordingStart = ProcessInfo.processInfo.systemUptime
+                try recorder.start { chunk in
+                    dispatcher.enqueue(chunk)
+                }
                 isRecording = true
-                Self.logger.notice("[SpeechProfile] recorder started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startRecordingStart) * 1000)), privacy: .public)")
+                Self.logger.notice("[SpeechProfile] realtime capture started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startRecordingStart) * 1000)), privacy: .public)")
             } catch {
-                Self.logger.error("[SpeechProfile] recorder start failed error=\(error.localizedDescription, privacy: .public)")
+                recorder.stop()
+                if let realtimeSpeechSession {
+                    await realtimeSpeechSession.cancel()
+                }
+                realtimeSpeechSession = nil
+                speechChunkDispatcher = nil
+                Self.logger.error("[SpeechProfile] realtime start failed error=\(error.localizedDescription, privacy: .public)")
                 speechError = error.localizedDescription
             }
         }
