@@ -97,8 +97,7 @@ struct FileContentView: View {
     private static let markdownMaxTotalLength = 60_000
 
     private func useRawTextForMarkdown(_ text: String) -> Bool {
-        let stats = MarkdownPreviewView.diagnostics(for: text)
-        return text.count > Self.markdownMaxTotalLength || stats.maxLineLength > Self.markdownMaxLineLength
+        return text.count > Self.markdownMaxTotalLength || MarkdownPreviewView.maxLineLength(in: text) > Self.markdownMaxLineLength
     }
 
     @ViewBuilder
@@ -211,56 +210,12 @@ struct MarkdownPreviewView: View {
     private static let maxLineLength = 5000
     private static let maxTotalLength = 60_000
 
-    struct Diagnostics {
-        let lineCount: Int
-        let maxLineLength: Int
-        let markdownImageCount: Int
-        let htmlImageCount: Int
-        let htmlFigureCount: Int
-        let dataURLCount: Int
-        let httpURLCount: Int
-        let firstImageReference: String?
-    }
-
-    static func diagnostics(for text: String) -> Diagnostics {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        let maxLine = lines.map(\.count).max() ?? 0
-        return Diagnostics(
-            lineCount: lines.count,
-            maxLineLength: maxLine,
-            markdownImageCount: countOccurrences(of: "![", in: text),
-            htmlImageCount: countOccurrences(of: "<img", in: text),
-            htmlFigureCount: countOccurrences(of: "<figure", in: text),
-            dataURLCount: countOccurrences(of: "data:image", in: text),
-            httpURLCount: countOccurrences(of: "http://", in: text) + countOccurrences(of: "https://", in: text),
-            firstImageReference: firstImageReference(in: text)
-        )
-    }
-
-    private static func countOccurrences(of needle: String, in text: String) -> Int {
-        guard !needle.isEmpty else { return 0 }
-        var count = 0
-        var searchStart = text.startIndex
-        while let range = text.range(of: needle, range: searchStart..<text.endIndex) {
-            count += 1
-            searchStart = range.upperBound
-        }
-        return count
-    }
-
-    private static func firstImageReference(in text: String) -> String? {
-        for line in text.components(separatedBy: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("![") || trimmed.hasPrefix("<img") || trimmed.hasPrefix("<figure") || trimmed.hasPrefix("<a ") {
-                return String(trimmed.prefix(240))
-            }
-        }
-        return nil
+    static func maxLineLength(in text: String) -> Int {
+        text.split(separator: "\n", omittingEmptySubsequences: false).map(\.count).max() ?? 0
     }
 
     private var useRawTextFallback: Bool {
-        let stats = Self.diagnostics(for: text)
-        return text.count > Self.maxTotalLength || stats.maxLineLength > Self.maxLineLength
+        return text.count > Self.maxTotalLength || Self.maxLineLength(in: text) > Self.maxLineLength
     }
 
     static func normalizeStandaloneImageBlocks(_ text: String) -> String {
