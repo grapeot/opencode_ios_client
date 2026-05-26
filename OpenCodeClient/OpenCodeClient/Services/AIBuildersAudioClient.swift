@@ -13,7 +13,7 @@ struct TranscriptionResponse: Codable {
     }
 }
 
-private struct RealtimeSessionResponse: Decodable {
+struct RealtimeSessionResponse: Decodable {
     let sessionID: String
     let wsURL: String
 
@@ -23,7 +23,7 @@ private struct RealtimeSessionResponse: Decodable {
     }
 }
 
-private struct RealtimeSocketEvent {
+struct RealtimeSocketEvent {
     let type: String
     let text: String?
     let code: String?
@@ -41,7 +41,7 @@ private struct RealtimeSocketEvent {
     }
 }
 
-enum AIBuildersAudioError: Error {
+enum AIBuildersAudioError: Error, Equatable {
     case invalidBaseURL
     case missingToken
     case invalidResponse
@@ -50,10 +50,144 @@ enum AIBuildersAudioError: Error {
     case websocketError(String)
 }
 
+struct RealtimeSessionPayload: Equatable {
+    let language: String?
+    let prompt: String?
+    let terms: [String]
+    let vad: Bool
+    let silenceDurationMs: Int
+
+    var jsonObject: [String: Any] {
+        var payload: [String: Any] = [
+            "vad": vad,
+            "silence_duration_ms": silenceDurationMs,
+        ]
+        if let language, !language.isEmpty {
+            payload["language"] = language
+        }
+        if let prompt, !prompt.isEmpty {
+            payload["prompt"] = prompt
+        }
+        if !terms.isEmpty {
+            payload["terms"] = terms
+        }
+        return payload
+    }
+}
+
+actor RealtimeWebSocketSender {
+    private let task: URLSessionWebSocketTask
+    private var pendingSend: Task<Void, Error>?
+
+    init(task: URLSessionWebSocketTask) {
+        self.task = task
+    }
+
+    func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        let previous = pendingSend
+        let current = Task {
+            if let previous {
+                try await previous.value
+            }
+            try await task.send(message)
+        }
+        pendingSend = current
+        try await current.value
+    }
+
+    func flush() async throws {
+        try await pendingSend?.value
+    }
+}
+
+actor AIBuildersRealtimeSession {
+    let sessionID: String
+
+    private let webSocketTask: URLSessionWebSocketTask
+    private let urlSession: URLSession
+    private let sender: RealtimeWebSocketSender
+    private let logger: Logger
+    private var isCommitted = false
+    private var isClosed = false
+    private var enqueuedAudioBytes = 0
+
+    init(
+        sessionID: String,
+        webSocketTask: URLSessionWebSocketTask,
+        urlSession: URLSession,
+        logger: Logger
+    ) {
+        self.sessionID = sessionID
+        self.webSocketTask = webSocketTask
+        self.urlSession = urlSession
+        self.sender = RealtimeWebSocketSender(task: webSocketTask)
+        self.logger = logger
+    }
+
+    func sendAudioChunk(_ chunk: Data) async throws {
+        guard !chunk.isEmpty, !isCommitted, !isClosed else { return }
+        enqueuedAudioBytes += chunk.count
+        try await sender.send(.data(chunk))
+    }
+
+    func commitAndStop(onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
+        guard !isClosed else { return "" }
+        isCommitted = true
+        try await sender.flush()
+        try await sender.send(.string(AIBuildersAudioClient.realtimeCommitMessage))
+        logger.notice("[SpeechProfile] realtime live commit sent bytes=\(self.enqueuedAudioBytes, privacy: .public)")
+
+        var finalTranscript: String?
+        var partialAccumulator = ""
+        do {
+            while true {
+                let event = try await AIBuildersAudioClient.receiveSocketEvent(task: webSocketTask)
+                switch event.type {
+                case "transcript_delta":
+                    if let delta = event.text, !delta.isEmpty {
+                        partialAccumulator += delta
+                        onPartialTranscript?(partialAccumulator)
+                    }
+                case "speech_started", "speech_stopped", "usage":
+                    continue
+                case "transcript_completed":
+                    finalTranscript = event.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    try await sender.send(.string(AIBuildersAudioClient.realtimeStopMessage))
+                case "session_stopped":
+                    close()
+                    return finalTranscript ?? ""
+                case "error":
+                    let message = event.message ?? event.code ?? "Unknown websocket error"
+                    throw AIBuildersAudioError.websocketError(message)
+                default:
+                    continue
+                }
+            }
+        } catch {
+            logger.error("[SpeechProfile] realtime websocket error=\(String(describing: error), privacy: .public)")
+            close()
+            throw error
+        }
+    }
+
+    func cancel() {
+        close()
+    }
+
+    private func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        webSocketTask.cancel(with: .goingAway, reason: nil)
+        urlSession.invalidateAndCancel()
+    }
+}
+
 enum AIBuildersAudioClient {
     private static let targetSampleRate: Double = 24_000
     private static let targetChannels: AVAudioChannelCount = 1
     private static let sendChunkSize = 240_000
+    static let realtimeCommitMessage = "{\"type\":\"commit\"}"
+    static let realtimeStopMessage = "{\"type\":\"stop\"}"
 
     private final class TaskMetricsCollector: NSObject, URLSessionTaskDelegate {
         private(set) var metrics: URLSessionTaskMetrics?
@@ -138,9 +272,10 @@ enum AIBuildersAudioClient {
         )
 
         let websocketURL = try realtimeWebSocketURL(baseURL: normalizedBase, relativePath: sessionResponse.wsURL)
-        logger.notice("[SpeechProfile] realtime ws_url=\(sessionResponse.wsURL, privacy: .public) resolved=\(websocketURL.absoluteString, privacy: .public)")
+        logger.notice("[SpeechProfile] realtime ws_url=\(redactedRealtimeWebSocketLogURL(websocketURL), privacy: .public)")
         let transcript = try await streamPCMOverRealtimeWebSocket(
             websocketURL: websocketURL,
+            sessionID: sessionResponse.sessionID,
             pcmAudio: pcmAudio,
             onPartialTranscript: onPartialTranscript
         )
@@ -181,6 +316,36 @@ enum AIBuildersAudioClient {
         return URL(string: normalizedBase) ?? URL(string: "https://invalid.example")!
     }
 
+    static func isLocalDevelopmentHost(_ host: String?) -> Bool {
+        guard let host else { return false }
+        if host == "localhost" || host.hasSuffix(".local") { return true }
+        let parts = host.split(separator: ".")
+        guard parts.count == 4,
+              let first = Int(parts[0]),
+              let second = Int(parts[1]) else { return false }
+        if first == 10 || first == 127 { return true }
+        if first == 192 && second == 168 { return true }
+        if first == 172 && (16...31).contains(second) { return true }
+        if first == 169 && second == 254 { return true }
+        return false
+    }
+
+    static func validateSecureRealtimeBaseURL(_ baseURL: URL) throws {
+        if baseURL.scheme == "https" { return }
+        if baseURL.scheme == "http", isLocalDevelopmentHost(baseURL.host) { return }
+        throw AIBuildersAudioError.invalidBaseURL
+    }
+
+    static func redactedRealtimeWebSocketLogURL(_ url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+            return "<invalid-websocket-url>"
+        }
+        if components.query != nil {
+            components.query = "ticket=redacted"
+        }
+        return components.url?.absoluteString ?? "<invalid-websocket-url>"
+    }
+
     /// Builds API URL by appending path to base (preserves mount path like /backend).
     /// Ensures base path ends with / so relative path appends instead of replacing (RFC 3986).
     static func buildAPIURL(base: URL, path: String) -> URL? {
@@ -196,7 +361,18 @@ enum AIBuildersAudioClient {
     }
 
     static func realtimeWebSocketURL(baseURL: URL, relativePath: String) throws -> URL {
-        guard let httpURL = URL(string: relativePath, relativeTo: baseURL)?.absoluteURL else {
+        let websocketPath: String
+        if relativePath.hasPrefix("/"),
+           let basePath = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)?.path,
+           !basePath.isEmpty,
+           basePath != "/",
+           !relativePath.hasPrefix(basePath + "/") {
+            websocketPath = basePath + relativePath
+        } else {
+            websocketPath = relativePath
+        }
+
+        guard let httpURL = URL(string: websocketPath, relativeTo: baseURL)?.absoluteURL else {
             throw AIBuildersAudioError.invalidBaseURL
         }
         var components = URLComponents(url: httpURL, resolvingAgainstBaseURL: true)
@@ -208,7 +384,79 @@ enum AIBuildersAudioClient {
         guard let websocketURL = components?.url else {
             throw AIBuildersAudioError.invalidBaseURL
         }
+        if websocketURL.scheme == "wss" { return websocketURL }
+        if websocketURL.scheme == "ws", isLocalDevelopmentHost(websocketURL.host) { return websocketURL }
+        if websocketURL.scheme == "ws" {
+            throw AIBuildersAudioError.invalidBaseURL
+        }
         return websocketURL
+    }
+
+    static func realtimeSessionPayload(
+        language: String?,
+        prompt: String?,
+        terms: String?
+    ) -> RealtimeSessionPayload {
+        let termsArray = terms?
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty } ?? []
+
+        return RealtimeSessionPayload(
+            language: language?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            prompt: prompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            terms: termsArray,
+            vad: false,
+            silenceDurationMs: 1200
+        )
+    }
+
+    static func startRealtimeSession(
+        baseURL: String,
+        token: String,
+        language: String? = nil,
+        prompt: String? = nil,
+        terms: String? = nil
+    ) async throws -> AIBuildersRealtimeSession {
+        let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedBase.isEmpty else { throw AIBuildersAudioError.invalidBaseURL }
+        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIBuildersAudioError.missingToken }
+
+        let normalizedBase = normalizedBaseURL(from: trimmedBase)
+        try validateSecureRealtimeBaseURL(normalizedBase)
+        let sessionResponse = try await createRealtimeSession(
+            baseURL: normalizedBase,
+            token: token,
+            language: language,
+            prompt: prompt,
+            terms: terms
+        )
+        let websocketURL = try realtimeWebSocketURL(baseURL: normalizedBase, relativePath: sessionResponse.wsURL)
+        logger.notice("[SpeechProfile] realtime live ws_url=\(redactedRealtimeWebSocketLogURL(websocketURL), privacy: .public)")
+
+        let urlSession = URLSession(configuration: .default)
+        let webSocketTask = urlSession.webSocketTask(with: websocketURL)
+        webSocketTask.resume()
+        do {
+            let readyEvent = try await receiveSocketEvent(task: webSocketTask)
+            guard readyEvent.type == "session_ready" else {
+                webSocketTask.cancel(with: .goingAway, reason: nil)
+                urlSession.invalidateAndCancel()
+                throw AIBuildersAudioError.websocketError("Expected session_ready, got \(readyEvent.type)")
+            }
+        } catch {
+            webSocketTask.cancel(with: .goingAway, reason: nil)
+            urlSession.invalidateAndCancel()
+            throw error
+        }
+
+        logger.notice("[SpeechProfile] realtime live session ready requestID=\(sessionResponse.sessionID, privacy: .public)")
+        return AIBuildersRealtimeSession(
+            sessionID: sessionResponse.sessionID,
+            webSocketTask: webSocketTask,
+            urlSession: urlSession,
+            logger: logger
+        )
     }
 
     private static func createRealtimeSession(
@@ -218,35 +466,25 @@ enum AIBuildersAudioClient {
         prompt: String?,
         terms: String?
     ) async throws -> RealtimeSessionResponse {
+        try validateSecureRealtimeBaseURL(baseURL)
         guard let url = buildAPIURL(base: baseURL, path: "/v1/audio/realtime/sessions") else {
             throw AIBuildersAudioError.invalidBaseURL
         }
         logger.notice("[SpeechProfile] realtime session POST url=\(url.absoluteString, privacy: .public)")
 
-        var payload: [String: Any] = [:]
-        if let language, !language.isEmpty {
-            payload["language"] = language
-        }
-        if let prompt, !prompt.isEmpty {
-            payload["prompt"] = prompt
+        let payload = realtimeSessionPayload(language: language, prompt: prompt, terms: terms)
+        if let prompt = payload.prompt {
             logger.notice("[SpeechProfile] realtime session payload includes prompt len=\(prompt.count, privacy: .public)")
         }
-        if let terms, !terms.isEmpty {
-            let termsArray = terms
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            payload["terms"] = termsArray
-            logger.notice("[SpeechProfile] realtime session payload includes terms count=\(termsArray.count, privacy: .public)")
+        if !payload.terms.isEmpty {
+            logger.notice("[SpeechProfile] realtime session payload includes terms count=\(payload.terms.count, privacy: .public)")
         }
-        payload["vad"] = false
-        payload["silence_duration_ms"] = 1200
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload.jsonObject)
 
         let metricsCollector = TaskMetricsCollector()
         let networkStart = ProcessInfo.processInfo.systemUptime
@@ -279,10 +517,11 @@ enum AIBuildersAudioClient {
 
     private static func streamPCMOverRealtimeWebSocket(
         websocketURL: URL,
+        sessionID: String,
         pcmAudio: Data,
         onPartialTranscript: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
-        logger.notice("[SpeechProfile] realtime websocket connect url=\(websocketURL.absoluteString, privacy: .public)")
+        logger.notice("[SpeechProfile] realtime websocket connect url=\(redactedRealtimeWebSocketLogURL(websocketURL), privacy: .public)")
         let session = URLSession(configuration: .default)
         let webSocketTask = session.webSocketTask(with: websocketURL)
         webSocketTask.resume()
@@ -293,37 +532,19 @@ enum AIBuildersAudioClient {
                 throw AIBuildersAudioError.websocketError("Expected session_ready, got \(readyEvent.type)")
             }
 
+            let handle = AIBuildersRealtimeSession(
+                sessionID: sessionID,
+                webSocketTask: webSocketTask,
+                urlSession: session,
+                logger: logger
+            )
+
             for start in stride(from: 0, to: pcmAudio.count, by: sendChunkSize) {
                 let end = min(start + sendChunkSize, pcmAudio.count)
                 let chunk = pcmAudio.subdata(in: start..<end)
-                try await webSocketTask.send(.data(chunk))
+                try await handle.sendAudioChunk(chunk)
             }
-            try await webSocketTask.send(.string("{\"type\":\"commit\"}"))
-
-            var finalTranscript: String?
-            var partialAccumulator = ""
-            while true {
-                let event = try await receiveSocketEvent(task: webSocketTask)
-                switch event.type {
-                case "transcript_delta":
-                    if let delta = event.text, !delta.isEmpty {
-                        partialAccumulator += delta
-                        onPartialTranscript?(partialAccumulator)
-                    }
-                case "speech_started", "speech_stopped", "usage":
-                    continue
-                case "transcript_completed":
-                    finalTranscript = event.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    try await webSocketTask.send(.string("{\"type\":\"stop\"}"))
-                case "session_stopped":
-                    return finalTranscript ?? ""
-                case "error":
-                    let message = event.message ?? event.code ?? "Unknown websocket error"
-                    throw AIBuildersAudioError.websocketError(message)
-                default:
-                    continue
-                }
-            }
+            return try await handle.commitAndStop(onPartialTranscript: onPartialTranscript)
         } catch {
             logger.error("[SpeechProfile] realtime websocket error=\(String(describing: error), privacy: .public)")
             webSocketTask.cancel(with: .goingAway, reason: nil)
@@ -332,7 +553,7 @@ enum AIBuildersAudioClient {
         }
     }
 
-    private static func receiveSocketEvent(task: URLSessionWebSocketTask) async throws -> RealtimeSocketEvent {
+    static func receiveSocketEvent(task: URLSessionWebSocketTask) async throws -> RealtimeSocketEvent {
         let message = try await task.receive()
         switch message {
         case .data(let data):
@@ -406,5 +627,11 @@ enum AIBuildersAudioClient {
             throw AIBuildersAudioError.audioConversionFailed
         }
         return pcmData
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

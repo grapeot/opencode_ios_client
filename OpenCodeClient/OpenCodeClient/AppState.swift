@@ -1218,6 +1218,33 @@ final class AppState {
         }
     }
 
+    func startRealtimeSpeechSession(language: String? = nil) async throws -> AIBuildersRealtimeSession {
+        let token = aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { throw AIBuildersAudioError.missingToken }
+
+        let base = aiBuilderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = aiBuilderCustomPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let terms = aiBuilderTerminology.trimmingCharacters(in: .whitespacesAndNewlines)
+        let start = ProcessInfo.processInfo.systemUptime
+        Self.logger.notice("[SpeechProfile] appState.realtime start begin")
+        do {
+            let session = try await AIBuildersAudioClient.startRealtimeSession(
+                baseURL: base,
+                token: token,
+                language: language,
+                prompt: prompt.isEmpty ? nil : prompt,
+                terms: terms.isEmpty ? nil : terms
+            )
+            let elapsedMs = max(0, Int((ProcessInfo.processInfo.systemUptime - start) * 1000))
+            Self.logger.notice("[SpeechProfile] appState.realtime start done ms=\(elapsedMs, privacy: .public)")
+            return session
+        } catch {
+            let elapsedMs = max(0, Int((ProcessInfo.processInfo.systemUptime - start) * 1000))
+            Self.logger.error("[SpeechProfile] appState.realtime start failed ms=\(elapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
     func testAIBuilderConnection() async {
         guard !isTestingAIBuilderConnection else { return }
         isTestingAIBuilderConnection = true

@@ -5,12 +5,27 @@
 
 import AVFoundation
 import Foundation
+import os
 
-final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
-    private var recorder: AVAudioRecorder?
-    private(set) var currentFileURL: URL?
+final class AudioRecorder {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "OpenCodeClient",
+        category: "SpeechProfile"
+    )
 
-    var isRecording: Bool { recorder?.isRecording == true }
+    private let engine = AVAudioEngine()
+    private var converter: AVAudioConverter?
+    private var inputFormat: AVAudioFormat?
+    private let audioProcessingQueue = DispatchQueue(label: "com.grapeot.OpenCodeClient.liveAudioProcessing")
+    private let outputFormat = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate: 24_000,
+        channels: 1,
+        interleaved: true
+    )!
+    private var chunkHandler: (@Sendable (Data) -> Void)?
+
+    var isRecording: Bool { engine.isRunning }
 
     func requestPermission() async -> Bool {
         #if os(iOS) || os(visionOS)
@@ -28,35 +43,91 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
         #endif
     }
 
-    func start() throws {
+    func start(onPCMChunk: @escaping @Sendable (Data) -> Void) throws {
         #if os(iOS) || os(visionOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true, options: [])
         #endif
 
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("opencode-recording-\(UUID().uuidString).m4a")
+        let inputNode = engine.inputNode
+        let sourceFormat = inputNode.outputFormat(forBus: 0)
+        guard sourceFormat.channelCount > 0 else {
+            throw AIBuildersAudioError.audioConversionFailed
+        }
+        guard let converter = AVAudioConverter(from: sourceFormat, to: outputFormat) else {
+            throw AIBuildersAudioError.audioConversionFailed
+        }
 
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44_100,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 64_000,
-        ]
+        self.inputFormat = sourceFormat
+        self.converter = converter
+        self.chunkHandler = onPCMChunk
 
-        let r = try AVAudioRecorder(url: url, settings: settings)
-        r.delegate = self
-        r.isMeteringEnabled = false
-        r.record()
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: sourceFormat) { [weak self] buffer, _ in
+            self?.audioProcessingQueue.sync {
+                self?.handleInputBuffer(buffer)
+            }
+        }
 
-        recorder = r
-        currentFileURL = url
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            inputNode.removeTap(onBus: 0)
+            self.inputFormat = nil
+            self.converter = nil
+            self.chunkHandler = nil
+            throw error
+        }
     }
 
-    func stop() -> URL? {
-        recorder?.stop()
-        recorder = nil
-        return currentFileURL
+    func stop() {
+        if inputFormat != nil {
+            engine.inputNode.removeTap(onBus: 0)
+        }
+        engine.stop()
+        audioProcessingQueue.sync {}
+        inputFormat = nil
+        converter = nil
+        chunkHandler = nil
+        #if os(iOS) || os(visionOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        #endif
+    }
+
+    private func handleInputBuffer(_ buffer: AVAudioPCMBuffer) {
+        guard let data = convertToPCM16Mono24k(buffer), !data.isEmpty else { return }
+        chunkHandler?(data)
+    }
+
+    private func convertToPCM16Mono24k(_ inputBuffer: AVAudioPCMBuffer) -> Data? {
+        guard let converter else { return nil }
+        let ratio = outputFormat.sampleRate / inputBuffer.format.sampleRate
+        let outputCapacity = max(1, AVAudioFrameCount(Double(inputBuffer.frameLength) * ratio) + 8)
+        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputCapacity) else {
+            return nil
+        }
+
+        var didProvideInput = false
+        var conversionError: NSError?
+        let status = converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
+            if didProvideInput {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            didProvideInput = true
+            outStatus.pointee = .haveData
+            return inputBuffer
+        }
+
+        if status == .error {
+            Self.logger.error("[SpeechProfile] live audio convert failed error=\(String(describing: conversionError), privacy: .public)")
+            return nil
+        }
+        guard outputBuffer.frameLength > 0 else { return nil }
+
+        let audioBuffer = outputBuffer.audioBufferList.pointee.mBuffers
+        guard let bytes = audioBuffer.mData, audioBuffer.mDataByteSize > 0 else { return nil }
+        return Data(bytes: bytes, count: Int(audioBuffer.mDataByteSize))
     }
 }
