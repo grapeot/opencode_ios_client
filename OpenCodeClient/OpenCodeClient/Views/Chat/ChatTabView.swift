@@ -809,13 +809,10 @@ struct ChatTabView: View {
                 return
             }
             isStartingRecording = true
-            defer { isStartingRecording = false }
-            let startSessionStart = ProcessInfo.processInfo.systemUptime
+            let startRecordingStart = ProcessInfo.processInfo.systemUptime
             do {
-                let session = try await state.startRealtimeSpeechSession()
                 let cache = try RealtimeSpeechAudioCache()
                 let streamer = RealtimeSpeechStreamer(
-                    session: session,
                     cache: cache,
                     logger: Self.logger,
                     makeSession: { @MainActor in
@@ -824,25 +821,36 @@ struct ChatTabView: View {
                 )
                 recordingInputPrefix = inputText
                 speechStreamer = streamer
-                Self.logger.notice("[SpeechProfile] realtime session started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startSessionStart) * 1000)), privacy: .public)")
 
-                let startRecordingStart = ProcessInfo.processInfo.systemUptime
                 try recorder.start { chunk in
                     Task {
                         await streamer.appendAudioChunk(chunk)
                     }
                 }
                 isRecording = true
+                isStartingRecording = false
                 startSpeechHeartbeat(for: streamer)
                 Self.logger.notice("[SpeechProfile] realtime capture started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startRecordingStart) * 1000)), privacy: .public)")
+
+                let startSessionStart = ProcessInfo.processInfo.systemUptime
+                Task { @MainActor in
+                    do {
+                        let session = try await state.startRealtimeSpeechSession()
+                        await streamer.attachSession(session)
+                        Self.logger.notice("[SpeechProfile] realtime session attached ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startSessionStart) * 1000)), privacy: .public)")
+                    } catch {
+                        Self.logger.error("[SpeechProfile] realtime deferred session start failed error=\(error.localizedDescription, privacy: .public)")
+                    }
+                }
             } catch {
                 recorder.stop()
                 stopSpeechHeartbeat()
+                isStartingRecording = false
                 if let speechStreamer {
                     await speechStreamer.cancel()
                 }
                 speechStreamer = nil
-                Self.logger.error("[SpeechProfile] realtime start failed error=\(error.localizedDescription, privacy: .public)")
+                Self.logger.error("[SpeechProfile] realtime capture start failed error=\(error.localizedDescription, privacy: .public)")
                 speechError = error.localizedDescription
             }
         }

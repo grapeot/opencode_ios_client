@@ -118,16 +118,15 @@ final class RealtimeSpeechAudioCache: @unchecked Sendable {
         }
     }
 }
-
 actor RealtimeSpeechStreamer {
     private let cache: RealtimeSpeechAudioCache
     private let makeSession: @MainActor @Sendable () async throws -> AIBuildersRealtimeSession
     private let logger: Logger
-    private var session: AIBuildersRealtimeSession
+    private var session: AIBuildersRealtimeSession?
     private var isRecovering = false
 
     init(
-        session: AIBuildersRealtimeSession,
+        session: AIBuildersRealtimeSession? = nil,
         cache: RealtimeSpeechAudioCache,
         logger: Logger,
         makeSession: @escaping @MainActor @Sendable () async throws -> AIBuildersRealtimeSession
@@ -141,15 +140,33 @@ actor RealtimeSpeechStreamer {
     func appendAudioChunk(_ chunk: Data) async {
         do {
             try cache.append(chunk)
-            guard !isRecovering else { return }
+            guard !isRecovering, let session else { return }
             try await session.sendAudioChunk(chunk)
         } catch {
             await recover(reason: error)
         }
     }
 
+    func attachSession(_ newSession: AIBuildersRealtimeSession) async {
+        guard session == nil, !isRecovering else {
+            await newSession.cancel()
+            return
+        }
+        isRecovering = true
+        do {
+            try await replayCache(to: newSession)
+            session = newSession
+            let cachedBytes = cache.byteCount
+            logger.notice("[SpeechProfile] realtime startup replay done bytes=\(cachedBytes, privacy: .public)")
+        } catch {
+            logger.error("[SpeechProfile] realtime startup replay failed error=\(String(describing: error), privacy: .public)")
+            await newSession.cancel()
+        }
+        isRecovering = false
+    }
+
     func heartbeat() async {
-        guard !isRecovering else { return }
+        guard !isRecovering, let session else { return }
         do {
             try await session.ping()
         } catch {
@@ -161,6 +178,15 @@ actor RealtimeSpeechStreamer {
         while isRecovering {
             try await Task.sleep(for: .milliseconds(100))
         }
+        if session == nil {
+            await recover(reason: AIBuildersAudioError.connectionLost("Realtime speech session was not ready before stop"))
+        }
+        while isRecovering {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        guard let session else {
+            throw AIBuildersAudioError.connectionLost("Realtime speech session is unavailable")
+        }
         do {
             return try await session.commitAndStop(onPartialTranscript: onPartialTranscript)
         } catch {
@@ -168,12 +194,15 @@ actor RealtimeSpeechStreamer {
             while isRecovering {
                 try await Task.sleep(for: .milliseconds(100))
             }
-            return try await session.commitAndStop(onPartialTranscript: onPartialTranscript)
+            guard let recoveredSession = self.session else { throw error }
+            return try await recoveredSession.commitAndStop(onPartialTranscript: onPartialTranscript)
         }
     }
 
     func cancel() async {
-        await session.cancel()
+        if let session {
+            await session.cancel()
+        }
         cache.remove()
     }
 
@@ -186,7 +215,10 @@ actor RealtimeSpeechStreamer {
         isRecovering = true
         let cachedBytes = cache.byteCount
         logger.error("[SpeechProfile] realtime recovery begin bytes=\(cachedBytes, privacy: .public) error=\(String(describing: reason), privacy: .public)")
-        await session.cancel()
+        if let session {
+            await session.cancel()
+        }
+        session = nil
         do {
             let replacement = try await makeSession()
             try await replayCache(to: replacement)

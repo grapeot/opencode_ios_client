@@ -1155,6 +1155,22 @@ struct AIBuildersAudioClientTests {
         #expect(FileManager.default.fileExists(atPath: cache.fileURL.path) == false)
     }
 
+    @Test func realtimeSpeechAudioCacheSupportsPreSessionBuffering() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opencode-cache-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let cache = try RealtimeSpeechAudioCache(directory: directory)
+        defer { cache.remove() }
+
+        try cache.append(Data([10, 11]))
+        try cache.append(Data([12, 13, 14]))
+
+        #expect(cache.byteCount == 5)
+        #expect(try cache.readChunk(offset: 0, maxBytes: 10) == Data([10, 11, 12, 13, 14]))
+    }
+
     @Test func realtimeSocketEventParsesTranscriptDelta() throws {
         let data = #"{"type":"transcript_delta","text":"hello","code":"c","message":"m"}"#.data(using: .utf8)!
         let event = try RealtimeSocketEvent(data: data)
