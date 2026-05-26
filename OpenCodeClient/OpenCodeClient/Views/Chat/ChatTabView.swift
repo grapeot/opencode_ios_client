@@ -10,16 +10,16 @@ import UIKit
 #endif
 
 private final class SpeechPartialTranscriptBuffer: @unchecked Sendable {
-    nonisolated(unsafe) private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.speechPartialTranscript")
+    private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.speechPartialTranscript")
     nonisolated(unsafe) private var transcript = ""
 
-    nonisolated(unsafe) func update(_ newValue: String) {
+    nonisolated func update(_ newValue: String) {
         queue.sync {
             transcript = newValue
         }
     }
 
-    nonisolated(unsafe) func current() -> String {
+    nonisolated func current() -> String {
         queue.sync { transcript }
     }
 }

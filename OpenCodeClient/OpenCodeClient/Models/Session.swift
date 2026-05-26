@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct Session: Codable, Identifiable {
+struct Session: Identifiable {
     let id: String
     let slug: String
     let projectID: String
@@ -33,6 +33,8 @@ struct Session: Codable, Identifiable {
         let files: Int
     }
 }
+
+extension Session: Codable {}
 
 struct SessionStatus: Codable {
     let type: String // "idle" | "busy" | "retry"

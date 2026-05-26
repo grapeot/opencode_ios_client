@@ -46,7 +46,7 @@ final class AudioRecorder {
     func start(onPCMChunk: @escaping @Sendable (Data) -> Void) throws {
         #if os(iOS) || os(visionOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true, options: [])
         #endif
 

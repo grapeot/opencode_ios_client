@@ -91,7 +91,7 @@ struct ChatComposerTextView: UIViewRepresentable {
         func textView(
             _ textView: UITextView,
             shouldChangeTextIn range: NSRange,
-            replacementText replacementText: String
+            replacementText: String
         ) -> Bool {
             let action = ChatComposerKeyAction.action(
                 for: replacementText,
