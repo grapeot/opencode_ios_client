@@ -24,33 +24,6 @@ private final class SpeechPartialTranscriptBuffer: @unchecked Sendable {
     }
 }
 
-private final class SpeechAudioChunkDispatcher: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.speechChunkDispatcher")
-    private let session: AIBuildersRealtimeSession
-    private var pendingSend: Task<Void, Error>?
-
-    init(session: AIBuildersRealtimeSession) {
-        self.session = session
-    }
-
-    func enqueue(_ chunk: Data) {
-        queue.sync {
-            let previous = pendingSend
-            pendingSend = Task {
-                if let previous {
-                    try await previous.value
-                }
-                try await session.sendAudioChunk(chunk)
-            }
-        }
-    }
-
-    func flush() async throws {
-        let task = queue.sync { pendingSend }
-        try await task?.value
-    }
-}
-
 private enum MessageGroupItem: Identifiable {
     case user(MessageWithParts)
     case assistantMerged([MessageWithParts])
@@ -130,8 +103,8 @@ struct ChatTabView: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var recorder = AudioRecorder()
-    @State private var realtimeSpeechSession: AIBuildersRealtimeSession?
-    @State private var speechChunkDispatcher: SpeechAudioChunkDispatcher?
+    @State private var speechStreamer: RealtimeSpeechStreamer?
+    @State private var speechHeartbeatTask: Task<Void, Never>?
     @State private var recordingInputPrefix = ""
     @State private var isRecording = false
     @State private var isStartingRecording = false
@@ -758,20 +731,37 @@ struct ChatTabView: View {
         }
     }
 
+    private func startSpeechHeartbeat(for streamer: RealtimeSpeechStreamer) {
+        speechHeartbeatTask?.cancel()
+        speechHeartbeatTask = Task {
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(AIBuildersAudioClient.realtimeHeartbeatIntervalSeconds))
+                } catch {
+                    return
+                }
+                await streamer.heartbeat()
+            }
+        }
+    }
+
+    private func stopSpeechHeartbeat() {
+        speechHeartbeatTask?.cancel()
+        speechHeartbeatTask = nil
+    }
     private func toggleRecording() async {
         if isRecording {
+            stopSpeechHeartbeat()
             let stopStart = ProcessInfo.processInfo.systemUptime
             recorder.stop()
             isRecording = false
             Self.logger.notice("[SpeechProfile] realtime capture stopped ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - stopStart) * 1000)), privacy: .public)")
 
-            guard let session = realtimeSpeechSession else {
-                Self.logger.error("[SpeechProfile] realtime stop failed: missing session")
+            guard let streamer = speechStreamer else {
+                Self.logger.error("[SpeechProfile] realtime stop failed: missing streamer")
                 return
             }
-            let dispatcher = speechChunkDispatcher
-            realtimeSpeechSession = nil
-            speechChunkDispatcher = nil
+            speechStreamer = nil
 
             isTranscribing = true
             defer { isTranscribing = false }
@@ -779,18 +769,18 @@ struct ChatTabView: View {
             let partialTranscriptBuffer = SpeechPartialTranscriptBuffer()
             let transcribeStart = ProcessInfo.processInfo.systemUptime
             do {
-                try await dispatcher?.flush()
-                let transcript = try await session.commitAndStop { partial in
+                let transcript = try await streamer.commitAndStop { partial in
                     partialTranscriptBuffer.update(partial)
                     Task { @MainActor in
                         inputText = Self.mergedSpeechInput(prefix: prefix, transcript: partial)
                     }
                 }
+                await streamer.cleanupCache()
                 let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                 Self.logger.notice("[SpeechProfile] chat realtime transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
                 inputText = Self.mergedSpeechInput(prefix: prefix, transcript: cleaned)
             } catch {
-                await session.cancel()
+                await streamer.cancel()
                 Self.logger.error("[SpeechProfile] chat realtime transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                 inputText = Self.speechFailureInput(prefix: prefix, lastPartialTranscript: partialTranscriptBuffer.current())
                 speechError = error.localizedDescription
@@ -823,25 +813,35 @@ struct ChatTabView: View {
             let startSessionStart = ProcessInfo.processInfo.systemUptime
             do {
                 let session = try await state.startRealtimeSpeechSession()
-                let dispatcher = SpeechAudioChunkDispatcher(session: session)
+                let cache = try RealtimeSpeechAudioCache()
+                let streamer = RealtimeSpeechStreamer(
+                    session: session,
+                    cache: cache,
+                    logger: Self.logger,
+                    makeSession: { @MainActor in
+                        try await state.startRealtimeSpeechSession()
+                    }
+                )
                 recordingInputPrefix = inputText
-                realtimeSpeechSession = session
-                speechChunkDispatcher = dispatcher
+                speechStreamer = streamer
                 Self.logger.notice("[SpeechProfile] realtime session started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startSessionStart) * 1000)), privacy: .public)")
 
                 let startRecordingStart = ProcessInfo.processInfo.systemUptime
                 try recorder.start { chunk in
-                    dispatcher.enqueue(chunk)
+                    Task {
+                        await streamer.appendAudioChunk(chunk)
+                    }
                 }
                 isRecording = true
+                startSpeechHeartbeat(for: streamer)
                 Self.logger.notice("[SpeechProfile] realtime capture started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startRecordingStart) * 1000)), privacy: .public)")
             } catch {
                 recorder.stop()
-                if let realtimeSpeechSession {
-                    await realtimeSpeechSession.cancel()
+                stopSpeechHeartbeat()
+                if let speechStreamer {
+                    await speechStreamer.cancel()
                 }
-                realtimeSpeechSession = nil
-                speechChunkDispatcher = nil
+                speechStreamer = nil
                 Self.logger.error("[SpeechProfile] realtime start failed error=\(error.localizedDescription, privacy: .public)")
                 speechError = error.localizedDescription
             }

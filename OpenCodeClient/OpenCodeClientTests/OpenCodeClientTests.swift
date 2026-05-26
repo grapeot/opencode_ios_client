@@ -1121,6 +1121,40 @@ struct AIBuildersAudioClientTests {
         #expect(AIBuildersAudioClient.realtimeStopMessage == "{\"type\":\"stop\"}")
     }
 
+    @Test func realtimeSpeechAudioCacheAppendsAndReadsChunks() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opencode-cache-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let cache = try RealtimeSpeechAudioCache(directory: directory)
+        defer { cache.remove() }
+
+        try cache.append(Data([1, 2, 3]))
+        try cache.append(Data([4, 5]))
+
+        #expect(cache.byteCount == 5)
+        #expect(try cache.readChunk(offset: 0, maxBytes: 4) == Data([1, 2, 3, 4]))
+        #expect(try cache.readChunk(offset: 4, maxBytes: 4) == Data([5]))
+        #expect(try cache.readChunk(offset: 5, maxBytes: 4).isEmpty)
+    }
+
+    @Test func realtimeSpeechAudioCacheRemoveDeletesBackingFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opencode-cache-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let cache = try RealtimeSpeechAudioCache(directory: directory)
+        try cache.append(Data([1, 2, 3]))
+        #expect(FileManager.default.fileExists(atPath: cache.fileURL.path))
+
+        cache.remove()
+
+        #expect(cache.byteCount == 0)
+        #expect(FileManager.default.fileExists(atPath: cache.fileURL.path) == false)
+    }
+
     @Test func realtimeSocketEventParsesTranscriptDelta() throws {
         let data = #"{"type":"transcript_delta","text":"hello","code":"c","message":"m"}"#.data(using: .utf8)!
         let event = try RealtimeSocketEvent(data: data)

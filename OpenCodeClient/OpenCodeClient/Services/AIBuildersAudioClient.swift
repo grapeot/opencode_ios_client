@@ -48,6 +48,7 @@ enum AIBuildersAudioError: Error, Equatable {
     case httpError(statusCode: Int, body: Data)
     case audioConversionFailed
     case websocketError(String)
+    case connectionLost(String)
 }
 
 struct RealtimeSessionPayload: Equatable {
@@ -72,6 +73,145 @@ struct RealtimeSessionPayload: Equatable {
             payload["terms"] = terms
         }
         return payload
+    }
+}
+
+final class RealtimeSpeechAudioCache: @unchecked Sendable {
+    nonisolated private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.realtimeSpeechAudioCache")
+    nonisolated let fileURL: URL
+    nonisolated(unsafe) private var byteCountValue = 0
+
+    init(directory: URL = FileManager.default.temporaryDirectory) throws {
+        fileURL = directory.appendingPathComponent("opencode-realtime-speech-\(UUID().uuidString).pcm")
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+    }
+
+    nonisolated var byteCount: Int {
+        queue.sync { byteCountValue }
+    }
+
+    nonisolated func append(_ data: Data) throws {
+        guard !data.isEmpty else { return }
+        try queue.sync {
+            let handle = try FileHandle(forWritingTo: fileURL)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: data)
+            byteCountValue += data.count
+        }
+    }
+
+    nonisolated func readChunk(offset: Int, maxBytes: Int) throws -> Data {
+        try queue.sync {
+            guard offset < byteCountValue else { return Data() }
+            let handle = try FileHandle(forReadingFrom: fileURL)
+            defer { try? handle.close() }
+            try handle.seek(toOffset: UInt64(offset))
+            return try handle.read(upToCount: min(maxBytes, byteCountValue - offset)) ?? Data()
+        }
+    }
+
+    nonisolated func remove() {
+        queue.sync {
+            try? FileManager.default.removeItem(at: fileURL)
+            byteCountValue = 0
+        }
+    }
+}
+
+actor RealtimeSpeechStreamer {
+    private let cache: RealtimeSpeechAudioCache
+    private let makeSession: @MainActor @Sendable () async throws -> AIBuildersRealtimeSession
+    private let logger: Logger
+    private var session: AIBuildersRealtimeSession
+    private var isRecovering = false
+
+    init(
+        session: AIBuildersRealtimeSession,
+        cache: RealtimeSpeechAudioCache,
+        logger: Logger,
+        makeSession: @escaping @MainActor @Sendable () async throws -> AIBuildersRealtimeSession
+    ) {
+        self.session = session
+        self.cache = cache
+        self.logger = logger
+        self.makeSession = makeSession
+    }
+
+    func appendAudioChunk(_ chunk: Data) async {
+        do {
+            try cache.append(chunk)
+            guard !isRecovering else { return }
+            try await session.sendAudioChunk(chunk)
+        } catch {
+            await recover(reason: error)
+        }
+    }
+
+    func heartbeat() async {
+        guard !isRecovering else { return }
+        do {
+            try await session.ping()
+        } catch {
+            await recover(reason: error)
+        }
+    }
+
+    func commitAndStop(onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
+        while isRecovering {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        do {
+            return try await session.commitAndStop(onPartialTranscript: onPartialTranscript)
+        } catch {
+            await recover(reason: error)
+            while isRecovering {
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            return try await session.commitAndStop(onPartialTranscript: onPartialTranscript)
+        }
+    }
+
+    func cancel() async {
+        await session.cancel()
+        cache.remove()
+    }
+
+    func cleanupCache() {
+        cache.remove()
+    }
+
+    private func recover(reason: Error) async {
+        guard !isRecovering else { return }
+        isRecovering = true
+        let cachedBytes = cache.byteCount
+        logger.error("[SpeechProfile] realtime recovery begin bytes=\(cachedBytes, privacy: .public) error=\(String(describing: reason), privacy: .public)")
+        await session.cancel()
+        do {
+            let replacement = try await makeSession()
+            try await replayCache(to: replacement)
+            session = replacement
+            let cachedBytes = cache.byteCount
+            logger.notice("[SpeechProfile] realtime recovery done bytes=\(cachedBytes, privacy: .public)")
+        } catch {
+            let cachedBytes = cache.byteCount
+            logger.error("[SpeechProfile] realtime recovery failed bytes=\(cachedBytes, privacy: .public) error=\(String(describing: error), privacy: .public)")
+        }
+        isRecovering = false
+    }
+
+    private func replayCache(to targetSession: AIBuildersRealtimeSession) async throws {
+        var offset = 0
+        while true {
+            let chunk = try cache.readChunk(offset: offset, maxBytes: AIBuildersAudioClient.realtimeReplayChunkSize)
+            if chunk.isEmpty {
+                if offset >= cache.byteCount { return }
+                try await Task.sleep(for: .milliseconds(20))
+                continue
+            }
+            try await targetSession.sendAudioChunk(chunk)
+            offset += chunk.count
+        }
     }
 }
 
@@ -130,6 +270,19 @@ actor AIBuildersRealtimeSession {
         try await sender.send(.data(chunk))
     }
 
+    func ping() async throws {
+        guard !isClosed else { throw AIBuildersAudioError.connectionLost("Realtime speech connection is closed") }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            webSocketTask.sendPing { error in
+                if let error {
+                    continuation.resume(throwing: AIBuildersAudioError.connectionLost(error.localizedDescription))
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
     func commitAndStop(onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
         guard !isClosed else { return "" }
         isCommitted = true
@@ -186,8 +339,10 @@ enum AIBuildersAudioClient {
     private static let targetSampleRate: Double = 24_000
     private static let targetChannels: AVAudioChannelCount = 1
     private static let sendChunkSize = 240_000
+    nonisolated static let realtimeReplayChunkSize = 240_000
     static let realtimeCommitMessage = "{\"type\":\"commit\"}"
     static let realtimeStopMessage = "{\"type\":\"stop\"}"
+    nonisolated static let realtimeHeartbeatIntervalSeconds: UInt64 = 12
 
     private final class TaskMetricsCollector: NSObject, URLSessionTaskDelegate {
         private(set) var metrics: URLSessionTaskMetrics?
