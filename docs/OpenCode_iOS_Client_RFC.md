@@ -400,7 +400,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **草稿**：按 sessionID 持久化未发送输入；切换 session 可恢复；发送成功后清空
 - **模型选择**：按 sessionID 记忆当前选择的模型；切换 Session 自动恢复（避免全局 model 覆盖）
 - **Agent 选择**：按 sessionID 记忆当前选择的 agent（与 model 同理）；发送消息时在 body 中携带 `agent: string` 字段
-- **语音输入**：输入框右侧麦克风按钮；录音后调用 AI Builder `POST /v1/audio/transcriptions` 转写，结果追加到输入框；Base URL 与 token 在 Settings → Speech Recognition 配置并存 Keychain
+- **语音输入**：输入框右侧麦克风按钮；开始录音时创建 AI Builder realtime WebSocket session，`AVAudioEngine` 输出 PCM16 mono 24kHz chunk；每个 chunk 同时写入本地临时 `.pcm` cache 并发送到当前 WebSocket。heartbeat / send failure 触发恢复状态机：取消坏 session，创建新 session，从 cache 文件 offset 0 顺序 replay 到当前文件末尾，之后继续 live 发送。停止录音时等待恢复完成，发送 `commit` / `stop`，将 transcript 追加到输入框；Base URL 与 token 在 Settings → Speech Recognition 配置并存 Keychain
 - **Abort**：提供按钮调用 `POST /session/:id/abort`
 - **历史加载交互**：Chat 顶部显示“下拉加载更多历史消息”提示；加载中显示“正在加载更多历史消息...”，支持中英文本地化
 

@@ -68,6 +68,11 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 
 ## 已完成（近期）
 
+- [x] **Realtime speech WebSocket recovery V2（2026-05-25）**：
+  - [x] 产品语义：长录音期间 WebSocket 断开时不中断录音，客户端用本地 PCM cache 恢复，而不是等 Stop 后才失败
+  - [x] 技术方案：每个 PCM chunk 同时写入临时 `.pcm` 文件和 live WebSocket；heartbeat / send failure 触发新 session，从 cache offset 0 replay 到当前文件末尾，追上后继续 live 发送；Stop 时等待恢复完成再 commit/stop
+  - [x] 约束：第一版接受每次断线都从头 replay，十分钟 PCM16 mono 24kHz 约 30MB，优先保证可靠性，性能问题后续再优化 checkpoint
+
 - [x] **Voiceflow-style 单 app target 迁移起步（2026-05-02）**：
   - [x] 对照 `adhoc_jobs/brainwave_mobile/brainwave_ios` 的 Voiceflow 配置，确认它不是独立 visionOS app target，而是主 app target 同时支持 `iphoneos iphonesimulator xros xrsimulator`，`TARGETED_DEVICE_FAMILY = "1,2,7"`，并保持同一个 bundle id
   - [x] 将 `OpenCodeClient` 主 target 改为支持 iPhone / iPad / Apple Vision：新增 `SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator"`、`TARGETED_DEVICE_FAMILY = "1,2,7"`、`XROS_DEPLOYMENT_TARGET = 26.0`、`SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO`

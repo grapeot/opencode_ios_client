@@ -226,7 +226,7 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 **草稿持久化（Draft Persistence）**：未发送的输入内容按 sessionID 保存（本地持久化），切换到其他 session 再切回时仍可恢复；发送成功后清空草稿。
 
-**语音输入（Speech Recognition）**：输入框右侧麦克风按钮。点击开始录音，再次点击停止并调用 AI Builder `/v1/audio/transcriptions` 转写，将文本追加到输入框。Token 和 Base URL 在 Settings → Speech Recognition 配置，存 Keychain，不提交到 git。
+**语音输入（Speech Recognition）**：输入框右侧麦克风按钮。点击开始录音时创建 AI Builder realtime WebSocket session，并用 `AVAudioEngine` 采集 PCM16 mono 24kHz 音频。客户端一边发送 live PCM，一边把同一份 PCM 追加写入本地临时 `.pcm` 文件。若 heartbeat 或 live send 发现 WebSocket 断开，客户端不中断录音，而是新建 session 并从本地缓存重放完整 PCM，追上当前录音后继续 live 发送；停止录音时等待恢复完成后发送 `commit` / `stop`，将 transcript 追加到输入框。Token 和 Base URL 在 Settings → Speech Recognition 配置，存 Keychain，不提交到 git。
 
 **消息队列**：当 session 处于 busy 状态时，用户发送的消息进入队列。OpenCode Server 的 `POST /session/:id/prompt_async` 在服务端已支持队列——busy 时会将消息入队，当前运行结束后自动处理。iOS 端调用 `prompt_async` 即可，无需本地维护队列。若未来 API 变更，可退化为本地队列维护。
 
