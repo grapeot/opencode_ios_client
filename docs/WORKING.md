@@ -72,6 +72,7 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
   - [x] 产品语义：长录音期间 WebSocket 断开时不中断录音，客户端用本地 PCM cache 恢复，而不是等 Stop 后才失败
   - [x] 技术方案：每个 PCM chunk 同时写入临时 `.pcm` 文件和 live WebSocket；heartbeat / send failure 触发新 session，从 cache offset 0 replay 到当前文件末尾，追上后继续 live 发送；Stop 时等待恢复完成再 commit/stop
   - [x] 约束：第一版接受每次断线都从头 replay，十分钟 PCM16 mono 24kHz 约 30MB，优先保证可靠性，性能问题后续再优化 checkpoint
+  - [x] 启动体验优化：点击麦克风后立即开始 `AVAudioEngine` 录音并写入本地 PCM cache；AI Builder session POST 在后台完成，session ready 后 replay 启动期间缓存的 PCM，避免首包网络等待导致录音按钮半透明但未采集。
 
 - [x] **Voiceflow-style 单 app target 迁移起步（2026-05-02）**：
   - [x] 对照 `adhoc_jobs/brainwave_mobile/brainwave_ios` 的 Voiceflow 配置，确认它不是独立 visionOS app target，而是主 app target 同时支持 `iphoneos iphonesimulator xros xrsimulator`，`TARGETED_DEVICE_FAMILY = "1,2,7"`，并保持同一个 bundle id
