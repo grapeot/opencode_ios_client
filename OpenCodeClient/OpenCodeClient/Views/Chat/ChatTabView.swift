@@ -11,18 +11,6 @@ import VoiceFlowKit
 import UIKit
 #endif
 
-private final class SpeechPartialTranscriptBuffer: Sendable {
-    private let storage = OSAllocatedUnfairLock(initialState: "")
-
-    nonisolated func update(_ newValue: String) {
-        storage.withLock { $0 = newValue }
-    }
-
-    nonisolated func current() -> String {
-        storage.withLock { $0 }
-    }
-}
-
 private enum MessageGroupItem: Identifiable {
     case user(MessageWithParts)
     case assistantMerged([MessageWithParts])
@@ -42,30 +30,6 @@ private enum MessageGroupItem: Identifiable {
     }
 }
 
-enum ChatScrollBehavior {
-    static let followThreshold: CGFloat = 80
-
-    static func shouldAutoScroll(
-        bottomMarkerMinY: CGFloat,
-        viewportHeight: CGFloat,
-        threshold: CGFloat = followThreshold
-    ) -> Bool {
-        bottomMarkerMinY <= viewportHeight + threshold
-    }
-}
-
-enum SessionListEdgeSwipeBehavior {
-    static let edgeThreshold: CGFloat = 32
-    static let minimumHorizontalTranslation: CGFloat = 72
-    static let maximumVerticalTranslation: CGFloat = 56
-
-    static func shouldOpenSessionList(startLocation: CGPoint, translation: CGSize) -> Bool {
-        guard startLocation.x <= edgeThreshold else { return false }
-        guard translation.width >= minimumHorizontalTranslation else { return false }
-        return abs(translation.height) <= maximumVerticalTranslation
-    }
-}
-
 private struct BottomMarkerMinYPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = .greatestFiniteMagnitude
 
@@ -75,42 +39,31 @@ private struct BottomMarkerMinYPreferenceKey: PreferenceKey {
 }
 
 struct ChatTabView: View {
-    private static let logger = Logger(
+    static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "OpenCodeClient",
         category: "SpeechProfile"
     )
 
-    static func mergedSpeechInput(prefix: String, transcript: String) -> String {
-        let cleanedTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanedTranscript.isEmpty else { return prefix }
-        guard !prefix.isEmpty else { return cleanedTranscript }
-        return prefix + " " + cleanedTranscript
-    }
-
-    static func speechFailureInput(prefix: String, lastPartialTranscript: String) -> String {
-        mergedSpeechInput(prefix: prefix, transcript: lastPartialTranscript)
-    }
-
     @Bindable var state: AppState
     var showSettingsInToolbar: Bool = false
     var onSettingsTap: (() -> Void)?
-    @State private var inputText = ""
+    @State var inputText = ""
     @State private var hasMarkedText = false
     @State private var isSending = false
     @State private var isSyncingDraft = false
     @State private var showSessionList = false
     @State private var showRenameAlert = false
     @State private var renameText = ""
-    @State private var microphone = VoiceFlowMicrophone()
-    @State private var speechSession: VoiceFlowSession?
-    @State private var speechHeartbeatTask: Task<Void, Never>?
-    @State private var speechEventTask: Task<Void, Never>?
-    @State private var recordingInputPrefix = ""
-    @State private var isRecording = false
-    @State private var isStartingRecording = false
-    @State private var isTranscribing = false
-    @State private var speechError: String?
-    @State private var speechRecoveryActive = false
+    @State var microphone = VoiceFlowMicrophone()
+    @State var speechSession: VoiceFlowSession?
+    @State var speechHeartbeatTask: Task<Void, Never>?
+    @State var speechEventTask: Task<Void, Never>?
+    @State var recordingInputPrefix = ""
+    @State var isRecording = false
+    @State var isStartingRecording = false
+    @State var isTranscribing = false
+    @State var speechError: String?
+    @State var speechRecoveryActive = false
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
@@ -728,157 +681,6 @@ struct ChatTabView: View {
             isSending = false
             if !success {
                 inputText = text
-            }
-        }
-    }
-
-    private static let speechHeartbeatIntervalSeconds: UInt64 = 12
-
-    private func startSpeechHeartbeat(for session: VoiceFlowSession) {
-        speechHeartbeatTask?.cancel()
-        speechHeartbeatTask = Task {
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(Self.speechHeartbeatIntervalSeconds))
-                } catch {
-                    return
-                }
-                await session.ping()
-            }
-        }
-    }
-
-    private func stopSpeechHeartbeat() {
-        speechHeartbeatTask?.cancel()
-        speechHeartbeatTask = nil
-    }
-
-    /// Drain `session.events` so the UI sees phase transitions and recovery
-    /// state mid-recording. Otherwise a stream blip is invisible until the
-    /// user hits stop and `commitAndStop` either succeeds late or fails.
-    private func startSpeechEventConsumer(for session: VoiceFlowSession) {
-        speechEventTask?.cancel()
-        speechEventTask = Task {
-            let events = await session.events
-            for await event in events {
-                guard !Task.isCancelled else { return }
-                switch event {
-                case .recoveryStarted:
-                    await MainActor.run { speechRecoveryActive = true }
-                case .recoveryFailed(let message):
-                    Self.logger.error("[SpeechProfile] realtime recovery failed message=\(message, privacy: .public)")
-                    await MainActor.run {
-                        speechRecoveryActive = false
-                        speechError = L10n.t(.chatSpeechStreamDisconnected)
-                    }
-                case .phaseChanged(let phase):
-                    if phase == .connected, speechRecoveryActive {
-                        await MainActor.run { speechRecoveryActive = false }
-                    }
-                case .partialTranscript:
-                    // Mid-recording partial transcripts are intentionally
-                    // suppressed in OpenCode's chat composer — the user only
-                    // sees text after stop. (See VoiceFlow's recording flow
-                    // for the opposite UX.)
-                    continue
-                }
-            }
-        }
-    }
-
-    private func stopSpeechEventConsumer() {
-        speechEventTask?.cancel()
-        speechEventTask = nil
-        speechRecoveryActive = false
-    }
-
-    private func toggleRecording() async {
-        if isRecording {
-            stopSpeechHeartbeat()
-            stopSpeechEventConsumer()
-            let stopStart = ProcessInfo.processInfo.systemUptime
-            _ = try? await microphone.stop()
-            isRecording = false
-            Self.logger.notice("[SpeechProfile] realtime capture stopped ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - stopStart) * 1000)), privacy: .public)")
-
-            guard let session = speechSession else {
-                Self.logger.error("[SpeechProfile] realtime stop failed: missing session")
-                return
-            }
-            speechSession = nil
-
-            isTranscribing = true
-            defer { isTranscribing = false }
-            let prefix = recordingInputPrefix
-            let partialTranscriptBuffer = SpeechPartialTranscriptBuffer()
-            let transcribeStart = ProcessInfo.processInfo.systemUptime
-            do {
-                let transcript = try await session.commitAndStop { partial in
-                    partialTranscriptBuffer.update(partial)
-                    Task { @MainActor in
-                        inputText = Self.mergedSpeechInput(prefix: prefix, transcript: partial)
-                    }
-                }
-                let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                Self.logger.notice("[SpeechProfile] chat realtime transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
-                inputText = Self.mergedSpeechInput(prefix: prefix, transcript: cleaned)
-            } catch {
-                await session.cancel()
-                Self.logger.error("[SpeechProfile] chat realtime transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                inputText = Self.speechFailureInput(prefix: prefix, lastPartialTranscript: partialTranscriptBuffer.current())
-                speechError = error.localizedDescription
-            }
-        } else {
-            guard !isStartingRecording else { return }
-            let token = state.aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
-            if token.isEmpty {
-                speechError = L10n.t(.chatSpeechTokenMissing)
-                return
-            }
-            if state.isTestingAIBuilderConnection {
-                speechError = L10n.t(.chatSpeechTesting)
-                return
-            }
-            guard state.aiBuilderConnectionOK else {
-                speechError = L10n.t(.chatSpeechNotPassed)
-                return
-            }
-
-            let permissionStart = ProcessInfo.processInfo.systemUptime
-            let allowed = await microphone.requestPermission()
-            Self.logger.notice("[SpeechProfile] microphone permission allowed=\(allowed, privacy: .public) ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - permissionStart) * 1000)), privacy: .public)")
-            guard allowed else {
-                speechError = L10n.t(.chatMicrophoneDenied)
-                return
-            }
-            isStartingRecording = true
-            let startRecordingStart = ProcessInfo.processInfo.systemUptime
-            do {
-                let session = try await state.startRealtimeSpeechSession()
-                recordingInputPrefix = inputText
-                speechSession = session
-                startSpeechEventConsumer(for: session)
-
-                try await microphone.start { chunk in
-                    Task {
-                        await session.sendAudioChunk(chunk)
-                    }
-                }
-                isRecording = true
-                isStartingRecording = false
-                startSpeechHeartbeat(for: session)
-                Self.logger.notice("[SpeechProfile] realtime capture started ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - startRecordingStart) * 1000)), privacy: .public)")
-            } catch {
-                _ = try? await microphone.stop()
-                stopSpeechHeartbeat()
-                stopSpeechEventConsumer()
-                isStartingRecording = false
-                if let speechSession {
-                    await speechSession.cancel()
-                }
-                speechSession = nil
-                Self.logger.error("[SpeechProfile] realtime capture start failed error=\(error.localizedDescription, privacy: .public)")
-                speechError = error.localizedDescription
             }
         }
     }
