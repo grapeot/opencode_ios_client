@@ -5,23 +5,21 @@
 
 import SwiftUI
 import os
+import os.lock
 import VoiceFlowKit
 #if canImport(UIKit)
 import UIKit
 #endif
 
-private final class SpeechPartialTranscriptBuffer: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "com.grapeot.OpenCodeClient.speechPartialTranscript")
-    nonisolated(unsafe) private var transcript = ""
+private final class SpeechPartialTranscriptBuffer: Sendable {
+    private let storage = OSAllocatedUnfairLock(initialState: "")
 
-    nonisolated func update(_ newValue: String) {
-        queue.sync {
-            transcript = newValue
-        }
+    func update(_ newValue: String) {
+        storage.withLock { $0 = newValue }
     }
 
-    nonisolated func current() -> String {
-        queue.sync { transcript }
+    func current() -> String {
+        storage.withLock { $0 }
     }
 }
 
@@ -106,11 +104,13 @@ struct ChatTabView: View {
     @State private var microphone = VoiceFlowMicrophone()
     @State private var speechSession: VoiceFlowSession?
     @State private var speechHeartbeatTask: Task<Void, Never>?
+    @State private var speechEventTask: Task<Void, Never>?
     @State private var recordingInputPrefix = ""
     @State private var isRecording = false
     @State private var isStartingRecording = false
     @State private var isTranscribing = false
     @State private var speechError: String?
+    @State private var speechRecoveryActive = false
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
@@ -753,9 +753,49 @@ struct ChatTabView: View {
         speechHeartbeatTask = nil
     }
 
+    /// Drain `session.events` so the UI sees phase transitions and recovery
+    /// state mid-recording. Otherwise a stream blip is invisible until the
+    /// user hits stop and `commitAndStop` either succeeds late or fails.
+    private func startSpeechEventConsumer(for session: VoiceFlowSession) {
+        speechEventTask?.cancel()
+        speechEventTask = Task {
+            let events = await session.events
+            for await event in events {
+                guard !Task.isCancelled else { return }
+                switch event {
+                case .recoveryStarted:
+                    await MainActor.run { speechRecoveryActive = true }
+                case .recoveryFailed(let message):
+                    Self.logger.error("[SpeechProfile] realtime recovery failed message=\(message, privacy: .public)")
+                    await MainActor.run {
+                        speechRecoveryActive = false
+                        speechError = L10n.t(.chatSpeechStreamDisconnected)
+                    }
+                case .phaseChanged(let phase):
+                    if phase == .connected, speechRecoveryActive {
+                        await MainActor.run { speechRecoveryActive = false }
+                    }
+                case .partialTranscript:
+                    // Mid-recording partial transcripts are intentionally
+                    // suppressed in OpenCode's chat composer — the user only
+                    // sees text after stop. (See VoiceFlow's recording flow
+                    // for the opposite UX.)
+                    continue
+                }
+            }
+        }
+    }
+
+    private func stopSpeechEventConsumer() {
+        speechEventTask?.cancel()
+        speechEventTask = nil
+        speechRecoveryActive = false
+    }
+
     private func toggleRecording() async {
         if isRecording {
             stopSpeechHeartbeat()
+            stopSpeechEventConsumer()
             let stopStart = ProcessInfo.processInfo.systemUptime
             _ = try? await microphone.stop()
             isRecording = false
@@ -817,6 +857,7 @@ struct ChatTabView: View {
                 let session = try await state.startRealtimeSpeechSession()
                 recordingInputPrefix = inputText
                 speechSession = session
+                startSpeechEventConsumer(for: session)
 
                 try await microphone.start { chunk in
                     Task {
@@ -830,6 +871,7 @@ struct ChatTabView: View {
             } catch {
                 _ = try? await microphone.stop()
                 stopSpeechHeartbeat()
+                stopSpeechEventConsumer()
                 isStartingRecording = false
                 if let speechSession {
                     await speechSession.cancel()
