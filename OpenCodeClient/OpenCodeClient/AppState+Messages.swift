@@ -1,0 +1,210 @@
+import Foundation
+import os
+
+/// Message + diff loading and outbound send (optimistic user message
+/// row + async `prompt` request to the server). Older-message pagination
+/// (`loadOlderMessagesForCurrentSession`) and the per-session diff load
+/// live here too — both are message-tab concerns.
+///
+/// State lives on `MessageStore`; this extension only orchestrates.
+extension AppState {
+    func loadMessages() async {
+        guard let sessionID = currentSessionID else { return }
+        do {
+            let fetchLimit = Self.normalizedMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
+            loadedMessageLimitBySessionID[sessionID] = fetchLimit
+            let loaded = try await apiClient.messages(sessionID: sessionID, limit: fetchLimit)
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                Self.logger.debug("drop stale loadMessages result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
+                return
+            }
+
+            hasMoreHistoryBySessionID[sessionID] = loaded.count >= fetchLimit
+
+            let loadedMessageIDs = Set(loaded.map { $0.info.id })
+            let keepPending = isBusySession(currentSessionStatus)
+            let pendingMessages: [MessageWithParts] = {
+                guard keepPending else { return [] }
+                let pending = messages.filter({ $0.info.id.hasPrefix("temp-user-") })
+                guard let lastLoadedUser = loaded.last(where: { $0.info.isUser }) else { return pending }
+
+                func normalizeEpochMs(_ raw: Int) -> Int {
+                    // Server timestamps may be seconds or milliseconds.
+                    if raw > 0 && raw < 10_000_000_000 { return raw * 1000 }
+                    return raw
+                }
+
+                func normalizeComparableText(_ raw: String) -> String {
+                    raw
+                        .components(separatedBy: .whitespacesAndNewlines)
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " ")
+                }
+
+                let lastLoadedText = normalizeComparableText(
+                    lastLoadedUser.parts.first(where: { $0.isText })?.text ?? ""
+                )
+                let lastLoadedCreated = normalizeEpochMs(lastLoadedUser.info.time.created)
+
+                return pending.filter { m in
+                    guard m.info.isUser else { return true }
+                    let text = normalizeComparableText(
+                        m.parts.first(where: { $0.isText })?.text ?? ""
+                    )
+                    guard !text.isEmpty else { return true }
+                    let textMatches = text == lastLoadedText || lastLoadedText.hasSuffix(text)
+
+                    let created = normalizeEpochMs(m.info.time.created)
+                    let timestampClose: Bool = {
+                        if created == 0 || lastLoadedCreated == 0 { return true }
+                        return abs(lastLoadedCreated - created) <= 60 * 1000
+                    }()
+
+                    if textMatches || timestampClose { return false }
+                    return true
+                }
+            }()
+
+            let draftMessages = messages.filter {
+                messageStore.isStreamingDraftMessage($0.info.id) && !loadedMessageIDs.contains($0.info.id)
+            }
+
+            var merged: [MessageWithParts] = loaded
+            for message in pendingMessages where !loadedMessageIDs.contains(message.info.id) {
+                merged.append(message)
+            }
+            for message in draftMessages where !merged.contains(where: { $0.info.id == message.info.id }) {
+                merged.append(message)
+            }
+
+            // Defensively dedupe by message id. Keep the latest occurrence.
+            var dedupedMessages: [MessageWithParts] = []
+            var dedupedIndexByMessageID: [String: Int] = [:]
+            for message in merged {
+                if let existingIndex = dedupedIndexByMessageID[message.info.id] {
+                    dedupedMessages[existingIndex] = message
+                } else {
+                    dedupedIndexByMessageID[message.info.id] = dedupedMessages.count
+                    dedupedMessages.append(message)
+                }
+            }
+
+            messages = dedupedMessages
+
+            var partsByMessageID: [String: [Part]] = [:]
+            for message in messages {
+                partsByMessageID[message.info.id] = message.parts
+            }
+            partsByMessage = partsByMessageID
+            messageStore.removeStreamingDraftMessages(loadedMessageIDs)
+
+            if isBusySession(currentSessionStatus) {
+                refreshSessionActivityText(sessionID: sessionID)
+            }
+        } catch let error as DecodingError {
+            Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+        } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                Self.logger.debug("ignore stale loadMessages error requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
+                return
+            }
+            connectionError = error.localizedDescription
+            Self.logger.error("loadMessages failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func loadOlderMessagesForCurrentSession() async {
+        guard let sessionID = currentSessionID else { return }
+        guard hasMoreHistoryBySessionID[sessionID] ?? true else { return }
+        guard !loadingOlderMessagesSessionIDs.contains(sessionID) else { return }
+
+        loadingOlderMessagesSessionIDs.insert(sessionID)
+        loadedMessageLimitBySessionID[sessionID] = Self.nextMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
+        await loadMessages()
+        loadingOlderMessagesSessionIDs.remove(sessionID)
+    }
+
+    func loadSessionDiff() async {
+        guard let sessionID = currentSessionID else { sessionDiffs = []; return }
+        do {
+            let loaded = try await apiClient.sessionDiff(sessionID: sessionID)
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                Self.logger.debug("drop stale loadSessionDiff result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
+                return
+            }
+            sessionDiffs = loaded
+        } catch {
+            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+                return
+            }
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return }
+            sessionDiffs = []
+        }
+    }
+
+    func sendMessage(_ text: String) async -> Bool {
+        sendError = nil
+        guard let sessionID = currentSessionID else {
+            sendError = L10n.t(.chatSelectSessionFirst)
+            return false
+        }
+        let tempMessageID = appendOptimisticUserMessage(text)
+        let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
+        let agentName = selectedAgent?.name ?? "build"
+        do {
+            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
+            return true
+        } catch {
+            let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
+            sendError = recovered ? L10n.t(.errorSessionNotFound) : error.localizedDescription
+            removeMessage(id: tempMessageID)
+            return false
+        }
+    }
+
+    @discardableResult
+    func appendOptimisticUserMessage(_ text: String) -> String {
+        guard let sessionID = currentSessionID else { return "" }
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let messageID = "temp-user-\(UUID().uuidString)"
+        let partID = "temp-part-\(messageID)"
+        let message = Message(
+            id: messageID,
+            sessionID: sessionID,
+            role: "user",
+            parentID: messages.last?.info.id,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: Message.TimeInfo(created: now, completed: now),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        let part = Part(
+            id: partID,
+            messageID: messageID,
+            sessionID: sessionID,
+            type: "text",
+            text: text,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            metadata: nil,
+            files: nil
+        )
+        let row = MessageWithParts(info: message, parts: [part])
+        messages.append(row)
+        partsByMessage[messageID] = [part]
+        return messageID
+    }
+
+    func removeMessage(id: String) {
+        messages.removeAll { $0.info.id == id }
+        partsByMessage[id] = nil
+    }
+}

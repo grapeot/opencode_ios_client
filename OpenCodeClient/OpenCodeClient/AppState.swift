@@ -125,7 +125,7 @@ final class AppState {
             warning: parsed == nil ? L10n.t(.errorInvalidBaseURL) : (scheme == "http" && !isTailscale ? L10n.t(.errorUsingLanHttp) : nil)
         )
     }
-    private var _serverURL: String = APIClient.defaultServer
+    var _serverURL: String = APIClient.defaultServer
     var serverURL: String {
         get { _serverURL }
         set {
@@ -134,7 +134,7 @@ final class AppState {
         }
     }
 
-    private var _username: String = ""
+    var _username: String = ""
     var username: String {
         get { _username }
         set {
@@ -143,7 +143,7 @@ final class AppState {
         }
     }
 
-    private var _password: String = ""
+    var _password: String = ""
     var password: String {
         get { _password }
         set {
@@ -156,20 +156,20 @@ final class AppState {
         }
     }
 
-    private static let serverURLKey = "serverURL"
-    private static let usernameKey = "username"
-    private static let passwordKeychainKey = "password"
-    private static let aiBuilderBaseURLKey = "aiBuilderBaseURL"
-    private static let aiBuilderTokenKeychainKey = "aiBuilderToken"
-    private static let aiBuilderCustomPromptKey = "aiBuilderCustomPrompt"
-    private static let aiBuilderTerminologyKey = "aiBuilderTerminology"
+    static let serverURLKey = "serverURL"
+    static let usernameKey = "username"
+    static let passwordKeychainKey = "password"
+    static let aiBuilderBaseURLKey = "aiBuilderBaseURL"
+    static let aiBuilderTokenKeychainKey = "aiBuilderToken"
+    static let aiBuilderCustomPromptKey = "aiBuilderCustomPrompt"
+    static let aiBuilderTerminologyKey = "aiBuilderTerminology"
     static let aiBuilderLastOKSignatureKey = "aiBuilderLastOKSignature"
     static let aiBuilderLastOKTestedAtKey = "aiBuilderLastOKTestedAt"
-    private static let draftInputsBySessionKey = "draftInputsBySession"
-    private static let selectedModelBySessionKey = "selectedModelBySession"
-    private static let showArchivedSessionsKey = "showArchivedSessions"
-    private static let selectedProjectWorktreeKey = "selectedProjectWorktree"
-    private static let customProjectPathKey = "customProjectPath"
+    static let draftInputsBySessionKey = "draftInputsBySession"
+    static let selectedModelBySessionKey = "selectedModelBySession"
+    static let showArchivedSessionsKey = "showArchivedSessions"
+    static let selectedProjectWorktreeKey = "selectedProjectWorktree"
+    static let customProjectPathKey = "customProjectPath"
 
     init(
         apiClient: APIClientProtocol = APIClient(),
@@ -222,43 +222,10 @@ final class AppState {
     }
 
     // Unsent composer drafts per session.
-    private var draftInputsBySessionID: [String: String] = [:]
+    var draftInputsBySessionID: [String: String] = [:]
 
     // Selected model (providerID/modelID) per session.
-    private var selectedModelIDBySessionID: [String: String] = [:]
-
-    private func persistSelectedModelMap() {
-        if selectedModelIDBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.selectedModelBySessionKey)
-            return
-        }
-        if let data = try? JSONEncoder().encode(selectedModelIDBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.selectedModelBySessionKey)
-        }
-    }
-
-    func draftText(for sessionID: String?) -> String {
-        guard let sessionID else { return "" }
-        return draftInputsBySessionID[sessionID] ?? ""
-    }
-
-    func setDraftText(_ text: String, for sessionID: String?) {
-        guard let sessionID else { return }
-        let cleaned = text
-        if cleaned.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            draftInputsBySessionID[sessionID] = nil
-        } else {
-            draftInputsBySessionID[sessionID] = cleaned
-        }
-
-        if draftInputsBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
-            return
-        }
-        if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
-        }
-    }
+    var selectedModelIDBySessionID: [String: String] = [:]
 
     static func aiBuilderSignature(baseURL: String, token: String) -> String {
         let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -269,7 +236,7 @@ final class AppState {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    private var _aiBuilderBaseURL: String = "https://space.ai-builders.com/backend"
+    var _aiBuilderBaseURL: String = "https://space.ai-builders.com/backend"
     var aiBuilderBaseURL: String {
         get { _aiBuilderBaseURL }
         set {
@@ -283,7 +250,7 @@ final class AppState {
         }
     }
 
-    private var _aiBuilderToken: String = ""
+    var _aiBuilderToken: String = ""
     var aiBuilderToken: String {
         get { _aiBuilderToken }
         set {
@@ -302,12 +269,12 @@ final class AppState {
     }
 
     /// Default custom prompt for speech recognition. Instructs engine on filename style.
-    private static let defaultAIBuilderCustomPrompt = "All file and directory names should use snake_case (lowercase with underscores)."
+    static let defaultAIBuilderCustomPrompt = "All file and directory names should use snake_case (lowercase with underscores)."
 
     /// Default terminology (comma-separated) from workspace routing.
-    private static let defaultAIBuilderTerminology = "adhoc_jobs, life_consulting, survey_sessions, thought_review"
+    static let defaultAIBuilderTerminology = "adhoc_jobs, life_consulting, survey_sessions, thought_review"
 
-    private var _aiBuilderCustomPrompt: String = ""
+    var _aiBuilderCustomPrompt: String = ""
     var aiBuilderCustomPrompt: String {
         get { _aiBuilderCustomPrompt }
         set {
@@ -316,7 +283,7 @@ final class AppState {
         }
     }
 
-    private var _aiBuilderTerminology: String = ""
+    var _aiBuilderTerminology: String = ""
     var aiBuilderTerminology: String {
         get { _aiBuilderTerminology }
         set {
@@ -338,11 +305,11 @@ final class AppState {
     var sessionActivities: [String: SessionActivity] = [:]
 
     // Track when a session status was last updated via SSE.
-    private var sessionStatusUpdatedAt: [String: Date] = [:]
+    var sessionStatusUpdatedAt: [String: Date] = [:]
 
     // Debounce session activity text changes (avoid rapid flipping).
-    private var activityTextLastChangeAt: [String: Date] = [:]
-    private var activityTextPendingTask: [String: Task<Void, Never>] = [:]
+    var activityTextLastChangeAt: [String: Date] = [:]
+    var activityTextPendingTask: [String: Task<Void, Never>] = [:]
 
     var currentSessionActivity: SessionActivity? {
         guard let sid = currentSessionID else { return nil }
@@ -386,10 +353,10 @@ final class AppState {
         case send
     }
 
-    private let sessionStore = SessionStore()
-    private let messageStore = MessageStore()
-    private let fileStore = FileStore()
-    private let todoStore = TodoStore()
+    let sessionStore = SessionStore()
+    let messageStore = MessageStore()
+    let fileStore = FileStore()
+    let todoStore = TodoStore()
 
     var sessions: [Session] { get { sessionStore.sessions } set { sessionStore.sessions = newValue } }
     var sortedSessions: [Session] {
@@ -441,7 +408,7 @@ final class AppState {
             UserDefaults.standard.set(newValue, forKey: Self.showArchivedSessionsKey)
         }
     }
-    private var _showArchivedSessions: Bool = false
+    var _showArchivedSessions: Bool = false
     var expandedSessionIDs: Set<String> = []
 
     var projects: [Project] = []
@@ -478,7 +445,7 @@ final class AppState {
             UserDefaults.standard.set(newValue, forKey: Self.selectedProjectWorktreeKey)
         }
     }
-    private var _selectedProjectWorktree: String?
+    var _selectedProjectWorktree: String?
 
     var customProjectPath: String {
         get { _customProjectPath }
@@ -487,7 +454,7 @@ final class AppState {
             UserDefaults.standard.set(newValue, forKey: Self.customProjectPathKey)
         }
     }
-    private var _customProjectPath: String = ""
+    var _customProjectPath: String = ""
 
     /// Effective directory for session fetch: selected project or custom path, nil = server default
     var effectiveProjectDirectory: String? {
@@ -530,17 +497,17 @@ final class AppState {
 
     @ObservationIgnored var _cachedContextUsage: ContextUsageSnapshot?
 
-    private let apiClient: APIClientProtocol
-    private let sseClient: SSEClientProtocol
+    let apiClient: APIClientProtocol
+    let sseClient: SSEClientProtocol
     let sshTunnelManager: SSHTunnelManager
-    private var sseTask: Task<Void, Never>?
+    var sseTask: Task<Void, Never>?
 
     /// Guard against race conditions when rapidly switching sessions.
     /// Each selectSession call generates a new ID; async tasks check if they're still current.
-    private var sessionLoadingID = UUID()
+    var sessionLoadingID = UUID()
     nonisolated private static let sessionPageSize = 100
-    private var loadedSessionLimit = sessionPageSize
-    private var hasMoreSessions = true
+    var loadedSessionLimit = sessionPageSize
+    var hasMoreSessions = true
     var isLoadingMoreSessions = false
 
     var canLoadMoreSessions: Bool {
@@ -549,9 +516,9 @@ final class AppState {
 
     // WAN optimization: page message history in fixed-size message batches.
     nonisolated private static let messagePageSize = 20
-    private var loadedMessageLimitBySessionID: [String: Int] = [:]
-    private var hasMoreHistoryBySessionID: [String: Bool] = [:]
-    private var loadingOlderMessagesSessionIDs: Set<String> = []
+    var loadedMessageLimitBySessionID: [String: Int] = [:]
+    var hasMoreHistoryBySessionID: [String: Bool] = [:]
+    var loadingOlderMessagesSessionIDs: Set<String> = []
 
     var selectedModel: ModelPreset? {
         guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
@@ -613,14 +580,6 @@ final class AppState {
         max(current, pageSize) + max(pageSize, 1)
     }
 
-    private func fetchSessions(limit: Int) async throws -> [Session] {
-        let directory = effectiveProjectDirectory
-        let loaded = try await apiClient.sessions(directory: directory, limit: limit)
-        let archivedCount = loaded.filter { $0.time.archived != nil }.count
-        Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) limit=\(limit, privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
-        return loaded
-    }
-
     nonisolated static func buildSessionTree(from sessions: [Session]) -> [SessionNode] {
         let sessionIDs = Set(sessions.map(\.id))
         let childrenMap = Dictionary(grouping: sessions, by: \.parentID)
@@ -650,80 +609,6 @@ final class AppState {
         return roots
     }
 
-    func toggleSessionExpanded(_ sessionID: String) {
-        if expandedSessionIDs.contains(sessionID) {
-            expandedSessionIDs.remove(sessionID)
-        } else {
-            expandedSessionIDs.insert(sessionID)
-        }
-    }
-
-    private func upsertSession(_ session: Session) {
-        let existingIndex = sessions.firstIndex(where: { $0.id == session.id })
-        sessions.removeAll { $0.id == session.id }
-
-        let targetIndex: Int
-        if let existingIndex {
-            targetIndex = min(existingIndex, sessions.count)
-        } else {
-            targetIndex = 0
-        }
-
-        sessions.insert(session, at: targetIndex)
-    }
-
-    func setSelectedModelIndex(_ index: Int) {
-        guard modelPresets.indices.contains(index) else { return }
-        selectedModelIndex = index
-        guard let sessionID = currentSessionID else { return }
-        selectedModelIDBySessionID[sessionID] = modelPresets[index].id
-        persistSelectedModelMap()
-    }
-
-    private func canonicalModelPresetID(for savedID: String) -> String {
-        switch savedID {
-        case "zai-coding-plan/glm-5.1", "zai-coding-plan/glm-5-turbo":
-            return "zai-coding-plan/glm-5.1"
-        case "openai/gpt-5.4":
-            return "openai/gpt-5.5"
-        default:
-            return savedID
-        }
-    }
-    
-    func setSelectedAgentIndex(_ index: Int) {
-        let visibleAgents = agents.filter { $0.isVisible }
-        guard visibleAgents.indices.contains(index) else { return }
-        selectedAgentIndex = index
-    }
-
-    private func applySavedModelForCurrentSession() {
-        guard let sessionID = currentSessionID else { return }
-        guard let saved = selectedModelIDBySessionID[sessionID] else { return }
-        let canonicalSaved = canonicalModelPresetID(for: saved)
-        if canonicalSaved != saved {
-            selectedModelIDBySessionID[sessionID] = canonicalSaved
-            persistSelectedModelMap()
-        }
-        guard let idx = modelPresets.firstIndex(where: { $0.id == canonicalSaved }) else { return }
-        selectedModelIndex = idx
-    }
-
-    private func syncModelFromMessageHistory() {
-        guard let sessionID = currentSessionID else { return }
-
-        guard let info = messages.reversed().compactMap({ $0.info.resolvedModel }).first else { return }
-        let canonicalModelID = canonicalModelPresetID(for: "\(info.providerID)/\(info.modelID)")
-        guard let idx = modelPresets.firstIndex(where: { $0.id == canonicalModelID }) else {
-            Self.logger.warning("syncModelFromMessageHistory: model \(info.providerID, privacy: .public)/\(info.modelID, privacy: .public) not in presets, keeping current selection")
-            return
-        }
-
-        selectedModelIndex = idx
-        selectedModelIDBySessionID[sessionID] = modelPresets[idx].id
-        persistSelectedModelMap()
-    }
-
     var currentSession: Session? {
         guard let id = currentSessionID else { return nil }
         return sessions.first { $0.id == id }
@@ -743,680 +628,6 @@ final class AppState {
         return sessionTodos[id] ?? []
     }
 
-    func configure(serverURL: String, username: String? = nil, password: String? = nil) {
-        // Keep raw user input; security normalization happens at request time.
-        self.serverURL = serverURL
-        self.username = username ?? ""
-        self.password = password ?? ""
-    }
-
-    func testConnection() async {
-        connectionError = nil
-
-        let info = Self.serverURLInfo(serverURL)
-        guard info.isAllowed, let baseURL = info.normalized else {
-            isConnected = false
-            connectionError = info.warning ?? L10n.t(.errorInvalidBaseURL)
-            return
-        }
-
-        await apiClient.configure(baseURL: baseURL, username: username.isEmpty ? nil : username, password: password.isEmpty ? nil : password)
-        do {
-            let health = try await apiClient.health()
-            isConnected = health.healthy
-            serverVersion = health.version
-            if isConnected {
-                connectSSE()
-            }
-        } catch {
-            isConnected = false
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func loadProjects() async {
-        guard isConnected else { return }
-        isLoadingProjects = true
-        do {
-            projects = try await apiClient.projects()
-            serverCurrentProjectWorktree = (try? await apiClient.projectCurrent())?.worktree
-        } catch {
-            Self.logger.warning("loadProjects failed: \(error.localizedDescription)")
-            projects = []
-        }
-        isLoadingProjects = false
-    }
-
-    func loadSessions() async {
-        guard isConnected else { return }
-        do {
-            let loaded = try await fetchSessions(limit: loadedSessionLimit)
-            sessions = loaded
-            hasMoreSessions = loaded.count >= loadedSessionLimit
-
-            // Only auto-select first session if there's no persisted selection at all
-            // This handles the case of fresh install or after all sessions are deleted
-            if currentSessionID == nil, let first = sessions.first {
-                currentSessionID = first.id
-                applySavedModelForCurrentSession()
-            }
-        } catch {
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func loadMoreSessions() async {
-        guard isConnected else { return }
-        guard hasMoreSessions else { return }
-        guard !isLoadingMoreSessions else { return }
-
-        isLoadingMoreSessions = true
-        let nextLimit = Self.nextSessionFetchLimit(current: loadedSessionLimit)
-        defer { isLoadingMoreSessions = false }
-
-        do {
-            let loaded = try await fetchSessions(limit: nextLimit)
-            loadedSessionLimit = nextLimit
-            sessions = loaded
-            hasMoreSessions = loaded.count >= loadedSessionLimit
-
-            if currentSessionID == nil, let first = sessions.first {
-                currentSessionID = first.id
-                applySavedModelForCurrentSession()
-            }
-        } catch {
-            connectionError = error.localizedDescription
-        }
-    }
-    
-    func loadAgents() async {
-        guard isConnected else { return }
-        isLoadingAgents = true
-        do {
-            let loaded = try await apiClient.agents()
-            agents = loaded
-            if selectedAgentIndex >= visibleAgents.count && !visibleAgents.isEmpty {
-                selectedAgentIndex = 0
-            }
-        } catch {
-            Self.logger.warning("loadAgents failed: \(error.localizedDescription)")
-        }
-        isLoadingAgents = false
-    }
-
-    func refreshSessions() async {
-        guard isConnected else { return }
-        await loadSessions()
-        await syncSessionStatusesFromPoll()
-    }
-
-    func selectSession(_ session: Session) {
-        guard currentSessionID != session.id else { return }
-        
-        // Generate new loading ID to invalidate any in-flight tasks from previous session
-        let loadingID = UUID()
-        sessionLoadingID = loadingID
-        
-        messageStore.resetStreaming()
-        messages = []
-        partsByMessage = [:]
-        currentSessionID = session.id
-        applySavedModelForCurrentSession()
-        
-        Task { [weak self] in
-            guard let self else { return }
-            // Check if this task is still current before proceeding
-            guard self.sessionLoadingID == loadingID else { return }
-            
-            await self.refreshSessions()
-            guard self.sessionLoadingID == loadingID else { return }
-            
-            await self.loadMessages()
-            guard self.sessionLoadingID == loadingID else { return }
-
-            await self.refreshPendingPermissions()
-            guard self.sessionLoadingID == loadingID else { return }
-
-            await self.refreshPendingQuestions()
-            guard self.sessionLoadingID == loadingID else { return }
-            
-            self.syncModelFromMessageHistory()
-            await self.loadSessionDiff()
-            guard self.sessionLoadingID == loadingID else { return }
-            
-            await self.loadSessionTodos()
-            guard self.sessionLoadingID == loadingID else { return }
-
-        }
-    }
-
-    private func isBusySession(_ status: SessionStatus?) -> Bool {
-        guard let type = status?.type else { return false }
-        return type == "busy" || type == "retry"
-    }
-
-    func loadSessionTodos() async {
-        guard let sessionID = currentSessionID else { return }
-        do {
-            let todos = try await apiClient.sessionTodos(sessionID: sessionID)
-            sessionTodos[sessionID] = todos
-        } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
-                return
-            }
-            // keep previous value if any
-        }
-    }
-
-    func createSession() async {
-        guard isConnected else { return }
-        
-        let loadingID = UUID()
-        sessionLoadingID = loadingID
-        
-        do {
-            let session = try await apiClient.createSession(title: nil)
-            guard sessionLoadingID == loadingID else { return }
-            
-            Self.logger.debug("createSession: created id=\(session.id, privacy: .public) directory=\(session.directory, privacy: .public) effectiveProjectDir=\(self.effectiveProjectDirectory ?? "nil", privacy: .public)")
-            
-            upsertSession(session)
-            currentSessionID = session.id
-            if let m = selectedModel {
-                selectedModelIDBySessionID[session.id] = m.id
-                persistSelectedModelMap()
-            }
-            messageStore.resetStreaming()
-            messages = []
-            partsByMessage = [:]
-        } catch {
-            guard sessionLoadingID == loadingID else { return }
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func forkSession(messageID: String?) async {
-        guard isConnected else { return }
-        guard let sessionID = currentSessionID else { return }
-
-        let loadingID = UUID()
-        sessionLoadingID = loadingID
-
-        do {
-            let forked = try await apiClient.forkSession(sessionID: sessionID, messageID: messageID)
-            guard sessionLoadingID == loadingID else { return }
-
-            Self.logger.debug("forkSession: created id=\(forked.id, privacy: .public) from=\(sessionID, privacy: .public) messageID=\(messageID ?? "nil", privacy: .public)")
-
-            upsertSession(forked)
-            currentSessionID = forked.id
-            messageStore.resetStreaming()
-            messages = []
-            partsByMessage = [:]
-            await loadMessages()
-            guard sessionLoadingID == loadingID else { return }
-            syncModelFromMessageHistory()
-        } catch {
-            guard sessionLoadingID == loadingID else { return }
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func deleteSession(sessionID: String) async throws {
-        let previousCurrentSessionID = currentSessionID
-        try await apiClient.deleteSession(sessionID: sessionID)
-
-        sessions.removeAll { $0.id == sessionID }
-        clearSessionScopedCaches(sessionID: sessionID)
-
-        let nextSessionID = Self.nextSessionIDAfterDeleting(
-            deletedSessionID: sessionID,
-            currentSessionID: previousCurrentSessionID,
-            remainingSessions: sessions
-        )
-
-        guard previousCurrentSessionID == sessionID else {
-            currentSessionID = nextSessionID
-            return
-        }
-
-        clearCurrentSessionViewState()
-        if let nextSessionID {
-            currentSessionID = nextSessionID
-            applySavedModelForCurrentSession()
-            await loadMessages()
-            await refreshPendingPermissions()
-            await loadSessionDiff()
-            await loadSessionTodos()
-            syncModelFromMessageHistory()
-        } else {
-            currentSessionID = nil
-            pendingPermissions = []
-        }
-    }
-
-    func loadMessages() async {
-        guard let sessionID = currentSessionID else { return }
-        do {
-            let fetchLimit = Self.normalizedMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
-            loadedMessageLimitBySessionID[sessionID] = fetchLimit
-            let loaded = try await apiClient.messages(sessionID: sessionID, limit: fetchLimit)
-            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
-                Self.logger.debug("drop stale loadMessages result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
-                return
-            }
-
-            hasMoreHistoryBySessionID[sessionID] = loaded.count >= fetchLimit
-
-            let loadedMessageIDs = Set(loaded.map { $0.info.id })
-            let keepPending = isBusySession(currentSessionStatus)
-            let pendingMessages: [MessageWithParts] = {
-                guard keepPending else { return [] }
-                let pending = messages.filter({ $0.info.id.hasPrefix("temp-user-") })
-                guard let lastLoadedUser = loaded.last(where: { $0.info.isUser }) else { return pending }
-
-                func normalizeEpochMs(_ raw: Int) -> Int {
-                    // Server timestamps may be seconds or milliseconds.
-                    if raw > 0 && raw < 10_000_000_000 { return raw * 1000 }
-                    return raw
-                }
-
-                func normalizeComparableText(_ raw: String) -> String {
-                    raw
-                        .components(separatedBy: .whitespacesAndNewlines)
-                        .filter { !$0.isEmpty }
-                        .joined(separator: " ")
-                }
-
-                let lastLoadedText = normalizeComparableText(
-                    lastLoadedUser.parts.first(where: { $0.isText })?.text ?? ""
-                )
-                let lastLoadedCreated = normalizeEpochMs(lastLoadedUser.info.time.created)
-
-                return pending.filter { m in
-                    guard m.info.isUser else { return true }
-                    let text = normalizeComparableText(
-                        m.parts.first(where: { $0.isText })?.text ?? ""
-                    )
-                    guard !text.isEmpty else { return true }
-                    let textMatches = text == lastLoadedText || lastLoadedText.hasSuffix(text)
-
-                    let created = normalizeEpochMs(m.info.time.created)
-                    let timestampClose: Bool = {
-                        if created == 0 || lastLoadedCreated == 0 { return true }
-                        return abs(lastLoadedCreated - created) <= 60 * 1000
-                    }()
-
-                    if textMatches || timestampClose { return false }
-                    return true
-                }
-            }()
-
-            let draftMessages = messages.filter {
-                messageStore.isStreamingDraftMessage($0.info.id) && !loadedMessageIDs.contains($0.info.id)
-            }
-
-            var merged: [MessageWithParts] = loaded
-            for message in pendingMessages where !loadedMessageIDs.contains(message.info.id) {
-                merged.append(message)
-            }
-            for message in draftMessages where !merged.contains(where: { $0.info.id == message.info.id }) {
-                merged.append(message)
-            }
-
-            // Defensively dedupe by message id. Keep the latest occurrence.
-            var dedupedMessages: [MessageWithParts] = []
-            var dedupedIndexByMessageID: [String: Int] = [:]
-            for message in merged {
-                if let existingIndex = dedupedIndexByMessageID[message.info.id] {
-                    dedupedMessages[existingIndex] = message
-                } else {
-                    dedupedIndexByMessageID[message.info.id] = dedupedMessages.count
-                    dedupedMessages.append(message)
-                }
-            }
-
-            messages = dedupedMessages
-
-            var partsByMessageID: [String: [Part]] = [:]
-            for message in messages {
-                partsByMessageID[message.info.id] = message.parts
-            }
-            partsByMessage = partsByMessageID
-            messageStore.removeStreamingDraftMessages(loadedMessageIDs)
-
-            if isBusySession(currentSessionStatus) {
-                refreshSessionActivityText(sessionID: sessionID)
-            }
-        } catch let error as DecodingError {
-            Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-        } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
-                return
-            }
-            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
-                Self.logger.debug("ignore stale loadMessages error requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
-                return
-            }
-            connectionError = error.localizedDescription
-            Self.logger.error("loadMessages failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    func loadOlderMessagesForCurrentSession() async {
-        guard let sessionID = currentSessionID else { return }
-        guard hasMoreHistoryBySessionID[sessionID] ?? true else { return }
-        guard !loadingOlderMessagesSessionIDs.contains(sessionID) else { return }
-
-        loadingOlderMessagesSessionIDs.insert(sessionID)
-        loadedMessageLimitBySessionID[sessionID] = Self.nextMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
-        await loadMessages()
-        loadingOlderMessagesSessionIDs.remove(sessionID)
-    }
-
-    func loadSessionDiff() async {
-        guard let sessionID = currentSessionID else { sessionDiffs = []; return }
-        do {
-            let loaded = try await apiClient.sessionDiff(sessionID: sessionID)
-            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
-                Self.logger.debug("drop stale loadSessionDiff result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
-                return
-            }
-            sessionDiffs = loaded
-        } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
-                return
-            }
-            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return }
-            sessionDiffs = []
-        }
-    }
-
-    func loadFileTree() async {
-        do {
-            fileTreeRoot = try await apiClient.fileList(path: "")
-            fileChildrenCache = [:]
-        } catch {
-            fileTreeRoot = []
-        }
-    }
-
-    func loadFileStatus() async {
-        do {
-            let entries = try await apiClient.fileStatus()
-            var nextStatusMap: [String: String] = [:]
-            for entry in entries {
-                guard let path = entry.path else { continue }
-                nextStatusMap[path] = entry.status ?? ""
-            }
-            fileStatusMap = nextStatusMap
-        } catch {
-            fileStatusMap = [:]
-        }
-    }
-
-    func loadFileChildren(path: String) async -> [FileNode] {
-        do {
-            let children = try await apiClient.fileList(path: path)
-            fileChildrenCache[path] = children
-            return children
-        } catch {
-            fileChildrenCache[path] = []
-            return []
-        }
-    }
-
-    func cachedChildren(for path: String) -> [FileNode]? {
-        fileChildrenCache[path]
-    }
-
-    func searchFiles(query: String) async {
-        guard !query.isEmpty else { fileSearchResults = []; return }
-        do {
-            fileSearchResults = try await apiClient.findFile(query: query, limit: 50)
-        } catch {
-            fileSearchResults = []
-        }
-    }
-
-    func loadFileContent(path: String) async throws -> FileContent {
-        let resolved = PathNormalizer.resolveWorkspaceRelativePath(path, workspaceDirectory: currentSession?.directory)
-        return try await apiClient.fileContent(path: resolved)
-    }
-
-    func loadFileContent(pathBytes: [UInt8]) async throws -> FileContent {
-        let path = String(decoding: pathBytes, as: UTF8.self)
-        return try await loadFileContent(path: path)
-    }
-
-    func toggleFileExpanded(_ path: String) {
-        if expandedPaths.contains(path) {
-            expandedPaths.remove(path)
-        } else {
-            expandedPaths.insert(path)
-        }
-    }
-
-    func isFileExpanded(_ path: String) -> Bool {
-        expandedPaths.contains(path)
-    }
-
-    func sendMessage(_ text: String) async -> Bool {
-        sendError = nil
-        guard let sessionID = currentSessionID else {
-            sendError = L10n.t(.chatSelectSessionFirst)
-            return false
-        }
-        let tempMessageID = appendOptimisticUserMessage(text)
-        let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
-        let agentName = selectedAgent?.name ?? "build"
-        do {
-            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
-            return true
-        } catch {
-            let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
-            sendError = recovered ? L10n.t(.errorSessionNotFound) : error.localizedDescription
-            removeMessage(id: tempMessageID)
-            return false
-        }
-    }
-
-    @discardableResult
-    func appendOptimisticUserMessage(_ text: String) -> String {
-        guard let sessionID = currentSessionID else { return "" }
-        let now = Int(Date().timeIntervalSince1970 * 1000)
-        let messageID = "temp-user-\(UUID().uuidString)"
-        let partID = "temp-part-\(messageID)"
-        let message = Message(
-            id: messageID,
-            sessionID: sessionID,
-            role: "user",
-            parentID: messages.last?.info.id,
-            providerID: nil,
-            modelID: nil,
-            model: nil,
-            error: nil,
-            time: Message.TimeInfo(created: now, completed: now),
-            finish: nil,
-            tokens: nil,
-            cost: nil
-        )
-        let part = Part(
-            id: partID,
-            messageID: messageID,
-            sessionID: sessionID,
-            type: "text",
-            text: text,
-            tool: nil,
-            callID: nil,
-            state: nil,
-            metadata: nil,
-            files: nil
-        )
-        let row = MessageWithParts(info: message, parts: [part])
-        messages.append(row)
-        partsByMessage[messageID] = [part]
-        return messageID
-    }
-
-    func removeMessage(id: String) {
-        messages.removeAll { $0.info.id == id }
-        partsByMessage[id] = nil
-    }
-
-    private func bootstrapSyncCurrentSession(reason: String) async {
-        guard currentSessionID != nil else { return }
-        let start = Date()
-
-        await validateAndRecoverCurrentSession()
-
-        await loadMessages()
-        await refreshPendingPermissions()
-        await refreshPendingQuestions()
-        await syncSessionStatusesFromPoll()
-        let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
-        Self.logger.debug("bootstrapSync reason=\(reason, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public) messages=\(self.messages.count, privacy: .public) permissions=\(self.pendingPermissions.count, privacy: .public)")
-    }
-
-    /// Check whether the current session still exists on the server.
-    /// If the session was deleted (e.g. server restarted), reset currentSessionID
-    /// so the next loadSessions call auto-selects a valid session.
-    private func validateAndRecoverCurrentSession() async {
-        guard let sid = currentSessionID else { return }
-        do {
-            _ = try await apiClient.messages(sessionID: sid, limit: 1)
-        } catch {
-            guard case APIError.httpError(let statusCode, _) = error, statusCode == 404 else { return }
-            Self.logger.debug("bootstrapSync: current session \(sid) not found on server, resetting")
-            currentSessionID = nil
-            await loadSessions()
-        }
-    }
-
-    private func syncSessionStatusesFromPoll(markMissingBusyAsIdle: Bool = true) async {
-        guard isConnected else { return }
-        guard let statuses = try? await apiClient.sessionStatus() else { return }
-        mergePolledSessionStatuses(statuses, markMissingBusyAsIdle: markMissingBusyAsIdle)
-    }
-
-    func abortSession() async {
-        guard let sessionID = currentSessionID else { return }
-        do {
-            try await apiClient.abort(sessionID: sessionID)
-        } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
-                return
-            }
-            connectionError = error.localizedDescription
-        }
-
-        await syncSessionStatusesFromPoll(markMissingBusyAsIdle: true)
-        await loadMessages()
-        await loadSessionDiff()
-    }
-
-    func updateSessionTitle(sessionID: String, title: String) async {
-        do {
-            _ = try await apiClient.updateSession(sessionID: sessionID, title: title)
-            await refreshSessions()
-        } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
-                return
-            }
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func respondPermission(_ perm: PendingPermission, response: APIClient.PermissionResponse) async {
-        do {
-            try await apiClient.respondPermission(sessionID: perm.sessionID, permissionID: perm.permissionID, response: response)
-            pendingPermissions.removeAll { $0.id == perm.id }
-            await refreshPendingPermissions()
-        } catch {
-            connectionError = error.localizedDescription
-        }
-    }
-
-    /// SSE permission events are not replayed; poll pending permissions so users can enter
-    /// an in-progress session and still see the warning.
-    func refreshPendingPermissions() async {
-        guard isConnected else { return }
-        do {
-            let requests = try await apiClient.pendingPermissions()
-            pendingPermissions = PermissionController.fromPendingRequests(requests)
-        } catch {
-            // Keep the current list on errors.
-        }
-    }
-
-    func respondQuestion(_ request: QuestionRequest, answers: [[String]]) async {
-        do {
-            try await apiClient.replyQuestion(requestID: request.id, answers: answers)
-            pendingQuestions.removeAll { $0.id == request.id }
-        } catch {
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func rejectQuestion(_ request: QuestionRequest) async {
-        do {
-            try await apiClient.rejectQuestion(requestID: request.id)
-            pendingQuestions.removeAll { $0.id == request.id }
-        } catch {
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func refreshPendingQuestions() async {
-        guard isConnected else { return }
-        do {
-            pendingQuestions = try await apiClient.pendingQuestions()
-        } catch {
-            connectionError = error.localizedDescription
-        }
-    }
-
-    func connectSSE() {
-        sseTask?.cancel()
-        sseTask = Task {
-            var attempt = 0
-            while !Task.isCancelled {
-                let info = Self.serverURLInfo(serverURL)
-                guard info.isAllowed, let baseURL = info.normalized else {
-                    return
-                }
-
-                let stream = await sseClient.connect(
-                    baseURL: baseURL,
-                    username: username.isEmpty ? nil : username,
-                    password: password.isEmpty ? nil : password
-                )
-
-                do {
-                    await bootstrapSyncCurrentSession(reason: "sse.reconnect")
-                    for try await event in stream {
-                        attempt = 0
-                        await handleSSEEvent(event)
-                    }
-                } catch {
-                    // Reconnect with exponential backoff
-                    attempt += 1
-                    let base = min(30.0, pow(2.0, Double(attempt)))
-                    try? await Task.sleep(for: .seconds(base))
-                }
-            }
-        }
-    }
-
-    func disconnectSSE() {
-        sseTask?.cancel()
-        sseTask = nil
-    }
-    
-    // Note: AppState is typically held for the app's lifetime (as @State in root view),
-    // so deinit-based cleanup is not critical. The disconnectSSE() method above
-    // should be called explicitly when needed (e.g., on background/terminate).
-
     /// 是否应处理 message.updated：有 sessionID 时需匹配当前 session，否则保持原行为
     nonisolated static func shouldProcessMessageEvent(eventSessionID: String?, currentSessionID: String?) -> Bool {
         guard currentSessionID != nil else { return false }
@@ -1427,304 +638,6 @@ final class AppState {
     /// Async request result should only apply when requested session is still current.
     nonisolated static func shouldApplySessionScopedResult(requestedSessionID: String, currentSessionID: String?) -> Bool {
         requestedSessionID == currentSessionID
-    }
-
-    private func handleSSEEvent(_ event: SSEEvent) async {
-        let type = event.payload.type
-        let props = event.payload.properties ?? [:]
-
-        switch type {
-        case "server.connected":
-            await syncSessionStatusesFromPoll(markMissingBusyAsIdle: true)
-        case "session.status":
-            if let sessionID = props["sessionID"]?.value as? String,
-                let statusObj = props["status"]?.value as? [String: Any] {
-                if let status = try? JSONSerialization.data(withJSONObject: statusObj),
-                    let decoded = try? JSONDecoder().decode(SessionStatus.self, from: status) {
-                    let prev = sessionStatuses[sessionID]
-
-                    sessionStatuses[sessionID] = decoded
-                    sessionStatusUpdatedAt[sessionID] = Date()
-
-                    if prev?.type != decoded.type || prev?.message != decoded.message {
-                        Self.logger.debug(
-                            "session.status(sse) session=\(sessionID, privacy: .public) prev=\(prev?.type ?? "nil", privacy: .public) next=\(decoded.type, privacy: .public)"
-                        )
-                    }
-
-                    updateSessionActivity(sessionID: sessionID, previous: prev, current: decoded)
-
-                    if sessionID == currentSessionID, !isBusySession(decoded) {
-                        messageStore.resetStreaming()
-                    }
-                }
-            }
-        case "session.updated":
-            let infoVal = props["info"]?.value ?? props["session"]?.value
-            if let infoObj = infoVal,
-               JSONSerialization.isValidJSONObject(infoObj),
-               let data = try? JSONSerialization.data(withJSONObject: infoObj),
-               let session = try? JSONDecoder().decode(Session.self, from: data) {
-                let dir = effectiveProjectDirectory
-                let isCurrent = (session.id == currentSessionID)
-                let matchesProject = dir == nil || session.directory == dir
-                let shouldApply = matchesProject || isCurrent
-                if shouldApply {
-                    let wasUpdate = sessions.contains(where: { $0.id == session.id })
-                    Self.logger.debug("session.updated id=\(session.id, privacy: .public) archived=\(session.time.archived.map { String($0) } ?? "nil", privacy: .public) dir=\(session.directory, privacy: .public) op=\(wasUpdate ? "replace" : "insert", privacy: .public)")
-                    upsertSession(session)
-                } else {
-                    Self.logger.debug("session.updated skip id=\(session.id, privacy: .public) dir=\(session.directory, privacy: .public) effectiveDir=\(dir ?? "nil", privacy: .public)")
-                }
-            }
-        case "session.deleted":
-            if let sessionID = (props["sessionID"]?.value as? String) ?? (props["id"]?.value as? String) {
-                Self.logger.debug("session.deleted id=\(sessionID, privacy: .public)")
-                await handleRemoteSessionDeleted(sessionID: sessionID)
-            } else {
-                await loadSessions()
-            }
-        case "message.updated":
-            let eventSessionID = props["sessionID"]?.value as? String
-            if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
-                messageStore.resetStreaming()
-                await loadMessages()
-                await loadSessionDiff()
-            }
-        case "message.part.updated":
-            switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {
-            case .ignored:
-                break
-            case .appended(let sessionID):
-                refreshSessionActivityText(sessionID: sessionID)
-            case .finalized:
-                await loadMessages()
-                await loadSessionDiff()
-            }
-        case "permission.asked":
-            if let perm = PermissionController.parseAskedEvent(properties: props),
-               !pendingPermissions.contains(where: { $0.id == perm.id }) {
-                pendingPermissions.append(perm)
-            }
-        case "permission.replied":
-            PermissionController.applyRepliedEvent(properties: props, to: &pendingPermissions)
-        case "question.asked":
-            if let question = QuestionController.parseAskedEvent(properties: props),
-               !pendingQuestions.contains(where: { $0.id == question.id }) {
-                pendingQuestions.append(question)
-            }
-        case "question.replied", "question.rejected":
-            QuestionController.applyResolvedEvent(properties: props, to: &pendingQuestions)
-        case "todo.updated":
-            if let sessionID = props["sessionID"]?.value as? String,
-               let todosObj = props["todos"]?.value,
-               JSONSerialization.isValidJSONObject(todosObj),
-               let todosData = try? JSONSerialization.data(withJSONObject: todosObj),
-               let decoded = try? JSONDecoder().decode([TodoItem].self, from: todosData) {
-                sessionTodos[sessionID] = decoded
-            }
-        default:
-            break
-        }
-    }
-
-    private func updateSessionActivity(sessionID: String, previous: SessionStatus?, current: SessionStatus) {
-        sessionActivities[sessionID] = ActivityTracker.updateSessionActivity(
-            sessionID: sessionID,
-            previous: previous,
-            current: current,
-            existing: sessionActivities[sessionID],
-            messages: messages,
-            currentSessionID: currentSessionID,
-            hasActiveStreaming: streamingReasoningPart?.sessionID == sessionID || messageStore.hasActiveStreaming
-        )
-    }
-
-    private func mergePolledSessionStatuses(_ statuses: [String: SessionStatus]) {
-        mergePolledSessionStatuses(statuses, markMissingBusyAsIdle: true)
-    }
-
-    private func mergePolledSessionStatuses(
-        _ statuses: [String: SessionStatus],
-        markMissingBusyAsIdle: Bool
-    ) {
-        let now = Date()
-        for (sid, st) in statuses {
-            if let updatedAt = sessionStatusUpdatedAt[sid], now.timeIntervalSince(updatedAt) < 5 {
-                continue
-            }
-            let prev = sessionStatuses[sid]
-            sessionStatuses[sid] = st
-            updateSessionActivity(sessionID: sid, previous: prev, current: st)
-            if sid == currentSessionID, !isBusySession(st) {
-                messageStore.resetStreaming()
-            }
-            if prev?.type != st.type {
-                Self.logger.debug(
-                    "session.status(poll) session=\(sid, privacy: .public) prev=\(prev?.type ?? "nil", privacy: .public) next=\(st.type, privacy: .public)"
-                )
-            }
-        }
-
-        guard markMissingBusyAsIdle else { return }
-
-        let existingSnapshot = sessionStatuses
-        for (sid, prev) in existingSnapshot {
-            guard statuses[sid] == nil else { continue }
-            guard prev.type == "busy" || prev.type == "retry" else { continue }
-            if let updatedAt = sessionStatusUpdatedAt[sid], now.timeIntervalSince(updatedAt) < 5 {
-                continue
-            }
-
-            let idle = SessionStatus(type: "idle", attempt: nil, message: nil, next: nil)
-            sessionStatuses[sid] = idle
-            updateSessionActivity(sessionID: sid, previous: prev, current: idle)
-            if sid == currentSessionID {
-                messageStore.resetStreaming()
-            }
-
-            Self.logger.debug(
-                "session.status(poll) session=\(sid, privacy: .public) prev=\(prev.type, privacy: .public) next=idle (missing from poll)"
-            )
-        }
-    }
-
-    private func refreshSessionActivityText(sessionID: String) {
-        guard isBusySession(sessionStatuses[sessionID]) else { return }
-        guard sessionActivities[sessionID]?.state == .running else { return }
-        let next = ActivityTracker.bestSessionActivityText(
-            sessionID: sessionID,
-            currentSessionID: currentSessionID,
-            sessionStatuses: sessionStatuses,
-            messages: messages,
-            streamingReasoningPart: streamingReasoningPart,
-            streamingPartTexts: streamingPartTexts
-        )
-        setSessionActivityText(sessionID: sessionID, next)
-    }
-
-    private func setSessionActivityText(sessionID: String, _ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard var a = sessionActivities[sessionID], a.state == .running else { return }
-        if a.text == trimmed { return }
-
-        let now = Date()
-        let delay = ActivityTracker.debounceDelay(lastChangeAt: activityTextLastChangeAt[sessionID], now: now)
-        if delay == 0 {
-            a.text = trimmed
-            sessionActivities[sessionID] = a
-            activityTextLastChangeAt[sessionID] = now
-            activityTextPendingTask[sessionID]?.cancel()
-            activityTextPendingTask[sessionID] = nil
-            return
-        }
-
-        activityTextPendingTask[sessionID]?.cancel()
-        activityTextPendingTask[sessionID] = Task { [weak self] in
-            guard let self else { return }
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            guard self.isBusySession(self.sessionStatuses[sessionID]) else { return }
-            let best = ActivityTracker.bestSessionActivityText(
-                sessionID: sessionID,
-                currentSessionID: self.currentSessionID,
-                sessionStatuses: self.sessionStatuses,
-                messages: self.messages,
-                streamingReasoningPart: self.streamingReasoningPart,
-                streamingPartTexts: self.streamingPartTexts
-            )
-            self.setSessionActivityText(sessionID: sessionID, best)
-        }
-    }
-
-    private func clearCurrentSessionViewState() {
-        sessionLoadingID = UUID()
-        messageStore.resetStreaming()
-        messages = []
-        partsByMessage = [:]
-        sessionDiffs = []
-    }
-
-    private func clearSessionScopedCaches(sessionID: String) {
-        sessionStatuses[sessionID] = nil
-        sessionTodos[sessionID] = nil
-        sessionActivities[sessionID] = nil
-        sessionStatusUpdatedAt[sessionID] = nil
-        activityTextLastChangeAt[sessionID] = nil
-        activityTextPendingTask[sessionID]?.cancel()
-        activityTextPendingTask[sessionID] = nil
-        loadedMessageLimitBySessionID[sessionID] = nil
-        hasMoreHistoryBySessionID[sessionID] = nil
-        loadingOlderMessagesSessionIDs.remove(sessionID)
-        pendingPermissions.removeAll { $0.sessionID == sessionID }
-
-        if streamingReasoningPart?.sessionID == sessionID {
-            messageStore.streamingReasoningPart = nil
-        }
-
-        draftInputsBySessionID[sessionID] = nil
-        if draftInputsBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
-        } else if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
-        }
-
-        selectedModelIDBySessionID[sessionID] = nil
-        persistSelectedModelMap()
-    }
-
-    private func isSessionNotFoundError(_ error: Error) -> Bool {
-        guard case APIError.httpError(let statusCode, _) = error else { return false }
-        return statusCode == 404
-    }
-
-    private func recoverFromMissingCurrentSessionIfNeeded(
-        error: Error,
-        requestedSessionID: String
-    ) async -> Bool {
-        guard requestedSessionID == currentSessionID else { return false }
-        guard isSessionNotFoundError(error) else { return false }
-
-        await loadSessions()
-
-        guard currentSessionID != nil else {
-            pendingPermissions = []
-            return true
-        }
-
-        await loadMessages()
-        await refreshPendingPermissions()
-        await loadSessionDiff()
-        await loadSessionTodos()
-        syncModelFromMessageHistory()
-        return true
-    }
-
-    private func handleRemoteSessionDeleted(sessionID: String) async {
-        let deletedCurrentSession = (sessionID == currentSessionID)
-
-        sessions.removeAll { $0.id == sessionID }
-        clearSessionScopedCaches(sessionID: sessionID)
-
-        if deletedCurrentSession {
-            clearCurrentSessionViewState()
-        }
-
-        await loadSessions()
-
-        if deletedCurrentSession, currentSessionID != nil {
-            await loadMessages()
-            await refreshPendingPermissions()
-            await loadSessionDiff()
-            await loadSessionTodos()
-            syncModelFromMessageHistory()
-        } else if currentSessionID == nil {
-            pendingPermissions = []
-        } else {
-            let validSessionIDs = Set(sessions.map(\.id))
-            pendingPermissions.removeAll { !validSessionIDs.contains($0.sessionID) }
-        }
     }
 
     func refresh() async {
@@ -1765,9 +678,6 @@ final class AppState {
         }
     }
 
-    func applySSEEventForTesting(_ event: SSEEvent) async {
-        await handleSSEEvent(event)
-    }
 }
 
 struct PendingPermission: Identifiable {
