@@ -29,12 +29,14 @@ OpenCodeClient/build_log*.txt
 # Swift Package Manager
 .build/
 .swiftpm/
-Package.resolved
+# Package.resolved is committed for Xcode Cloud (automatic resolution disabled in CI).
 
 # CocoaPods
 Pods/
 *.xcworkspace
 !default.xcworkspace
+!**/*.xcodeproj/project.xcworkspace/
+!**/*.xcodeproj/project.xcworkspace/**
 
 # macOS
 .DS_Store
