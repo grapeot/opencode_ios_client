@@ -1,8 +1,10 @@
 # OpenCode iOS Client - .gitignore
 
-# Reference (not part of this project)
+# Local dev checkouts (not part of this repo)
 opencode-official/
-oh-my-openagent/
+
+# Python tooling (scripts/resize_icon.py)
+.venv/
 
 # Xcode
 build/

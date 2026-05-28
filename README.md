@@ -52,11 +52,26 @@ The app is designed for LAN use by default. Two options for remote access:
 
 **SSH Tunnel**: the app has a built-in SSH tunnel (powered by Citadel). Set up a reverse tunnel from your home machine to a VPS, then configure the tunnel in Settings > SSH Tunnel. See `docs/` for detailed steps.
 
+## Repository layout
+
+This repo ships only the iOS/visionOS app and its docs/scripts. Large local-only directories are gitignored:
+
+| Path | In git | Purpose |
+|---|---|---|
+| `OpenCodeClient/` | yes | Xcode project, app sources, unit/UI tests |
+| `docs/` | yes | PRD, RFC, API notes, working notes |
+| `scripts/` | yes | One-off maintenance scripts |
+| `opencode-official/` | no | Optional local checkout of upstream OpenCode server for integration testing |
+| `.venv/` | no | Python venv for `scripts/` |
+| `OpenCodeClient/build/`, `DerivedData/` | no | Xcode build artifacts |
+
+`opencode-official/` is optional. Clone it only when you need to build or patch the server alongside the client. See `docs/WORKING.md` for the default rebase-on-`origin/dev` workflow.
+
 ## Building from Source
 
 ```bash
-git clone https://github.com/grapeot/OpenCodeClient.git
-cd OpenCodeClient/OpenCodeClient
+git clone https://github.com/grapeot/opencode_ios_client.git
+cd opencode_ios_client/OpenCodeClient
 open OpenCodeClient.xcodeproj
 ```
 
