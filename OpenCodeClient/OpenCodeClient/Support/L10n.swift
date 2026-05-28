@@ -214,7 +214,7 @@ enum L10n {
         case configureNoAgents
     }
 
-    private static let en: [String: String] = [
+    nonisolated private static let en: [String: String] = [
         Key.appChat.rawValue: "Chat",
         Key.appClose.rawValue: "Close",
         Key.appDone.rawValue: "Done",
@@ -424,7 +424,7 @@ enum L10n {
         Key.configureNoAgents.rawValue: "No agents available"
     ]
 
-    private static let zh: [String: String] = [
+    nonisolated private static let zh: [String: String] = [
         Key.appChat.rawValue: "Chat",
         Key.appClose.rawValue: "关闭",
         Key.appDone.rawValue: "完成",

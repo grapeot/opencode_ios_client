@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct SSEEvent: Codable {
+nonisolated struct SSEEvent: Codable {
     let directory: String?
     let payload: SSEPayload
 }
@@ -15,7 +15,7 @@ struct SSEPayload: Codable {
     let properties: [String: AnyCodable]?
 }
 
-struct AnyCodable: Codable {
+nonisolated struct AnyCodable: Codable {
     let value: Any
 
     init(_ value: Any) {

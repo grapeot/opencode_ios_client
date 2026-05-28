@@ -34,7 +34,7 @@ struct Session: Identifiable {
     }
 }
 
-extension Session: Codable {}
+nonisolated extension Session: Codable {}
 
 struct SessionStatus: Codable {
     let type: String // "idle" | "busy" | "retry"
