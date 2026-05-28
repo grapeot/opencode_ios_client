@@ -101,6 +101,7 @@ enum L10n {
         case chatSpeechTokenMissing
         case chatSpeechTesting
         case chatSpeechNotPassed
+        case chatSpeechStreamDisconnected
         case chatMicrophoneDenied
         case chatSessionStatusBusy
         case chatSessionStatusRetrying
@@ -309,6 +310,7 @@ enum L10n {
         Key.chatSpeechTokenMissing.rawValue: "Speech recognition is not configured. Set AI Builder Token in Settings → Speech Recognition and tap Test Connection.",
         Key.chatSpeechTesting.rawValue: "AI Builder connection is being tested, please wait.",
         Key.chatSpeechNotPassed.rawValue: "AI Builder connection test failed. Go to Settings → Speech Recognition, tap Test Connection, and confirm it's OK before recording.",
+        Key.chatSpeechStreamDisconnected.rawValue: "The speech connection was lost and couldn't recover. Tap stop and try again.",
         Key.chatMicrophoneDenied.rawValue: "Microphone permission denied",
         Key.chatSessionStatusBusy.rawValue: "Running",
         Key.chatSessionStatusRetrying.rawValue: "Retrying",
@@ -521,6 +523,7 @@ enum L10n {
         Key.chatSpeechTokenMissing.rawValue: "语音识别未配置：请先到 Settings -> Speech Recognition 设置 AI Builder Token，并点击 Test Connection。",
         Key.chatSpeechTesting.rawValue: "AI Builder 正在测试连接，请稍候。",
         Key.chatSpeechNotPassed.rawValue: "AI Builder 连接未通过测试：请先到 Settings -> Speech Recognition 点击 Test Connection，确认 OK 后再录音。",
+        Key.chatSpeechStreamDisconnected.rawValue: "语音连接断开且无法恢复，请按停止后重试。",
         Key.chatMicrophoneDenied.rawValue: "未授权麦克风权限",
         Key.chatSessionStatusBusy.rawValue: "运行中",
         Key.chatSessionStatusRetrying.rawValue: "重试中",
