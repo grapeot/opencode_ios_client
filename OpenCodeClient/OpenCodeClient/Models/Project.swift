@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct Project: Codable, Identifiable {
+nonisolated struct Project: Codable, Identifiable {
     let id: String
     let worktree: String
     let vcs: String?

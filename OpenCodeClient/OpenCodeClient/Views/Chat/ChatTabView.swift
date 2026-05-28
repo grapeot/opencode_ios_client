@@ -14,11 +14,11 @@ import UIKit
 private final class SpeechPartialTranscriptBuffer: Sendable {
     private let storage = OSAllocatedUnfairLock(initialState: "")
 
-    func update(_ newValue: String) {
+    nonisolated func update(_ newValue: String) {
         storage.withLock { $0 = newValue }
     }
 
-    func current() -> String {
+    nonisolated func current() -> String {
         storage.withLock { $0 }
     }
 }

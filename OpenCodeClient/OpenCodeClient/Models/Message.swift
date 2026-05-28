@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct Message: Codable, Identifiable {
+nonisolated struct Message: Codable, Identifiable {
     let id: String
     let sessionID: String
     let role: String
@@ -87,7 +87,7 @@ struct Message: Codable, Identifiable {
     }
 }
 
-struct MessageWithParts: Codable {
+nonisolated struct MessageWithParts: Codable {
     let info: Message
     let parts: [Part]
 }
@@ -223,7 +223,7 @@ struct PartStateBridge: Codable {
     }
 }
 
-struct Part: Codable, Identifiable {
+nonisolated struct Part: Codable, Identifiable {
     let id: String
     let messageID: String
     let sessionID: String

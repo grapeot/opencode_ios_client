@@ -6,7 +6,7 @@
 import Foundation
 
 /// 统一路径规范化：用于 API 请求、文件跳转等
-enum PathNormalizer {
+nonisolated enum PathNormalizer {
 
     /// 规范化文件路径：去除 a/b 前缀、# 及后缀、:line:col 后缀
     static func normalize(_ path: String) -> String {

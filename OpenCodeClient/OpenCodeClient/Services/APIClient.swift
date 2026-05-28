@@ -410,7 +410,7 @@ struct FileNode: Codable, Identifiable {
     let ignored: Bool?
 }
 
-struct FileContent: Codable {
+nonisolated struct FileContent: Codable {
     let type: String  // "text" | "binary"
     let content: String?
     var text: String? { type == "text" ? content : nil }
@@ -473,7 +473,7 @@ struct FileDiff: Codable, Identifiable, Hashable {
 /// - `providers` may be an array (`[{id, name, models}]`) or a dictionary (`{ providerID: ProviderInfo }`)
 /// - `models` may be a dictionary (`{ modelID: ModelInfo }`) or an array (`[{id, ...}]`)
 /// - `ProviderModel.id` / `ConfigProvider.id` may be missing when encoded as dictionary values
-struct ProvidersResponse: Decodable {
+nonisolated struct ProvidersResponse: Decodable {
     let providers: [ConfigProvider]
     let `default`: DefaultProvider?
 
@@ -505,7 +505,7 @@ struct ProvidersResponse: Decodable {
     }
 }
 
-struct ConfigProvider: Decodable {
+nonisolated struct ConfigProvider: Decodable {
     let id: String
     let name: String?
     let models: [String: ProviderModel]
@@ -556,7 +556,7 @@ struct ConfigProvider: Decodable {
     }
 }
 
-struct ProviderModel: Decodable {
+nonisolated struct ProviderModel: Decodable {
     let id: String
     let name: String?
     let providerID: String?
@@ -586,18 +586,18 @@ struct ProviderModel: Decodable {
     }
 }
 
-struct ProviderModelLimit: Codable {
+nonisolated struct ProviderModelLimit: Codable {
     let context: Int?
     let input: Int?
     let output: Int?
 }
 
-struct DefaultProvider: Codable {
+nonisolated struct DefaultProvider: Codable {
     let providerID: String
     let modelID: String
 }
 
-struct HealthResponse: Codable {
+nonisolated struct HealthResponse: Codable {
     let healthy: Bool
     let version: String?
 }

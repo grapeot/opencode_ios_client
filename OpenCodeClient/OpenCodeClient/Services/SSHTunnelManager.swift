@@ -449,6 +449,12 @@ private final class NIOToNWConnectionHandler: ChannelInboundHandler {
         let bytes = buffer.readBytes(length: buffer.readableBytes) ?? []
         guard !bytes.isEmpty else { return }
 
+        // NIO's `ChannelHandlerContext` isn't Sendable but is thread-confined
+        // to its event loop. We capture it here and immediately schedule
+        // `context.close` back onto that event loop, which is the correct NIO
+        // pattern. Swift 6 strict concurrency still flags the capture; the
+        // fix lives upstream in NIO. See
+        // https://forums.swift.org/t/nio-channelhandlercontext-sendable
         nwConnection.send(content: Data(bytes), completion: .contentProcessed { error in
             if let error {
                 #if DEBUG
