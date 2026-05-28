@@ -10,6 +10,7 @@
 		3B4F459A2F3FB16A00A4CD74 /* Citadel in Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; productRef = 3B4F45992F3FB16A00A4CD74 /* Citadel */; };
 		AA000001AAAAAAAA00000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000002AAAAAAAA00000002 /* MarkdownUI */; };
 		AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */ = {isa = PBXBuildFile; productRef = AA000005AAAAAAAA00000005 /* NetworkImage */; };
+		BB000001BBBBBBBB00000001 /* VoiceFlowKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB000002BBBBBBBB00000002 /* VoiceFlowKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,7 @@
 				AA000001AAAAAAAA00000001 /* MarkdownUI in Frameworks */,
 				AA000004AAAAAAAA00000004 /* NetworkImage in Frameworks */,
 				3B4F459A2F3FB16A00A4CD74 /* Citadel in Frameworks */,
+				BB000001BBBBBBBB00000001 /* VoiceFlowKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -123,6 +125,7 @@
 			packageProductDependencies = (
 				AA000002AAAAAAAA00000002 /* MarkdownUI */,
 				AA000005AAAAAAAA00000005 /* NetworkImage */,
+				BB000002BBBBBBBB00000002 /* VoiceFlowKit */,
 			);
 			productName = OpenCodeClient;
 			productReference = 3B4F44022F3E642500A4CD74 /* OpenCodeClient.app */;
@@ -210,6 +213,7 @@
 				AA000003AAAAAAAA00000003 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				AA000006AAAAAAAA00000006 /* XCRemoteSwiftPackageReference "NetworkImage" */,
 				3B4F45982F3FB16A00A4CD74 /* XCRemoteSwiftPackageReference "Citadel" */,
+				BB000003BBBBBBBB00000003 /* XCRemoteSwiftPackageReference "voiceflow" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3B4F44032F3E642500A4CD74 /* Products */;
@@ -634,6 +638,14 @@
 				version = "6.0.1-visionos.1";
 			};
 		};
+		BB000003BBBBBBBB00000003 /* XCRemoteSwiftPackageReference "voiceflow" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/grapeot/voiceflow.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -651,6 +663,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA000006AAAAAAAA00000006 /* XCRemoteSwiftPackageReference "NetworkImage" */;
 			productName = NetworkImage;
+		};
+		BB000002BBBBBBBB00000002 /* VoiceFlowKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000003BBBBBBBB00000003 /* XCRemoteSwiftPackageReference "voiceflow" */;
+			productName = VoiceFlowKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
