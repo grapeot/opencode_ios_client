@@ -421,6 +421,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "OpenCode Remote needs local network access to connect to your OpenCode server on the same network.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenCode Remote uses the microphone to record voice input, which is transcribed to text and added to the message input field.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -460,6 +461,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "OpenCode Remote needs local network access to connect to your OpenCode server on the same network.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OpenCode Remote uses the microphone to record voice input, which is transcribed to text and added to the message input field.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
