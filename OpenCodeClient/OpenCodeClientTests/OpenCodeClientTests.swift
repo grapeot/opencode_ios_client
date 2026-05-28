@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import VoiceFlowKit
 @testable import OpenCodeClient
 
 // MARK: - Existing Tests
@@ -1019,174 +1020,7 @@ struct SpeechRecognitionDefaultsTests {
     }
 }
 
-struct AIBuildersAudioClientTests {
-
-    @Test func normalizedBaseURLAddsHTTPSWhenMissing() {
-        let url = AIBuildersAudioClient.normalizedBaseURL(from: "space.ai-builders.com/backend")
-        #expect(url.absoluteString == "https://space.ai-builders.com/backend")
-    }
-
-    @Test func realtimeWebSocketURLPreservesHostAndSwitchesScheme() throws {
-        let baseURL = URL(string: "https://space.ai-builders.com/backend")!
-        let websocketURL = try AIBuildersAudioClient.realtimeWebSocketURL(
-            baseURL: baseURL,
-            relativePath: "/v1/audio/realtime/ws?ticket=abc123"
-        )
-        #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")
-    }
-
-    @Test func realtimeWebSocketURLWithMountPath() throws {
-        let baseURL = URL(string: "https://space.ai-builders.com/backend")!
-        let websocketURL = try AIBuildersAudioClient.realtimeWebSocketURL(
-            baseURL: baseURL,
-            relativePath: "/backend/v1/audio/realtime/ws?ticket=abc123"
-        )
-        #expect(websocketURL.absoluteString == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")
-    }
-
-    @Test func realtimeWebSocketURLRejectsPlaintextRemoteHost() throws {
-        let baseURL = URL(string: "http://space.ai-builders.com/backend")!
-        #expect(throws: AIBuildersAudioError.invalidBaseURL) {
-            try AIBuildersAudioClient.realtimeWebSocketURL(
-                baseURL: baseURL,
-                relativePath: "/v1/audio/realtime/ws?ticket=abc123"
-            )
-        }
-    }
-
-    @Test func realtimeWebSocketURLAllowsPlaintextLocalHost() throws {
-        let baseURL = URL(string: "http://127.0.0.1:8016/backend")!
-        let websocketURL = try AIBuildersAudioClient.realtimeWebSocketURL(
-            baseURL: baseURL,
-            relativePath: "/v1/audio/realtime/ws?ticket=abc123"
-        )
-        #expect(websocketURL.absoluteString == "ws://127.0.0.1:8016/backend/v1/audio/realtime/ws?ticket=abc123")
-    }
-
-    @Test func redactedRealtimeWebSocketLogURLRemovesTicketValue() throws {
-        let url = URL(string: "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=abc123")!
-        #expect(AIBuildersAudioClient.redactedRealtimeWebSocketLogURL(url) == "wss://space.ai-builders.com/backend/v1/audio/realtime/ws?ticket=redacted")
-    }
-
-    @Test func buildAPIURLPreservesMountPath() throws {
-        let baseWithMount = URL(string: "https://space.ai-builders.com/backend")!
-        let url = AIBuildersAudioClient.buildAPIURL(base: baseWithMount, path: "/v1/audio/realtime/sessions")
-        #expect(url?.absoluteString == "https://space.ai-builders.com/backend/v1/audio/realtime/sessions")
-    }
-
-    @Test func buildAPIURLWithoutMountPath() throws {
-        let baseNoMount = URL(string: "https://space.ai-builders.com")!
-        let url = AIBuildersAudioClient.buildAPIURL(base: baseNoMount, path: "/v1/audio/realtime/sessions")
-        #expect(url?.absoluteString == "https://space.ai-builders.com/v1/audio/realtime/sessions")
-    }
-
-    @Test func realtimeSessionPayloadTrimsTermsAndKeepsManualCommitMode() throws {
-        let payload = AIBuildersAudioClient.realtimeSessionPayload(
-            language: " en ",
-            prompt: " Use snake_case ",
-            terms: " adhoc_jobs, , survey_sessions "
-        )
-
-        #expect(payload.language == "en")
-        #expect(payload.prompt == "Use snake_case")
-        #expect(payload.terms == ["adhoc_jobs", "survey_sessions"])
-        #expect(payload.vad == false)
-        #expect(payload.silenceDurationMs == 1200)
-
-        let json = payload.jsonObject
-        #expect(json["language"] as? String == "en")
-        #expect(json["prompt"] as? String == "Use snake_case")
-        #expect(json["terms"] as? [String] == ["adhoc_jobs", "survey_sessions"])
-        #expect(json["vad"] as? Bool == false)
-        #expect(json["silence_duration_ms"] as? Int == 1200)
-    }
-
-    @Test func realtimeSessionPayloadOmitsEmptyOptionalFields() throws {
-        let payload = AIBuildersAudioClient.realtimeSessionPayload(
-            language: "   ",
-            prompt: "",
-            terms: " , "
-        )
-
-        #expect(payload.language == nil)
-        #expect(payload.prompt == nil)
-        #expect(payload.terms.isEmpty)
-        #expect(payload.jsonObject.keys.contains("language") == false)
-        #expect(payload.jsonObject.keys.contains("prompt") == false)
-        #expect(payload.jsonObject.keys.contains("terms") == false)
-    }
-
-    @Test func realtimeControlMessagesMatchBackendProtocol() {
-        #expect(AIBuildersAudioClient.realtimeCommitMessage == "{\"type\":\"commit\"}")
-        #expect(AIBuildersAudioClient.realtimeStopMessage == "{\"type\":\"stop\"}")
-    }
-
-    @Test func realtimeSpeechAudioCacheAppendsAndReadsChunks() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("opencode-cache-test-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let cache = try RealtimeSpeechAudioCache(directory: directory)
-        defer { cache.remove() }
-
-        try cache.append(Data([1, 2, 3]))
-        try cache.append(Data([4, 5]))
-
-        #expect(cache.byteCount == 5)
-        #expect(try cache.readChunk(offset: 0, maxBytes: 4) == Data([1, 2, 3, 4]))
-        #expect(try cache.readChunk(offset: 4, maxBytes: 4) == Data([5]))
-        #expect(try cache.readChunk(offset: 5, maxBytes: 4).isEmpty)
-    }
-
-    @Test func realtimeSpeechAudioCacheRemoveDeletesBackingFile() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("opencode-cache-test-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let cache = try RealtimeSpeechAudioCache(directory: directory)
-        try cache.append(Data([1, 2, 3]))
-        #expect(FileManager.default.fileExists(atPath: cache.fileURL.path))
-
-        cache.remove()
-
-        #expect(cache.byteCount == 0)
-        #expect(FileManager.default.fileExists(atPath: cache.fileURL.path) == false)
-    }
-
-    @Test func realtimeSpeechAudioCacheSupportsPreSessionBuffering() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("opencode-cache-test-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let cache = try RealtimeSpeechAudioCache(directory: directory)
-        defer { cache.remove() }
-
-        try cache.append(Data([10, 11]))
-        try cache.append(Data([12, 13, 14]))
-
-        #expect(cache.byteCount == 5)
-        #expect(try cache.readChunk(offset: 0, maxBytes: 10) == Data([10, 11, 12, 13, 14]))
-    }
-
-    @Test func realtimeSocketEventParsesTranscriptDelta() throws {
-        let data = #"{"type":"transcript_delta","text":"hello","code":"c","message":"m"}"#.data(using: .utf8)!
-        let event = try RealtimeSocketEvent(data: data)
-
-        #expect(event.type == "transcript_delta")
-        #expect(event.text == "hello")
-        #expect(event.code == "c")
-        #expect(event.message == "m")
-    }
-
-    @Test func realtimeSocketEventRejectsMissingType() throws {
-        let data = #"{"text":"hello"}"#.data(using: .utf8)!
-        #expect(throws: AIBuildersAudioError.invalidResponse) {
-            try RealtimeSocketEvent(data: data)
-        }
-    }
+struct ChatComposerSpeechTests {
 
     @Test func mergedSpeechInputOmitsLeadingSpaceForEmptyPrefix() {
         #expect(ChatTabView.mergedSpeechInput(prefix: "", transcript: " hello world ") == "hello world")
@@ -3163,5 +2997,26 @@ struct DesignTokensTests {
         #expect(r1 != r2 || g1 != g2 || b1 != b2)
         info.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
         #expect(r1 != r2 || g1 != g2 || b1 != b2)
+    }
+}
+
+// MARK: - VoiceFlowKit integration tests
+
+struct VoiceFlowKitIntegrationTests {
+
+    @Test @MainActor func transcribeAudioThrowsMissingTokenWhenTokenEmpty() async {
+        let state = AppState()
+        state.aiBuilderToken = "   "
+        await #expect(throws: VoiceFlowError.missingToken) {
+            _ = try await state.transcribeAudio(audioFileURL: URL(fileURLWithPath: "/tmp/does-not-exist.wav"))
+        }
+    }
+
+    @Test @MainActor func startRealtimeSpeechSessionThrowsMissingTokenWhenTokenEmpty() async {
+        let state = AppState()
+        state.aiBuilderToken = ""
+        await #expect(throws: VoiceFlowError.missingToken) {
+            _ = try await state.startRealtimeSpeechSession()
+        }
     }
 }

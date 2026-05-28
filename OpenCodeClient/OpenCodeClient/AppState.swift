@@ -7,6 +7,7 @@ import Foundation
 import CryptoKit
 import Observation
 import os
+import VoiceFlowKit
 
 struct SessionNode: Identifiable {
     let session: Session
@@ -1188,29 +1189,41 @@ final class AppState {
         return try await loadFileContent(path: path)
     }
 
-    func transcribeAudio(audioFileURL: URL, language: String? = nil, onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
+    private func makeVoiceFlowClient() throws -> VoiceFlowClient {
         let token = aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { throw AIBuildersAudioError.missingToken }
-
+        guard !token.isEmpty else { throw VoiceFlowError.missingToken }
         let base = aiBuilderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prompt = aiBuilderCustomPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let terms = aiBuilderTerminology.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpointString = base.isEmpty ? VoiceFlowConfig.defaultEndpoint.absoluteString : base
+        let normalized = endpointString.hasPrefix("http://") || endpointString.hasPrefix("https://")
+            ? endpointString
+            : "https://\(endpointString)"
+        guard let endpoint = URL(string: normalized) else {
+            throw VoiceFlowError.invalidEndpoint
+        }
+        let promptText = aiBuilderCustomPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let terms = aiBuilderTerminology
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let config = VoiceFlowConfig(
+            endpoint: endpoint,
+            tokenProvider: { token },
+            prompt: promptText.isEmpty ? nil : promptText,
+            terms: terms
+        )
+        return VoiceFlowClient(config: config)
+    }
+
+    func transcribeAudio(audioFileURL: URL, onPartialTranscript: (@Sendable (String) -> Void)? = nil) async throws -> String {
         let start = ProcessInfo.processInfo.systemUptime
         let fileName = audioFileURL.lastPathComponent.isEmpty ? "audio.m4a" : audioFileURL.lastPathComponent
         Self.logger.notice("[SpeechProfile] appState.transcribe begin file=\(fileName, privacy: .public)")
         do {
-            let resp = try await AIBuildersAudioClient.transcribe(
-                baseURL: base,
-                token: token,
-                audioFileURL: audioFileURL,
-                language: language,
-                prompt: prompt.isEmpty ? nil : prompt,
-                terms: terms.isEmpty ? nil : terms,
-                onPartialTranscript: onPartialTranscript
-            )
+            let client = try makeVoiceFlowClient()
+            let result = try await client.transcribe(audioFile: audioFileURL, onPartialTranscript: onPartialTranscript)
             let elapsedMs = max(0, Int((ProcessInfo.processInfo.systemUptime - start) * 1000))
-            Self.logger.notice("[SpeechProfile] appState.transcribe done ms=\(elapsedMs, privacy: .public) textChars=\(resp.text.count, privacy: .public) requestID=\(resp.requestID, privacy: .public)")
-            return resp.text
+            Self.logger.notice("[SpeechProfile] appState.transcribe done ms=\(elapsedMs, privacy: .public) textChars=\(result.text.count, privacy: .public) requestID=\(result.requestID, privacy: .public)")
+            return result.text
         } catch {
             let elapsedMs = max(0, Int((ProcessInfo.processInfo.systemUptime - start) * 1000))
             Self.logger.error("[SpeechProfile] appState.transcribe failed ms=\(elapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
@@ -1218,23 +1231,12 @@ final class AppState {
         }
     }
 
-    func startRealtimeSpeechSession(language: String? = nil) async throws -> AIBuildersRealtimeSession {
-        let token = aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { throw AIBuildersAudioError.missingToken }
-
-        let base = aiBuilderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prompt = aiBuilderCustomPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let terms = aiBuilderTerminology.trimmingCharacters(in: .whitespacesAndNewlines)
+    func startRealtimeSpeechSession() async throws -> VoiceFlowSession {
         let start = ProcessInfo.processInfo.systemUptime
         Self.logger.notice("[SpeechProfile] appState.realtime start begin")
         do {
-            let session = try await AIBuildersAudioClient.startRealtimeSession(
-                baseURL: base,
-                token: token,
-                language: language,
-                prompt: prompt.isEmpty ? nil : prompt,
-                terms: terms.isEmpty ? nil : terms
-            )
+            let client = try makeVoiceFlowClient()
+            let session = try await client.startSession()
             let elapsedMs = max(0, Int((ProcessInfo.processInfo.systemUptime - start) * 1000))
             Self.logger.notice("[SpeechProfile] appState.realtime start done ms=\(elapsedMs, privacy: .public)")
             return session
@@ -1260,7 +1262,8 @@ final class AppState {
         }
         let base = aiBuilderBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try await AIBuildersAudioClient.testConnection(baseURL: base, token: token)
+            let client = try makeVoiceFlowClient()
+            try await client.testConnection()
             aiBuilderConnectionOK = true
             aiBuilderLastTestedAt = Date()
 
@@ -1273,11 +1276,11 @@ final class AppState {
             UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
             UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
             switch error {
-            case AIBuildersAudioError.missingToken:
+            case VoiceFlowError.missingToken:
                 aiBuilderConnectionError = L10n.t(.errorAiBuilderTokenEmpty)
-            case AIBuildersAudioError.invalidBaseURL:
+            case VoiceFlowError.invalidEndpoint:
                 aiBuilderConnectionError = L10n.t(.errorInvalidBaseURL)
-            case AIBuildersAudioError.httpError(let statusCode, _):
+            case VoiceFlowError.httpError(let statusCode):
                 aiBuilderConnectionError = L10n.errorMessage(.errorServerError, String(statusCode))
             default:
                 aiBuilderConnectionError = error.localizedDescription
