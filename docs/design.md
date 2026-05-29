@@ -142,29 +142,31 @@
 
 ### 大屏（iPad / visionOS，三栏，留白舒展）
 
-- 三栏常驻：左 = Session 列表（带摘要预览 + 父子连接线），中 = Chat，右 = Files/预览（可折叠）。
+现状是 `NavigationSplitView` 三栏（左 sidebar 上=file tree 下=Session 列表 / 中 文件预览 / 右 Chat）。这次的调整属于**改进**：
+
+- **三栏角色**：左 = Session 列表（树形，父子缩进 + leaf 圆点 + 选中态；行只有标题/时间/状态，**没有摘要预览**——别再画那个）；中 = Chat（主场）；右 = 文件预览（从 Chat 点 tool/patch 跳来的单文件预览，可折叠）。
+- **file tree 默认收起**（用户决策）：iPad 上文件树不再常驻占空间，降级为左栏顶部一个默认收起、可展开的 "Files" disclosure。它在 iPhone 上仍是独立 tab。把横向空间让给 Chat 和预览。
 - 大留白：屏幕水平边距 32pt，消息间距 28pt，卡片内边距 18pt。留白本身是"贵"的来源。
 - 内容列限宽：Chat 正文最大宽度约 720pt 居中，不铺满整个中栏——长行不利阅读，限宽是 editorial 的高级感。
-- Toolbar 可以更展开（大屏不挤），但仍遵守"最多一处彩色"。
+- 右栏文件预览：**代码纯文本 + 行号等宽渲染，无语法高亮**（现状如此，见下文 future 说明），不画彩色 token；Markdown 走预览，图片可缩放。
 - visionOS：沿用现有 `DesignControls` 的大尺寸 composer 分支（48/56pt 按钮，gaze 友好），材质用系统 glass，色彩 token 不变。
 
 ```
  iPad — 三栏（深色）
  ┌───────────────┬───────────────────────────┬──────────────┐
- │ Sessions   +  │  my-session        ◌  ⚙    │  login.ts    │
- │ ───────────── │                             │  ──────────  │
- │ ▎my-session   │   ▎Refactor the auth module │  1  import…  │
- │   auth refac… │                             │  2  export…  │
- │  └ sub-task   │   I'll start by reading the │  3          │
- │ chat-2        │   current implementation.   │  …           │
- │   fix tests   │                             │              │
- │               │   ┌ read login.ts ────────┐ │              │
- │               │   │ 42 lines              │ │              │
+ │ ▸ Files       │  my-session        ◌  ⚙    │  login.ts    │
+ │ Sessions   +  │                             │  ──────────  │
+ │ ───────────── │   ▎Refactor the auth module │  1  import…  │
+ │ ▎my-session   │                             │  2  export…  │
+ │  └ sub-task   │   I'll start by reading the │  3  …        │
+ │ chat-2        │   current implementation.   │              │
+ │               │   ┌ read login.ts ────────┐ │  纯文本+行号 │
+ │               │   │ 42 lines              │ │  无语法高亮  │
  │               │   └───────────────────────┘ │              │
- │               │                             │              │
  │               │   🎤 Message…         [ ▷ ] │              │
  └───────────────┴───────────────────────────┴──────────────┘
-       ↑ 摘要预览 + 连接线        ↑ 正文限宽 720pt 居中      ↑ 可折叠
+   ↑ ▸Files 默认收起        ↑ 正文限宽 720pt 居中    ↑ 单文件预览
+   Session 树（无摘要预览）
 ```
 
 ## 空状态与引导
@@ -179,6 +181,18 @@
 - 不做 splash 动画。
 - 不重新设计信息架构（Tab + 三栏是对的）。
 - 不让第二种彩色常驻——gold 只在"工作中"，其余时刻全灰 + 至多一处 accent。
+
+## 功能边界（这是实施稿，严格区分三类）
+
+这份 spec 要落地实现，所以每个视觉元素必须对得上真实功能。三类：
+
+**现状已有，本设计只改视觉、不改功能**：3 tab（Chat/Files/Settings）；iPhone Session 列表是 sheet；iPad 三栏；Chat 的 10 种消息渲染（用户消息、AI 文本、tool 卡、patch 卡、permission 卡、question 卡、todo、turn activity、streaming reasoning，step 不渲染）；markdown + 图片预览（可缩放）；file tree（展开折叠 + git 状态色）；composer（mic/send/stop + VoiceFlowKit 语音）；toolbar（session/rename/create/model-agent picker/context ring/settings）；Settings（Server/Project/SSH Tunnel/AI Builder/Appearance/About）；Session 树形嵌套 + swipe 删除；双模主题。
+
+**本设计的视觉改进（改的是观感，不新增功能）**：单一识别色收敛（permission 的绿/蓝/红、patch 的橙、tool 的蓝 → 统一电蓝 + gold 仅"工作中"）；卡片三态形态语言取代"多色同形"；用户消息左色条；composer 的 mic 移入框内、send 做成实底；iPad file tree 默认收起。这些都不依赖新后端能力，是纯前端视觉/布局调整。
+
+**明确不在本设计内（future / 不画进 mockup）**：
+- **代码语法高亮**：现状是纯文本 + 行号单色渲染（`Text(line)`），**没有**语法高亮。mockup 一律画纯文本。语法高亮列为 future enhancement——有技术成本（需要 tokenizer / highlight 库，且要兼顾性能和大文件），本轮不做、也不在图里假装有。
+- Session 行摘要预览、diff 侧边对比、消息搜索/编辑、文件上传等 audit 中"未 shipped"的项，一律不设计。
 
 ## 实现落点
 
