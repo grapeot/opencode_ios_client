@@ -644,8 +644,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/grapeot/voiceflow.git";
 			requirement = {
-				branch = master;
-				kind = branch;
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.1.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
