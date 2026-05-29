@@ -1,189 +1,213 @@
-# OpenCode iOS Client 视觉设计改进方向
+# OpenCode iOS Client 设计 Spec — 冷静科技感（Quiet Tech）
 
-## 现状诊断
+本文件是 OpenCode iOS Client 视觉重做的实施 spec，不是评审记录。它取代了之前那份"诊断 + 多方向建议"的草稿（诊断结论仍然成立，附在文末"诊断回顾"里），专注一件事：把视觉方向锁定为一套叫 **Quiet Tech** 的设计语言，并拆成可以直接照着改 SwiftUI 代码的规格。
 
-当前 UI 是典型的工程师驱动设计：功能完整、信息密度高、交互路径正确，但视觉上没有记忆点。具体表现为以下几类问题。
+方向的一句话定义：像 Raycast、Vercel、Arc 那一类现代开发者工具——深色为主、低饱和、靠精准的间距和细描边而不是装饰来显贵。它不喧哗，所有"贵"都来自克制、一致和恰到好处的留白节奏。
 
-### 信息层级扁平
+这份 spec 和姊妹项目 VoiceFlow 的 `docs/design.md`（暖琥珀/深墨）是同一套方法论的两个实例：单一识别色、颜色不建立层级、无边框优先、极轻动效。两个 app 因此有家族感，但 OpenCode 更偏冷、更偏工具。
 
-所有内容用相同的字号和间距排列，用户无法在 200ms 内判断「哪里是我应该看的」。Chat 里用户消息和 AI 回复的区分仅靠一个极浅的蓝色背景（accentColor.opacity(0.07)），几乎看不到。Tool 卡片、Patch 卡片、Permission 卡片虽然用了不同的强调色（蓝、橙、绿），但都是相同的圆角矩形 + 浅底色 + 1px 描边公式，导致视觉上像是同一个东西穿了不同颜色的衣服。
+## 设计原则
 
-### 留白不足，密度过高
+1. **深色是主场，浅色是平替。** OpenCode 的用户是开发者，深色模式是默认审美。深色模式优先调到完美，浅色模式跟随同一套 token 做映射，而不是反过来。
+2. **单一识别色：电蓝 `#3B82F6`。** 整个 app 只有一个色相承担"可交互/品牌"语义——发送、选中、链接、活跃。金色 `#D9A621` 仅作为**唯一的次级强调**，只用在"AI 正在工作"这一种瞬时状态上，平时不出现。除这两色外，全部走中性灰阶。系统的 `.red/.green/.orange/.purple` 一律不直接用。
+3. **语义靠形态和位置，不靠颜色堆叠。** 现状最大的问题是"一屏五种颜色同一个形状"（tool/patch/permission 卡片都是圆角矩形+浅底+描边，只换颜色）。新方案用**卡片形态**区分功能类别，颜色只在极少数地方点缀。
+4. **颜色不建立层级，字号和留白建立层级。** 同一种文字色下用字号、字重、间距区分主次。次级灰只给真正次级的信息（时间戳、路径、placeholder）。
+5. **无边框优先。** 信息类容器去描边、只留极淡底色或纯靠留白分组；只有需要"请你操作"的卡片才用一条左侧色条作为功能信号。描边在 iOS 里暗示表单字段，chat 流里要少用。
+6. **极轻、极快的动效。** 状态切换走 spring（response 0.3–0.35, damping 0.8）或 250–300ms ease-out，opacity crossfade 优先于位移。动效是这套设计里"廉价的奢华"，但绝不 bouncing、不做炫技 splash。
+7. **小屏保功能，大屏给留白。** 见下文"两套布局策略"。同一套 token、同一个品牌，但 iPhone 单栏紧凑、iPad/visionOS 三栏舒展，是两种不同的"贵"。
 
-LayoutConstants 里 MessageList.spacing 只有 12pt，消息之间几乎没有呼吸感。Toolbar 按钮间距 12pt，三个 circle.fill 图标紧贴在一起。Tool 卡片展开后的内部 padding 只有 8pt，信息紧凑到令人疲劳。这些数字在功能上没问题，但在视觉上让人觉得这是一个工具而不是一个产品。
+## 双模色板
 
-### 缺乏品牌性格
+两套模式共用一组语义 token，只换底色/文字映射。实现上 `DesignTokens` 用 `Color(light:dark:)` 双值定义，View 层只引用语义名，不写 ad-hoc `.opacity()` 或系统灰。
 
-整个 app 使用纯系统 SF Symbols + 系统字体 + 系统颜色。没有任何自定义的视觉元素能把 OpenCode 和其他 AI chat app 区分开。Logo 是像素风格的机器人，但这个性格完全没有延伸到 app 内部。打开 app 的第一印象是「这是一个 SwiftUI 教程项目」。
+### 深色模式（主场）
 
-### 微交互缺失
+| Token | Hex | 用途 |
+|---|---|---|
+| `bg.primary` | `#0B0C0E` | 主背景，近黑带极轻微冷偏移 |
+| `bg.secondary` | `#141619` | 次级背景：sidebar、sheet、settings 分组 |
+| `surface` | `#1A1D21` | 信息卡片底（tool/patch 输出区） |
+| `text.primary` | `#ECEDEE` | 主文字、AI 回复正文 |
+| `text.secondary` | `#9BA1A6` | 次级：时间戳、状态、tool 名 |
+| `text.tertiary` | `#5A6066` | placeholder、disabled、代码路径 |
+| `divider` | `#23272B` | 极细分隔线（1px，sidebar/settings 行间） |
+| `accent` | `#3B82F6` | 唯一识别色：发送、选中、链接、用户消息色条 |
+| `accent.muted` | `#3B82F614` | accent 8% alpha，用户消息底/选中行底 |
+| `gold` | `#D9A621` | 唯一次级强调：仅"AI 工作中"瞬时态 |
 
-消息发送、tool 执行、权限请求这些高频操作没有过渡动画。DisclosureGroup 的展开收起是系统默认的。ProgressView 是系统默认的。没有任何地方使用了 spring 动画或自定义 transition。这导致 app 感觉是静态的，而不是活的。
+### 浅色模式（平替）
+
+| Token | Hex | 用途 |
+|---|---|---|
+| `bg.primary` | `#FBFBFC` | 主背景，近白带极轻微冷偏移 |
+| `bg.secondary` | `#F4F5F6` | 次级背景 |
+| `surface` | `#F0F1F3` | 信息卡片底 |
+| `text.primary` | `#1A1D21` | 主文字（深墨，非纯黑） |
+| `text.secondary` | `#6B7177` | 次级文字 |
+| `text.tertiary` | `#9BA1A6` | placeholder、disabled |
+| `divider` | `#E6E8EA` | 极细分隔线 |
+| `accent` | `#2563EB` | 同色相，浅底上略深一档保证对比 |
+| `accent.muted` | `#2563EB14` | accent 8% alpha |
+| `gold` | `#B8860B` | 浅底上略深的金 |
+
+### 状态颜色语义（取代"红绿橙圆点"）
+
+现状用红/绿/橙表达 error/success/warning，违反单一识别色。新方案让颜色退场，用形态和文字承担：
+
+| 状态 | 表达方式 |
+|---|---|
+| AI 空闲 / 就绪 | 无任何色彩，纯文字 |
+| AI 工作中 | 唯一允许 `gold` 出现的地方：composer 旁的脉冲点 + context ring 高占用时的脉冲 |
+| 成功 / 完成 | 用 `text.secondary` 的 checkmark + 文字，不用绿 |
+| 错误 | `accent`（蓝）承担警示 + 明确文字，不用红色块（红只保留给真正破坏性操作如删除 session 的确认按钮） |
+| 警告 | `gold` 文字 + 说明，不用橙底块 |
+
+整屏在任何时刻最多出现一处彩色（accent 或 gold），其余全灰阶。这是"冷静"的硬约束。
+
+## 字体
+
+系统 SF，显式选 design 变体。不引第三方字体（中文回退链、包体积、和系统 UI 融合都更好）。
+
+- **Display** — Session 标题、空状态主文案：SF Pro Display Semibold 22pt，`text.primary`。出现极少。
+- **Body** — AI 回复正文（用户 90% 时间在看）：SF Pro Text Regular 16pt，行距 1.45，`text.primary`。
+- **Body Prominent** — 用户消息：SF Pro Text Medium 16pt。用字重而非颜色和 AI 回复区分。
+- **Meta** — 时间戳、状态、tool 名、agent/model 标签：SF Pro Text Regular 13pt，`text.secondary`。
+- **Micro Mono** — 代码、文件路径、tool 输入输出：SF Mono Regular 12pt，`text.tertiary`。只在展开详情时出现。
+
+字号差是层级的主要载体：22 / 16 / 13 / 12 四档，跨度明确，不在中间塞更多档。
+
+## 卡片设计语言
+
+按功能分三类形态，这是解决"彩虹色表格"的核心：
+
+1. **信息卡片**（tool 输入输出、patch、diff）：**无描边**，只 `surface` 底色。靠内部排版（mono 字体 + 留白）建立结构。展开详情区内边距 14pt。一屏内多张信息卡片视觉上是"同一种安静的容器"，不抢戏。
+2. **操作卡片**（permission、question——需要用户响应）：无外框，但左侧一条 3pt `accent` 色条 + `surface` 底。色条是"请你操作"的功能信号，在 iOS 里少见所以有新鲜感。这是全屏少数允许出现 accent 的地方之一。
+3. **状态行**（turn activity、"2:30 elapsed"）：**不是卡片**。去掉底色和圆角，就是一行 `text.secondary` 的 meta 文字 + 可选 mono 计时。
+
+圆角统一：信息/操作卡片 12pt，sheet 16pt，inline tag 6pt。不混用。
+
+## 消息区
+
+- 用户消息：**全宽 + 左侧 3pt `accent` 色条 + `accent.muted` 底**，Body Prominent 字重。和操作卡片同构（左色条语言贯穿全 app）。右对齐气泡不用——iPad 宽屏下浪费空间，且色条方案更现代。
+- AI 回复：**完全无容器**，纯 `text.primary` 正文铺在 `bg.primary` 上，靠上下 20pt 间距和用户消息区分。流式文本逐字出现，不加入场动画。
+- 消息间距 20pt（现状 12pt 太挤）。每条消息是一个完整思考单元，要呼吸感。
+
+## Composer
+
+- 输入框：去描边，只 `bg.secondary` 底，16pt 圆角。描边暗示表单字段，自由文本区不要。
+- 发送：独立的圆角矩形按钮（非圆形 icon），`accent` 实底白图标，贴输入框右侧底部对齐——视觉上属于"输入区域的一部分"。
+- mic：移到输入框**内部左侧**，作为框内功能图标（`text.secondary`）。
+- AI 执行时：send 按钮**原位**替换为 stop（同位置同尺寸，图标变 stop，色变中性而非红——红留给破坏性操作），旁边出现唯一的 `gold` 脉冲点表示"工作中"。
 
-## 设计哲学
+## 动效（投入产出比最高）
+
+- 用户消息出现：offset y 16→0 + opacity 0→1，ease-out 0.28s。AI 流式文本不加。
+- Tool 卡片展开：自定义 spring（response 0.32, damping 0.82），比系统 DisclosureGroup 快一点弹一点。
+- Permission/Question 卡片出现：从下滑入 offset y 24→0 + 淡入，比纯淡入更能吸引"请看我"。
+- Session 切换：消息列表 opacity crossfade 0.2s，避免瞬切的"卡一下"感。
+- 不做：splash 动画、bouncing、渐变背景（2024 后渐变是廉价信号）。
 
-改进的目标不是把 app 变成纯视觉展示品，而是在保持现有功能密度的前提下，通过几个关键维度的调整让它看起来像是花了大价钱请设计师做的。核心原则：
+## 两套布局策略（小屏 vs 大屏）
 
-**克制比装饰有效。** 好的设计不是加东西，而是决定不做什么。减少颜色种类、减少边框、减少视觉噪音，反而比堆渐变和阴影更有高级感。
+品牌、token、色彩、字体、卡片语言**完全一致**；布局和留白策略不同。这是这次设计最关键的补充——iPhone 上堆留白会牺牲功能，iPad/visionOS 上不给留白则浪费屏幕。
 
-**一致性比创意重要。** 选一个视觉语言然后贯彻到底，比每个页面都玩花样看起来贵。一套圆角值、一套间距系统、一套颜色规则，严格执行。
+### 小屏（iPhone，单栏，功能优先）
 
-**动效是廉价的奢华。** iOS 用户对静态 UI 已经完全脱敏了，但一个精心调校的 0.3s spring 动画就能让人觉得「这个 app 不一样」。动效的开发成本远低于自定义绘制，但感知价值极高。
+- 单栏：底部 Tab（Chat / Files / Settings）。Session 列表从 Chat 顶部的入口推入（或下拉），不常驻。
+- 留白克制：消息间距 20pt，卡片内边距 14pt，屏幕水平边距 16pt。够呼吸但不浪费纵向空间。
+- Toolbar 精简到 4 个：session 入口、配置（model+agent 合并进一个 sheet）、context ring（18pt）、settings。rename 降级到 session 列表的 swipe action。
+- Composer 紧凑：单行起，最多长到 ~100pt 高。
 
-## 具体改进方向
+```
+ iPhone — Chat（深色）
+ ┌──────────────────────────────┐
+ │ ‹  my-session      ◌  ⚙       │  ← 精简 toolbar，◌=context ring
+ ├──────────────────────────────┤
+ │ ▎Refactor the auth module     │  ← 用户消息：左 accent 色条 + muted 底
+ │                               │
+ │ I'll start by reading the     │  ← AI 回复：无容器，纯正文
+ │ current implementation.       │
+ │                               │
+ │ ┌ read  src/auth/login.ts ──┐ │  ← 信息卡片：无描边，surface 底
+ │ │ 42 lines                  │ │
+ │ └───────────────────────────┘ │
+ │ ▎ Allow edit to login.ts?     │  ← 操作卡片：左 accent 色条
+ │   Allow      Deny             │
+ ├──────────────────────────────┤
+ │ 🎤 Message…              [ ▷ ]│  ← mic 在框内左，send 实底贴右
+ ├──────────────────────────────┤
+ │  Chat      Files     Settings │
+ └──────────────────────────────┘
+```
 
-### 1. 色彩系统重构
+### 大屏（iPad / visionOS，三栏，留白舒展）
 
-当前问题：颜色使用分散，没有统一的语义映射。accentColor 在不同上下文中承担了太多角色。
+- 三栏常驻：左 = Session 列表（带摘要预览 + 父子连接线），中 = Chat，右 = Files/预览（可折叠）。
+- 大留白：屏幕水平边距 32pt，消息间距 28pt，卡片内边距 18pt。留白本身是"贵"的来源。
+- 内容列限宽：Chat 正文最大宽度约 720pt 居中，不铺满整个中栏——长行不利阅读，限宽是 editorial 的高级感。
+- Toolbar 可以更展开（大屏不挤），但仍遵守"最多一处彩色"。
+- visionOS：沿用现有 `DesignControls` 的大尺寸 composer 分支（48/56pt 按钮，gaze 友好），材质用系统 glass，色彩 token 不变。
 
-建议建立三层色彩系统：
+```
+ iPad — 三栏（深色）
+ ┌───────────────┬───────────────────────────┬──────────────┐
+ │ Sessions   +  │  my-session        ◌  ⚙    │  login.ts    │
+ │ ───────────── │                             │  ──────────  │
+ │ ▎my-session   │   ▎Refactor the auth module │  1  import…  │
+ │   auth refac… │                             │  2  export…  │
+ │  └ sub-task   │   I'll start by reading the │  3          │
+ │ chat-2        │   current implementation.   │  …           │
+ │   fix tests   │                             │              │
+ │               │   ┌ read login.ts ────────┐ │              │
+ │               │   │ 42 lines              │ │              │
+ │               │   └───────────────────────┘ │              │
+ │               │                             │              │
+ │               │   🎤 Message…         [ ▷ ] │              │
+ └───────────────┴───────────────────────────┴──────────────┘
+       ↑ 摘要预览 + 连接线        ↑ 正文限宽 720pt 居中      ↑ 可折叠
+```
 
-**主色（Brand Color）**：从 Logo 中提取。Logo 的深蓝 bracket + 金黄 bracket 提供了一个天然的双色调组合。可以用深蓝作为主操作色（发送按钮、选中态、链接），金黄作为辅助强调色（tool 执行中、高亮标记）。这个组合在 tech 产品中不常见，能建立辨识度。
+## 空状态与引导
 
-**语义色**：保持现有映射（红=错误、绿=完成、橙=警告），但统一使用同一套 opacity 规则。当前的问题是对同一个语义色，有的地方用 opacity(0.07)，有的用 opacity(0.08)，有的用 opacity(0.14)。统一为一套：浅底用 0.06，描边用 0.12，文字用 1.0。
+- 空 session 列表：深色版 logo（需补，现仅 `logo_light.png`）+ 一句有性格的文案，如 "Start a conversation with your code"，不用 "No sessions"。logo 下极微妙呼吸动画（scale 1.0→1.02→1.0，3s）。
+- 空 chat：居中简短引导文字，无图标。
 
-**中性色**：放弃 systemGray4/systemGray5/systemGray6 这种 iOS 系统灰色，改用自定义的灰阶。当前系统灰在不同 OLED 设备上表现差异很大，而且太蓝。一套偏暖的灰（比如 H=220, S=5%）会让整个 app 感觉更柔和。
+## 不做清单
 
-### 2. 排版层级
+- 不加渐变背景。纯色 + 留白 + 动效比渐变高级。
+- 不引第三方字体。SF Pro/SF Mono 够用且融合系统。
+- 不做 splash 动画。
+- 不重新设计信息架构（Tab + 三栏是对的）。
+- 不让第二种彩色常驻——gold 只在"工作中"，其余时刻全灰 + 至多一处 accent。
 
-当前问题：Chat 消息中 AI 回复的正文用系统默认 body 字体，用户消息也是。Tool 卡片内全是 caption2。整个界面的字号差异只在 caption2 和 body 之间。
+## 实现落点
 
-建议建立四档排版：
+`OpenCodeClient/OpenCodeClient/Utils/DesignTokens.swift` 已有 Brand/Semantic/Neutral/Opacity/Typography/Spacing/Controls/Corners 雏形。这次是**提纯**：把上表的 hex 和语义灌进去、删掉 ad-hoc 系统灰与多余 Semantic 色、把 Typography 收敛到 22/16/13/12 四档、间距按小屏/大屏两套节奏。View 层禁止再出现 `Color.blue/.red/.gray.opacity(…)`。
 
-**Display**：Session 标题、空状态主文案。.title3.weight(.bold)，只出现在少数地方。
+## 效果图
 
-**Body**：Chat 消息正文、主要文案。.body，这是用户 90% 时间在看的东西。
+`docs/design_images/` 下的 mockup 由 GPT image generation（gpt-image-2）生成，用来锁定"冷静科技感"的视觉目标，不是像素级实现稿。
 
-**Meta**：时间戳、状态标签、tool 名称。.caption，次要但需要能看清的信息。
+### 小屏（iPhone，单栏）
 
-**Micro**：Tool 输入输出、代码片段路径。.caption2.monospaced()，只在展开详情时才出现。
+Chat 是用户 90% 时间所在。注意：用户消息的蓝色左色条、AI 回复无容器、信息卡片无描边只留深色底、操作卡片的左色条 + 文字按钮、composer 的 mic 在框内左 / 实底蓝 send 贴右、以及全屏至多一处蓝色 accent。
 
-关键改动：用户消息的字号应该比 AI 回复稍大（.callout vs .body），或者用 weight 差异来区分。当前两者在视觉上几乎一样，只能靠极浅的背景色区分，这在浅色模式下尤其不明显。
+![iPhone — Chat](design_images/iphone_chat_v.png)
 
-### 3. 间距与节奏
+Session 列表：每行标题 + 灰色摘要预览 + 时间，选中行用极淡蓝底 + 蓝左条，子 session 用竖线 + 圆点连接器表达父子。
 
-当前问题：所有间距都是 4 的倍数（4, 8, 12, 16），看起来工整但机械。消息列表 12pt 间距太紧，tool 卡片内部 8pt 太紧，但 toolbar 和消息列表之间的间距又合适。
+![iPhone — Sessions](design_images/iphone_sessions.png)
 
-建议引入基于 8pt 网格但不完全对齐的节奏：
+Settings：分组列表，Theme 分段控件是少数允许出现 accent 的地方，其余全灰阶。
 
-Chat 消息之间：20pt（而不是 12pt）。每条消息是一个完整的思考单元，需要呼吸感。
+![iPhone — Settings](design_images/iphone_settings.png)
 
-Tool 卡片到上下文的距离：16pt。卡片和消息之间需要明确的视觉间隔。
+### 大屏（iPad / visionOS，三栏）
 
-卡片内部 padding：12pt（而不是 8pt）。展开后的详情区域给信息更多空间。
+同一套 token 与品牌，布局舒展：左 Session 列表、中 Chat（正文限宽居中，editorial 留白）、右文件/代码预览。代码预览的语法高亮要收敛到冷静灰阶为主，避免彩虹色。
 
-Toolbar 区域：保持 16pt，这个已经是合理的。
+![iPad — 三栏](design_images/ipad_threecol.png)
 
-这些数字的变化听起来很小（12→20, 8→12），但对信息密集型界面的阅读体验影响显著。
+## 诊断回顾（来自上一版，结论仍成立）
 
-### 4. 卡片设计语言
-
-当前问题：所有卡片都是 `RoundedRectangle(cornerRadius: 12) + 浅底色 + 1px 描边`。这个公式用在了 Tool 卡片、Patch 卡片、Permission 卡片、Question 卡片、Turn Activity 行上。结果是一屏之内可能有 5 种颜色但同一个形状，视觉上像彩虹色的表格。
-
-建议按功能分组卡片：
-
-**信息卡片**（Tool 输入输出、Patch 信息）：去掉描边，只保留底色。底色从 opacity(0.07) 降到 opacity(0.04)，更微妙。靠内容本身的排版来建立结构，不靠边框。
-
-**操作卡片**（Permission、Question）：保留描边，但改为更粗的左侧彩色边条（4pt），右侧无边框。这是从 Material Design 的 Card 借鉴来的模式，但在 iOS 上很少见，所以反而有新鲜感。左侧色条 + 无边框 = 简洁但有明确的功能信号。
-
-**状态指示**（Turn Activity）：从卡片形态改为纯文字行。当前用一个灰底圆角矩形来显示「2:30 elapsed」，完全不需要。一个带图标的文字行就够了，去掉背景和圆角。
-
-### 5. 消息气泡
-
-当前用户消息的视觉处理：全宽的浅蓝背景 + 1px 描边。这更像是高亮行而不是消息气泡。
-
-两个方向可以选：
-
-**方向 A：经典气泡**。用户消息右对齐、带尾巴的气泡，AI 回复左对齐无尾巴。这是用户最熟悉的 chat 模式，信息归属一目了然。缺点是在 iPad 分栏下可能浪费空间。
-
-**方向 B：无气泡但有强区分**。用户消息保持全宽，但改用左侧 4pt 粗色条（和操作卡片一致），AI 回复完全无边框。用户消息的背景色加深到 opacity(0.10)，AI 回复保持透明。通过左对齐和右对齐来区分。这个方向更现代，也更适合 iPad 的宽屏。
-
-两个方向都可以，但关键是选择一个然后贯彻到底，不要混用。
-
-### 6. Composer 区域
-
-当前设计：一个灰色圆角输入框 + 右侧三个圆形按钮（mic、send、stop）。
-
-问题：三个按钮纵向排列在输入框右侧，send 按钮用的是 accentColor 的 arrow.up.circle.fill，和其他两个按钮的视觉权重不同，但区分方式只是颜色，不够明确。
-
-建议：
-
-把 send 按钮做成一个独立的圆角矩形按钮，放在输入框右侧（而不是上方），和输入框底部对齐。按钮用主色填充，白色图标。这样 send 操作在视觉上是「输入区域的一部分」而不是「旁边的工具按钮」。
-
-mic 按钮放到输入框内部左侧，作为输入框内的功能图标。stop 按钮在 AI 执行时替换 send 按钮的位置（同一个位置，同一个大小，只是颜色变红图标变 stop）。
-
-输入框本身去掉 1px 描边，只用底色。描边在 iOS 的输入场景中通常暗示「可编辑的表单字段」，而 chat 输入更像是一个自由文本区域。
-
-### 7. 动效
-
-这是投入产出比最高的改进方向。以下四个动效，每个实现成本不超过半天，但能显著提升品质感。
-
-**消息出现动画**：新消息从下方淡入 + 轻微上移（offset y: 20 → 0, opacity: 0 → 1, duration: 0.3s, curve: .easeOut）。AI 回复的流式文本不需要这个动画（因为是逐步出现的），但用户发送的消息和 tool 卡片出现时需要。
-
-**Tool 卡片展开/收起**：从系统默认的 DisclosureGroup 动画改为自定义的 spring 动画（response: 0.35, dampingFraction: 0.8）。展开时内容从 0 高度增长，收起时反向。关键是要比系统默认的快一点、弹一点。
-
-**Permission 卡片出现**：从底部滑入（offset y: 30 → 0）+ 淡入。这个卡片是系统在等待用户操作，需要明确的「请看我」信号。滑动动画比单纯淡入更能吸引注意力。
-
-**Session 切换**：切换 session 时，消息列表用一个交叉淡入淡出（opacity transition, duration: 0.2s），而不是瞬间替换。当前切换 session 时内容是突然变的，感觉 app 卡了一下。
-
-### 8. 空状态与引导
-
-当前空状态是系统默认的 ContentUnavailableView + 一行灰色文字。这是一个被忽视但影响第一印象的环节。
-
-建议：
-
-空 session 列表：用 Logo 的大图（当前只有 logo_light.png，需要做深色版）+ 一句有性格的文案。不要用「No sessions」这种功能描述，用类似「Start a conversation with your code」这种带一点 aspirational tone 的文案。Logo 下方可以加一个非常微妙的呼吸动画（scale 1.0 → 1.02 → 1.0, duration: 3s），让空状态不完全是静态的。
-
-空 chat（有 session 但没消息）：一个居中的简短提示，不需要图标。当前已经有这个逻辑，只是文案可以更有引导性。
-
-### 9. Toolbar 精简
-
-当前 ChatToolbarView 有 6-7 个操作：session list、rename、create、model picker、agent picker、context usage、settings。在一个 HStack 里排开，在 iPhone 上会很拥挤。
-
-建议：
-
-把 model picker 和 agent picker 合并为一个「配置」入口。点击后弹出一个底部 sheet，里面同时选择 model 和 agent。这样 toolbar 从 6 个元素减少到 4 个，视觉上宽松很多。
-
-Rename 操作从 toolbar 移到 session list 的 swipe action 里。rename 是低频操作，不需要一直占 toolbar 位置。
-
-Context usage 环形指示器保留在 toolbar，但可以做得更小更精致（当前 22pt 的圆可以缩到 18pt），并且在接近 90% 时加一个脉冲动画来提醒用户。
-
-### 10. 深色模式
-
-当前深色模式通过 preferredColorScheme 实现，但代码中没有针对深色模式做任何颜色调整。所有 opacity 值在深色模式下会产生不同的视觉效果（opacity(0.07) 在浅色背景上几乎看不见，但在深色背景上可能太亮）。
-
-建议为深色模式定义独立的 opacity 值：浅色模式底色用 opacity(0.06)，深色模式用 opacity(0.10)。深色模式下描边用 opacity(0.15) 而不是 opacity(0.12)。这些微调能让深色模式下的信息层级和浅色模式一样清晰。
-
-### 11. Session 列表
-
-当前 SessionListView 是标准的 List + SessionRowView，每行显示标题 + 时间 + 状态。树形结构用缩进表示。
-
-建议：
-
-给每个 session 加一个摘要预览（取第一条用户消息的前 50 个字符），显示在标题下方。这让用户在列表中就能判断哪个 session 是哪个，而不需要点进去。
-
-当前选中的 session 用蓝色背景高亮（Color.blue.opacity(0.08)），这个颜色太系统了。改用主色的低透明度版本，保持品牌一致性。
-
-子 session 的缩进当前用 24pt 的固定步进，可以考虑改用左侧竖线 + 小圆点的连接器模式（类似 Xcode 的断点导航），视觉上更清晰地表达父子关系。
-
-## 优先级建议
-
-如果只能做三件事，按投入产出比排序：
-
-1. **消息间距 + 字号层级**（半天工作量）。这是用户 90% 时间在看的东西，20pt 间距和明确的字号差异能立刻改变阅读体验。
-
-2. **Composer 重设计**（半天工作量）。这是交互频率最高的区域，把 send 按钮独立出来、mic 移入输入框内，能让整个 chat 界面看起来更成熟。
-
-3. **四个关键动效**（一天工作量）。消息出现、卡片展开、权限滑入、session 切换。动效是让 app 从「能用」变成「好用」的最短路径。
-
-如果预算更充足，接下来是色彩系统重构和卡片设计语言统一。这两项加起来大约需要 2-3 天，但能从根本上解决「看起来像教程项目」的问题。
-
-## 不建议做的事
-
-**不要加渐变背景**。渐变在 2024 年的 iOS app 里已经是廉价信号了。纯色 + 好的间距 + 好的动效比渐变高级得多。
-
-**不要自定义字体**。SF Pro 已经足够好，而且和系统 UI 无缝融合。引入第三方字体增加包体积、加载时间，而且在中文场景下很少有第三方字体能和 SF Pro 的中文回退链竞争。
-
-**不要加 splash screen 动画**。用户打开 app 是为了用功能，不是为了看动画。一个静态的 logo + 快速进入主界面比一个 2 秒的动画更尊重用户时间。
-
-**不要重新设计信息架构**。当前的 Tab 结构（Chat / Files / Settings）和 iPad 的三栏布局是合理的。设计改进应该在现有架构内进行，而不是推翻重来。
+当前 UI 是工程师驱动设计：信息层级扁平（全同字号同间距）、留白不足（消息 12pt、卡片 8pt 太挤）、缺品牌性格（纯系统 SF Symbols + 系统色，像 SwiftUI 教程项目）、微交互缺失（无过渡动画）。本 spec 的每条原则都对应解掉其中一类问题。
