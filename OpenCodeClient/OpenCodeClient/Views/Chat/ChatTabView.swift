@@ -526,6 +526,8 @@ struct ChatTabView: View {
                                         lineWidth: 1.5
                                     )
                             )
+                            .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                            .hoverEffect(.lift)
                         }
                         .disabled(isSending || isTranscribing || isStartingRecording)
                         .buttonStyle(.plain)
@@ -544,11 +546,13 @@ struct ChatTabView: View {
                                         .foregroundStyle(.white)
                                 }
                             }
-                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                            .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
                             .background {
                                 RoundedRectangle(cornerRadius: DesignCorners.medium)
                                     .fill(DesignColors.Brand.primary)
                             }
+                            .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                            .hoverEffect(.lift)
                         }
                         .disabled(!ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) || isRecording || isTranscribing)
 
@@ -571,6 +575,8 @@ struct ChatTabView: View {
                                                 lineWidth: 1.5
                                             )
                                     )
+                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .hoverEffect(.lift)
                             }
                         }
                     }

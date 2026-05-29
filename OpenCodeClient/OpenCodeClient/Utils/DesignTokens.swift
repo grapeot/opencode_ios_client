@@ -162,7 +162,8 @@ enum DesignControls {
     #if os(visionOS)
     /// Larger chat composer action buttons for gaze interaction on Apple Vision Pro.
     static let composerActionButtonSize: CGFloat = 48
-    static let composerActionButtonSpacing: CGFloat = DesignSpacing.md
+    static let composerPrimaryActionButtonSize: CGFloat = 56
+    static let composerActionButtonSpacing: CGFloat = 18
     static let composerActionIconFont: Font = .title3
     static let composerContainerHorizontalPadding: CGFloat = 32
     static let composerContainerVerticalPadding: CGFloat = 20
@@ -173,6 +174,7 @@ enum DesignControls {
     #else
     /// Compact chat composer action buttons for iPhone and iPad.
     static let composerActionButtonSize: CGFloat = 32
+    static let composerPrimaryActionButtonSize: CGFloat = 32
     static let composerActionButtonSpacing: CGFloat = DesignSpacing.sm
     static let composerActionIconFont: Font = .callout
     static let composerContainerHorizontalPadding: CGFloat = 16
