@@ -468,32 +468,6 @@ struct ChatTabView: View {
                     .opacity(0.5)
                  HStack(alignment: .bottom, spacing: DesignSpacing.sm) {
                     VStack(spacing: DesignControls.composerActionButtonSpacing) {
-                        // mic — lives INSIDE the composer pill, left-aligned, borderless
-                        Button {
-                            Task { await toggleRecording() }
-                        } label: {
-                            ZStack {
-                                if isTranscribing || isRetryingSpeech {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                } else {
-                                    Image(systemName: "mic.fill")
-                                        .font(DesignControls.composerActionIconFont)
-                                        .foregroundStyle(isRecording ? Color.red : DesignColors.Neutral.textSecondary)
-                                }
-                            }
-                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
-                            .background {
-                                if isRecording {
-                                    Circle().fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
-                                }
-                            }
-                            .contentShape(.hoverEffect, Circle())
-                            .hoverEffect(.lift)
-                        }
-                        .disabled(isSending || isTranscribing || isStartingRecording || isRetryingSpeech)
-                        .buttonStyle(.plain)
-
                         if isTranscribing {
                             Button {
                                 Task { await abortSpeechRecognition() }
@@ -522,6 +496,32 @@ struct ChatTabView: View {
                             .disabled(isRetryingSpeech || isStartingRecording || isSending)
                             .buttonStyle(.plain)
                         }
+
+                        // mic — lives INSIDE the composer pill, left-aligned, borderless
+                        Button {
+                            Task { await toggleRecording() }
+                        } label: {
+                            ZStack {
+                                if isTranscribing || isRetryingSpeech {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "mic.fill")
+                                        .font(DesignControls.composerActionIconFont)
+                                        .foregroundStyle(isRecording ? Color.red : DesignColors.Neutral.textSecondary)
+                                }
+                            }
+                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                            .background {
+                                if isRecording {
+                                    Circle().fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
+                                }
+                            }
+                            .contentShape(.hoverEffect, Circle())
+                            .hoverEffect(.lift)
+                        }
+                        .disabled(isSending || isTranscribing || isStartingRecording || isRetryingSpeech)
+                        .buttonStyle(.plain)
                     }
                     .padding(.bottom, 2)
 
@@ -546,13 +546,27 @@ struct ChatTabView: View {
                         }
                     }
 
-                    // Send is ALWAYS present — you can fire off a new message
-                    // while the assistant is still working, no need to stop
-                    // first. The stop button is an ADDITIONAL control that only
-                    // appears while busy; it stacks BELOW send (not beside it),
-                    // so the column reads send-on-top / stop-underneath. Solid
-                    // rounded squares: send blue, stop red.
+                    // Send is ALWAYS present and keeps the bottom slot. The stop
+                    // button is transient and stacks above it so the send target
+                    // never moves when busy state changes.
                     VStack(spacing: DesignControls.composerActionButtonSpacing) {
+                        if state.isBusy {
+                            Button {
+                                Task { await state.abortSession() }
+                            } label: {
+                                Image(systemName: "stop.fill")
+                                    .font(DesignControls.composerActionIconFont.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                            .fill(Color.red)
+                                    }
+                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .hoverEffect(.lift)
+                            }
+                        }
+
                         Button {
                             sendCurrentInput()
                         } label: {
@@ -576,23 +590,6 @@ struct ChatTabView: View {
                             .hoverEffect(.lift)
                         }
                         .disabled(!canSendNow)
-
-                        if state.isBusy {
-                            Button {
-                                Task { await state.abortSession() }
-                            } label: {
-                                Image(systemName: "stop.fill")
-                                    .font(DesignControls.composerActionIconFont.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                            .fill(Color.red)
-                                    }
-                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
-                                    .hoverEffect(.lift)
-                            }
-                        }
                     }
                     .padding(.bottom, 1)
                 }
