@@ -512,25 +512,13 @@ struct ChatTabView: View {
                         }
                     }
 
-                    // primary action — solid blue rounded square hugging the right.
-                    // Stop replaces send while the assistant is working.
-                    if state.isBusy {
-                        Button {
-                            Task { await state.abortSession() }
-                        } label: {
-                            Image(systemName: "stop.fill")
-                                .font(DesignControls.composerActionIconFont.bold())
-                                .foregroundStyle(.white)
-                                .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
-                                .background {
-                                    RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                        .fill(Color.red)
-                                }
-                                .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
-                                .hoverEffect(.lift)
-                        }
-                        .padding(.bottom, 1)
-                    } else {
+                    // Send is ALWAYS present — you can fire off a new message
+                    // while the assistant is still working, no need to stop
+                    // first. The stop button is an ADDITIONAL control that only
+                    // appears while busy; it stacks BELOW send (not beside it),
+                    // so the column reads send-on-top / stop-underneath. Solid
+                    // rounded squares: send blue, stop red.
+                    VStack(spacing: DesignControls.composerActionButtonSpacing) {
                         Button {
                             sendCurrentInput()
                         } label: {
@@ -554,8 +542,25 @@ struct ChatTabView: View {
                             .hoverEffect(.lift)
                         }
                         .disabled(!canSendNow)
-                        .padding(.bottom, 1)
+
+                        if state.isBusy {
+                            Button {
+                                Task { await state.abortSession() }
+                            } label: {
+                                Image(systemName: "stop.fill")
+                                    .font(DesignControls.composerActionIconFont.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                            .fill(Color.red)
+                                    }
+                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .hoverEffect(.lift)
+                            }
+                        }
                     }
+                    .padding(.bottom, 1)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
