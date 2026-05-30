@@ -522,14 +522,16 @@ Agent prefill（5 个，OpenCode-Builder 默认）：
 
 `GET /session/:id/diff` 实测返回 `[]`，即使 session 有 write 操作。GH #10920 等表明可能是 OpenCode server 端 session_diff 追踪问题，官方 web 客户端也可能遇到。暂不修复，待 server 端修复。
 
-## Pixelate 设计探索（仅设计，未实现）
+## 工具卡渲染重做（仅设计，未实现）
 
-在 design.md 末尾新增 "Pixelate 升级" 章节，锁定一层叠加在 Quiet Tech 之上的像素化点缀方向（受 VoiceFlow Pixelate 改造启发）。**只落设计 + 效果图，不改代码**，实现放后续 PR。三块：
+在 design.md 末尾新增 "工具卡渲染重做" 章节。**注意：最初探索过像素风，但放弃了——OpenCode 整体不做像素化**，吸引人的是那套**信息组织方式**而非像素质感。**只落设计 + 效果图，不改代码**，实现放后续 PR。
 
-1. **工具卡按类型分两形态**：patch/edit/write/read → 文件卡（像素文件图标 + 路径 + chevron）；其余 bash/test/grep/… → 合并可展开单行（`▸ Ran 3 tests`）。取代现状"所有工具一律通用展开卡 + patch 单独整卡蓝"。
-2. **AI 工作中**：gold ProgressView → 像素方块流动指示器（沿用"动态只给工作中"语义）。
-3. **logo**：换成电蓝像素终端提示符（`>` + 光标块）。
+核心：工具结果按类型分两形态，**按时间顺序混排、不分组、不加分区标题**：
+- patch/edit/write/read → **文件卡**（保留一个干净的 file 图标 + monospace 路径 + chevron）。
+- 其余 bash/test/grep/… → **合并可展开单行**（`▸ Ran 3 tests`）。
 
-边界：不全像素化（正文/工具内容/代码预览/模型选择器保持现代字体）、不要右上角用户头像、模型选择器不动。
+配套：AI 回复**左边去掉头像/圆形图标**，用户 vs AI 继续靠"用户消息蓝左竖条 / AI 无容器"区分；"AI 工作中"维持现有 gold 轻动效，不引入像素。
 
-效果图见 `docs/design_images/pixelate_*.png`（gpt-image-2 生成）。
+边界：不引入像素风、不分组、文件卡保留 file 图标、AI 回复无头像、模型选择器不动、不要右上角用户头像。
+
+效果图见 `docs/design_images/tool_cards_chronological.png`（gpt-image-2 生成）。
