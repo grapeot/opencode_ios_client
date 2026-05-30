@@ -69,6 +69,26 @@ extension AppState {
         }
     }
 
+    func transcribePreservedAudio(
+        _ preservedAudio: VoiceFlowPreservedAudio,
+        onPartialTranscript: (@Sendable (String) -> Void)? = nil
+    ) async throws -> String {
+        let client = try makeVoiceFlowClient()
+        let result = try await client.transcribe(preservedAudio: preservedAudio, onPartialTranscript: onPartialTranscript)
+        return result.text
+    }
+
+    func discardPreservedAudio(_ preservedAudio: VoiceFlowPreservedAudio) {
+        Task {
+            do {
+                let client = try makeVoiceFlowClient()
+                await client.discardPreservedAudio(preservedAudio)
+            } catch {
+                Self.logger.error("[SpeechProfile] discard preserved audio failed error=\(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     func testAIBuilderConnection() async {
         guard !isTestingAIBuilderConnection else { return }
         isTestingAIBuilderConnection = true

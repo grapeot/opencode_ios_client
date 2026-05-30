@@ -3,9 +3,9 @@
 //  OpenCodeClientUITests
 //
 //  UX test for the "tool card render redo": launches with a deterministic injected
-//  assistant turn (UITEST_TOOL_CARDS_FIXTURE) and asserts the new rendering —
-//  the "OpenCode" assistant header, file-operation cards (2-column grid), and the
-//  merged "N tool calls" disclosure row (expandable). Captures a screenshot for
+//  assistant turn (UITEST_TOOL_CARDS_FIXTURE) and asserts the new rendering:
+//  assistant fixture text, file-operation cards (2-column grid), and the merged
+//  "N tool calls" disclosure row (expandable). Captures a screenshot for
 //  visual QA. Anchored on accessibility identifiers per AGENTS.md (no TextField queries).
 //
 
@@ -23,9 +23,11 @@ final class ToolCardsUITests: XCTestCase {
         app.launchArguments = ["UITEST_TOOL_CARDS_FIXTURE"]
         app.launch()
 
-        // Assistant "OpenCode" header.
-        let header = app.staticTexts["assistant.header"]
-        XCTAssertTrue(header.waitForExistence(timeout: 12), "assistant.header (OpenCode 标题) 应可见")
+        // Assistant fixture content.
+        let assistantText = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS[c] 'Here are the changes I made'")
+        ).firstMatch
+        XCTAssertTrue(assistantText.waitForExistence(timeout: 12), "fixture assistant text 应可见")
 
         // At least one file card. Identifiers are toolcard.file.<basename>.
         let fileCardPredicate = NSPredicate(format: "identifier BEGINSWITH 'toolcard.file.'")
