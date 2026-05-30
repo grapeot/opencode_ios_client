@@ -99,6 +99,19 @@ extension AppState {
                 currentSessionID = first.id
                 applySavedModelForCurrentSession()
             }
+
+            // A persisted session was restored on launch but its messages were
+            // never fetched (selectSession is the only path that loads them, and
+            // it short-circuits when the id already matches). Without this, a
+            // relaunch lands on the last session showing an empty transcript
+            // until the user manually switches away and back. Hydrate it once.
+            if let restoredID = currentSessionID,
+               messages.isEmpty,
+               sessions.contains(where: { $0.id == restoredID }) {
+                applySavedModelForCurrentSession()
+                await loadMessages()
+                await refreshPendingPermissions()
+            }
         } catch {
             connectionError = error.localizedDescription
         }

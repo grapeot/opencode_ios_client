@@ -63,10 +63,10 @@ struct SessionListView: View {
                                 dismiss()
                             }
                         } label: {
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "plus")
                         }
                         .disabled(!state.canCreateSession)
-                        .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : .gray)
+                        .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
 
                         if !state.canCreateSession {
                             Button {
@@ -247,6 +247,15 @@ struct SessionRowView: View {
         .onTapGesture {
             guard !isDeleting else { return }
             onSelect()
+        }
+        // Selected row speaks the same "blue left bar" language as user
+        // messages and action cards — a 3pt accent edge plus the subtle fill.
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Rectangle()
+                    .fill(DesignColors.Brand.primary)
+                    .frame(width: 3)
+            }
         }
         .listRowBackground(isSelected ? DesignColors.Brand.primary.opacity(DesignColors.Opacity.selectionFill) : Color.clear)
         .accessibilityElement(children: .combine)

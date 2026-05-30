@@ -41,30 +41,27 @@ struct ChatToolbarView: View {
             Button {
                 showSessionList = true
             } label: {
-                Image(systemName: "list.bullet.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(DesignColors.Brand.primary)
+                Image(systemName: "list.bullet")
+                    .font(.body)
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
             }
             .accessibilityIdentifier("chat-toolbar-session-list")
-            
+
             Button {
                 renameText = state.currentSession?.title ?? ""
                 showRenameAlert = true
             } label: {
-                Image(systemName: "pencil.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
+                Image(systemName: "pencil")
+                    .font(.body)
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
             }
-            
+
             Button {
                 Task { await state.createSession() }
             } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : .gray)
+                Image(systemName: "plus")
+                    .font(.body)
+                    .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
             }
             .disabled(!state.canCreateSession)
             .accessibilityIdentifier("chat-toolbar-create-session")
@@ -74,8 +71,8 @@ struct ChatToolbarView: View {
                     showCreateDisabledAlert = true
                 } label: {
                     Image(systemName: "info.circle")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
+                        .font(.body)
+                        .foregroundStyle(DesignColors.Neutral.textTertiary)
                 }
                 .buttonStyle(.plain)
             }
@@ -114,10 +111,12 @@ struct ChatToolbarView: View {
                     .font(.caption2)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(DesignColors.Brand.primary.gradient)
-            .foregroundColor(.white)
-            .clipShape(Capsule())
+            .padding(.vertical, 6)
+            .foregroundColor(DesignColors.Brand.primary)
+            .overlay(
+                Capsule()
+                    .stroke(DesignColors.Brand.primary.opacity(0.30), lineWidth: 1)
+            )
         }
         .sheet(isPresented: $showConfigSheet) {
             NavigationStack {

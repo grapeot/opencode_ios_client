@@ -35,13 +35,15 @@ struct ToolPartView: View {
         return raw
     }
 
+    // Info cards are neutral, not branded — the tool name reads as quiet
+    // metadata (muted secondary), and the surface is a plain neutral fill
+    // rather than an accent tint. Blue is reserved for actions/selection.
     private var toolAccentColor: Color {
-        if part.tool == "todowrite" { return .green }
-        return DesignColors.Brand.primary
+        DesignColors.Neutral.textSecondary
     }
 
     private var toolBackgroundColor: Color {
-        DesignColors.Brand.primary.opacity(DesignColors.surfaceFill(for: colorScheme))
+        DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme))
     }
 
     private var imageCandidatePaths: [String] {
@@ -189,6 +191,10 @@ struct ToolPartView: View {
             }
             .font(DesignTypography.micro)
         }
+        // DisclosureGroup tints its label + chevron with the global accent by
+        // default, which would paint this info card electric-blue. Info cards
+        // are neutral, so override the tint to a quiet tertiary gray.
+        .tint(DesignColors.Neutral.textTertiary)
         .onChange(of: part.stateDisplay) { _, newValue in
             if newValue?.lowercased() == "completed" {
                 isExpanded = false

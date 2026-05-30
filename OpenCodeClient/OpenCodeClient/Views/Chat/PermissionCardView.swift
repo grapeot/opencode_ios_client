@@ -10,24 +10,18 @@ struct PermissionCardView: View {
     let permission: PendingPermission
     let onRespond: (APIClient.PermissionResponse) -> Void
 
-    private let accent = DesignColors.Semantic.warning
+    // Action cards speak a single language: a left electric-blue accent bar
+    // plus plain text actions. Blue is the only color — green/orange/red are
+    // dropped so the card reads as "decision needed", not "alarm".
+    private let accent = DesignColors.Brand.primary
 
     var body: some View {
         HStack(spacing: 0) {
             Rectangle()
                 .fill(accent)
-                .frame(width: 4)
+                .frame(width: 3)
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.shield.fill")
-                        .foregroundStyle(accent)
-                        .font(.title3)
-                    Text(L10n.t(.permissionRequired))
-                        .font(DesignTypography.headline.weight(.semibold))
-                        .foregroundStyle(accent)
-                }
-
+            VStack(alignment: .leading, spacing: 8) {
                 if let name = permission.permission, !name.isEmpty {
                     Text(name)
                         .font(DesignTypography.body.weight(.semibold))
@@ -35,37 +29,34 @@ struct PermissionCardView: View {
 
                 Text(permission.description)
                     .font(DesignTypography.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignColors.Neutral.text)
 
                 if !permission.patterns.isEmpty {
                     Text(permission.patterns.joined(separator: ", "))
-                        .font(DesignTypography.micro)
-                        .foregroundStyle(.secondary)
+                        .font(DesignTypography.microMono)
+                        .foregroundStyle(DesignColors.Neutral.textSecondary)
                         .lineLimit(2)
                 }
 
-                VStack(spacing: 10) {
-                    HStack(spacing: 10) {
-                        Button {
-                            onRespond(.once)
-                        } label: {
-                            Text(L10n.t(.permissionAllowOnce))
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
+                HStack(spacing: DesignSpacing.lg) {
+                    Button {
+                        onRespond(.once)
+                    } label: {
+                        Text(L10n.t(.permissionAllowOnce))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(accent)
+                    }
+                    .buttonStyle(.plain)
 
+                    if permission.allowAlways {
                         Button {
                             onRespond(.always)
                         } label: {
                             Text(L10n.t(.permissionAllowAlways))
                                 .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
+                                .foregroundStyle(accent)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.blue)
-                        .disabled(!permission.allowAlways)
+                        .buttonStyle(.plain)
                     }
 
                     Button {
@@ -73,16 +64,16 @@ struct PermissionCardView: View {
                     } label: {
                         Text(L10n.t(.permissionReject))
                             .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
+                            .foregroundStyle(DesignColors.Neutral.textSecondary)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
+                    .buttonStyle(.plain)
                 }
+                .padding(.top, 2)
             }
             .padding(DesignSpacing.cardPadding)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(accent.opacity(DesignColors.surfaceFill(for: colorScheme)))
+        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
     }
 }

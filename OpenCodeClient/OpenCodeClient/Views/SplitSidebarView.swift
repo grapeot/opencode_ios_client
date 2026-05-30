@@ -11,18 +11,34 @@ import SwiftUI
 struct SplitSidebarView: View {
     @Bindable var state: AppState
 
-    private let minPaneHeight: CGFloat = 220
     private let dividerHeight: CGFloat = 1
+    // File tree defaults to collapsed: in practice the sidebar is used to pick
+    // sessions, so sessions own the column and Files is a disclosure the user
+    // expands only when they need to browse the workspace.
+    @State private var filesExpanded = false
 
     var body: some View {
         NavigationStack {
-            GeometryReader { geo in
-                let available = max(0, geo.size.height - dividerHeight)
-                let half = max(minPaneHeight, available / 2)
-                let filesHeight = half
-                let sessionsHeight = max(minPaneHeight, available - half)
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(DesignAnimation.spring) { filesExpanded.toggle() }
+                } label: {
+                    HStack(spacing: DesignSpacing.sm) {
+                        Image(systemName: filesExpanded ? "chevron.down" : "chevron.right")
+                            .font(DesignTypography.micro)
+                            .foregroundStyle(DesignColors.Neutral.textSecondary)
+                        Text(L10n.t(.navFiles))
+                            .font(DesignTypography.headline)
+                            .foregroundStyle(DesignColors.Neutral.text)
+                        Spacer()
+                    }
+                    .padding(.horizontal, DesignSpacing.lg)
+                    .padding(.vertical, DesignSpacing.md)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
-                VStack(spacing: 0) {
+                if filesExpanded {
                     FileTreeView(state: state, forceSplitPreview: true)
                         .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
                         .onSubmit(of: .search) {
@@ -39,7 +55,7 @@ struct SplitSidebarView: View {
                                 }
                             }
                         }
-                        .frame(height: filesHeight)
+                        .frame(maxHeight: .infinity)
                         .refreshable {
                             await state.loadFileTree()
                             await state.loadFileStatus()
@@ -47,10 +63,10 @@ struct SplitSidebarView: View {
 
                     Divider()
                         .frame(height: dividerHeight)
-
-                    SessionsSidebarList(state: state)
-                        .frame(height: sessionsHeight)
                 }
+
+                SessionsSidebarList(state: state)
+                    .frame(maxHeight: .infinity)
             }
             .navigationTitle(L10n.t(.navWorkspace))
             .navigationBarTitleDisplayMode(.inline)
