@@ -2937,12 +2937,12 @@ struct DesignTokensTests {
         #expect(DesignCorners.large > DesignCorners.medium)
     }
 
-    @Test func brandPrimaryIsSystemBlueTone() {
+    @Test func brandPrimaryIsElectricBlueTone() {
         let brand = DesignColors.Brand.primary
         let uiColor = UIColor(brand)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-        #expect(r < 0.1)
+        #expect(r > 0.2 && r < 0.3)
         #expect(g > 0.3 && g < 0.6)
         #expect(b > 0.8)
     }

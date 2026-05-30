@@ -117,10 +117,14 @@ extension ChatTabView {
                 Self.logger.error("[SpeechProfile] realtime stop failed: missing session")
                 return
             }
-            speechSession = nil
 
             isTranscribing = true
-            defer { isTranscribing = false }
+            defer {
+                if speechSession === session {
+                    speechSession = nil
+                    isTranscribing = false
+                }
+            }
             let prefix = recordingInputPrefix
             let partialTranscriptBuffer = SpeechPartialTranscriptBuffer()
             let transcribeStart = ProcessInfo.processInfo.systemUptime
@@ -132,10 +136,13 @@ extension ChatTabView {
                     }
                 }
                 let cleaned = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard speechSession === session else { return }
                 Self.logger.notice("[SpeechProfile] chat realtime transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
                 inputText = Self.mergedSpeechInput(prefix: prefix, transcript: cleaned)
+                clearPreservedSpeechAudio()
             } catch {
                 await session.cancel()
+                guard speechSession === session else { return }
                 Self.logger.error("[SpeechProfile] chat realtime transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                 inputText = Self.speechFailureInput(prefix: prefix, lastPartialTranscript: partialTranscriptBuffer.current())
                 speechError = error.localizedDescription
@@ -166,6 +173,7 @@ extension ChatTabView {
             isStartingRecording = true
             let startRecordingStart = ProcessInfo.processInfo.systemUptime
             do {
+                clearPreservedSpeechAudio()
                 let session = try await state.startRealtimeSpeechSession()
                 recordingInputPrefix = inputText
                 speechSession = session
@@ -193,5 +201,59 @@ extension ChatTabView {
                 speechError = error.localizedDescription
             }
         }
+    }
+
+    func abortSpeechRecognition() async {
+        stopSpeechHeartbeat()
+        stopSpeechEventConsumer()
+        _ = try? await microphone.stop()
+
+        let session = speechSession
+        let prefix = recordingInputPrefix
+        speechSession = nil
+        isRecording = false
+        isTranscribing = false
+        isStartingRecording = false
+
+        guard let session else { return }
+        do {
+            if let preserved = try await session.abortPreservingAudio() {
+                clearPreservedSpeechAudio()
+                preservedSpeechInputPrefix = prefix
+                preservedSpeechAudio = preserved
+                Self.logger.notice("[SpeechProfile] realtime speech aborted with preserved bytes=\(preserved.byteCount, privacy: .public)")
+            }
+        } catch {
+            Self.logger.error("[SpeechProfile] realtime speech abort failed error=\(error.localizedDescription, privacy: .public)")
+            speechError = error.localizedDescription
+        }
+    }
+
+    func retryPreservedSpeechAudio() async {
+        guard let preserved = preservedSpeechAudio else { return }
+        isRetryingSpeech = true
+        defer { isRetryingSpeech = false }
+
+        let prefix = preservedSpeechInputPrefix
+        do {
+            let transcript = try await state.transcribePreservedAudio(preserved) { partial in
+                Task { @MainActor in
+                    inputText = Self.mergedSpeechInput(prefix: prefix, transcript: partial)
+                }
+            }
+            inputText = Self.mergedSpeechInput(prefix: prefix, transcript: transcript)
+            clearPreservedSpeechAudio()
+        } catch {
+            Self.logger.error("[SpeechProfile] preserved speech retry failed error=\(error.localizedDescription, privacy: .public)")
+            speechError = error.localizedDescription
+        }
+    }
+
+    func clearPreservedSpeechAudio() {
+        if let preservedSpeechAudio {
+            state.discardPreservedAudio(preservedSpeechAudio)
+        }
+        preservedSpeechAudio = nil
+        preservedSpeechInputPrefix = ""
     }
 }

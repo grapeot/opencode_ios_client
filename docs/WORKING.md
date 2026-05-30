@@ -4,11 +4,17 @@
 
 ## 当前状态
 
-- **最后更新**：2026-05-29
-- **分支**：`fix-composer-send-while-busy`（from master，PR #63 已 merge）
+- **最后更新**：2026-05-30
+- **分支**：`feature/speech-abort-retry`（from master）
 - **编译**：✅ iPhone 16 Pro Simulator build 通过
 - **测试**：⏳ 待用户实测 composer send/stop 行为
-- **Phase**：Composer send/stop 逻辑回归修复
+- **Phase**：Speech abort/retry via VoiceFlowKit preserved audio
+
+### 2026-05-30 — Speech abort/retry
+
+- VoiceFlowKit pin 更新到 merged revision `dbbe297ea52e3a3438d227a54001b23c138c47b7`。
+- Chat composer 左侧新增辅助按钮：录音/转写中显示 stop，调用 `abortPreservingAudio()` 立即释放 UI；保留音频后显示 retry，调用 `transcribe(preservedAudio:)` 重识别上一段 PCM。
+- `cancel()` 语义保持不变，只有显式 abort 路径保留音频；发送按钮仍通过 `isRecording/isTranscribing/isRetryingSpeech` 门控避免并发写入 input。
 
 ## 默认工作流约定
 

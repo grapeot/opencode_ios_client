@@ -59,9 +59,12 @@ struct ChatTabView: View {
     @State var speechHeartbeatTask: Task<Void, Never>?
     @State var speechEventTask: Task<Void, Never>?
     @State var recordingInputPrefix = ""
+    @State var preservedSpeechInputPrefix = ""
+    @State var preservedSpeechAudio: VoiceFlowPreservedAudio?
     @State var isRecording = false
     @State var isStartingRecording = false
     @State var isTranscribing = false
+    @State var isRetryingSpeech = false
     @State var speechError: String?
     @State var speechRecoveryActive = false
     @State private var pendingScrollTask: Task<Void, Never>?
@@ -74,7 +77,7 @@ struct ChatTabView: View {
 
     private var canSendNow: Bool {
         ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText)
-            && !isRecording && !isTranscribing
+            && !isRecording && !isTranscribing && !isRetryingSpeech
     }
 
     fileprivate struct TurnActivity: Identifiable {
@@ -464,31 +467,62 @@ struct ChatTabView: View {
                  Divider()
                     .opacity(0.5)
                  HStack(alignment: .bottom, spacing: DesignSpacing.sm) {
-                    // mic — lives INSIDE the composer pill, left-aligned, borderless
-                    Button {
-                        Task { await toggleRecording() }
-                    } label: {
-                        ZStack {
-                            if isTranscribing {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Image(systemName: "mic.fill")
-                                    .font(DesignControls.composerActionIconFont)
-                                    .foregroundStyle(isRecording ? Color.red : DesignColors.Neutral.textSecondary)
+                    VStack(spacing: DesignControls.composerActionButtonSpacing) {
+                        // mic — lives INSIDE the composer pill, left-aligned, borderless
+                        Button {
+                            Task { await toggleRecording() }
+                        } label: {
+                            ZStack {
+                                if isTranscribing || isRetryingSpeech {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "mic.fill")
+                                        .font(DesignControls.composerActionIconFont)
+                                        .foregroundStyle(isRecording ? Color.red : DesignColors.Neutral.textSecondary)
+                                }
                             }
-                        }
-                        .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
-                        .background {
-                            if isRecording {
-                                Circle().fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
+                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                            .background {
+                                if isRecording {
+                                    Circle().fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
+                                }
                             }
+                            .contentShape(.hoverEffect, Circle())
+                            .hoverEffect(.lift)
                         }
-                        .contentShape(.hoverEffect, Circle())
-                        .hoverEffect(.lift)
+                        .disabled(isSending || isTranscribing || isStartingRecording || isRetryingSpeech)
+                        .buttonStyle(.plain)
+
+                        if isRecording || isTranscribing {
+                            Button {
+                                Task { await abortSpeechRecognition() }
+                            } label: {
+                                Image(systemName: "stop.fill")
+                                    .font(DesignControls.composerActionIconFont.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                                    .background { RoundedRectangle(cornerRadius: DesignCorners.medium).fill(Color.red) }
+                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .hoverEffect(.lift)
+                            }
+                            .buttonStyle(.plain)
+                        } else if preservedSpeechAudio != nil {
+                            Button {
+                                Task { await retryPreservedSpeechAudio() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(DesignControls.composerActionIconFont.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                                    .background { RoundedRectangle(cornerRadius: DesignCorners.medium).fill(DesignColors.Brand.primary) }
+                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                    .hoverEffect(.lift)
+                            }
+                            .disabled(isRetryingSpeech || isStartingRecording || isSending)
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .disabled(isSending || isTranscribing || isStartingRecording)
-                    .buttonStyle(.plain)
                     .padding(.bottom, 2)
 
                     ZStack(alignment: .topLeading) {

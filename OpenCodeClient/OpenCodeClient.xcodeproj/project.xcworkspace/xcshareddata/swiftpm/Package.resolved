@@ -123,8 +123,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/grapeot/voiceflow.git",
       "state" : {
-        "revision" : "1e22166d535bee9d8e028a9c1bdda9ccd23e7285",
-        "version" : "0.1.0"
+        "revision" : "dbbe297ea52e3a3438d227a54001b23c138c47b7"
       }
     }
   ],

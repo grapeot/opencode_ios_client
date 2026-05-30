@@ -2,6 +2,12 @@
 
 日期：2026-05-01
 
+## 2026-05-30 speech abort/retry
+
+- VoiceFlowKit is pinned to revision `dbbe297ea52e3a3438d227a54001b23c138c47b7`, which exposes preserved audio retry APIs.
+- Chat composer now shows a left-side speech auxiliary button: stop during recording/transcribing, retry after abort when preserved audio exists.
+- Expected validation: unit/build must compile the new `VoiceFlowPreservedAudio` facade usage; UI smoke should confirm send is unlocked immediately after speech abort.
+
 ## 文档目的
 
 这份文档不是单纯的测试计划，而是当前项目测试系统的说明文档。它主要回答三件事：
