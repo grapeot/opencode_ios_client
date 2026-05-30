@@ -125,4 +125,103 @@ struct ToolCardClassifierTests {
         #expect(otherParts.count == 3)
         #expect(ToolCardClassifier.toolCallsCount(parts) == 3)
     }
+
+    // MARK: - Directory read detection + entries parsing
+
+    /// Build a `read` Part whose object `state` carries `output`, mirroring the
+    /// real server shape where Part.toolOutput resolves to state.output.
+    private func makeReadPart(tool: String = "read", output: String) throws -> Part {
+        let obj: [String: Any] = [
+            "id": "d1",
+            "messageID": "m1",
+            "sessionID": "s1",
+            "type": "tool",
+            "tool": tool,
+            "state": [
+                "status": "completed",
+                "output": output,
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: obj)
+        return try JSONDecoder().decode(Part.self, from: data)
+    }
+
+    private let directoryOutput = """
+    <path>/abs/path/proj</path>
+    <type>directory</type>
+    <entries>
+    sub/
+    nested_dir/
+    file.txt
+    README.md
+    (4 entries)
+    </entries>
+    """
+
+    @Test func directoryReadIsDetected() throws {
+        let part = try makeReadPart(output: directoryOutput)
+        #expect(ToolCardClassifier.isDirectoryRead(part))
+    }
+
+    @Test func fileReadIsNotDirectoryRead() throws {
+        let fileOutput = """
+        <path>/abs/path/file.txt</path>
+        <type>file</type>
+        <content>hello</content>
+        """
+        let part = try makeReadPart(output: fileOutput)
+        #expect(!ToolCardClassifier.isDirectoryRead(part))
+    }
+
+    @Test func readFileAliasDetectsDirectory() throws {
+        let part = try makeReadPart(tool: "read_file", output: directoryOutput)
+        #expect(ToolCardClassifier.isDirectoryRead(part))
+    }
+
+    @Test func nonReadToolIsNeverDirectoryRead() throws {
+        // Even if some tool's output mentioned directory, only `read` counts.
+        let part = try makeReadPart(tool: "bash", output: directoryOutput)
+        #expect(!ToolCardClassifier.isDirectoryRead(part))
+    }
+
+    @Test func readWithoutOutputIsNotDirectoryRead() throws {
+        let part = try makePart(type: "tool", tool: "read")
+        #expect(!ToolCardClassifier.isDirectoryRead(part))
+    }
+
+    @Test func parsesEntriesWithDirAndFileFlags() throws {
+        let entries = ToolCardClassifier.parseDirectoryEntries(directoryOutput)
+        #expect(entries.count == 4)
+        #expect(entries.map(\.name) == ["sub", "nested_dir", "file.txt", "README.md"])
+        #expect(entries.map(\.isDirectory) == [true, true, false, false])
+    }
+
+    @Test func parseSkipsSummaryAndBlankLines() throws {
+        let output = """
+        <type>directory</type>
+        <entries>
+
+        a/
+
+        b.swift
+        (2 entries)
+        </entries>
+        """
+        let entries = ToolCardClassifier.parseDirectoryEntries(output)
+        #expect(entries.map(\.name) == ["a", "b.swift"])
+        #expect(entries.map(\.isDirectory) == [true, false])
+    }
+
+    @Test func parseReturnsEmptyWhenNoEntriesBlock() throws {
+        #expect(ToolCardClassifier.parseDirectoryEntries("<type>file</type>").isEmpty)
+        #expect(ToolCardClassifier.parseDirectoryEntries(nil).isEmpty)
+    }
+
+    @Test func parseHandlesMissingCloseTag() throws {
+        // Tolerate a truncated/streaming output with no </entries>.
+        let output = "<entries>\nonly/\nfile.txt\n"
+        let entries = ToolCardClassifier.parseDirectoryEntries(output)
+        #expect(entries.map(\.name) == ["only", "file.txt"])
+        #expect(entries.map(\.isDirectory) == [true, false])
+    }
 }
