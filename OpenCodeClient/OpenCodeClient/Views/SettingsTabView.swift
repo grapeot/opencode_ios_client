@@ -288,13 +288,19 @@ struct SettingsTabView: View {
                 #endif
 
                 Section(L10n.t(.settingsAppearance)) {
-                    Picker(L10n.t(.settingsTheme), selection: $state.themePreference) {
-                        Text(L10n.t(.settingsAutoTheme)).tag("auto")
-                        Text(L10n.t(.settingsLightTheme)).tag("light")
-                        Text(L10n.t(.settingsDarkTheme)).tag("dark")
+                    VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+                        Text(L10n.t(.settingsTheme))
+                        Picker(L10n.t(.settingsTheme), selection: $state.themePreference) {
+                            Text(L10n.t(.settingsAutoTheme)).tag("auto")
+                            Text(L10n.t(.settingsLightTheme)).tag("light")
+                            Text(L10n.t(.settingsDarkTheme)).tag("dark")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
                     }
-                    
+
                     Toggle(L10n.t(.settingsShowArchivedSessions), isOn: $state.showArchivedSessions)
+                        .tint(DesignColors.Brand.primary)
                 }
 
                 Section(L10n.t(.settingsSpeechRecognition)) {

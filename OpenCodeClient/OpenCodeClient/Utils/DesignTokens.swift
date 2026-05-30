@@ -18,10 +18,14 @@ enum DesignColors {
     // MARK: Brand
 
     enum Brand {
-        /// Primary brand blue — close to system accent, used for all interactive elements
-        static let primary = Color(red: 0.0, green: 0.478, blue: 1.0)
-        /// Gold accent — highlights, running indicators
-        static let gold = Color(red: 0.85, green: 0.65, blue: 0.13)
+        /// Primary brand — the single identity color of the "Quiet Tech" design
+        /// language. Electric blue #3B82F6, used for every interactive/branded
+        /// element (send, selection, links, the user-message left bar).
+        static let primary = Color(red: 0.231, green: 0.510, blue: 0.965)
+        /// Gold accent #D9A621 — the ONLY secondary emphasis, reserved strictly
+        /// for the transient "AI is working" state (working pulse, context ring
+        /// near capacity). It must not appear anywhere else.
+        static let gold = Color(red: 0.851, green: 0.651, blue: 0.129)
     }
 
     // MARK: Semantic
@@ -47,14 +51,14 @@ enum DesignColors {
         static let textTertiary = Color.gray.opacity(0.4)
         #endif
 
-        /// Subtle card / surface background — light mode
-        static let surfaceLight = Color(red: 0.96, green: 0.96, blue: 0.97)
-        /// Subtle card / surface background — dark mode
-        static let surfaceDark = Color(red: 0.14, green: 0.14, blue: 0.16)
-        /// Composer input background — light mode
-        static let composerLight = Color(red: 0.94, green: 0.94, blue: 0.95)
-        /// Composer input background — dark mode
-        static let composerDark = Color(red: 0.12, green: 0.12, blue: 0.14)
+        /// Subtle card / info surface background — light mode (#F0F1F3)
+        static let surfaceLight = Color(red: 0.941, green: 0.945, blue: 0.953)
+        /// Subtle card / info surface background — dark mode (#1A1D21)
+        static let surfaceDark = Color(red: 0.102, green: 0.114, blue: 0.129)
+        /// Composer input background — light mode (#F4F5F6, the secondary bg)
+        static let composerLight = Color(red: 0.957, green: 0.961, blue: 0.965)
+        /// Composer input background — dark mode (#141619, the secondary bg)
+        static let composerDark = Color(red: 0.078, green: 0.086, blue: 0.098)
     }
 
     // MARK: Opacity Rules

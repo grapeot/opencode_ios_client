@@ -12,6 +12,10 @@ struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
+    // iPad/visionOS: keep all three columns visible by default so the layout
+    // reads as the intended sidebar · preview · chat triptych instead of
+    // collapsing to a single detail pane.
+    @State private var splitColumnVisibility: NavigationSplitViewVisibility = .all
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -216,7 +220,7 @@ struct ContentView: View {
             let paneMin = min(paneIdeal, total * LayoutConstants.SplitView.paneMinFraction)
             let paneMax = max(paneIdeal, total * LayoutConstants.SplitView.paneMaxFraction)
 
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $splitColumnVisibility) {
                 SplitSidebarView(state: state)
                     .navigationSplitViewColumnWidth(min: sidebarMin, ideal: sidebarIdeal, max: sidebarMax)
             } content: {

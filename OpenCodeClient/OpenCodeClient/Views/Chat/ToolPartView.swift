@@ -35,13 +35,17 @@ struct ToolPartView: View {
         return raw
     }
 
+    // The card body stays neutral (a plain surface fill, not an accent tint),
+    // but a tool card IS actionable — it expands to show input/output and can
+    // jump to a file preview. So the tool icon + name carry the electric-blue
+    // accent as the "you can tap this" affordance, rather than reading as inert
+    // gray metadata. Blue lives on the interactive bits, not the whole card.
     private var toolAccentColor: Color {
-        if part.tool == "todowrite" { return .green }
-        return DesignColors.Brand.primary
+        DesignColors.Brand.primary
     }
 
     private var toolBackgroundColor: Color {
-        DesignColors.Brand.primary.opacity(DesignColors.surfaceFill(for: colorScheme))
+        DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme))
     }
 
     private var imageCandidatePaths: [String] {
@@ -189,6 +193,9 @@ struct ToolPartView: View {
             }
             .font(DesignTypography.micro)
         }
+        // Let the DisclosureGroup chevron take the accent — it's the expand
+        // affordance, and a blue chevron reinforces that the card is tappable.
+        .tint(DesignColors.Brand.primary)
         .onChange(of: part.stateDisplay) { _, newValue in
             if newValue?.lowercased() == "completed" {
                 isExpanded = false

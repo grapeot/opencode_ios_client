@@ -72,21 +72,9 @@ struct ChatTabView: View {
 
     private var useGridCards: Bool { sizeClass == .regular }
 
-    private var micButtonBackground: Color {
-        if isRecording {
-            return Color.red.opacity(DesignColors.Opacity.recordingActionFill)
-        }
-        if isTranscribing {
-            return colorScheme == .dark ? DesignColors.Neutral.surfaceDark : DesignColors.Neutral.surfaceLight
-        }
-        return .clear
-    }
-
-    private var micButtonBorder: Color {
-        if isRecording {
-            return Color.red.opacity(DesignColors.Opacity.recordingActionBorder)
-        }
-        return DesignColors.Brand.primary.opacity(DesignColors.Opacity.borderStroke)
+    private var canSendNow: Bool {
+        ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText)
+            && !isRecording && !isTranscribing
     }
 
     fileprivate struct TurnActivity: Identifiable {
@@ -474,7 +462,35 @@ struct ChatTabView: View {
                 }
 
                  Divider()
-                 HStack(alignment: .bottom, spacing: DesignSpacing.md) {
+                    .opacity(0.5)
+                 HStack(alignment: .bottom, spacing: DesignSpacing.sm) {
+                    // mic — lives INSIDE the composer pill, left-aligned, borderless
+                    Button {
+                        Task { await toggleRecording() }
+                    } label: {
+                        ZStack {
+                            if isTranscribing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "mic.fill")
+                                    .font(DesignControls.composerActionIconFont)
+                                    .foregroundStyle(isRecording ? Color.red : DesignColors.Neutral.textSecondary)
+                            }
+                        }
+                        .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
+                        .background {
+                            if isRecording {
+                                Circle().fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
+                            }
+                        }
+                        .contentShape(.hoverEffect, Circle())
+                        .hoverEffect(.lift)
+                    }
+                    .disabled(isSending || isTranscribing || isStartingRecording)
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 2)
+
                     ZStack(alignment: .topLeading) {
                         ChatComposerTextView(
                             text: $inputText,
@@ -490,48 +506,31 @@ struct ChatTabView: View {
 
                         if inputText.isEmpty {
                             Text(L10n.t(.chatInputPlaceholder))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(DesignColors.Neutral.textTertiary)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
-                    .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
-                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
 
-                    VStack(spacing: DesignControls.composerActionButtonSpacing) {
+                    // primary action — solid blue rounded square hugging the right.
+                    // Stop replaces send while the assistant is working.
+                    if state.isBusy {
                         Button {
-                            Task { await toggleRecording() }
+                            Task { await state.abortSession() }
                         } label: {
-                            ZStack {
-                                if isTranscribing {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                } else {
-                                    Image(systemName: "mic.fill")
-                                        .font(DesignControls.composerActionIconFont)
-                                        .foregroundStyle(isRecording ? Color.red : DesignColors.Brand.primary)
+                            Image(systemName: "stop.fill")
+                                .font(DesignControls.composerActionIconFont.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
+                                .background {
+                                    RoundedRectangle(cornerRadius: DesignCorners.medium)
+                                        .fill(Color.red)
                                 }
-                            }
-                            .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
-                            .background {
-                                RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                    .fill(micButtonBackground)
-                            }
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                    .stroke(
-                                        micButtonBorder,
-                                        lineWidth: 1.5
-                                    )
-                            )
-                            .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
-                            .hoverEffect(.lift)
+                                .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
+                                .hoverEffect(.lift)
                         }
-                        .disabled(isSending || isTranscribing || isStartingRecording)
-                        .buttonStyle(.plain)
-
+                        .padding(.bottom, 1)
+                    } else {
                         Button {
                             sendCurrentInput()
                         } label: {
@@ -549,38 +548,19 @@ struct ChatTabView: View {
                             .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
                             .background {
                                 RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                    .fill(DesignColors.Brand.primary)
+                                    .fill(canSendNow ? DesignColors.Brand.primary : DesignColors.Brand.primary.opacity(0.35))
                             }
                             .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
                             .hoverEffect(.lift)
                         }
-                        .disabled(!ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) || isRecording || isTranscribing)
-
-                        if state.isBusy {
-                            Button {
-                                Task { await state.abortSession() }
-                            } label: {
-                                Image(systemName: "stop.fill")
-                                    .font(DesignControls.composerActionIconFont.bold())
-                                    .foregroundStyle(Color.red)
-                                    .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                            .fill(Color.red.opacity(DesignColors.Opacity.recordingActionFill))
-                                    }
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                            .stroke(
-                                                Color.red.opacity(DesignColors.Opacity.recordingActionBorder),
-                                                lineWidth: 1.5
-                                            )
-                                    )
-                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
-                                    .hoverEffect(.lift)
-                            }
-                        }
+                        .disabled(!canSendNow)
+                        .padding(.bottom, 1)
                     }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
+                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
                 .padding(.horizontal, DesignControls.composerContainerHorizontalPadding)
                 .padding(.vertical, DesignControls.composerContainerVerticalPadding)
                 .background(.bar)

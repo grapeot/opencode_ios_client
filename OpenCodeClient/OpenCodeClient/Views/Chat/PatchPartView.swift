@@ -15,7 +15,9 @@ struct PatchPartView: View {
 
     var body: some View {
         let fileCount = part.files?.count ?? 0
-        let accent = DesignColors.Semantic.warning
+        // A patch is a navigational action (tap → open changed files), so it
+        // earns the single electric-blue accent — never orange.
+        let accent = DesignColors.Brand.primary
         Button {
             let paths = part.filePathsForNavigation
             if paths.count == 1 {
@@ -40,7 +42,7 @@ struct PatchPartView: View {
             .font(DesignTypography.micro)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DesignSpacing.cardPadding)
-            .background(accent.opacity(DesignColors.surfaceFill(for: colorScheme)))
+            .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
             .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         }
         .buttonStyle(.plain)
