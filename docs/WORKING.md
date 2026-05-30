@@ -5,10 +5,10 @@
 ## 当前状态
 
 - **最后更新**：2026-05-29
-- **分支**：`implement-quiet-tech-design`（from master）
-- **编译**：✅ iPhone 16 Pro / iPad Pro 11" Simulator build 通过（无 error/warning）
-- **测试**：✅ iOS build 回归验证通过
-- **Phase**：Quiet Tech 视觉设计语言落地（PR #62 设计稿 → 代码实现）
+- **分支**：`fix-composer-send-while-busy`（from master，PR #63 已 merge）
+- **编译**：✅ iPhone 16 Pro Simulator build 通过
+- **测试**：⏳ 待用户实测 composer send/stop 行为
+- **Phase**：Composer send/stop 逻辑回归修复
 
 ## 默认工作流约定
 
@@ -67,6 +67,13 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
 ## 已完成（近期）
+
+- [x] **Composer send/stop 逻辑回归修复（2026-05-29）**：
+  - [x] 根因：Quiet Tech composer 重做时把 primary action 写成 `if state.isBusy { stop } else { send }`，导致 AI 运行时 send 按钮被 stop 替换，用户必须先终止才能发新消息——破坏了"一个发送 + 一个终止、运行中也能直接发"的既定产品行为（WORKING 早有记录："恢复 AI 工作中仍可发送消息：send 始终可见，stop/abort 同时显示"）
+  - [x] 修复：send 按钮**始终渲染**（`canSendNow` 不含 busy 判断，busy 时只要有文字即可发），stop 改为 busy 时**额外**出现的按钮，而非替换 send；二者**上下排列**（send 在上、stop 在下，VStack），不左右并排
+  - [x] 文档：design.md composer 段原本就把错误行为写成"send 原位替换为 stop"，已改正为"send 始终保留、stop 额外并存、上下排列"——根源是设计稿描述与产品行为矛盾
+  - [x] 验证：iPhone build 通过
+  - **分支**：`fix-composer-send-while-busy`（off master）
 
 - [x] **Quiet Tech 视觉设计语言落地（2026-05-29）**：
   - [x] 背景：`docs/design.md` 锁定的 "Quiet Tech 冷静科技感" 设计稿（PR #62）落进 SwiftUI 代码，逐屏在模拟器截图对照 `docs/design_images/` 四张 mockup 迭代到一致
