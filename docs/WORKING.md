@@ -521,3 +521,16 @@ Agent prefill（5 个，OpenCode-Builder 默认）：
 ## Diff 问题
 
 `GET /session/:id/diff` 实测返回 `[]`，即使 session 有 write 操作。GH #10920 等表明可能是 OpenCode server 端 session_diff 追踪问题，官方 web 客户端也可能遇到。暂不修复，待 server 端修复。
+
+## 工具卡渲染重做（仅设计，未实现）
+
+在 design.md 末尾新增 "工具卡渲染重做" 章节。**注意：最初探索过像素风，但放弃了——OpenCode 整体不做像素化**，吸引人的是那套**信息组织方式**而非像素质感。**只落设计 + 效果图，不改代码**，实现放后续 PR。
+
+三个具体改动：
+1. **区分谁说话**：用户消息保留蓝左竖条；OpenCode 回复**去头像**但加 "OpenCode" 文字标题 + **保留现有模型小字**（不动）。用不同 visual style 明确分开。
+2. **文件卡 2 列网格**：patch/edit/write/read → 文件卡（file 图标 + 文件名 + chevron），2 列网格排列。
+3. **合并成 "N tool calls"**：其余工具 → `▸ 3 tool calls`，展开看里面逐条。
+
+排列：版式优先的近时间序（相邻同类聚合），不分组、不加分区标题。边界：不引入像素风、模型选择器不动、不要右上角用户头像、AI working 维持现有 gold 轻动效。
+
+效果图见 `docs/design_images/tool_cards_chronological.png`（gpt-image-2 生成）。
