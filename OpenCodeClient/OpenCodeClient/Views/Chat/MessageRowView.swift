@@ -169,11 +169,8 @@ struct MessageRowView: View {
             .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
 
             HStack {
-                if let model = message.info.resolvedModel {
-                    Text("\(model.providerID)/\(model.modelID)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                // User messages don't carry a model line — the model belongs to
+                // the assistant's reply, not to what the human said.
                 Spacer()
                 if onForkFromMessage != nil {
                     Menu {
