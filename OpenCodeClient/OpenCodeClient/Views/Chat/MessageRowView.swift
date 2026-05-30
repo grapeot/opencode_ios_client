@@ -195,14 +195,9 @@ struct MessageRowView: View {
 
     private var assistantMessageView: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // "OpenCode" header: not an avatar/icon, just a small accent title so
-            // it's obvious the AI is speaking (contrast with the user's blue left bar).
-            Text("OpenCode")
-                .font(DesignTypography.micro)
-                .fontWeight(.semibold)
-                .foregroundStyle(DesignColors.Brand.primary)
-                .accessibilityIdentifier("assistant.header")
-
+            // No "OpenCode" speaker title — the user's blue left-bar vs the
+            // assistant's container-less reply already make it clear who's
+            // speaking, so an extra blue label is redundant.
             ForEach(assistantBlocks) { block in
                 switch block {
                 case .text(let part):
