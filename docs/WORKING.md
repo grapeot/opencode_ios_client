@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **最后更新**：2026-05-03
-- **分支**：`visionos`（from master）
-- **编译**：✅ unified `OpenCodeClient` visionOS Simulator build 通过
-- **测试**：✅ iOS build/test 回归验证通过
-- **Phase**：Voiceflow-style unified iOS + visionOS app target
+- **最后更新**：2026-05-29
+- **分支**：`implement-quiet-tech-design`（from master）
+- **编译**：✅ iPhone 16 Pro / iPad Pro 11" Simulator build 通过（无 error/warning）
+- **测试**：✅ iOS build 回归验证通过
+- **Phase**：Quiet Tech 视觉设计语言落地（PR #62 设计稿 → 代码实现）
 
 ## 默认工作流约定
 
@@ -67,6 +67,21 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
 ## 已完成（近期）
+
+- [x] **Quiet Tech 视觉设计语言落地（2026-05-29）**：
+  - [x] 背景：`docs/design.md` 锁定的 "Quiet Tech 冷静科技感" 设计稿（PR #62）落进 SwiftUI 代码，逐屏在模拟器截图对照 `docs/design_images/` 四张 mockup 迭代到一致
+  - [x] `DesignTokens`：Brand 主色 → 电蓝 `#3B82F6`，gold 仅留给"AI 工作中"；surface/composer 灌入设计稿深色值。token **名称不变**，所有 View 继续引用，避免大面积改动
+  - [x] 卡片三态语言：信息卡（tool）中性 surface 底，但**图标/工具名/文件路径/chevron 用电蓝**作为"可点"暗示（卡身中性、accent 只点在可交互元素上）；操作卡（permission）左 3pt 蓝条 + 纯文字按钮（去掉绿/蓝/红三色实底按钮）；patch 卡去橙 → 单一蓝 accent
+  - [x] 消息区：用户消息保留 3pt 蓝左条 + muted 底（去掉上方 divider，靠间距分隔）；AI 回复无容器
+  - [x] Composer：收成单 pill，mic 移入框内左（无描边），send 实底蓝圆角方块贴右（busy 时 stop 替换）
+  - [x] Toolbar：朴素 glyph 取代填充圆；模型选择器从实底蓝胶囊 → 描边 chip
+  - [x] Session 行：选中态左蓝条 baked 进圆角选中背景并 clip 在圆角内，不再戳出/与展开 chevron 打架
+  - [x] Settings：Theme 改分段控件
+  - [x] iPad：三栏默认全展开（`columnVisibility = .all`）；sidebar 的 file tree 默认收起为 disclosure，sidebar 主要作 session picker
+  - [x] iPhone tool/patch 卡片两列 grid（信息密度），iPad 三列
+  - [x] Bug 修复：重启恢复 session 时补加载消息（`loadSessions` 之前只设 `currentSessionID`，`selectSession` 因 id 已匹配而短路不拉消息，导致重启落在上次 session 显示空白历史，需手动切走再切回）
+  - [x] 验证：iPhone 16 Pro + iPad Pro 11" build 干净；连本地 server 真实数据截图对照 Chat（空态 + tool/patch/permission 卡片）/ Settings / iPad 三栏
+  - **PR**: #63 — feat(design): implement the "Quiet Tech" visual language
 
 - [x] **Realtime speech WebSocket recovery V2（2026-05-25）**：
   - [x] 产品语义：长录音期间 WebSocket 断开时不中断录音，客户端用本地 PCM cache 恢复，而不是等 Stop 后才失败

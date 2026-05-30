@@ -245,7 +245,7 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 列表显示所有 Session，按时间倒序。每个条目显示：标题、更新时间、`summary.files`（该 session diff 涉及文件数）和状态（idle/busy/retry）。支持新建 Session、切换 Session，也支持删除 Session。
 
-视觉与交互：列表文本默认使用中性色（灰）以避免 iOS 默认的“链接蓝”。当前活跃 Session 使用轻量背景色高亮，并在右侧显示选中标记。
+视觉与交互：列表文本默认使用中性色（灰）以避免 iOS 默认的"链接蓝"。当前活跃 Session 使用轻量背景色高亮，左缘嵌一条 3pt 电蓝 accent 色条（与用户消息、操作卡片同一套"左色条"语言；色条与圆角选中背景合为一体并裁切在圆角内，不外溢、不与展开 chevron/缩进冲突），并在右侧显示选中标记。
 
 #### 4.2.6 Fork Session（会话分叉）
 
