@@ -526,12 +526,11 @@ Agent prefill（5 个，OpenCode-Builder 默认）：
 
 在 design.md 末尾新增 "工具卡渲染重做" 章节。**注意：最初探索过像素风，但放弃了——OpenCode 整体不做像素化**，吸引人的是那套**信息组织方式**而非像素质感。**只落设计 + 效果图，不改代码**，实现放后续 PR。
 
-核心：工具结果按类型分两形态，**按时间顺序混排、不分组、不加分区标题**：
-- patch/edit/write/read → **文件卡**（保留一个干净的 file 图标 + monospace 路径 + chevron）。
-- 其余 bash/test/grep/… → **合并可展开单行**（`▸ Ran 3 tests`）。
+三个具体改动：
+1. **区分谁说话**：用户消息保留蓝左竖条；OpenCode 回复**去头像**但加 "OpenCode" 文字标题 + **保留现有模型小字**（不动）。用不同 visual style 明确分开。
+2. **文件卡 2 列网格**：patch/edit/write/read → 文件卡（file 图标 + 文件名 + chevron），2 列网格排列。
+3. **合并成 "N tool calls"**：其余工具 → `▸ 3 tool calls`，展开看里面逐条。
 
-配套：AI 回复**左边去掉头像/圆形图标**，用户 vs AI 继续靠"用户消息蓝左竖条 / AI 无容器"区分；"AI 工作中"维持现有 gold 轻动效，不引入像素。
-
-边界：不引入像素风、不分组、文件卡保留 file 图标、AI 回复无头像、模型选择器不动、不要右上角用户头像。
+排列：版式优先的近时间序（相邻同类聚合），不分组、不加分区标题。边界：不引入像素风、模型选择器不动、不要右上角用户头像、AI working 维持现有 gold 轻动效。
 
 效果图见 `docs/design_images/tool_cards_chronological.png`（gpt-image-2 生成）。
