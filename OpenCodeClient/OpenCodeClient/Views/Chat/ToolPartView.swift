@@ -35,11 +35,13 @@ struct ToolPartView: View {
         return raw
     }
 
-    // Info cards are neutral, not branded — the tool name reads as quiet
-    // metadata (muted secondary), and the surface is a plain neutral fill
-    // rather than an accent tint. Blue is reserved for actions/selection.
+    // The card body stays neutral (a plain surface fill, not an accent tint),
+    // but a tool card IS actionable — it expands to show input/output and can
+    // jump to a file preview. So the tool icon + name carry the electric-blue
+    // accent as the "you can tap this" affordance, rather than reading as inert
+    // gray metadata. Blue lives on the interactive bits, not the whole card.
     private var toolAccentColor: Color {
-        DesignColors.Neutral.textSecondary
+        DesignColors.Brand.primary
     }
 
     private var toolBackgroundColor: Color {
@@ -191,10 +193,9 @@ struct ToolPartView: View {
             }
             .font(DesignTypography.micro)
         }
-        // DisclosureGroup tints its label + chevron with the global accent by
-        // default, which would paint this info card electric-blue. Info cards
-        // are neutral, so override the tint to a quiet tertiary gray.
-        .tint(DesignColors.Neutral.textTertiary)
+        // Let the DisclosureGroup chevron take the accent — it's the expand
+        // affordance, and a blue chevron reinforces that the card is tappable.
+        .tint(DesignColors.Brand.primary)
         .onChange(of: part.stateDisplay) { _, newValue in
             if newValue?.lowercased() == "completed" {
                 isExpanded = false

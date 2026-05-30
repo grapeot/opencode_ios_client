@@ -17,9 +17,9 @@ struct MessageRowView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var colorScheme
 
-    // iPhone (compact) stacks cards in a single column — the Quiet Tech layout
-    // reads top-to-bottom, no side-by-side card grid. iPad keeps the 3-up grid.
-    private var cardGridColumnCount: Int { sizeClass == .regular ? 3 : 1 }
+    // iPhone packs tool/patch cards two-up to keep information density high;
+    // iPad has room for a 3-up grid.
+    private var cardGridColumnCount: Int { sizeClass == .regular ? 3 : 2 }
     private var cardGridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
     }

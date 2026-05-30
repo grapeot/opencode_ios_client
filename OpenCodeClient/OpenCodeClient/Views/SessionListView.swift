@@ -189,6 +189,22 @@ struct SessionRowView: View {
         return status.type == "busy" || status.type == "retry"
     }
 
+    @ViewBuilder
+    private var selectionBackground: some View {
+        if isSelected {
+            RoundedRectangle(cornerRadius: DesignCorners.medium)
+                .fill(DesignColors.Brand.primary.opacity(DesignColors.Opacity.selectionFill))
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(DesignColors.Brand.primary)
+                        .frame(width: 3)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+        } else {
+            Color.clear
+        }
+    }
+
     var body: some View {
         HStack(spacing: DesignSpacing.sm) {
             if hasChildren {
@@ -248,16 +264,11 @@ struct SessionRowView: View {
             guard !isDeleting else { return }
             onSelect()
         }
-        // Selected row speaks the same "blue left bar" language as user
-        // messages and action cards — a 3pt accent edge plus the subtle fill.
-        .overlay(alignment: .leading) {
-            if isSelected {
-                Rectangle()
-                    .fill(DesignColors.Brand.primary)
-                    .frame(width: 3)
-            }
-        }
-        .listRowBackground(isSelected ? DesignColors.Brand.primary.opacity(DesignColors.Opacity.selectionFill) : Color.clear)
+        // Selected row: a single rounded fill with the accent bar baked into its
+        // left edge. Drawing the bar as part of the background (rather than a
+        // separate overlay) keeps it clipped to the rounded corners, so it can't
+        // poke out past the pill or collide with the expand/indent of child rows.
+        .listRowBackground(selectionBackground)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("session-row-\(session.id)")
     }
