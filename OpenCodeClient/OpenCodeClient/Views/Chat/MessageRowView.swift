@@ -40,6 +40,15 @@ struct MessageRowView: View {
         }
     }
 
+    // A "file operation" is a patch part, or a tool whose name matches one of the
+    // file-op verbs (loose prefix match so aliases like "edit"/"write"/"read"/"patch"
+    // and full forms like "edit_file"/"apply_patch" all count). These render as
+    // file cards in the grid; everything else collapses into "N tool calls".
+    // Classification lives in ToolCardClassifier so it can be unit-tested.
+    private func isFileOperation(_ part: Part) -> Bool {
+        ToolCardClassifier.isFileOperation(part)
+    }
+
     private var assistantBlocks: [AssistantBlock] {
         var blocks: [AssistantBlock] = []
         var buffer: [Part] = []
@@ -189,23 +198,33 @@ struct MessageRowView: View {
 
     private var assistantMessageView: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // "OpenCode" header: not an avatar/icon, just a small accent title so
+            // it's obvious the AI is speaking (contrast with the user's blue left bar).
+            Text("OpenCode")
+                .font(DesignTypography.micro)
+                .fontWeight(.semibold)
+                .foregroundStyle(DesignColors.Brand.primary)
+                .accessibilityIdentifier("assistant.header")
+
             ForEach(assistantBlocks) { block in
                 switch block {
                 case .text(let part):
                     markdownText(part.text ?? "", isUser: false)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .cards(let parts):
-                    LazyVGrid(
-                        columns: cardGridColumns,
-                        alignment: .leading,
-                        spacing: DesignSpacing.sm
-                    ) {
-                        ForEach(parts, id: \.id) { part in
-                            cardView(part)
-                        }
-                    }
+                    cardsBlock(parts)
                 }
             }
+
+            // Model footer: same caption2/tertiary "providerID/modelID" treatment as
+            // the user message, placed at the end of the assistant turn.
+            if let model = message.info.resolvedModel {
+                Text("\(model.providerID)/\(model.modelID)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.leading, 4)
+            }
+
             if let err = message.info.errorMessageForDisplay {
                 Text(err)
                     .font(.caption)
@@ -220,24 +239,61 @@ struct MessageRowView: View {
         }
     }
 
+    // A buffered run of tool/patch parts becomes: a 2-up (iPhone) / 3-up (iPad)
+    // grid of file cards for the file operations, plus a single collapsed
+    // "N tool calls" row for everything else. Layout-first near-time order:
+    // file cards cluster into the grid, other tools cluster into one row.
     @ViewBuilder
-    private func cardView(_ part: Part) -> some View {
-        if part.isTool {
-            ToolPartView(
-                part: part,
-                sessionTodos: sessionTodos,
-                workspaceDirectory: workspaceDirectory,
-                onOpenResolvedPath: onOpenResolvedPath
-            )
-        } else if part.isPatch {
-            PatchPartView(
-                part: part,
-                workspaceDirectory: workspaceDirectory,
-                onOpenResolvedPath: onOpenResolvedPath,
-                onOpenFilesTab: onOpenFilesTab
-            )
-        } else {
-            EmptyView()
+    private func cardsBlock(_ parts: [Part]) -> some View {
+        let (fileParts, otherParts) = ToolCardClassifier.split(parts)
+
+        VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+            if !fileParts.isEmpty {
+                LazyVGrid(
+                    columns: cardGridColumns,
+                    alignment: .leading,
+                    spacing: DesignSpacing.sm
+                ) {
+                    ForEach(fileParts, id: \.id) { part in
+                        FileCardView(
+                            part: part,
+                            workspaceDirectory: workspaceDirectory,
+                            onOpenResolvedPath: onOpenResolvedPath,
+                            onOpenFilesTab: onOpenFilesTab
+                        )
+                    }
+                }
+            }
+            if !otherParts.isEmpty {
+                toolCallsRow(otherParts)
+            }
         }
+    }
+
+    private func toolCallsRow(_ parts: [Part]) -> some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+                ForEach(parts, id: \.id) { part in
+                    ToolPartView(
+                        part: part,
+                        sessionTodos: sessionTodos,
+                        workspaceDirectory: workspaceDirectory,
+                        onOpenResolvedPath: onOpenResolvedPath
+                    )
+                }
+            }
+            .padding(.top, DesignSpacing.sm)
+        } label: {
+            Text("\(parts.count) tool calls")
+                .font(DesignTypography.micro)
+                .fontWeight(.medium)
+                .foregroundStyle(DesignColors.Brand.primary)
+        }
+        .tint(DesignColors.Brand.primary)
+        .padding(DesignSpacing.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
+        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+        .accessibilityIdentifier("toolcard.toolcalls")
     }
 }

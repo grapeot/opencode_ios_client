@@ -25,8 +25,18 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_SESSION_TREE_FIXTURE")
     }
 
+    private static var hasUITestToolCardsFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_TOOL_CARDS_FIXTURE")
+    }
+
     private static func makeInitialState() -> AppState {
         let state = AppState()
+
+        if hasUITestToolCardsFixture {
+            applyToolCardsFixture(to: state)
+            return state
+        }
+
         guard hasUITestSessionTreeFixture else { return state }
 
         state.isConnected = true
@@ -97,8 +107,155 @@ struct ContentView: View {
         }
     }
 
+    /// Injects a deterministic assistant turn so the UI test renders the new tool
+    /// cards (file-op grid + merged "N tool calls" row) without a live server.
+    /// Only active under the UITEST_TOOL_CARDS_FIXTURE launch argument.
+    private static func applyToolCardsFixture(to state: AppState) {
+        let sessionID = "toolcards-session"
+        let userMessageID = "u-toolcards"
+        let assistantMessageID = "a-toolcards"
+
+        state.isConnected = true
+        state.sessions = [
+            Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: "Tool Cards Session",
+                version: "1",
+                time: .init(created: 0, updated: 2_000, archived: nil),
+                share: nil,
+                summary: nil
+            )
+        ]
+        state.currentSessionID = sessionID
+        state.expandedSessionIDs = [sessionID]
+
+        // User message: a single text part.
+        let userInfo = Message(
+            id: userMessageID,
+            sessionID: sessionID,
+            role: "user",
+            parentID: nil,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: .init(created: 1_000, completed: 1_000),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        let userTextPart = decodePart([
+            "id": "up-text",
+            "messageID": userMessageID,
+            "sessionID": sessionID,
+            "type": "text",
+            "text": "Refactor the API client and run the tests.",
+        ])
+
+        // Assistant message: resolvedModel via top-level providerID/modelID so the
+        // small "providerID/modelID" footer shows.
+        let assistantInfo = Message(
+            id: assistantMessageID,
+            sessionID: sessionID,
+            role: "assistant",
+            parentID: userMessageID,
+            providerID: "openai",
+            modelID: "gpt-5.5",
+            model: nil,
+            error: nil,
+            time: .init(created: 1_100, completed: 1_200),
+            finish: "stop",
+            tokens: nil,
+            cost: nil
+        )
+
+        var assistantParts: [Part] = []
+
+        // Leading text so the assistant turn reads naturally.
+        assistantParts.append(decodePart([
+            "id": "ap-text",
+            "messageID": assistantMessageID,
+            "sessionID": sessionID,
+            "type": "text",
+            "text": "Here are the changes I made.",
+        ]))
+
+        // File-operation parts -> render as FileCardView in the 2-column grid.
+        let fileTools: [(id: String, tool: String, path: String)] = [
+            ("ap-read", "read_file", "src/api/client.ts"),
+            ("ap-edit", "edit_file", "src/api/types.ts"),
+            ("ap-write", "write_file", "README.md"),
+        ]
+        for f in fileTools {
+            assistantParts.append(decodePart([
+                "id": f.id,
+                "messageID": assistantMessageID,
+                "sessionID": sessionID,
+                "type": "tool",
+                "tool": f.tool,
+                "callID": "call-\(f.id)",
+                "metadata": ["path": f.path],
+                "state": [
+                    "status": "completed",
+                    "input": ["path": f.path],
+                    "output": "ok",
+                ],
+            ]))
+        }
+
+        // A patch part with files -> a fourth file card.
+        assistantParts.append(decodePart([
+            "id": "ap-patch",
+            "messageID": assistantMessageID,
+            "sessionID": sessionID,
+            "type": "patch",
+            "files": [
+                ["path": "src/api/index.ts", "additions": 12, "deletions": 3, "status": "modified"],
+            ],
+        ]))
+
+        // Non-file tools -> collapse into the merged "3 tool calls" row.
+        let otherTools: [(id: String, tool: String, command: String, output: String)] = [
+            ("ap-bash", "bash", "npm test", "All tests passed"),
+            ("ap-grep", "grep", "TODO", "3 matches"),
+            ("ap-list", "list", "src/api", "client.ts\ntypes.ts\nindex.ts"),
+        ]
+        for t in otherTools {
+            assistantParts.append(decodePart([
+                "id": t.id,
+                "messageID": assistantMessageID,
+                "sessionID": sessionID,
+                "type": "tool",
+                "tool": t.tool,
+                "callID": "call-\(t.id)",
+                "state": [
+                    "status": "completed",
+                    "title": t.command,
+                    "input": ["command": t.command],
+                    "output": t.output,
+                ],
+            ]))
+        }
+
+        state.messages = [
+            MessageWithParts(info: userInfo, parts: [userTextPart]),
+            MessageWithParts(info: assistantInfo, parts: assistantParts),
+        ]
+    }
+
+    /// Decode a Part from a JSON-object dictionary, mirroring how the server feeds
+    /// parts through Codable (so metadata/state/path classification flows identically).
+    private static func decodePart(_ obj: [String: Any]) -> Part {
+        let data = try! JSONSerialization.data(withJSONObject: obj)
+        return try! JSONDecoder().decode(Part.self, from: data)
+    }
+
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture {
             return
         }
 
