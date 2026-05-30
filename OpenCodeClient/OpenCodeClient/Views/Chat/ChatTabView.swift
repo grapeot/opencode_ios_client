@@ -494,7 +494,7 @@ struct ChatTabView: View {
                         .disabled(isSending || isTranscribing || isStartingRecording || isRetryingSpeech)
                         .buttonStyle(.plain)
 
-                        if isRecording || isTranscribing {
+                        if isTranscribing {
                             Button {
                                 Task { await abortSpeechRecognition() }
                             } label: {
