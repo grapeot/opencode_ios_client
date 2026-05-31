@@ -72,6 +72,7 @@ struct ChatTabView: View {
     @State private var isNearBottom = true
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
 
     private var useGridCards: Bool { sizeClass == .regular }
 
@@ -651,6 +652,10 @@ struct ChatTabView: View {
             .onChange(of: inputText) { _, newValue in
                 guard !isSyncingDraft else { return }
                 state.setDraftText(newValue, for: state.currentSessionID)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase == .background else { return }
+                Task { await stopSpeechForBackground() }
             }
         }
     }

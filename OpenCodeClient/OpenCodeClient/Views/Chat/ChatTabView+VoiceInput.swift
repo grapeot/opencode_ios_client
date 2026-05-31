@@ -104,6 +104,32 @@ extension ChatTabView {
         speechRecoveryActive = false
     }
 
+    func terminateSpeechSession(_ session: VoiceFlowSession) async {
+        do {
+            if let preserved = try await session.abortPreservingAudio() {
+                state.discardPreservedAudio(preserved)
+            }
+        } catch {
+            Self.logger.error("[SpeechProfile] realtime session termination failed error=\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func stopSpeechForBackground() async {
+        stopSpeechHeartbeat()
+        stopSpeechEventConsumer()
+        _ = try? await microphone.stop()
+
+        let session = speechSession
+        speechSession = nil
+        isRecording = false
+        isTranscribing = false
+        isStartingRecording = false
+
+        if let session {
+            await terminateSpeechSession(session)
+        }
+    }
+
     func toggleRecording() async {
         if isRecording {
             stopSpeechHeartbeat()
@@ -140,8 +166,9 @@ extension ChatTabView {
                 Self.logger.notice("[SpeechProfile] chat realtime transcribe done ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) chars=\(cleaned.count, privacy: .public)")
                 inputText = Self.mergedSpeechInput(prefix: prefix, transcript: cleaned)
                 clearPreservedSpeechAudio()
+                await terminateSpeechSession(session)
             } catch {
-                await session.cancel()
+                await terminateSpeechSession(session)
                 guard speechSession === session else { return }
                 Self.logger.error("[SpeechProfile] chat realtime transcribe failed ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - transcribeStart) * 1000)), privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                 inputText = Self.speechFailureInput(prefix: prefix, lastPartialTranscript: partialTranscriptBuffer.current())
@@ -194,7 +221,7 @@ extension ChatTabView {
                 stopSpeechEventConsumer()
                 isStartingRecording = false
                 if let speechSession {
-                    await speechSession.cancel()
+                    await terminateSpeechSession(speechSession)
                 }
                 speechSession = nil
                 Self.logger.error("[SpeechProfile] realtime capture start failed error=\(error.localizedDescription, privacy: .public)")
