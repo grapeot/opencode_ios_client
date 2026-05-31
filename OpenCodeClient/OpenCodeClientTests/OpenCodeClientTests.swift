@@ -2270,6 +2270,8 @@ actor MockAPIClient: APIClientProtocol {
     var updateSessionCalls: [(String, String)] = []
     var sessionDiffResult: [FileDiff] = []
     var sessionDiffCallCount = 0
+    var fileListResults: [String: [FileNode]] = [:]
+    var fileListRequests: [String] = []
 
     func setHealthError(_ error: Error?) {
         healthError = error
@@ -2293,6 +2295,10 @@ actor MockAPIClient: APIClientProtocol {
 
     func setSessionDiffResult(_ diffs: [FileDiff]) {
         sessionDiffResult = diffs
+    }
+
+    func setFileListResult(_ nodes: [FileNode], forPath path: String) {
+        fileListResults[path] = nodes
     }
 
     func setPromptError(_ error: Error?) {
@@ -2371,7 +2377,10 @@ actor MockAPIClient: APIClientProtocol {
         return sessionDiffResult
     }
     func sessionTodos(sessionID: String) async throws -> [TodoItem] { [] }
-    func fileList(path: String) async throws -> [FileNode] { [] }
+    func fileList(path: String) async throws -> [FileNode] {
+        fileListRequests.append(path)
+        return fileListResults[path] ?? []
+    }
     func fileContent(path: String) async throws -> FileContent { FileContent(type: "text", content: "") }
     func findFile(query: String, limit: Int) async throws -> [String] { [] }
     func fileStatus() async throws -> [FileStatusEntry] { [] }
@@ -2393,6 +2402,23 @@ actor MockSSEClient: SSEClientProtocol {
 }
 
 struct AppStateFlowTests {
+    @Test @MainActor func loadFileTreePreservesExpandedChildrenCache() async {
+        let apiClient = MockAPIClient()
+        let root = [FileNode(name: "src", path: "src", absolute: nil, type: "directory", ignored: false)]
+        let children = [FileNode(name: "main.swift", path: "src/main.swift", absolute: nil, type: "file", ignored: false)]
+        await apiClient.setFileListResult(root, forPath: "")
+
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.expandedPaths = ["src"]
+        state.fileChildrenCache = ["src": children]
+
+        await state.loadFileTree()
+
+        #expect(state.fileTreeRoot.map(\.path) == ["src"])
+        #expect(state.isFileExpanded("src"))
+        #expect(state.cachedChildren(for: "src")?.map(\.path) == ["src/main.swift"])
+    }
+
     @Test @MainActor func testConnectionConfiguresInjectedClient() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
