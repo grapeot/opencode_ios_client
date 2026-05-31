@@ -7,9 +7,11 @@ import Foundation
 /// load actions.
 extension AppState {
     func loadFileTree() async {
+        let previousChildrenCache = fileChildrenCache
+        let previouslyExpandedPaths = expandedPaths
         do {
             fileTreeRoot = try await apiClient.fileList(path: "")
-            fileChildrenCache = [:]
+            fileChildrenCache = previousChildrenCache.filter { previouslyExpandedPaths.contains($0.key) }
         } catch {
             fileTreeRoot = []
         }
