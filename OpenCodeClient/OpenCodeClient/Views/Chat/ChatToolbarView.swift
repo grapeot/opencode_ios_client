@@ -15,6 +15,7 @@ struct ChatToolbarView: View {
     
     @State private var showCreateDisabledAlert = false
     @State private var showConfigSheet = false
+    @State private var showTodoPanel = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     
     private var useCompactLabels: Bool {
@@ -86,6 +87,7 @@ struct ChatToolbarView: View {
     private var rightButtons: some View {
         HStack(spacing: DesignSpacing.md) {
             configButton
+            todoButton
             ContextUsageButton(state: state)
             
             if showSettingsInToolbar, let onSettingsTap {
@@ -188,5 +190,58 @@ struct ChatToolbarView: View {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    // MARK: - Todo Button & Panel
+
+    private var currentTodos: [TodoItem] {
+        guard let sessionID = state.currentSessionID else { return [] }
+        return state.sessionTodos[sessionID] ?? []
+    }
+
+    private var todoBadge: String {
+        let total = currentTodos.count
+        guard total > 0 else { return "" }
+        let completed = currentTodos.count { $0.isCompleted }
+        return "\(completed)/\(total)"
+    }
+
+    private var todoButton: some View {
+        Button {
+            showTodoPanel = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "checklist")
+                    .font(.caption)
+                if !todoBadge.isEmpty {
+                    Text(todoBadge)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+        }
+        .accessibilityIdentifier("chat-toolbar-todo")
+        .popover(isPresented: $showTodoPanel) {
+            NavigationStack {
+                todoPanelContent
+                    .navigationTitle(L10n.t(.todoPanelTitle))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(L10n.t(.appDone)) {
+                                showTodoPanel = false
+                            }
+                        }
+                    }
+            }
+            .frame(idealWidth: 320, idealHeight: 400)
+        }
+    }
+
+    private var todoPanelContent: some View {
+        TodoListPanel(todos: currentTodos)
     }
 }

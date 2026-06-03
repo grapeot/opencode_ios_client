@@ -83,9 +83,12 @@ struct ToolPartView: View {
                 }
 
                 if part.tool == "todowrite" {
-                    let todos = part.toolTodos.isEmpty ? sessionTodos : part.toolTodos
+                    let todos = sessionTodos.isEmpty ? part.toolTodos : sessionTodos
                     if !todos.isEmpty {
-                        TodoListInlineView(todos: todos)
+                        let completed = todos.count { $0.isCompleted }
+                        Text(String(format: L10n.t(.todoUpdatedBadge), completed, todos.count))
+                            .font(DesignTypography.micro)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 if part.tool != "todowrite",

@@ -212,6 +212,12 @@ enum L10n {
         case configureModel
         case configureAgent
         case configureNoAgents
+
+        case todoButtonLabel
+        case todoPanelTitle
+        case todoPanelCompleted
+        case todoPanelEmpty
+        case todoUpdatedBadge
     }
 
     nonisolated private static let en: [String: String] = [
@@ -421,7 +427,13 @@ enum L10n {
         Key.configureTitle.rawValue: "Configure",
         Key.configureModel.rawValue: "Model",
         Key.configureAgent.rawValue: "Agent",
-        Key.configureNoAgents.rawValue: "No agents available"
+        Key.configureNoAgents.rawValue: "No agents available",
+
+        Key.todoButtonLabel.rawValue: "Todo",
+        Key.todoPanelTitle.rawValue: "Todo",
+        Key.todoPanelCompleted.rawValue: "%d/%d completed",
+        Key.todoPanelEmpty.rawValue: "No todos yet",
+        Key.todoUpdatedBadge.rawValue: "Todo updated · %d/%d",
     ]
 
     nonisolated private static let zh: [String: String] = [
@@ -631,7 +643,13 @@ enum L10n {
         Key.configureTitle.rawValue: "配置",
         Key.configureModel.rawValue: "模型",
         Key.configureAgent.rawValue: "Agent",
-        Key.configureNoAgents.rawValue: "暂无可用 Agent"
+        Key.configureNoAgents.rawValue: "暂无可用 Agent",
+
+        Key.todoButtonLabel.rawValue: "任务",
+        Key.todoPanelTitle.rawValue: "任务",
+        Key.todoPanelCompleted.rawValue: "%d/%d 已完成",
+        Key.todoPanelEmpty.rawValue: "暂无任务",
+        Key.todoUpdatedBadge.rawValue: "任务更新 · %d/%d",
     ]
 
     private static var languageIsChinese: Bool {
