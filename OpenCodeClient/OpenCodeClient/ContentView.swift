@@ -13,6 +13,7 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
+    @State private var filePreviewRefreshTrigger = 0
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -316,13 +317,28 @@ struct ContentView: View {
         }
         .sheet(item: filePreviewSheetItem) { wrapper in
             NavigationStack {
-                FileContentView(state: state, filePath: wrapper.path)
+                FileContentView(
+                    state: state,
+                    filePath: wrapper.path,
+                    refreshTrigger: filePreviewRefreshTrigger
+                )
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(L10n.t(.appClose)) {
+                            Button {
                                 state.fileToOpenInFilesTab = nil
                                 if !useSplitLayout { state.selectedTab = 0 }
+                            } label: {
+                                Image(systemName: "xmark")
                             }
+                            .accessibilityLabel(L10n.t(.appClose))
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                filePreviewRefreshTrigger += 1
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .accessibilityLabel(L10n.t(.contentRefreshHelp))
                         }
                     }
             }
