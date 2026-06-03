@@ -388,6 +388,8 @@ final class AppState {
         ModelPreset(displayName: "DeepSeek V4 Flash", providerID: "deepseek", modelID: "deepseek-v4-flash"),
         ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash"),
         ModelPreset(displayName: "DeepSeek V4 Pro", providerID: "deepseek", modelID: "deepseek-v4-pro"),
+        ModelPreset(displayName: "Ollama DeepSeek V4 Pro", providerID: "ollama-cloud", modelID: "deepseek-v4-pro"),
+        ModelPreset(displayName: "MiniMax M3", providerID: "ollama-cloud", modelID: "minimax-m3"),
     ]
     var selectedModelIndex: Int = 2
     
