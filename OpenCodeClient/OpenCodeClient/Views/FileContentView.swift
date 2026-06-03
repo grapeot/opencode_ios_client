@@ -20,6 +20,7 @@ enum ImageFileUtils {
 struct FileContentView: View {
     @Bindable var state: AppState
     let filePath: String
+    var refreshTrigger: Int = 0
     @State private var content: String?
     @State private var imageData: Data?
     @State private var isLoading = false
@@ -88,6 +89,9 @@ struct FileContentView: View {
             loadContent()
         }
         .refreshable {
+            loadContent()
+        }
+        .onChange(of: refreshTrigger) { _, _ in
             loadContent()
         }
     }
