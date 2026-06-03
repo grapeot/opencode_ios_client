@@ -12,10 +12,7 @@ struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
-    // iPad/visionOS: keep all three columns visible by default so the layout
-    // reads as the intended sidebar · preview · chat triptych instead of
-    // collapsing to a single detail pane.
-    @State private var splitColumnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showTabletSettings = false
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -364,30 +361,35 @@ struct ContentView: View {
         }
     }
 
-    /// iPad / Vision Pro：左右分栏，左 Files 右 Chat，Settings 为 toolbar 按钮
+    /// iPad / Vision Pro：Android-aligned three-pane layout.
     private var splitLayout: some View {
         GeometryReader { geo in
             let total = geo.size.width
-            let sidebarIdeal = total * LayoutConstants.SplitView.sidebarWidthFraction
-            let paneIdeal = total * LayoutConstants.SplitView.previewWidthFraction
+            let sessionsWidth = total * 0.25
+            let paneWidth = total * 0.375
 
-            let sidebarMin = min(sidebarIdeal, total * LayoutConstants.SplitView.sidebarMinFraction)
-            let sidebarMax = max(sidebarIdeal, total * LayoutConstants.SplitView.sidebarMaxFraction)
+            HStack(spacing: 0) {
+                TabletSessionsColumn(
+                    state: state,
+                    showSettings: $showTabletSettings
+                )
+                .frame(width: sessionsWidth)
 
-            let paneMin = min(paneIdeal, total * LayoutConstants.SplitView.paneMinFraction)
-            let paneMax = max(paneIdeal, total * LayoutConstants.SplitView.paneMaxFraction)
+                Divider()
 
-            NavigationSplitView(columnVisibility: $splitColumnVisibility) {
-                SplitSidebarView(state: state)
-                    .navigationSplitViewColumnWidth(min: sidebarMin, ideal: sidebarIdeal, max: sidebarMax)
-            } content: {
-                PreviewColumnView(state: state)
-                    .navigationSplitViewColumnWidth(min: paneMin, ideal: paneIdeal, max: paneMax)
-            } detail: {
-                ChatTabView(state: state, showSettingsInToolbar: true, onSettingsTap: { showSettingsSheet = true })
-                    .navigationSplitViewColumnWidth(min: paneMin, ideal: paneIdeal, max: paneMax)
+                TabletFilesColumn(state: state)
+                    .frame(width: paneWidth)
+
+                Divider()
+
+                ChatTabView(
+                    state: state,
+                    showSettingsInToolbar: false,
+                    showSessionListInToolbar: false,
+                    showCreateSessionInToolbar: false
+                )
+                .frame(width: paneWidth)
             }
-            .navigationSplitViewStyle(.balanced)
         }
     }
 }
@@ -397,7 +399,7 @@ private struct FilePathWrapper: Identifiable {
     var id: String { path }
 }
 
-private struct PreviewColumnView: View {
+private struct TabletFilesColumn: View {
     @Bindable var state: AppState
     @State private var reloadToken = UUID()
 
@@ -408,26 +410,215 @@ private struct PreviewColumnView: View {
                     FileContentView(state: state, filePath: path)
                         .id("\(path)|\(reloadToken.uuidString)")
                 } else {
-                    ContentUnavailableView(
-                        L10n.t(.contentPreviewUnavailableTitle),
-                        systemImage: "doc.text.magnifyingglass",
-                        description: Text(L10n.t(.contentPreviewUnavailableDescription))
-                    )
-                    .navigationTitle(L10n.t(.navPreview))
-                    .navigationBarTitleDisplayMode(.inline)
+                    FileTreeView(state: state, forceSplitPreview: true)
+                        .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
+                        .onSubmit(of: .search) {
+                            Task { await state.searchFiles(query: state.fileSearchQuery) }
+                        }
+                        .onChange(of: state.fileSearchQuery) { _, newValue in
+                            if newValue.isEmpty {
+                                state.fileSearchResults = []
+                            } else {
+                                Task {
+                                    try? await Task.sleep(for: .milliseconds(300))
+                                    guard !Task.isCancelled else { return }
+                                    await state.searchFiles(query: newValue)
+                                }
+                            }
+                        }
+                        .navigationTitle(L10n.t(.navFiles))
+                        .navigationBarTitleDisplayMode(.inline)
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        reloadToken = UUID()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+                    if let path = state.previewFilePath, !path.isEmpty {
+                        HStack(spacing: 12) {
+                            Button {
+                                reloadToken = UUID()
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .help(L10n.t(.contentRefreshHelp))
+
+                            Button {
+                                state.previewFilePath = nil
+                                state.fileToOpenInFilesTab = nil
+                            } label: {
+                                Image(systemName: "xmark")
+                            }
+                            .help(L10n.t(.appClose))
+                        }
                     }
-                    .disabled((state.previewFilePath ?? "").isEmpty)
-                    .help(L10n.t(.contentRefreshHelp))
                 }
             }
+        }
+    }
+}
+
+private struct TabletSessionsColumn: View {
+    @Bindable var state: AppState
+    @Binding var showSettings: Bool
+    @State private var pendingDeleteSession: Session?
+    @State private var deletingSessionID: String?
+    @State private var deleteError: String?
+    @State private var showCreateDisabledAlert = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if showSettings {
+                    SettingsTabView(state: state)
+                } else if state.sidebarSessions.isEmpty {
+                    ContentUnavailableView(
+                        L10n.t(.sessionsEmptyTitle),
+                        systemImage: "bubble.left.and.text.bubble.right",
+                        description: Text(L10n.t(.sessionsEmptyDescription))
+                    )
+                } else {
+                    List {
+                        sessionNodes(state.sessionTree)
+
+                        if state.isLoadingMoreSessions {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                Spacer()
+                            }
+                            .listRowSeparator(.hidden)
+                        } else if state.canLoadMoreSessions, let lastSessionID = state.sidebarSessions.last?.id {
+                            Color.clear
+                                .frame(height: 1)
+                                .listRowSeparator(.hidden)
+                                .onAppear {
+                                    Task { await state.loadMoreSessions() }
+                                }
+                                .id("load-more-\(lastSessionID)")
+                        }
+                    }
+                    .listStyle(.plain)
+                    .refreshable {
+                        await state.refreshSessions()
+                    }
+                }
+            }
+            .navigationTitle(showSettings ? L10n.t(.navSettings) : L10n.t(.sessionsTitle))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    if showSettings {
+                        Button(L10n.t(.appDone)) {
+                            showSettings = false
+                            Task { await state.refresh() }
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            Button {
+                                Task { await state.createSession() }
+                            } label: {
+                                Text(L10n.t(.sessionsNew))
+                            }
+                            .disabled(!state.canCreateSession)
+                            .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+
+                            if !state.canCreateSession {
+                                Button {
+                                    showCreateDisabledAlert = true
+                                } label: {
+                                    Image(systemName: "info.circle")
+                                }
+                                .foregroundColor(.secondary)
+                            }
+
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gear")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .alert(
+            L10n.t(.sessionsDeleteConfirmTitle),
+            isPresented: Binding(
+                get: { pendingDeleteSession != nil },
+                set: { if !$0 { pendingDeleteSession = nil } }
+            ),
+            presenting: pendingDeleteSession
+        ) { session in
+            Button(L10n.t(.commonCancel), role: .cancel) {}
+            Button(L10n.t(.sessionsDelete), role: .destructive) {
+                confirmDelete(session)
+            }
+        } message: { _ in
+            Text(L10n.t(.sessionsDeleteConfirmMessage))
+        }
+        .alert(
+            L10n.t(.sessionsDeleteFailedTitle),
+            isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )
+        ) {
+            Button(L10n.t(.commonOk)) {
+                deleteError = nil
+            }
+        } message: {
+            if let deleteError {
+                Text(deleteError)
+            }
+        }
+        .alert(L10n.t(.chatCreateDisabledHint), isPresented: $showCreateDisabledAlert) {
+            Button(L10n.t(.commonOk)) {}
+        }
+    }
+
+    private func sessionNodes(_ nodes: [SessionNode], depth: Int = 0) -> AnyView {
+        AnyView(
+            ForEach(nodes) { node in
+                let session = node.session
+                let status = state.sessionStatuses[session.id]
+
+                SessionRowView(
+                    session: session,
+                    status: status,
+                    isSelected: state.currentSessionID == session.id,
+                    isDeleting: deletingSessionID == session.id,
+                    depth: depth,
+                    hasChildren: !node.children.isEmpty,
+                    isCollapsed: !state.expandedSessionIDs.contains(session.id),
+                    onSelect: { state.selectSession(session) },
+                    onToggleCollapse: { state.toggleSessionExpanded(session.id) }
+                )
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button {
+                        pendingDeleteSession = session
+                    } label: {
+                        Label(L10n.t(.sessionsDelete), systemImage: "trash")
+                    }
+                    .tint(.red)
+                    .disabled(deletingSessionID != nil)
+                }
+
+                if state.expandedSessionIDs.contains(session.id) {
+                    sessionNodes(node.children, depth: depth + 1)
+                }
+            }
+        )
+    }
+
+    private func confirmDelete(_ session: Session) {
+        guard deletingSessionID == nil else { return }
+        deletingSessionID = session.id
+        Task {
+            do {
+                try await state.deleteSession(sessionID: session.id)
+            } catch {
+                deleteError = error.localizedDescription
+            }
+            deletingSessionID = nil
         }
     }
 }
