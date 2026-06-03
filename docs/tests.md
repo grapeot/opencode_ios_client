@@ -1,302 +1,172 @@
-# OpenCode iOS Client 测试体系
+# OpenCode iOS Client 测试策略
 
-日期：2026-05-01
+日期：2026-06-03
 
-## 2026-05-30 speech abort/retry
+本文件定义 OpenCode iOS 客户端的测试系统设计。逐次改动记录放在 `docs/WORKING.md`；这里回答体系问题：每一层测什么、为什么存在、怎么运行、依赖什么前提。
 
-- VoiceFlowKit is pinned to revision `dbbe297ea52e3a3438d227a54001b23c138c47b7`, which exposes preserved audio retry APIs.
-- Chat composer now shows a left-side speech auxiliary button: stop during recording/transcribing, retry after abort when preserved audio exists.
-- Expected validation: unit/build must compile the new `VoiceFlowPreservedAudio` facade usage; UI smoke should confirm send is unlocked immediately after speech abort.
+这套设计对齐 Android client 已经落地的 four-tier testing model，但按 iOS 现有架构重新解释。iOS 已有的 Swift Testing、`AppState` mock flow、fixture-driven XCUITest 都保留，只是重新归类；新的缺口是 Tier 3 的真实 server integration-UI 和 Tier 4 的 LLM-driven UI。
 
-## 文档目的
+## 为什么分四层
 
-这份文档不是单纯的测试计划，而是当前项目测试系统的说明文档。它主要回答三件事：
+四层不是按工具分，而是按它们回答的问题、成本和触发频率分。
 
-1. 现在这个项目已经有哪些测试层。
-2. 这些测试各自负责保护什么。
-3. 后续还值得继续补哪些 behavior guard。
+第一，unit/contract 保护纯逻辑和数据契约。它不启动 app、不连 server，最快、最稳定，每次 commit 都应该跑。
 
-这份文档的背景，是最近出现过一次 session 列表回归：底层能力本身没有消失，但用户可见的交互路径被改坏了。因此，这里不仅介绍现状，也把“什么行为值得被自动化测试保护”讲清楚。
+第二，state/component 保护 client 内部状态机和 fixture UI。iOS 的优势在这里：`AppState` 可以注入 `MockAPIClient` 和 `MockSSEClient`，所以很多接近用户行为的状态流可以在不连真实 server 的情况下精确复现。fixture-driven XCUITest 也属于这一层：启动真实 app，但状态是测试注入的。
 
-## 当前测试 Target
+第三，integration-UI 把 mock 拿掉，连真实 OpenCode server 和真实 session。它回答的是：server 当前真实返回的 endpoint、payload、SSE/tool part shape，client 还能不能 decode、加载并渲染。Tier 2 无法发现 server protocol drift，Tier 3 专门守这条边界。
 
-仓库当前有两个测试 target：
+第四，LLM-driven-UI 让 agent 驱动真实 app、读取 accessibility tree/截图，并按场景目标判断结果。下面三层都是过程确定性：断言写死，只能检查已经想到的东西。Tier 4 是结果确定性：给目标和验收标准，让 agent 自己操作、观察、等待和判断，用来发现没有提前写成断言的 UI/UX regression。
 
-| Target | 框架 | 主要作用 | 当前状态 |
+这四层越往下越快、越确定、越适合每次提交；越往上越真实、越贵、越能发现未知问题。Tier 4 探明的问题，能固化的部分应该沉淀回 Tier 3 或 Tier 2。
+
+## 当前测试 Targets
+
+当前工程暴露两个测试 target：
+
+| Target | 框架 | 归属 | 当前状态 |
 | --- | --- | --- | --- |
-| `OpenCodeClientTests` | Swift Testing（`import Testing`） | 单元测试、契约测试、状态流测试 | 主力测试层 |
-| `OpenCodeClientUITests` | XCTest UI Testing | 启动与关键交互 smoke test | 轻量但有效 |
-| `OpenCodeClientVision` | xcodebuild target build | visionOS 原生 target 编译 smoke | 保护平台条件编译与 target 配置 |
+| `OpenCodeClientTests` | Swift Testing (`import Testing`) | Tier 1 + Tier 2 | 主力测试层 |
+| `OpenCodeClientUITests` | XCTest UI Testing | Tier 2 | fixture UI / smoke guard |
 
-## 主要测试文件
+主要文件：
 
 - `OpenCodeClient/OpenCodeClientTests/OpenCodeClientTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/ToolCardClassifierTests.swift`
 - `OpenCodeClient/OpenCodeClientUITests/OpenCodeClientUITests.swift`
+- `OpenCodeClient/OpenCodeClientUITests/ToolCardsUITests.swift`
 - `OpenCodeClient/OpenCodeClientUITests/OpenCodeClientUITestsLaunchTests.swift`
 
-## 当前测试系统的结构
+## Tier 1：unit / contract
 
-### 1. 契约测试（contract tests）
+Tier 1 是纯逻辑和数据契约测试，不需要真实 server，也不依赖 UI。位置在 `OpenCodeClientTests`，框架是 Swift Testing。
 
-这层主要保护服务端返回结构和本地模型之间的契约。
+这一层已经比较成熟，覆盖：
 
-当前已经覆盖的例子包括：
+- `Session` / `SessionStatus` / `Message` / `Part` decoding。
+- `SSEEvent` payload shape。
+- `TodoItem`、`Project`、`QuestionRequest` 等 API model。
+- URL 修正、scheme 补全、路径规范化、文件路径提取。
+- `ToolCardClassifier`：哪些 part 进入 file-card grid，哪些折叠进 merged tool calls row；目录 read 的识别和 entries parsing。
 
-- `Session` / `SessionStatus` 解码
-- `Message` / `Part` 解码
-- `SSEEvent` 各种 payload 结构
-- `TodoItem`、`Project`、`QuestionRequest` 等模型解码
+这一层回答的是：client 对它已知的输入格式和纯规则是否正确。它不证明真实 server 当前仍然发送这些格式；这个问题由 Tier 3 回答。
 
-这类测试的价值在于：一旦 API 字段名、optional 字段、嵌套结构发生变化，可以尽早在本地测试里报出来，而不会等到 UI 里出现奇怪行为才发现。
-
-### 2. 业务逻辑 / 纯状态测试
-
-这层主要保护那些不需要真实网络和真实 UI 就能验证的规则。
-
-当前已经覆盖的例子包括：
-
-- URL 修正与 scheme 补全
-- 路径规范化
-- session 删除后的 fallback 选择
-- session tree 构建
-- message / session 分页 limit 计算
-
-这类测试的优点是快、稳定、定位清晰，适合保护确定性的业务规则。
-
-### 3. AppState 状态流测试
-
-这是当前项目最有价值的一层。
-
-`AppState` 可以注入 `MockAPIClient` 和 `MockSSEClient`，所以可以在不依赖真实网络的情况下验证：
-
-- `loadSessions()`
-- `loadMoreSessions()`
-- `createSession()`
-- `deleteSession()`
-- `message.updated` / `message.part.updated` / `session.updated` 这类 SSE 驱动的状态变化
-
-这一层的价值在于，它测试的不是孤立纯函数，而是真正贴近用户行为的“状态编排”。
-
-### 4. UI smoke tests
-
-这层目前保持得比较轻，但已经开始承担关键交互兜底职责。
-
-当前已经有的 smoke coverage 包括：
-
-- App 启动成功
-- Chat tab 输入框可见
-- Session list fixture 下 child session 仍然可见
-
-UI smoke tests 的目标不是把所有视觉细节都测掉，而是保护那些“状态没坏，但接线错了，用户已经用不了”的问题。
-
-## 为什么这个项目适合做行为测试
-
-这个项目的一大优势，是 `AppState` 已经支持依赖注入：
-
-- 测试时可以给它 `MockAPIClient`
-- 测试时可以给它 `MockSSEClient`
-- 不需要真的连服务器，就能精确控制输入和状态变化
-
-这意味着很多原本只会在手工测试里发现的问题，其实都能前移到自动化测试里。
-
-相比强耦合写法，这样做的好处是：
-
-- 测试更快
-- 测试更稳定
-- 更容易构造边界条件
-- 更容易复现时序型 bug
-
-## 当前测试体系的优势
-
-- `AppState` 相关逻辑已经具备较好的可测试性。
-- 现有测试已经不只是测解码，也开始测状态编排和用户行为。
-- session、SSE、删除 fallback、分页这些关键行为已经有不错基础。
-- UI test 虽然轻，但现在已经可以开始承担行为 guard 的职责，而不只是做 launch check。
-
-## 当前测试体系的缺口
-
-当前系统最强的是：
-
-- 数据契约正确性
-- 局部状态逻辑正确性
-
-当前系统相对薄弱的是：
-
-- 跨 view / state seam 的行为保护
-
-最近的 session 列表回归就是一个典型例子：
-
-- `sessionTree` 本身没有坏
-- `sidebarSessions` 本身也没有坏
-- 真正坏的是 view 选错了数据源，导致用户可见行为退化成 root-only 列表
-
-这说明仅有纯逻辑测试还不够，还需要少量但明确的 behavior guard。
-
-## 当前已经补上的 P0 / P1 保护
-
-这轮已经实际补上了两类保护，重点就是 session list 回归。
-
-### P0：状态层 behavior guards
-
-已补的重点断言包括：
-
-1. `sessionTree` 仍然是完整层级结构的 canonical 列表。
-2. `sidebarSessions` 仍然只是 root-only 分页 helper，而不是完整列表真相。
-3. `loadMoreSessions()` 在补更多 root session 时，不能把 child hierarchy 从 canonical tree 里弄丢。
-4. archived 过滤在 `sessionTree` 与 `sidebarSessions` 两侧保持一致。
-
-这些测试主要落在：
-
-- `SessionTreeTests`
-- `AppStateFlowTests`
-
-### P1：轻量 UI smoke guard
-
-已补一条关键 smoke test：
-
-- 在 UI test fixture 下打开 session list，验证 child session 真正可见。
-
-这条测试的意义不是测视觉，而是防止未来再次出现“状态里有 child session，但列表 UI 实际只渲染 root sessions”的回归。
-
-## 当前推荐的测试分层方式
-
-后续建议继续把测试系统看成四层，各层分工明确：
-
-| 层级 | 作用 | 代表对象 |
-| --- | --- | --- |
-| Layer 0 | 契约与解码保护 | model / SSE decoding tests |
-| Layer 1 | 纯逻辑与确定性状态规则 | helper / property tests |
-| Layer 2 | 带 mock 的状态流保护 | `AppState` flow tests |
-| Layer 3 | 用户可见交互 reachability | UI smoke tests |
-
-这个分层的目的，是避免两种极端：
-
-- 要么全靠单元测试，接线错误测不出来
-- 要么什么都扔给 UI test，导致测试又慢又脆
-
-## 什么样的问题值得加 Behavior Guard
-
-建议只给下面几类问题加 behavior guard：
-
-- 对用户重要且必须持续可达的 workflow
-- 跨多层的关键行为不变量
-- 已经出现过、并且很容易在重构中再次出现的 bug 模式
-
-典型例子：
-
-- child / subagent session 在列表中仍然可见
-- 删除当前 session 后自动选中正确 fallback
-- 非当前 session 的 SSE 更新不会污染当前可见内容
-- 发送消息后不会留下重复 optimistic user row
-
-## 后续值得继续做的工作
-
-### 1. 继续扩展高价值 P0 / P1 coverage
-
-优先建议：
-
-- session switch 后 conversation 内容切换的 smoke test
-- 当前 session 删除后的 UI-level guard
-- SSE reload 只作用于当前 session 的更明确行为测试
-
-### 2. 把已知 bug 模式转成测试
-
-当前最值得继续跟进的是“发送后偶发重复消息 / 底部 ghost row”问题。
-
-目前的初步判断是：
-
-- optimistic user message append 与真实消息 reload 的合并逻辑之间存在时序 race
-- `session.status`、`message.updated`、streaming state 收口之间可能没有完全对齐
-- session switch 会触发清理和 reload，所以肉眼上表现为“切出去再切回来就好了”
-
-这个问题后续很适合转成：
-
-- 一条状态流测试：保护 optimistic message merge
-- 一条状态/UI 组合测试：保护 ghost row 不会在 session switch 前长期残留
-
-### 3. 继续保持 UI smoke test 的节制
-
-UI smoke tests 应该继续保持少而关键。
-
-建议原则：
-
-- 测 reachability，不测排版细节
-- 测关键 workflow，不测所有分支
-- 只在 view wiring 真正有回归风险时增加
-
-## 改动时的默认规则
-
-建议以后在这个项目里默认遵守下面这些规则：
-
-1. 只要改动了用户可见 workflow，就在同一分支补一条回归测试，或者更新已有测试。
-2. 如果改动的是 view 的数据源选择，必须补一条 guard，证明原有行为没有 silently regression。
-3. 如果某个 bug 的表现是“切 session / 刷新 / 重进页面就好了”，要优先怀疑它是状态与展示之间的跨层问题，而不只是纯函数 bug。
-4. UI tests 保持轻量，重点验证交互可达性。
-5. 能用带 mock 的状态流测试覆盖的，优先不用重型端到端测试。
-
-## 推荐验证方式
-
-与测试系统相关的改动，推荐至少跑：
+运行：
 
 ```bash
-xcodebuild build -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'generic/platform=iOS Simulator'
-xcodebuild test -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'
-```
-
-涉及 visionOS target、平台条件编译、或共享 SwiftUI view 的改动，还要跑：
-
-```bash
-xcodebuild -project "OpenCodeClient.xcodeproj" \
-  -target "OpenCodeClientVision" \
-  -configuration Debug \
-  -sdk xrsimulator \
-  CODE_SIGNING_ALLOWED=NO build
-```
-
-涉及 asset catalog、app icon、或 target resource membership 的改动，要顺序跑 iOS app build 和 visionOS app build。visionOS layered app icon 应放在 visionOS-only asset catalog 里，并且只加入 `OpenCodeClientVision` target；否则 iOS `actool` 会扫描共享 catalog 并把 visionOS layered icon 当成 iOS app icon 错误处理。
-
-visionOS app icon 的结构要让 Xcode 生成或严格仿照 Xcode 生成结果：`AppIcon.solidimagestack` 作为顶层图标 asset，里面包含 `Front/Middle/Back.solidimagestacklayer`，每层实际 PNG 放在内部 `Content.imageset/`。这些 image set 需要使用 `idiom: vision`、`scale: 2x`，1024×1024 PNG 对应 512pt @2x。不要用 `.appiconset` + `.imagestacklayer` 手写 visionOS icon；这种结构可能通过 CLI build，但 Xcode UI 会显示 No Content，真机图标也可能为空。
-
-visionOS icon build 通过后，建议再检查编译产物：
-
-```bash
-xcrun --sdk xros assetutil --info \
-  ~/Library/Developer/Xcode/DerivedData/<DerivedData>/Build/Products/Debug-xrsimulator/OpenCodeClientVision.app/Assets.car
-```
-
-输出里应该能看到 `AssetType: SolidImageStack`、`Name: AppIcon`，以及 `AppIcon/Back/Content`、`AppIcon/Middle/Content`、`AppIcon/Front/Content` 三层。Back 应为 opaque，Middle / Front 可以带 alpha。
-
-当前验证命令是：
-
-```bash
-xcodebuild -project "OpenCodeClient.xcodeproj" \
+xcodebuild test \
+  -project "OpenCodeClient.xcodeproj" \
   -scheme "OpenCodeClient" \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  CODE_SIGNING_ALLOWED=NO build
-
-xcodebuild -project "OpenCodeClient.xcodeproj" \
-  -scheme "OpenCodeClientVision" \
-  -configuration Debug \
-  -sdk xrsimulator \
-  CODE_SIGNING_ALLOWED=NO build
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'
 ```
 
-当前 `OpenCodeClientVision` 是编译 smoke target，还没有单独的 visionOS test bundle。它的主要保护面是：Xcode project target 配置正确、共享源码没有引用 visionOS unavailable API、visionOS 不链接 iOS-only/暂不支持的功能依赖，并且本地 patched MarkdownUI / NetworkImage package 链可以在 visionOS SDK 下完整编译。
+新增纯逻辑、model decoding、path/URL/tool classification 行为时，优先补 Tier 1。
 
-Markdown 渲染相关改动还需要同时跑 iOS app build。原因是 iOS 与 visionOS 共用同一套 SPM 依赖（`grapeot/swift-markdown-ui` 与 `grapeot/NetworkImage` 的 pinned revision），visionOS build 只能证明 package patch 对 xrOS 可用，iOS build 才能证明这条依赖图没有破坏原有 iOS target。
+## Tier 2：state flow / fixture UI
 
-visionOS 独有 window scene、default window size、split view width fraction、或 composer / tool-call design token 改动，也需要跑 `OpenCodeClientVision` xrsimulator build。若改动复用共享 SwiftUI view（例如 Markdown image preview、chat composer、tool-call open-file affordance），还需要顺序跑 iOS app build，确认 iPad/iPhone 的 sheet 预览、composer 布局和 tool-call 操作路径没有被 visionOS 条件分支影响。
+Tier 2 使用 fake data 或 mocked dependency，但跑真实 client 状态机或真实 UI。它不连真实 server，成本低、可控、适合覆盖大量边界条件。
 
-如果遇到 simulator 本身的 creation / launch 问题，需要明确区分：
+iOS 这一层有两种形态。
 
-- 测试环境失败
-- 代码逻辑失败
+第一种是 `AppState` 状态流测试。`AppState` 可注入 `MockAPIClient` 和 `MockSSEClient`，所以测试可以精确控制 API 返回、错误、SSE event，并让真实 `AppState` 从状态 A 走到状态 B。现有覆盖包括：
 
-二者不能混为一谈。
+- `loadSessions()` / `loadMoreSessions()`。
+- `createSession()` / `deleteSession()` / fallback selection。
+- `message.updated` / `message.part.updated` / `session.updated`。
+- optimistic user row dedupe 和失败回滚。
+- session tree、sidebar root-only helper、archived filtering。
 
-## 总结
+第二种是 fixture-driven XCUITest。app 通过 launch arguments 注入 deterministic state，然后 UI test 操作真实 app：
 
-OpenCode iOS client 现在已经有了一套不错的测试骨架：契约测试、纯逻辑测试、状态流测试、轻量 UI smoke tests 四层都在，只是成熟度不同。
+- `UITEST_SESSION_TREE_FIXTURE`：验证 child/subagent session 在 session list 里可见。
+- `UITEST_TOOL_CARDS_FIXTURE`：验证 tool card grid、merged tool calls row、展开后的内容。
+- launch/input smoke：验证 app 启动、chat input 可达、长输入保持可滚动。
 
-这份文档的核心观点是：后续不应该只是“再多写一些测试”，而应该有意识地把测试资源放到真正容易回归、用户又最敏感的行为上。session list 这轮回归保护是第一步，接下来应该继续把重复 optimistic row、ghost row、session switch 等问题逐步纳入 behavior guard 体系。
+Tier 2 保护 client 内部状态编排和 view wiring，但它仍然运行在我们构造的世界里。server 改了 protocol，而 mock 还在发旧 payload，Tier 2 可能继续通过。所以它不能替代 Tier 3。
+
+## Tier 3：integration-UI
+
+Tier 3 连接真实 OpenCode server、真实 session 和真实 server-produced message/tool part，再用固定断言验证 client 的渲染契约。它的核心目标是发现 client-server 边界上的 drift。
+
+这一层在 iOS 还需要系统化落地。第一条建议测试与 Android 的 `ReadToolCardIntegrationTest` 对齐：
+
+1. 连接本地测试 server（优先 4097，避免碰用户正在使用的 4096）。
+2. 用真实 API 创建 session。
+3. 发送 read-only prompt，例如读取 `AGENTS.md` 第一行，明确禁止创建、编辑、写文件。
+4. 轮询真实 messages，直到出现 read tool part。
+5. 让真实 iOS decode/render path 消费这些 messages。
+6. 断言 UI/accessibility 中存在 read file card。
+
+第一版可以不用启动完整 app navigation。像 Android 一样，先通过 public API client 拿到真实 messages，再喂给真实渲染/状态路径，验证 decode + render contract。这样更小、更稳定，也不需要为了测试在生产 app 里加入额外入口。等这一层稳定后，再补完整 XCUITest 版本：启动 app、配置 server、发送 prompt、看整屏 UI。
+
+credential 和 model/agent 配置必须来自 gitignored `.env` 或 test runtime arguments，不写进源码、文档样例或 Xcode project。未配置或 server 不可达时，这一层应该明确 skip/block，并报告原因；不要把环境缺失伪装成 app failure。
+
+Tier 3 默认只跑 read 类安全场景。真实 write/edit 会写入当前 workspace，除非 server cwd 指向专用 sandbox，否则不允许在 Tier 3 触发。
+
+## Tier 4：LLM-driven UI
+
+Tier 4 由 agent 驱动真实 app，读 accessibility tree/截图，根据用户场景和验收标准判断结果。它不追求穷举覆盖，目标是发现固定断言没有想到的问题，尤其是异步、时序、整屏可理解性和 UX regression。
+
+Android 已经证明的结构应该迁移到 iOS：
+
+- `ui_driver` CLI 是 skeleton：把启动 app、配置 server、输入 prompt、读取 tree、截图、滚动查找这些机械动作封装成确定性命令。
+- agent 是判断层：读命令返回的 tree/screenshot，决定是否等待、滚动、重试，并给出 PASS / FAIL / BLOCKED。
+- 每个 test 是一个 prompt：描述目标、可做 setup、验收标准和安全边界，而不是写死点击坐标或逐步操作。
+- 两个 skill 分层：一个操作层 skill 说明 iOS simulator/client 怎么驱动，一个测试任务 skill 说明如何用操作层完成 Tier 4。
+
+iOS 版 `ui_driver` 可以建立在 `xcodebuild`、`xcrun simctl`、XCTest helper 或 Accessibility tooling 之上，但对 agent 的契约应保持简单：每个会改变 UI 的命令返回操作后的可读 UI state；截图存到 ignored artifact 目录；错误返回原始命令、exit code 和 stderr，方便定位。
+
+第一条 Tier 4 prompt 可以对齐 Android：用户打开 app、连上 4097、发送 read-only prompt，并确认 UI 中出现一张明确标成 read 的 file card，同时不出现 write/edit card。
+
+Tier 4 不进每次 commit。它按需或定期运行；当 Tier 4 探明一个稳定可断言的行为后，把能固化的部分下沉到 Tier 3 或 Tier 2。
+
+## 贯穿全局的前提：UI 可观测性
+
+Tier 2、Tier 3、Tier 4 都依赖稳定的 accessibility surface。需要测试或 agent 判断的 UI 元素必须有语义化的 `accessibilityIdentifier` / `accessibilityLabel`，不能靠坐标、颜色或排版细节。
+
+当前 iOS tool card 使用 `toolcard.file.<basename>`、`toolcard.folder.<basename>`、`toolcard.toolcalls`。这足以证明 file card 存在，但不足以区分 read 与 write。要完整支持 four-tier strategy，需要把 read/write 在 accessibility 层暴露出来。推荐同时做两件事：
+
+1. deterministic tests 使用稳定 identifier，例如 `toolcard.read.<basename>` / `toolcard.write.<basename>`。
+2. agent 和无障碍使用 label，例如 `Read file <basename>` / `Write file <basename>` / `Read directory <basename>`。
+
+write/edit/patch 的真实 server 场景不安全，但 write card 的渲染必须在 Tier 2 fixture 里覆盖。read card 则可以在 Tier 2 fixture 和 Tier 3/Tier 4 真实 read 场景里共同覆盖。
+
+## 边界与安全
+
+本地 OpenCode server 可能共享 `/Users/grapeot/co/knowledge_working` 工作目录。只要没有专用 sandbox，Tier 3 和 Tier 4 都只能触发 read 类 tool call。任何创建、编辑、写文件的 prompt 都越界。
+
+截图和 UI tree 可能包含 server URL、用户名、session 内容或其他私人信息。Tier 4 artifact 必须写到 gitignored 目录，分享或提交前需要确认不含 token、密码、真实私有内容。
+
+测试命令运行规则仍按项目 `AGENTS.md`：`xcodebuild build` 和 `xcodebuild test` 顺序执行，不并行，避免共享 DerivedData/build database 出现 `build.db: database is locked`。
+
+## 推荐验证命令
+
+常规代码或测试改动至少顺序跑：
+
+```bash
+xcodebuild build \
+  -project "OpenCodeClient.xcodeproj" \
+  -scheme "OpenCodeClient" \
+  -destination 'generic/platform=iOS Simulator'
+
+xcodebuild test \
+  -project "OpenCodeClient.xcodeproj" \
+  -scheme "OpenCodeClient" \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'
+```
+
+Tier 3 额外需要本地测试 server、credential、agent/model 配置。Tier 4 额外需要 booted simulator、已安装 app、iOS `ui_driver` 及其 skill/prompt。
+
+## 落地顺序
+
+建议按这个顺序实现 four-tier：
+
+1. 更新本文档，明确分层、现有测试归属和缺口。
+2. 补 tool card read/write accessibility observability。
+3. 扩展 Tier 2 fixture UI test，证明 read/write card 可区分。
+4. 补 Tier 3 的最小 real-server read-card integration test。
+5. 建 iOS `ui_driver` skeleton，并给它自己的 unit tests。
+6. 写 `skill_operate_ios_simulator.md`、`skill_ui_test_tasks.md` 和第一条 Tier 4 prompt。
+7. 跑通 Tier 1/Tier 2 常规测试，手动验证 Tier 3/Tier 4 的 read-only happy path。
+
+这套顺序保证现有 unit/state/UI smoke 不丢失，同时把 Android 已落地的真实 server 和 LLM-driven 两层系统化迁移过来。
