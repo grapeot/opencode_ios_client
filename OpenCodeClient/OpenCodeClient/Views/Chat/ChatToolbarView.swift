@@ -11,6 +11,8 @@ struct ChatToolbarView: View {
     @Binding var showRenameAlert: Bool
     @Binding var renameText: String
     var showSettingsInToolbar: Bool
+    var showSessionListInToolbar: Bool = true
+    var showCreateSessionInToolbar: Bool = true
     var onSettingsTap: (() -> Void)?
     
     @State private var showCreateDisabledAlert = false
@@ -39,14 +41,16 @@ struct ChatToolbarView: View {
     // MARK: - Session Operation Buttons
     private var sessionButtons: some View {
         HStack(spacing: LayoutConstants.Toolbar.buttonSpacing) {
-            Button {
-                showSessionList = true
-            } label: {
-                Image(systemName: "list.bullet")
-                    .font(.body)
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+            if showSessionListInToolbar {
+                Button {
+                    showSessionList = true
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.body)
+                        .foregroundStyle(DesignColors.Neutral.textSecondary)
+                }
+                .accessibilityIdentifier("chat-toolbar-session-list")
             }
-            .accessibilityIdentifier("chat-toolbar-session-list")
 
             Button {
                 renameText = state.currentSession?.title ?? ""
@@ -57,17 +61,19 @@ struct ChatToolbarView: View {
                     .foregroundStyle(DesignColors.Neutral.textSecondary)
             }
 
-            Button {
-                Task { await state.createSession() }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.body)
-                    .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+            if showCreateSessionInToolbar {
+                Button {
+                    Task { await state.createSession() }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.body)
+                        .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+                }
+                .disabled(!state.canCreateSession)
+                .accessibilityIdentifier("chat-toolbar-create-session")
             }
-            .disabled(!state.canCreateSession)
-            .accessibilityIdentifier("chat-toolbar-create-session")
 
-            if !state.canCreateSession {
+            if showCreateSessionInToolbar, !state.canCreateSession {
                 Button {
                     showCreateDisabledAlert = true
                 } label: {

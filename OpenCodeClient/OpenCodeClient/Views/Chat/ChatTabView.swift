@@ -46,6 +46,8 @@ struct ChatTabView: View {
 
     @Bindable var state: AppState
     var showSettingsInToolbar: Bool = false
+    var showSessionListInToolbar: Bool = true
+    var showCreateSessionInToolbar: Bool = true
     var onSettingsTap: (() -> Void)?
     @State var inputText = ""
     @State private var hasMarkedText = false
@@ -299,6 +301,8 @@ struct ChatTabView: View {
                     showRenameAlert: $showRenameAlert,
                     renameText: $renameText,
                     showSettingsInToolbar: showSettingsInToolbar,
+                    showSessionListInToolbar: showSessionListInToolbar,
+                    showCreateSessionInToolbar: showCreateSessionInToolbar,
                     onSettingsTap: onSettingsTap
                 )
 

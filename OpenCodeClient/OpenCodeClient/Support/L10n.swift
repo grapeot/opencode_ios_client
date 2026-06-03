@@ -163,6 +163,7 @@ enum L10n {
         case sessionsEmptyTitle
         case sessionsEmptyDescription
         case sessionsClose
+        case sessionsNew
         case sessionsUntitled
         case sessionsFilesOne
         case sessionsFilesMany
@@ -378,6 +379,7 @@ enum L10n {
         Key.sessionsEmptyTitle.rawValue: "No Sessions",
         Key.sessionsEmptyDescription.rawValue: "Tap + to create one, or pull to refresh for existing sessions.",
         Key.sessionsClose.rawValue: "Close",
+        Key.sessionsNew.rawValue: "New",
         Key.sessionsUntitled.rawValue: "Untitled",
         Key.sessionsFilesOne.rawValue: "%d file",
         Key.sessionsFilesMany.rawValue: "%d files",
@@ -597,6 +599,7 @@ enum L10n {
         Key.sessionsEmptyTitle.rawValue: "暂无 Session",
         Key.sessionsEmptyDescription.rawValue: "点击右上角新建，或下拉刷新获取已有 Session",
         Key.sessionsClose.rawValue: "关闭",
+        Key.sessionsNew.rawValue: "新建",
         Key.sessionsUntitled.rawValue: "无标题",
         Key.sessionsFilesOne.rawValue: "%d 个文件",
         Key.sessionsFilesMany.rawValue: "%d 个文件",
