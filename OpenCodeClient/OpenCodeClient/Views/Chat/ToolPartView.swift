@@ -41,7 +41,13 @@ struct ToolPartView: View {
     // accent as the "you can tap this" affordance, rather than reading as inert
     // gray metadata. Blue lives on the interactive bits, not the whole card.
     private var toolAccentColor: Color {
-        DesignColors.Brand.primary
+        isReadOnlyTool ? DesignColors.Neutral.textSecondary : DesignColors.Brand.primary
+    }
+
+    private var isReadOnlyTool: Bool {
+        guard let tool = part.tool?.lowercased() else { return false }
+        return ["read_file", "read", "grep", "glob", "list", "webfetch", "task", "todoread"]
+            .contains { tool.hasPrefix($0) }
     }
 
     private var toolBackgroundColor: Color {
