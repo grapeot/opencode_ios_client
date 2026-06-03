@@ -46,6 +46,15 @@ struct FileCardView: View {
         ToolCardClassifier.parseDirectoryEntries(part.toolOutput)
     }
 
+    private var isReadOnlyFileTool: Bool {
+        guard let tool = part.tool?.lowercased() else { return false }
+        return ToolCardClassifier.readToolPrefixes.contains { tool.hasPrefix($0) }
+    }
+
+    private var fileAccent: Color {
+        isReadOnlyFileTool ? DesignColors.Neutral.textSecondary : DesignColors.Brand.primary
+    }
+
     var body: some View {
         if isDirectoryRead {
             folderCard
@@ -57,7 +66,6 @@ struct FileCardView: View {
     // MARK: - File card (unchanged behavior)
 
     private var fileCard: some View {
-        let accent = DesignColors.Brand.primary
         return Button {
             let paths = part.filePathsForNavigation
             if paths.count == 1 {
@@ -68,7 +76,7 @@ struct FileCardView: View {
                 onOpenFilesTab()
             }
         } label: {
-            cardLabel(iconName: "doc.text", accent: accent)
+            cardLabel(iconName: "doc.text", accent: fileAccent)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("toolcard.file.\(basename)")
@@ -87,11 +95,10 @@ struct FileCardView: View {
     // MARK: - Folder card (directory read → show contents)
 
     private var folderCard: some View {
-        let accent = DesignColors.Brand.primary
         return Button {
             showFolderSheet = true
         } label: {
-            cardLabel(iconName: "folder.fill", accent: accent)
+            cardLabel(iconName: "folder.fill", accent: fileAccent)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("toolcard.folder.\(basename)")
