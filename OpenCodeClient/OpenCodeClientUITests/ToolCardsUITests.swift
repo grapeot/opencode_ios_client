@@ -29,14 +29,17 @@ final class ToolCardsUITests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(assistantText.waitForExistence(timeout: 12), "fixture assistant text 应可见")
 
-        // At least one file card. Identifiers are toolcard.file.<basename>.
-        let fileCardPredicate = NSPredicate(format: "identifier BEGINSWITH 'toolcard.file.'")
-        let anyFileCard = app.descendants(matching: .any).matching(fileCardPredicate).firstMatch
-        XCTAssertTrue(anyFileCard.waitForExistence(timeout: 8), "至少一个 toolcard.file.* 文件卡应渲染")
+        // Read/write file cards must be distinguishable in the accessibility tree.
+        let readCardPredicate = NSPredicate(format: "identifier BEGINSWITH 'toolcard.read.'")
+        let writeCardPredicate = NSPredicate(format: "identifier BEGINSWITH 'toolcard.write.'")
+        let readCards = app.descendants(matching: .any).matching(readCardPredicate)
+        let writeCards = app.descendants(matching: .any).matching(writeCardPredicate)
+
+        XCTAssertTrue(readCards.firstMatch.waitForExistence(timeout: 8), "至少一个 toolcard.read.* 读文件卡应渲染")
+        XCTAssertTrue(writeCards.firstMatch.waitForExistence(timeout: 8), "至少一个 toolcard.write.* 写文件卡应渲染")
 
         // Sanity: expect multiple file cards from the fixture (read/edit/write + patch).
-        let fileCardCount = app.descendants(matching: .any).matching(fileCardPredicate).count
-        XCTAssertGreaterThanOrEqual(fileCardCount, 3, "应渲染出多个文件卡（fixture 注入了 4 个）")
+        XCTAssertGreaterThanOrEqual(readCards.count + writeCards.count, 3, "应渲染出多个文件卡（fixture 注入了 4 个）")
 
         // The merged "N tool calls" disclosure row.
         let toolCalls = app.descendants(matching: .any)["toolcard.toolcalls"]

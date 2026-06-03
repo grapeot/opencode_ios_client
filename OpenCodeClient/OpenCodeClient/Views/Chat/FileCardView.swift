@@ -51,6 +51,14 @@ struct FileCardView: View {
         return ToolCardClassifier.readToolPrefixes.contains { tool.hasPrefix($0) }
     }
 
+    private var fileAccessibilityIdentifier: String {
+        isReadOnlyFileTool ? "toolcard.read.\(basename)" : "toolcard.write.\(basename)"
+    }
+
+    private var fileAccessibilityLabel: String {
+        isReadOnlyFileTool ? "Read file \(basename)" : "Write file \(basename)"
+    }
+
     private var fileAccent: Color {
         isReadOnlyFileTool ? DesignColors.Neutral.textSecondary : DesignColors.Brand.primary
     }
@@ -79,7 +87,8 @@ struct FileCardView: View {
             cardLabel(iconName: "doc.text", accent: fileAccent)
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("toolcard.file.\(basename)")
+        .accessibilityIdentifier(fileAccessibilityIdentifier)
+        .accessibilityLabel(fileAccessibilityLabel)
         .confirmationDialog(L10n.t(.toolOpenFile), isPresented: $showOpenFileSheet) {
             ForEach(part.filePathsForNavigation, id: \.self) { path in
                 Button(L10n.toolOpenFileLabel(path: path)) {
@@ -102,6 +111,7 @@ struct FileCardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("toolcard.folder.\(basename)")
+        .accessibilityLabel("Read directory \(basename)")
         .sheet(isPresented: $showFolderSheet) {
             FolderContentsSheet(
                 folderName: basename,
