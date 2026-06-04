@@ -25,6 +25,7 @@ struct SettingsTabView: View {
 
                     TextField(L10n.t(.settingsAddress), text: $state.serverURL)
                         .focused($isServerAddressFocused)
+                        .accessibilityIdentifier("settings-server-url")
                         .submitLabel(.done)
                         .onAppear { normalizeServerURLInPlace(state: state) }
                         .textContentType(.URL)
@@ -35,10 +36,12 @@ struct SettingsTabView: View {
 
                     TextField(L10n.t(.settingsUsername), text: $state.username)
                         .textContentType(.username)
+                        .accessibilityIdentifier("settings-username")
                         .autocapitalization(.none)
 
                     SecureField(L10n.t(.settingsPassword), text: $state.password)
                         .textContentType(.password)
+                        .accessibilityIdentifier("settings-password")
 
                     if let scheme = info.scheme {
                         #if os(visionOS)
@@ -70,6 +73,7 @@ struct SettingsTabView: View {
                                 .foregroundStyle(DesignColors.Semantic.error)
                         }
                     }
+                    .accessibilityIdentifier("settings-connection-status")
 
                     if let error = state.connectionError {
                         Text(error)
@@ -80,6 +84,7 @@ struct SettingsTabView: View {
                     Button(L10n.t(.settingsTestConnection)) {
                         Task { await state.refresh() }
                     }
+                    .accessibilityIdentifier("settings-test-connection")
                     .buttonStyle(.plain)
                 }
 

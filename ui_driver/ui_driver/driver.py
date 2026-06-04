@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import json
+import os
 
 from .simctl import Simctl, SimctlError
 from .xcodebuild import Xcodebuild
 
 
 WARNING_SCREENSHOT_ONLY = "iOS V1 driver does not provide an accessibility tree yet; use screenshot evidence or XCTest assertions for richer validation."
+TIER4_CONFIG_PATH = Path("/tmp/opencode-ios-tier4-config.json")
 
 
 class Driver:
@@ -87,12 +90,14 @@ class Driver:
         result_bundle: str | None = None,
         cwd: str | None = None,
         timeout: int = 180,
+        env: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         args = [
             "test",
             "-project", project,
             "-scheme", scheme,
             "-destination", destination,
+            "-parallel-testing-enabled", "NO",
         ]
         for test_id in only_testing or []:
             args.append(f"-only-testing:{test_id}")
@@ -103,7 +108,7 @@ class Driver:
             resolved_bundle = str(bundle_path)
             args.extend(["-resultBundlePath", resolved_bundle])
 
-        result = self.xcodebuild.run(args, cwd=cwd, timeout=timeout)
+        result = self.xcodebuild.run(args, cwd=cwd, timeout=timeout, env=env)
         return {
             "ok": result.exit_code == 0,
             "command": "run-xcuitest",
@@ -115,6 +120,146 @@ class Driver:
             "stdout_tail": self._tail(result.stdout),
             "stderr_tail": self._tail(result.stderr),
         }
+
+    def configure_server(
+        self,
+        project: str,
+        scheme: str,
+        destination: str,
+        server_url: str,
+        username: str = "",
+        password: str = "",
+        result_bundle: str | None = None,
+        cwd: str | None = None,
+        timeout: int = 180,
+    ) -> dict[str, Any]:
+        out = self._run_with_tier4_config(
+            config={"server_url": server_url, "username": username, "password": password},
+            project=project,
+            scheme=scheme,
+            destination=destination,
+            only_testing=["OpenCodeClientUITests/Tier4DriverUITests/testConfigureServerFromEnvironment"],
+            result_bundle=result_bundle,
+            cwd=cwd,
+            timeout=timeout,
+        )
+        self._redact_output(out, [password])
+        out["command"] = "configure-server"
+        out["server"] = {"url": server_url, "username": username, "password": "***" if password else ""}
+        return out
+
+    def send_prompt(
+        self,
+        project: str,
+        scheme: str,
+        destination: str,
+        prompt: str,
+        server_url: str | None = None,
+        username: str = "",
+        password: str = "",
+        result_bundle: str | None = None,
+        cwd: str | None = None,
+        timeout: int = 240,
+    ) -> dict[str, Any]:
+        config = {"prompt": prompt}
+        if server_url is not None:
+            config.update({"server_url": server_url, "username": username, "password": password})
+        out = self._run_with_tier4_config(
+            config=config,
+            project=project,
+            scheme=scheme,
+            destination=destination,
+            only_testing=["OpenCodeClientUITests/Tier4DriverUITests/testSendPromptFromEnvironment"],
+            result_bundle=result_bundle,
+            cwd=cwd,
+            timeout=timeout,
+        )
+        self._redact_output(out, [password])
+        out["command"] = "send-prompt"
+        out["prompt"] = prompt
+        if server_url is not None:
+            out["server"] = {"url": server_url, "username": username, "password": "***" if password else ""}
+        return out
+
+    def accessibility_observation(
+        self,
+        project: str,
+        scheme: str,
+        destination: str,
+        result_bundle: str | None = None,
+        cwd: str | None = None,
+        timeout: int = 180,
+    ) -> dict[str, Any]:
+        out = self.run_xcuitest(
+            project=project,
+            scheme=scheme,
+            destination=destination,
+            only_testing=["OpenCodeClientUITests/Tier4DriverUITests/testAccessibilityObservationSnapshot"],
+            result_bundle=result_bundle,
+            cwd=cwd,
+            timeout=timeout,
+        )
+        out["command"] = "tree"
+        out["observability"] = "xcuitest_accessibility_snapshot"
+        out["nodes"] = []
+        out["compact"] = []
+        return out
+
+    def _run_with_tier4_config(
+        self,
+        config: dict[str, str],
+        project: str,
+        scheme: str,
+        destination: str,
+        only_testing: list[str],
+        result_bundle: str | None,
+        cwd: str | None,
+        timeout: int,
+    ) -> dict[str, Any]:
+        self._write_tier4_config(config)
+        try:
+            return self.run_xcuitest(
+                project=project,
+                scheme=scheme,
+                destination=destination,
+                only_testing=only_testing,
+                result_bundle=result_bundle,
+                cwd=cwd,
+                timeout=timeout,
+            )
+        finally:
+            try:
+                TIER4_CONFIG_PATH.unlink()
+            except FileNotFoundError:
+                pass
+
+    @staticmethod
+    def _write_tier4_config(config: dict[str, str]) -> None:
+        payload = json.dumps(config)
+        fd = os.open(TIER4_CONFIG_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(payload)
+
+    @staticmethod
+    def _redact_output(payload: dict[str, Any], secrets: list[str]) -> None:
+        redactions = [s for s in secrets if s]
+        if not redactions:
+            return
+        for key in ("stdout_tail", "stderr_tail"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                for secret in redactions:
+                    value = value.replace(secret, "***")
+                payload[key] = value
+        summaries = payload.get("test_summaries")
+        if isinstance(summaries, list):
+            redacted = []
+            for item in summaries:
+                if isinstance(item, str):
+                    for secret in redactions:
+                        item = item.replace(secret, "***")
+                redacted.append(item)
+            payload["test_summaries"] = redacted
 
     def _safe_select_device(self, udid: str | None, device: str | None) -> dict[str, Any] | None:
         try:

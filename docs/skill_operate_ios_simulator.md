@@ -4,7 +4,7 @@ Type: API Guide / operation layer
 
 Use when an agent needs to launch the OpenCode iOS client, capture screenshots, or gather basic simulator state for Tier 4 UI testing.
 
-This skill is the iOS counterpart to Android's emulator operation skill. The current iOS `ui_driver` is a v1 skeleton backed by `xcrun simctl` plus an XCTest bridge. It supports deterministic launch/screenshot/status operations and targeted XCUITest runs, but does not yet expose a full Android-style accessibility tree.
+This skill is the iOS counterpart to Android's emulator operation skill. The current iOS `ui_driver` is backed by `xcrun simctl` plus an XCTest bridge. It supports deterministic launch/screenshot/status operations, targeted XCUITest runs, high-level `configure-server` / `send-prompt` flows, and XCTest-backed focused observations. It still does not expose a full Android-style accessibility tree.
 
 ## Project Facts
 
@@ -64,7 +64,49 @@ Get current observation state:
 .venv/bin/python -m ui_driver tree --screenshot artifacts/current.png
 ```
 
-`tree` currently returns `observability: screenshot_only`, with empty `nodes` and `compact`. This is intentional. For deterministic element assertions use XCUITest; for Tier 4 v1, use screenshot evidence and exact BLOCKED reporting when the missing accessibility tree prevents a confident verdict.
+Without Xcode arguments, `tree` returns `observability: screenshot_only`, with empty `nodes` and `compact`. This remains intentional.
+
+For focused accessibility observation, route `tree` through XCTest:
+
+```bash
+.venv/bin/python -m ui_driver tree \
+  --cwd ../OpenCodeClient \
+  --project OpenCodeClient.xcodeproj \
+  --scheme OpenCodeClient \
+  --destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+  --result-bundle "artifacts/tier4-observation-$(date +%Y%m%d-%H%M%S).xcresult"
+```
+
+This returns `observability: xcuitest_accessibility_snapshot` and XCTest summaries. It is a focused bridge over known identifiers, not a full tree dump.
+
+High-level live flows:
+
+```bash
+.venv/bin/python -m ui_driver configure-server \
+  --cwd ../OpenCodeClient \
+  --project OpenCodeClient.xcodeproj \
+  --scheme OpenCodeClient \
+  --destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+  --server-url http://127.0.0.1:4096 \
+  --username "$OPENCODE_USERNAME" \
+  --password-env OPENCODE_PASSWORD \
+  --result-bundle "artifacts/configure-server-$(date +%Y%m%d-%H%M%S).xcresult"
+
+.venv/bin/python -m ui_driver send-prompt \
+  --cwd ../OpenCodeClient \
+  --project OpenCodeClient.xcodeproj \
+  --scheme OpenCodeClient \
+  --destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+  --prompt 'Read README.md and summarize it in one sentence.' \
+  --result-bundle "artifacts/send-prompt-$(date +%Y%m%d-%H%M%S).xcresult"
+```
+
+Passwords are read from the named environment variable and passed to XCTest through a temporary `0600` config file at `/tmp/opencode-ios-tier4-config.json`. The password is pasted into the secure field rather than typed, and JSON output masks password values in stdout/stderr tails. The driver runs Xcode UI tests with `-parallel-testing-enabled NO` to avoid runner clone flakiness.
+
+Verified live 4097 flow:
+
+- `configure-server` against `http://127.0.0.1:4097` passed via `Tier4DriverUITests/testConfigureServerFromEnvironment`.
+- `send-prompt` against `http://127.0.0.1:4097` passed via `Tier4DriverUITests/testSendPromptFromEnvironment` after creating a fresh session and sending `T4PING4097`.
 
 Run a targeted XCTest UI harness and return JSON summaries:
 
@@ -99,6 +141,6 @@ The driver chooses a simulator in this order:
 ## Known Limitations
 
 - No full accessibility tree in v1.
-- No reliable `tap-label`, `configure-server`, or `send-prompt` command yet.
-- Exact element identity is available through targeted XCUITest runs, not through `tree`.
+- No reliable generic `tap-label` command yet.
+- Exact element identity is available through targeted XCUITest runs and XCTest-backed `tree`, not through a raw simulator tree dump.
 - Live read-card flows are currently better validated by Tier 3 Swift tests and fixture XCUITest; Tier 4 uses this driver for launch/screenshot/XCTest evidence until richer iOS observation exists.

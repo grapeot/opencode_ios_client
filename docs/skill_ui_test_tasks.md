@@ -36,13 +36,13 @@ BLOCKED means infrastructure prevented a confident verdict: no booted simulator,
 
 ## Current v1 Limitation
 
-The iOS driver does not yet expose a full accessibility tree. For scenarios requiring exact element identity, combine:
+The iOS driver does not expose a full Android-style accessibility tree. For scenarios requiring exact element identity, combine:
 
 - Tier 2 XCUITest assertions for deterministic fixture state.
 - Tier 3 live integration tests for server/client contract.
 - Tier 4 screenshots for visual/UX judgment.
 
-The preferred Tier 4 bridge is `run-xcuitest`: it invokes XCTest through the driver and returns a JSON verdict surface (`ok`, `exit_code`, `test_summaries`, `result_bundle`). This keeps iOS automation on stable accessibility identifiers and avoids brittle coordinate scripts.
+The preferred Tier 4 bridge is `run-xcuitest` or XCTest-backed `tree`: it invokes XCTest through the driver and returns a JSON verdict surface (`ok`, `exit_code`, `test_summaries`, `result_bundle`). This keeps iOS automation on stable accessibility identifiers and avoids brittle coordinate scripts. Use `configure-server` and `send-prompt` for the standard live server flow; they pass secrets through a temporary `0600` config file, paste passwords instead of typing them, mask passwords in JSON output, and run Xcode with parallel UI testing disabled.
 
 When a prompt asks for read/write card distinction, prefer evidence from `toolcard.read.*` / `toolcard.write.*` XCUITest or visible screenshot labels. If neither is available, return BLOCKED and say the driver needs richer accessibility observation.
 

@@ -594,6 +594,7 @@ struct ChatTabView: View {
                             .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
                             .hoverEffect(.lift)
                         }
+                        .accessibilityIdentifier("chat-send")
                         .disabled(!canSendNow)
                     }
                     .padding(.bottom, 1)

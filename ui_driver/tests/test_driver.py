@@ -1,3 +1,6 @@
+import json
+
+import ui_driver.driver as driver_module
 from ui_driver.driver import Driver, WARNING_SCREENSHOT_ONLY
 from ui_driver.simctl import SimctlError, SimctlResult
 from ui_driver.xcodebuild import XcodebuildResult
@@ -30,9 +33,12 @@ class FakeXcodebuild:
     def __init__(self, exit_code=0):
         self.calls = []
         self.exit_code = exit_code
+        self.config_seen = None
 
-    def run(self, args, cwd=None, timeout=180):
-        self.calls.append((args, cwd, timeout))
+    def run(self, args, cwd=None, timeout=180, env=None):
+        self.calls.append((args, cwd, timeout, env))
+        if driver_module.TIER4_CONFIG_PATH.exists():
+            self.config_seen = json.loads(driver_module.TIER4_CONFIG_PATH.read_text())
         return XcodebuildResult(
             args=args,
             exit_code=self.exit_code,
@@ -99,17 +105,19 @@ def test_run_xcuitest_builds_targeted_xcodebuild_command(tmp_path):
     )
 
     assert out["ok"] is True
-    args, cwd, timeout = fake_xcodebuild.calls[0]
-    assert args[:7] == [
+    args, cwd, timeout, env = fake_xcodebuild.calls[0]
+    assert args[:9] == [
         "test",
         "-project", "OpenCodeClient.xcodeproj",
         "-scheme", "OpenCodeClient",
         "-destination", "platform=iOS Simulator,name=iPhone 16,OS=18.4",
+        "-parallel-testing-enabled", "NO",
     ]
     assert "-only-testing:OpenCodeClientUITests/ToolCardsUITests/testReadCard" in args
     assert "-resultBundlePath" in args
     assert cwd == "OpenCodeClient"
     assert timeout == 30
+    assert env is None
     assert out["test_summaries"] == [
         "** TEST SUCCEEDED **",
         "Test Suite 'ToolCardsUITests' started",
@@ -127,3 +135,49 @@ def test_run_xcuitest_surfaces_failure_exit_code():
     assert out["ok"] is False
     assert out["exit_code"] == 65
     assert "** TEST FAILED **" in out["test_summaries"]
+
+
+def test_configure_server_uses_xcuitest_env_and_masks_password():
+    driver_module.TIER4_CONFIG_PATH.unlink(missing_ok=True)
+    fake_xcodebuild = FakeXcodebuild()
+    out = Driver(FakeSimctl(), xcodebuild=fake_xcodebuild).configure_server(
+        project="OpenCodeClient.xcodeproj",
+        scheme="OpenCodeClient",
+        destination="platform=iOS Simulator,name=iPhone 16,OS=18.4",
+        server_url="http://127.0.0.1:4096",
+        username="user",
+        password="secret",
+    )
+
+    args, _, _, env = fake_xcodebuild.calls[0]
+    assert out["ok"] is True
+    assert out["command"] == "configure-server"
+    assert out["server"]["password"] == "***"
+    assert "secret" not in out["xcodebuild_args"]
+    assert "-only-testing:OpenCodeClientUITests/Tier4DriverUITests/testConfigureServerFromEnvironment" in args
+    assert env is None
+    assert fake_xcodebuild.config_seen == {
+        "server_url": "http://127.0.0.1:4096",
+        "username": "user",
+        "password": "secret",
+    }
+    assert not driver_module.TIER4_CONFIG_PATH.exists()
+
+
+def test_send_prompt_uses_xcuitest_env():
+    driver_module.TIER4_CONFIG_PATH.unlink(missing_ok=True)
+    fake_xcodebuild = FakeXcodebuild()
+    out = Driver(FakeSimctl(), xcodebuild=fake_xcodebuild).send_prompt(
+        project="OpenCodeClient.xcodeproj",
+        scheme="OpenCodeClient",
+        destination="platform=iOS Simulator,name=iPhone 16,OS=18.4",
+        prompt="list files",
+    )
+
+    args, _, _, env = fake_xcodebuild.calls[0]
+    assert out["ok"] is True
+    assert out["command"] == "send-prompt"
+    assert "-only-testing:OpenCodeClientUITests/Tier4DriverUITests/testSendPromptFromEnvironment" in args
+    assert env is None
+    assert fake_xcodebuild.config_seen == {"prompt": "list files"}
+    assert not driver_module.TIER4_CONFIG_PATH.exists()
