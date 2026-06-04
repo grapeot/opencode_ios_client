@@ -10,7 +10,7 @@ This workflow depends on `docs/skill_operate_ios_simulator.md`.
 
 Tier 4 separates mechanical operations from judgment:
 
-- `ui_driver` CLI is the skeleton. It launches the app, captures screenshots, lists devices, and returns JSON.
+- `ui_driver` CLI is the skeleton. It launches the app, captures screenshots, lists devices, runs targeted XCUITest harnesses, and returns JSON.
 - The agent is the judge. It reads JSON and screenshots, decides whether the evidence satisfies the user scenario, and reports a verdict.
 - Each test is a prompt under `docs/ui_test_prompts/`.
 
@@ -22,8 +22,9 @@ Do not turn a Tier 4 prompt into a coordinate script. If every step is fixed, wr
 2. Read `docs/skill_operate_ios_simulator.md`.
 3. Build/install the app if needed using standard Xcode workflows.
 4. Use `ui_driver` for available deterministic operations.
-5. Use screenshots and any deterministic test output as evidence.
-6. Return exactly one verdict: PASS, FAIL, or BLOCKED.
+5. For exact iOS element identity, use `ui_driver run-xcuitest` against a focused UI test rather than coordinate tapping.
+6. Use screenshots and deterministic test output as evidence.
+7. Return exactly one verdict: PASS, FAIL, or BLOCKED.
 
 ## Verdict Standard
 
@@ -40,6 +41,8 @@ The iOS driver does not yet expose a full accessibility tree. For scenarios requ
 - Tier 2 XCUITest assertions for deterministic fixture state.
 - Tier 3 live integration tests for server/client contract.
 - Tier 4 screenshots for visual/UX judgment.
+
+The preferred Tier 4 bridge is `run-xcuitest`: it invokes XCTest through the driver and returns a JSON verdict surface (`ok`, `exit_code`, `test_summaries`, `result_bundle`). This keeps iOS automation on stable accessibility identifiers and avoids brittle coordinate scripts.
 
 When a prompt asks for read/write card distinction, prefer evidence from `toolcard.read.*` / `toolcard.write.*` XCUITest or visible screenshot labels. If neither is available, return BLOCKED and say the driver needs richer accessibility observation.
 

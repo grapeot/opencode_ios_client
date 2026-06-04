@@ -1,5 +1,6 @@
 from ui_driver.driver import Driver, WARNING_SCREENSHOT_ONLY
 from ui_driver.simctl import SimctlError, SimctlResult
+from ui_driver.xcodebuild import XcodebuildResult
 
 
 class FakeSimctl:
@@ -23,6 +24,26 @@ class FakeSimctl:
         if args in self.fail_args:
             raise SimctlError(SimctlResult(args=args, exit_code=1, stdout="", stderr="boom"))
         return SimctlResult(args=args, exit_code=0, stdout="ok", stderr="")
+
+
+class FakeXcodebuild:
+    def __init__(self, exit_code=0):
+        self.calls = []
+        self.exit_code = exit_code
+
+    def run(self, args, cwd=None, timeout=180):
+        self.calls.append((args, cwd, timeout))
+        return XcodebuildResult(
+            args=args,
+            exit_code=self.exit_code,
+            stdout="\n".join([
+                "build noise",
+                "** TEST SUCCEEDED **" if self.exit_code == 0 else "** TEST FAILED **",
+                "Test Suite 'ToolCardsUITests' started",
+                "Test Case 'ToolCardsUITests/testReadCard()' passed (1.0 seconds)",
+            ]),
+            stderr="",
+        )
 
 
 def test_devices_flattens_simctl_json():
@@ -63,3 +84,46 @@ def test_simctl_failure_preserves_raw_error():
     assert out["simctl_args"] == failing_args
     assert out["exit_code"] == 1
     assert out["stderr"] == "boom"
+
+
+def test_run_xcuitest_builds_targeted_xcodebuild_command(tmp_path):
+    fake_xcodebuild = FakeXcodebuild()
+    out = Driver(FakeSimctl(), xcodebuild=fake_xcodebuild).run_xcuitest(
+        project="OpenCodeClient.xcodeproj",
+        scheme="OpenCodeClient",
+        destination="platform=iOS Simulator,name=iPhone 16,OS=18.4",
+        only_testing=["OpenCodeClientUITests/ToolCardsUITests/testReadCard"],
+        result_bundle=str(tmp_path / "read-card.xcresult"),
+        cwd="OpenCodeClient",
+        timeout=30,
+    )
+
+    assert out["ok"] is True
+    args, cwd, timeout = fake_xcodebuild.calls[0]
+    assert args[:7] == [
+        "test",
+        "-project", "OpenCodeClient.xcodeproj",
+        "-scheme", "OpenCodeClient",
+        "-destination", "platform=iOS Simulator,name=iPhone 16,OS=18.4",
+    ]
+    assert "-only-testing:OpenCodeClientUITests/ToolCardsUITests/testReadCard" in args
+    assert "-resultBundlePath" in args
+    assert cwd == "OpenCodeClient"
+    assert timeout == 30
+    assert out["test_summaries"] == [
+        "** TEST SUCCEEDED **",
+        "Test Suite 'ToolCardsUITests' started",
+        "Test Case 'ToolCardsUITests/testReadCard()' passed (1.0 seconds)",
+    ]
+
+
+def test_run_xcuitest_surfaces_failure_exit_code():
+    out = Driver(FakeSimctl(), xcodebuild=FakeXcodebuild(exit_code=65)).run_xcuitest(
+        project="OpenCodeClient.xcodeproj",
+        scheme="OpenCodeClient",
+        destination="platform=iOS Simulator,name=iPhone 16,OS=18.4",
+    )
+
+    assert out["ok"] is False
+    assert out["exit_code"] == 65
+    assert "** TEST FAILED **" in out["test_summaries"]

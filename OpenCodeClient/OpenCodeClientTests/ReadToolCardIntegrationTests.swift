@@ -13,7 +13,7 @@ import Testing
 
 struct ReadToolCardIntegrationTests {
     @Test func readToolCallFromRealServerClassifiesAsReadCard() async throws {
-        let env = ProcessInfo.processInfo.environment
+        let env = loadEnvironment()
         guard env["OPENCODE_INTEGRATION_TESTS"] == "1" else { return }
         guard let serverURL = env.nonEmpty("OPENCODE_SERVER_URL") else { return }
         guard let agent = env.nonEmpty("OPENCODE_AGENT") else { return }
@@ -31,16 +31,17 @@ struct ReadToolCardIntegrationTests {
         var createdSessionID: String?
         do {
             let session = try await client.createSession(title: "ios-tier3-read-card")
-            createdSessionID = session.id
+            let sessionID = await session.id
+            createdSessionID = sessionID
 
             try await client.promptAsync(
-                sessionID: session.id,
+                sessionID: sessionID,
                 text: "Read the file AGENTS.md and reply with only its first line. Do not create, edit, or write any file.",
                 agent: agent,
                 model: model
             )
 
-            let messages = try await pollForReadToolPart(client: client, sessionID: session.id)
+            let messages = try await pollForReadToolPart(client: client, sessionID: sessionID)
             let readParts = messages.flatMap(\.parts).filter(isReadToolPart)
 
             #expect(readParts.isEmpty == false)
@@ -48,7 +49,7 @@ struct ReadToolCardIntegrationTests {
                 !part.filePathsForNavigation.isEmpty || (part.toolOutput?.contains("<type>file</type>") == true)
             })
 
-            try? await client.deleteSession(sessionID: session.id)
+            try? await client.deleteSession(sessionID: sessionID)
             createdSessionID = nil
         } catch {
             if let createdSessionID {
@@ -89,6 +90,38 @@ struct ReadToolCardIntegrationTests {
             return nil
         }
         return Message.ModelInfo(providerID: providerID, modelID: modelID)
+    }
+
+    private func loadEnvironment() -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot = testFile
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let envFile = repoRoot.appendingPathComponent(".env")
+
+        guard let contents = try? String(contentsOf: envFile, encoding: .utf8) else {
+            return env
+        }
+
+        for rawLine in contents.split(whereSeparator: \.isNewline) {
+            var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.hasPrefix("export ") {
+                line.removeFirst("export ".count)
+            }
+            guard !line.isEmpty, !line.hasPrefix("#"), let separator = line.firstIndex(of: "=") else {
+                continue
+            }
+
+            let key = String(line[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(line[line.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if env[key]?.isEmpty ?? true {
+                env[key] = value
+            }
+        }
+
+        return env
     }
 }
 

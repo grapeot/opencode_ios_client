@@ -26,6 +26,15 @@ def main(argv: list[str] | None = None) -> int:
     _add_device_flags(tree)
     tree.add_argument("--screenshot")
 
+    xcuitest = sub.add_parser("run-xcuitest")
+    xcuitest.add_argument("--project", required=True)
+    xcuitest.add_argument("--scheme", required=True)
+    xcuitest.add_argument("--destination", required=True)
+    xcuitest.add_argument("--only-testing", action="append", default=[])
+    xcuitest.add_argument("--result-bundle")
+    xcuitest.add_argument("--cwd")
+    xcuitest.add_argument("--timeout", type=int, default=180)
+
     ns = parser.parse_args(argv)
     driver = Driver()
     out: dict[str, Any]
@@ -38,6 +47,16 @@ def main(argv: list[str] | None = None) -> int:
         out = driver.screenshot(output=ns.output, udid=ns.udid, device=ns.device)
     elif ns.command == "tree":
         out = driver.tree(screenshot=ns.screenshot, udid=ns.udid, device=ns.device)
+    elif ns.command == "run-xcuitest":
+        out = driver.run_xcuitest(
+            project=ns.project,
+            scheme=ns.scheme,
+            destination=ns.destination,
+            only_testing=ns.only_testing,
+            result_bundle=ns.result_bundle,
+            cwd=ns.cwd,
+            timeout=ns.timeout,
+        )
     else:
         parser.error(f"unknown command {ns.command}")
 

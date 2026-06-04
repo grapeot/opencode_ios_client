@@ -11,7 +11,7 @@ Verify that a user can see a file read operation represented as read, distinct f
 Preferred deterministic setup:
 
 - Launch the app with `UITEST_TOOL_CARDS_FIXTURE`.
-- Use existing Tier 2 XCUITest expectations or screenshots to confirm that read and write file cards are distinguishable.
+- Use `ui_driver run-xcuitest` to run `OpenCodeClientUITests/ToolCardsUITests/testToolCardsFixtureRendersFileCardsAndMergedToolCalls`, which launches with `UITEST_TOOL_CARDS_FIXTURE` and asserts that `toolcard.read.*` and `toolcard.write.*` are distinguishable.
 
 Live setup, only when server credentials and a booted simulator are available:
 

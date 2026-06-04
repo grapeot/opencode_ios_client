@@ -3,10 +3,11 @@
 Deterministic `xcrun simctl` operation skeleton for the OpenCode iOS client.
 
 This is Tier 4 infrastructure: a CLI performs repeatable simulator operations,
-then an agent judges the result from JSON output and screenshots. V1 is
-intentionally small. It supports launch, screenshots, device listing, and a
-screenshot-backed `tree` command. It does not yet provide a full accessibility
-tree like Android `uiautomator dump`.
+then an agent judges the result from JSON output, XCTest summaries, and
+screenshots. V1 is intentionally small. It supports launch, screenshots, device
+listing, a screenshot-backed `tree` command, and an XCTest bridge for stable UI
+assertions. It does not pretend to provide a full accessibility tree like
+Android `uiautomator dump`.
 
 ## Install / Run
 
@@ -25,6 +26,13 @@ python -m ui_driver devices
 python -m ui_driver launch --bundle-id com.grapeot.OpenCodeClient
 python -m ui_driver screenshot --output artifacts/screen.png
 python -m ui_driver tree --screenshot artifacts/screen.png
+python -m ui_driver run-xcuitest \
+  --cwd ../OpenCodeClient \
+  --project OpenCodeClient.xcodeproj \
+  --scheme OpenCodeClient \
+  --destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+  --only-testing OpenCodeClientUITests/ToolCardsUITests/testToolCardsFixtureRendersFileCardsAndMergedToolCalls \
+  --result-bundle "artifacts/read-card-visible-$(date +%Y%m%d-%H%M%S).xcresult"
 ```
 
 Device selection precedence:
@@ -53,7 +61,9 @@ exit code, stdout, and stderr.
 ```
 
 Use screenshots as evidence or pair this driver with XCTest assertions until a
-reliable accessibility-tree bridge is added.
+reliable accessibility-tree bridge is added. For iOS, the XCTest bridge is the
+preferred stable surface for exact element identity: it sees accessibility
+identifiers such as `toolcard.read.*` without relying on coordinates.
 
 ## Tests
 

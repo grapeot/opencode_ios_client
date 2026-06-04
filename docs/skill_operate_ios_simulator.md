@@ -4,7 +4,7 @@ Type: API Guide / operation layer
 
 Use when an agent needs to launch the OpenCode iOS client, capture screenshots, or gather basic simulator state for Tier 4 UI testing.
 
-This skill is the iOS counterpart to Android's emulator operation skill. The current iOS `ui_driver` is a v1 skeleton backed by `xcrun simctl`; it supports deterministic launch/screenshot/status operations but does not yet expose a full accessibility tree.
+This skill is the iOS counterpart to Android's emulator operation skill. The current iOS `ui_driver` is a v1 skeleton backed by `xcrun simctl` plus an XCTest bridge. It supports deterministic launch/screenshot/status operations and targeted XCUITest runs, but does not yet expose a full Android-style accessibility tree.
 
 ## Project Facts
 
@@ -66,6 +66,20 @@ Get current observation state:
 
 `tree` currently returns `observability: screenshot_only`, with empty `nodes` and `compact`. This is intentional. For deterministic element assertions use XCUITest; for Tier 4 v1, use screenshot evidence and exact BLOCKED reporting when the missing accessibility tree prevents a confident verdict.
 
+Run a targeted XCTest UI harness and return JSON summaries:
+
+```bash
+.venv/bin/python -m ui_driver run-xcuitest \
+  --cwd ../OpenCodeClient \
+  --project OpenCodeClient.xcodeproj \
+  --scheme OpenCodeClient \
+  --destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+  --only-testing OpenCodeClientUITests/ToolCardsUITests/testToolCardsFixtureRendersFileCardsAndMergedToolCalls \
+  --result-bundle "artifacts/read-card-visible-$(date +%Y%m%d-%H%M%S).xcresult"
+```
+
+This is the current best-practice bridge for exact UI identity on iOS. `simctl` can launch and screenshot, but XCTest is the stable way to assert accessibility identifiers like `toolcard.read.*` and `toolcard.write.*`.
+
 ## Device Selection
 
 The driver chooses a simulator in this order:
@@ -86,4 +100,5 @@ The driver chooses a simulator in this order:
 
 - No full accessibility tree in v1.
 - No reliable `tap-label`, `configure-server`, or `send-prompt` command yet.
-- Live read-card flows are currently better validated by Tier 3 Swift tests and fixture XCUITest; Tier 4 uses this driver for launch/screenshot evidence until richer iOS observation exists.
+- Exact element identity is available through targeted XCUITest runs, not through `tree`.
+- Live read-card flows are currently better validated by Tier 3 Swift tests and fixture XCUITest; Tier 4 uses this driver for launch/screenshot/XCTest evidence until richer iOS observation exists.
