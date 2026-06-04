@@ -29,6 +29,28 @@ class StubDriver:
             "timeout": timeout,
         }
 
+    def configure_server(self, project, scheme, destination, server_url, username="", password="", result_bundle=None, cwd=None, timeout=180):
+        return {
+            "ok": True,
+            "command": "configure-server",
+            "project": project,
+            "server_url": server_url,
+            "username": username,
+            "password": "***" if password else "",
+        }
+
+    def send_prompt(self, project, scheme, destination, prompt, server_url=None, username="", password="", result_bundle=None, cwd=None, timeout=240):
+        return {
+            "ok": True,
+            "command": "send-prompt",
+            "project": project,
+            "prompt": prompt,
+            "server_url": server_url,
+        }
+
+    def accessibility_observation(self, project, scheme, destination, result_bundle=None, cwd=None, timeout=180):
+        return {"ok": True, "command": "tree", "observability": "xcuitest_accessibility_snapshot"}
+
 
 def test_cli_devices_outputs_json(monkeypatch, capsys):
     monkeypatch.setattr(cli, "Driver", StubDriver)
@@ -69,3 +91,37 @@ def test_cli_run_xcuitest_passes_arguments(monkeypatch, capsys):
     assert payload["result_bundle"] == "artifacts/flow.xcresult"
     assert payload["cwd"] == "ios"
     assert payload["timeout"] == 30
+
+
+def test_cli_configure_server_masks_password(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "Driver", StubDriver)
+    monkeypatch.setenv("OPENCODE_PASSWORD", "secret")
+    code = cli.main([
+        "configure-server",
+        "--project", "App.xcodeproj",
+        "--scheme", "App",
+        "--destination", "platform=iOS Simulator,name=iPhone 16,OS=18.4",
+        "--server-url", "http://127.0.0.1:4096",
+        "--username", "user",
+        "--password-env", "OPENCODE_PASSWORD",
+    ])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert code == 0
+    assert payload["command"] == "configure-server"
+    assert payload["password"] == "***"
+    assert "secret" not in captured.out
+
+
+def test_cli_tree_can_use_xcuitest_observation(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "Driver", StubDriver)
+    code = cli.main([
+        "tree",
+        "--project", "App.xcodeproj",
+        "--scheme", "App",
+        "--destination", "platform=iOS Simulator,name=iPhone 16,OS=18.4",
+    ])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert code == 0
+    assert payload["observability"] == "xcuitest_accessibility_snapshot"

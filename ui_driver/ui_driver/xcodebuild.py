@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+import os
 
 
 @dataclass
@@ -14,11 +15,15 @@ class XcodebuildResult:
 
 
 class Xcodebuild:
-    def run(self, args: list[str], cwd: str | None = None, timeout: int = 180) -> XcodebuildResult:
+    def run(self, args: list[str], cwd: str | None = None, timeout: int = 180, env: dict[str, str] | None = None) -> XcodebuildResult:
+        proc_env = os.environ.copy()
+        if env:
+            proc_env.update(env)
         try:
             proc = subprocess.run(
                 ["xcodebuild", *args],
                 cwd=Path(cwd) if cwd else None,
+                env=proc_env,
                 text=True,
                 capture_output=True,
                 check=False,
