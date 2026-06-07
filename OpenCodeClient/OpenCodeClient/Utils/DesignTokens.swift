@@ -26,6 +26,10 @@ enum DesignColors {
         /// for the transient "AI is working" state (working pulse, context ring
         /// near capacity). It must not appear anywhere else.
         static let gold = Color(red: 0.851, green: 0.651, blue: 0.129)
+        /// Teal #2DB7A3 — the "actively running / working" state color. Replaces the
+        /// former gold for session-running indication: a cool neighbor of the primary
+        /// blue, so running and "needs you" (primary blue) stay distinct without clashing.
+        static let teal = Color(red: 0.176, green: 0.718, blue: 0.639)
     }
 
     // MARK: Semantic

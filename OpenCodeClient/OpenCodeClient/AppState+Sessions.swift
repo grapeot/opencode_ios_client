@@ -173,6 +173,7 @@ extension AppState {
         messages = []
         partsByMessage = [:]
         currentSessionID = session.id
+        markSessionViewed(session.id)
         applySavedModelForCurrentSession()
 
         Task { [weak self] in

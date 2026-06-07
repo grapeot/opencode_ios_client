@@ -167,6 +167,7 @@ final class AppState {
     static let aiBuilderLastOKTestedAtKey = "aiBuilderLastOKTestedAt"
     static let draftInputsBySessionKey = "draftInputsBySession"
     static let selectedModelBySessionKey = "selectedModelBySession"
+    static let lastViewedAtBySessionKey = "lastViewedAtBySession"
     static let showArchivedSessionsKey = "showArchivedSessions"
     static let selectedProjectWorktreeKey = "selectedProjectWorktree"
     static let customProjectPathKey = "customProjectPath"
@@ -219,6 +220,11 @@ final class AppState {
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             selectedModelIDBySessionID = decoded
         }
+
+        if let data = UserDefaults.standard.data(forKey: Self.lastViewedAtBySessionKey),
+           let decoded = try? JSONDecoder().decode([String: Int].self, from: data) {
+            lastViewedAtBySessionID = decoded
+        }
     }
 
     // Unsent composer drafts per session.
@@ -226,6 +232,9 @@ final class AppState {
 
     // Selected model (providerID/modelID) per session.
     var selectedModelIDBySessionID: [String: String] = [:]
+
+    // Last-viewed timestamp (ms since epoch) per session, for read/unread state.
+    var lastViewedAtBySessionID: [String: Int] = [:]
 
     static func aiBuilderSignature(baseURL: String, token: String) -> String {
         let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -472,6 +481,31 @@ final class AppState {
 
     var pendingPermissions: [PendingPermission] = []
     var pendingQuestions: [QuestionRequest] = []
+
+    /// True if a pending permission or question is waiting on this session.
+    /// Used to drive the `.needsYou` display state (see `SessionDisplayState`).
+    func isSessionBlocked(_ sessionID: String) -> Bool {
+        pendingPermissions.contains { $0.sessionID == sessionID }
+            || pendingQuestions.contains { $0.sessionID == sessionID }
+    }
+
+    /// What kind of pending interaction is blocking a session, if any. Lets the
+    /// `.needsYou` row pick the right trailing label ("等你授权" vs "等你回答").
+    /// Permissions take priority over questions when both are pending.
+    enum SessionBlockKind {
+        case permission
+        case question
+    }
+
+    func sessionBlockKind(_ sessionID: String) -> SessionBlockKind? {
+        if pendingPermissions.contains(where: { $0.sessionID == sessionID }) {
+            return .permission
+        }
+        if pendingQuestions.contains(where: { $0.sessionID == sessionID }) {
+            return .question
+        }
+        return nil
+    }
 
     var themePreference: String = "auto"  // "auto" | "light" | "dark"
 
