@@ -97,8 +97,8 @@ struct ChatTabView: View {
     }
 
     private var composerPlaceholderText: String {
-        if isRecording { return L10n.t(.chatSpeechListening) }
-        if isShowingTranscribingUI { return L10n.t(.chatSpeechTranscribing) }
+        if isRecording { return L10n.t(.chatSpeechTranscriptWillAppear) }
+        if isShowingTranscribingUI { return L10n.t(.chatSpeechTranscribingHint) }
         if hasPreservedSpeechAudioForUI { return L10n.t(.chatSpeechPreservedAudio) }
         return L10n.t(.chatInputPlaceholder)
     }
@@ -395,7 +395,8 @@ struct ChatTabView: View {
             }
         }
         .padding(.horizontal, DesignSpacing.xs)
-        .padding(.bottom, DesignSpacing.xs)
+        .padding(.top, DesignSpacing.xs)
+        .padding(.bottom, DesignSpacing.sm)
     }
 
     private var shouldShowComposerStatus: Bool {
@@ -480,7 +481,8 @@ struct ChatTabView: View {
             voiceRailTrailingAction
         }
         .padding(.horizontal, DesignSpacing.xs)
-        .padding(.bottom, DesignSpacing.sm)
+        .padding(.top, DesignSpacing.sm)
+        .padding(.bottom, DesignSpacing.md)
     }
 
     var body: some View {
@@ -717,9 +719,9 @@ struct ChatTabView: View {
                         .disabled(!canSendNow)
                         .padding(.bottom, 1)
                     }
-                 }
+                }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
                 .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
                 .padding(.horizontal, DesignControls.composerContainerHorizontalPadding)

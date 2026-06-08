@@ -104,8 +104,10 @@ enum L10n {
         case chatSpeechStreamDisconnected
         case chatSpeechTapToSpeak
         case chatSpeechListening
+        case chatSpeechTranscriptWillAppear
         case chatSpeechRecovering
         case chatSpeechTranscribing
+        case chatSpeechTranscribingHint
         case chatSpeechPreservedAudio
         case chatSpeechStopWaiting
         case chatSpeechRetrySegment
@@ -334,8 +336,10 @@ enum L10n {
         Key.chatSpeechStreamDisconnected.rawValue: "The speech connection was lost and couldn't recover. Tap stop and try again.",
         Key.chatSpeechTapToSpeak.rawValue: "Tap to speak",
         Key.chatSpeechListening.rawValue: "Listening...",
+        Key.chatSpeechTranscriptWillAppear.rawValue: "Transcript will appear here...",
         Key.chatSpeechRecovering.rawValue: "Reconnecting voice...",
         Key.chatSpeechTranscribing.rawValue: "Transcribing...",
+        Key.chatSpeechTranscribingHint.rawValue: "Finishing transcript...",
         Key.chatSpeechPreservedAudio.rawValue: "Audio saved. Retry this segment.",
         Key.chatSpeechStopWaiting.rawValue: "Stop transcription wait",
         Key.chatSpeechRetrySegment.rawValue: "Retry this segment",
@@ -568,8 +572,10 @@ enum L10n {
         Key.chatSpeechStreamDisconnected.rawValue: "语音连接断开且无法恢复，请按停止后重试。",
         Key.chatSpeechTapToSpeak.rawValue: "点击说话",
         Key.chatSpeechListening.rawValue: "正在听…",
+        Key.chatSpeechTranscriptWillAppear.rawValue: "转写内容会显示在这里…",
         Key.chatSpeechRecovering.rawValue: "语音正在重连…",
         Key.chatSpeechTranscribing.rawValue: "正在转写…",
+        Key.chatSpeechTranscribingHint.rawValue: "正在完成转写…",
         Key.chatSpeechPreservedAudio.rawValue: "音频已保留，可重试这段。",
         Key.chatSpeechStopWaiting.rawValue: "停止转写等待",
         Key.chatSpeechRetrySegment.rawValue: "重试这段",
