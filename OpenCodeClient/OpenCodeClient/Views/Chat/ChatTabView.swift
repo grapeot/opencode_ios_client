@@ -424,20 +424,20 @@ struct ChatTabView: View {
             } else if hasPreservedSpeechAudioForUI {
                 Button {
                     guard !Self.hasUITestF3RetryFixture else { return }
-                    Task { await retryPreservedSpeechAudio() }
+                    clearPreservedSpeechAudio()
                 } label: {
-                    Text(L10n.t(.chatSpeechRetrySegment))
+                    Text(L10n.t(.chatSpeechDiscardAudio))
                         .font(DesignTypography.meta.weight(.semibold))
-                        .foregroundStyle(DesignColors.Brand.primary)
+                        .foregroundStyle(DesignColors.Neutral.textSecondary)
                         .padding(.horizontal, DesignSpacing.md)
                         .padding(.vertical, 7)
                         .background {
-                            Capsule().fill(DesignColors.Brand.primary.opacity(0.12))
+                            Capsule().fill(DesignColors.Neutral.textSecondary.opacity(0.10))
                         }
                 }
                 .disabled(isRetryingSpeech || isStartingRecording || isSending)
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("speech-retry-segment-action")
+                .accessibilityIdentifier("speech-discard-audio")
             }
         }
     }

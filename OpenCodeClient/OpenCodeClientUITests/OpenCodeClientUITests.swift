@@ -129,6 +129,7 @@ final class OpenCodeClientUITests: XCTestCase {
         XCTAssertTrue(app.buttons["agent-interrupt-menu"].waitForExistence(timeout: 8), "agent 中断菜单应可见但降级为 quiet status")
         XCTAssertTrue(app.otherElements["speech-waveform"].waitForExistence(timeout: 8), "语音 waveform rail 应可见")
         XCTAssertTrue(app.buttons["speech-retry-segment"].waitForExistence(timeout: 8), "重试这段按钮应可见")
+        XCTAssertTrue(app.buttons["speech-discard-audio"].waitForExistence(timeout: 8), "丢弃音频按钮应可见")
         XCTAssertTrue(app.buttons["chat-send"].waitForExistence(timeout: 8), "send 按钮应保留固定槽位")
 
         try captureF3Screenshot(named: "f3_retry_preserved_audio")
