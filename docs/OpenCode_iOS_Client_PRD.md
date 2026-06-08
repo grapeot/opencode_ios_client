@@ -263,13 +263,23 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 - 回答调用 `POST /question/{requestID}/reply`
 - 拒绝调用 `POST /question/{requestID}/reject`
 
-#### 4.2.4 输入框
+#### 4.2.4 Composer：voice rail + text review field
 
-底部固定输入框，支持多行文本。右侧为发送按钮和麦克风按钮。Session 操作（新建、重命名、列表、Compact）在 Chat 顶部 toolbar，不在输入框左侧。
+底部固定 composer 采用两行结构：上方是 voice rail，下方是 text review field。Session 操作（新建、重命名、列表、Compact）在 Chat 顶部 toolbar，不进入 composer。
+
+这条结构来自 Steer 产品定位：用户在手机上最常做的不是长篇打字，而是阅读 AI 输出后用语音快速补一条方向性指令。语音是主输入模态，文本框承担转写审阅、轻量修正和 fallback 打字。composer 因此不把麦克风做成输入框里的附属按钮，而把 voice rail 放在第一行作为主控面。
 
 **草稿持久化（Draft Persistence）**：未发送的输入内容按 sessionID 保存（本地持久化），切换到其他 session 再切回时仍可恢复；发送成功后清空草稿。
 
-**语音输入（Speech Recognition）**：输入框左侧麦克风按钮。点击开始录音时创建 VoiceFlowKit realtime session，并用 `AVAudioEngine` 采集 PCM16 mono 24kHz 音频。VoiceFlowKit 一边发送 live PCM，一边把同一份 PCM 追加写入内部临时 `.pcm` 文件；若 heartbeat 或 live send 发现 WebSocket 断开，Kit 不中断录音，而是新建 session 并从本地缓存重放完整 PCM，追上当前录音后继续 live 发送。停止录音时等待恢复完成后发送 `commit` / `stop`，将 transcript 追加到输入框。录音或转写卡住时，麦克风下方显示辅助 stop 按钮，调用 `abortPreservingAudio()` 关闭 WebSocket 并保留已录 PCM；随后该按钮变为 retry，调用 `transcribe(preservedAudio:)` 重新识别上一段音频。Token 和 Base URL 在 Settings → Speech Recognition 配置，存 Keychain，不提交到 git。
+**Voice rail（Speech Recognition）**：voice rail 位于文本框上方，由左侧 transport、中央 waveform/status、右侧轻量恢复动作组成。点击 transport 开始录音时创建 VoiceFlowKit realtime session，并用 `AVAudioEngine` 采集 PCM16 mono 24kHz 音频。录音中，中央 waveform 消费 `VoiceFlowMicrophone.audioLevel` 的真实 0..1 smoothed mic level，让用户能看出 App 正在采集声音。再次点击 transport 是正常结束采集并进入转写，不等同于 agent abort。
+
+VoiceFlowKit 一边发送 live PCM，一边把同一份 PCM 追加写入内部临时 `.pcm` 文件；若 heartbeat 或 live send 发现 WebSocket 断开，Kit 不中断录音，而是新建 session 并从本地缓存重放完整 PCM，追上当前录音后继续 live 发送。停止录音时等待恢复完成后发送 `commit` / `stop`，将 transcript 追加到 text review field。
+
+转写等待或卡住时，voice rail 显示 processing waveform 和明确的恢复动作，例如 `Stop transcription wait`。这个动作调用 `abortPreservingAudio()` 关闭 WebSocket/finalize 等待并保留已录 PCM；随后 rail 进入 preserved-audio 状态，显示 `Retry this segment`，调用 `transcribe(preservedAudio:)` 重新识别同一段音频。retry 是重转同一段已保存音频，不是续录，也不要求用户重新说。
+
+**Text review field**：下方文本框支持多行文本，承接转写结果、人工修正和 fallback 打字。录音状态下 placeholder 表达“转写会出现在这里”，避免在 voice rail/status row 已显示 Listening 时重复同一状态。发送按钮固定在文本框右侧；即使 session busy 也保留，因为 `prompt_async` 支持服务端排队。
+
+**Agent interrupt**：agent 运行状态用 composer 附近的低权重状态行表达，例如 `Agent running`。`Interrupt agent` 是低频逃生口，放在 `⋯` 菜单里调用 `POST /session/:id/abort`，不做成顶部红色 banner，也不和语音转写恢复共用同一个 stop 图标。这样用户能区分三个对象：语音采集、转写等待、agent 运行。Token 和 Base URL 在 Settings → Speech Recognition 配置，存 Keychain，不提交到 git。
 
 **消息队列**：当 session 处于 busy 状态时，用户发送的消息进入队列。OpenCode Server 的 `POST /session/:id/prompt_async` 在服务端已支持队列——busy 时会将消息入队，当前运行结束后自动处理。iOS 端调用 `prompt_async` 即可，无需本地维护队列。若未来 API 变更，可退化为本地队列维护。
 
@@ -278,7 +288,6 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 额外操作（通过 Chat 顶部 toolbar 按钮，从左到右依次为）：
 - Session 列表、重命名、Compact、新建 Session（按此顺序排列）
 - Compact Session（调用 `POST /session/:id/summarize`，压缩历史以降低 token 超限风险）（🔲 暂未实现）
-- 中止当前运行（调用 `POST /session/:id/abort`）
 
 #### 4.2.5 Session 管理
 

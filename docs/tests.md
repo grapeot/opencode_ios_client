@@ -85,6 +85,8 @@ iOS 这一层有两种形态。
 
 - `UITEST_SESSION_TREE_FIXTURE`：验证 child/subagent session 在 session list 里可见；当前 fixture 也包含 active/archived session tree，用来覆盖 archive section wiring。
 - `UITEST_TOOL_CARDS_FIXTURE`：验证 tool card grid、merged tool calls row、展开后的内容。
+- `UITEST_F3_TRANSCRIBING_FIXTURE`：验证 voice rail 在 agent running + transcribing 并行状态下仍保留 text review/send，并把 agent interrupt 降到 `⋯` 菜单。
+- `UITEST_F3_RETRY_FIXTURE`：验证 preserved-audio retry 状态清楚表达“重试同一段音频”，并且恢复动作与 agent abort 语义分离。
 - launch/input smoke：验证 app 启动、chat input 可达、长输入保持可滚动。
 
 Tier 2 保护 client 内部状态编排和 view wiring，但它仍然运行在我们构造的世界里。server 改了 protocol，而 mock 还在发旧 payload，Tier 2 可能继续通过。所以它不能替代 Tier 3。
@@ -159,6 +161,17 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
   -only-testing:OpenCodeClientUITests/OpenCodeClientUITests/testCaptureSessionArchiveFixtureScreenshot \
   -parallel-testing-enabled NO
+```
+
+F3 voice composer 的 deterministic fixture 可以用同一层 UI test 单独跑：
+
+```bash
+xcodebuild test \
+  -project "OpenCodeClient.xcodeproj" \
+  -scheme "OpenCodeClient" \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4' \
+  -only-testing:OpenCodeClientUITests/OpenCodeClientUITests/testF3TranscribingComposerFixtureScreenshot \
+  -only-testing:OpenCodeClientUITests/OpenCodeClientUITests/testF3RetryComposerFixtureScreenshot
 ```
 
 同一条 harness 可以换 iPad destination 复用。截图建议写到 `tmp/visual_qa/`，不要提交。跑完必须打开图片检查：是否落在目标屏、是否展开了目标 section、是否存在系统弹窗或 stale UI、是否含真实私有内容、视觉层级是否符合设计意图。
