@@ -63,9 +63,33 @@ struct ContentView: View {
                 share: nil,
                 summary: nil
             ),
+            Session(
+                id: "archived-session",
+                slug: "archived-session",
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: "Archived Session",
+                version: "1",
+                time: .init(created: 0, updated: 1_200, archived: 3_000),
+                share: nil,
+                summary: nil
+            ),
+            Session(
+                id: "archived-child-session",
+                slug: "archived-child-session",
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: "archived-session",
+                title: "Archived Child",
+                version: "1",
+                time: .init(created: 0, updated: 1_100, archived: 3_000),
+                share: nil,
+                summary: nil
+            ),
         ]
         state.currentSessionID = "root-session"
-        state.expandedSessionIDs = ["root-session"]
+        state.expandedSessionIDs = ["root-session", "archived-session"]
         return state
     }
 
@@ -475,17 +499,26 @@ private struct TabletFilesColumn: View {
 private struct TabletSessionsColumn: View {
     @Bindable var state: AppState
     @Binding var showSettings: Bool
-    @State private var pendingDeleteSession: Session?
-    @State private var deletingSessionID: String?
-    @State private var deleteError: String?
+    @State private var activeExpanded = true
+    @State private var archivedExpanded = false
+    @State private var mutatingSessionID: String?
+    @State private var actionError: String?
     @State private var showCreateDisabledAlert = false
+
+    private var activeNodes: [SessionNode] {
+        state.sessionTree(archived: false)
+    }
+
+    private var archivedNodes: [SessionNode] {
+        state.sessionTree(archived: true)
+    }
 
     var body: some View {
         NavigationStack {
             Group {
                 if showSettings {
                     SettingsTabView(state: state)
-                } else if state.sidebarSessions.isEmpty {
+                } else if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -493,7 +526,21 @@ private struct TabletSessionsColumn: View {
                     )
                 } else {
                     List {
-                        sessionNodes(state.sessionTree)
+                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
+                            activeExpanded.toggle()
+                        }
+
+                        if activeExpanded {
+                            sessionNodes(activeNodes, archived: false)
+                        }
+
+                        SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
+                            archivedExpanded.toggle()
+                        }
+
+                        if archivedExpanded {
+                            sessionNodes(archivedNodes, archived: true)
+                        }
 
                         if state.isLoadingMoreSessions {
                             HStack {
@@ -513,6 +560,7 @@ private struct TabletSessionsColumn: View {
                         }
                     }
                     .listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
                     .refreshable {
                         await state.refreshSessions()
                     }
@@ -557,33 +605,18 @@ private struct TabletSessionsColumn: View {
             }
         }
         .alert(
-            L10n.t(.sessionsDeleteConfirmTitle),
+            L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(
-                get: { pendingDeleteSession != nil },
-                set: { if !$0 { pendingDeleteSession = nil } }
-            ),
-            presenting: pendingDeleteSession
-        ) { session in
-            Button(L10n.t(.commonCancel), role: .cancel) {}
-            Button(L10n.t(.sessionsDelete), role: .destructive) {
-                confirmDelete(session)
-            }
-        } message: { _ in
-            Text(L10n.t(.sessionsDeleteConfirmMessage))
-        }
-        .alert(
-            L10n.t(.sessionsDeleteFailedTitle),
-            isPresented: Binding(
-                get: { deleteError != nil },
-                set: { if !$0 { deleteError = nil } }
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
             )
         ) {
             Button(L10n.t(.commonOk)) {
-                deleteError = nil
+                actionError = nil
             }
         } message: {
-            if let deleteError {
-                Text(deleteError)
+            if let actionError {
+                Text(actionError)
             }
         }
         .alert(L10n.t(.chatCreateDisabledHint), isPresented: $showCreateDisabledAlert) {
@@ -591,7 +624,7 @@ private struct TabletSessionsColumn: View {
         }
     }
 
-    private func sessionNodes(_ nodes: [SessionNode], depth: Int = 0) -> AnyView {
+    private func sessionNodes(_ nodes: [SessionNode], archived: Bool, depth: Int = 0) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
                 let session = node.session
@@ -601,40 +634,58 @@ private struct TabletSessionsColumn: View {
                     session: session,
                     status: status,
                     isSelected: state.currentSessionID == session.id,
-                    isDeleting: deletingSessionID == session.id,
+                    isMutating: mutatingSessionID == session.id,
+                    isArchived: archived,
                     depth: depth,
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     onSelect: { state.selectSession(session) },
                     onToggleCollapse: { state.toggleSessionExpanded(session.id) }
                 )
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        mutateSession(session) {
+                            if archived {
+                                try await state.restoreSession(sessionID: session.id)
+                            } else {
+                                try await state.archiveSession(sessionID: session.id)
+                            }
+                        }
+                    } label: {
+                        Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
+                    }
+                    .tint(DesignColors.Brand.primary.opacity(0.7))
+                    .disabled(mutatingSessionID != nil)
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
-                        pendingDeleteSession = session
+                        mutateSession(session) {
+                            try await state.deleteSession(sessionID: session.id)
+                        }
                     } label: {
                         Label(L10n.t(.sessionsDelete), systemImage: "trash")
                     }
                     .tint(.red)
-                    .disabled(deletingSessionID != nil)
+                    .disabled(mutatingSessionID != nil)
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {
-                    sessionNodes(node.children, depth: depth + 1)
+                    sessionNodes(node.children, archived: archived, depth: depth + 1)
                 }
             }
         )
     }
 
-    private func confirmDelete(_ session: Session) {
-        guard deletingSessionID == nil else { return }
-        deletingSessionID = session.id
+    private func mutateSession(_ session: Session, action: @escaping () async throws -> Void) {
+        guard mutatingSessionID == nil else { return }
+        mutatingSessionID = session.id
         Task {
             do {
-                try await state.deleteSession(sessionID: session.id)
+                try await action()
             } catch {
-                deleteError = error.localizedDescription
+                actionError = error.localizedDescription
             }
-            deletingSessionID = nil
+            mutatingSessionID = nil
         }
     }
 }

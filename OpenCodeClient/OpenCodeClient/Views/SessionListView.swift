@@ -8,15 +8,64 @@ import SwiftUI
 struct SessionListView: View {
     @Bindable var state: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var pendingDeleteSession: Session?
-    @State private var deletingSessionID: String?
-    @State private var deleteError: String?
+    @State private var activeExpanded = true
+    @State private var archivedExpanded = false
+    @State private var mutatingSessionID: String?
+    @State private var actionError: String?
     @State private var showCreateDisabledAlert = false
 
+    private var activeNodes: [SessionNode] {
+        state.sessionTree(archived: false)
+    }
+
+    private var archivedNodes: [SessionNode] {
+        state.sessionTree(archived: true)
+    }
+
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                Button(L10n.t(.sessionsClose)) { dismiss() }
+                    .frame(width: 88, alignment: .leading)
+
+                Spacer()
+
+                Text(L10n.t(.sessionsTitle))
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(DesignColors.Neutral.text)
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task {
+                            await state.createSession()
+                            dismiss()
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 28, weight: .regular))
+                    }
+                    .disabled(!state.canCreateSession)
+                    .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+
+                    if !state.canCreateSession {
+                        Button {
+                            showCreateDisabledAlert = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .frame(width: 88, alignment: .trailing)
+            }
+            .padding(.horizontal, DesignSpacing.lg)
+            .padding(.top, DesignSpacing.lg)
+            .padding(.bottom, DesignSpacing.md)
+
             Group {
-                if state.sidebarSessions.isEmpty {
+                if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -24,7 +73,21 @@ struct SessionListView: View {
                     )
                 } else {
                     List {
-                        sessionNodes(state.sessionTree)
+                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
+                            activeExpanded.toggle()
+                        }
+
+                        if activeExpanded {
+                            sessionNodes(activeNodes, archived: false)
+                        }
+
+                        SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
+                            archivedExpanded.toggle()
+                        }
+
+                        if archivedExpanded {
+                            sessionNodes(archivedNodes, archived: true)
+                        }
 
                         if state.isLoadingMoreSessions {
                             HStack {
@@ -43,71 +106,28 @@ struct SessionListView: View {
                                 .id("load-more-\(lastSessionID)")
                         }
                     }
+                    .listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
                     .accessibilityIdentifier("session-list")
                     .refreshable {
                         await state.refreshSessions()
                     }
                 }
             }
-            .navigationTitle(L10n.t(.sessionsTitle))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.t(.sessionsClose)) { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 8) {
-                        Button {
-                            Task {
-                                await state.createSession()
-                                dismiss()
-                            }
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .disabled(!state.canCreateSession)
-                        .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
-
-                        if !state.canCreateSession {
-                            Button {
-                                showCreateDisabledAlert = true
-                            } label: {
-                                Image(systemName: "info.circle")
-                            }
-                            .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
         }
         .alert(
-            L10n.t(.sessionsDeleteConfirmTitle),
+            L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(
-                get: { pendingDeleteSession != nil },
-                set: { if !$0 { pendingDeleteSession = nil } }
-            ),
-            presenting: pendingDeleteSession
-        ) { session in
-            Button(L10n.t(.commonCancel), role: .cancel) {}
-            Button(L10n.t(.sessionsDelete), role: .destructive) {
-                confirmDelete(session)
-            }
-        } message: { session in
-            Text(L10n.t(.sessionsDeleteConfirmMessage))
-        }
-        .alert(
-            L10n.t(.sessionsDeleteFailedTitle),
-            isPresented: Binding(
-                get: { deleteError != nil },
-                set: { if !$0 { deleteError = nil } }
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
             )
         ) {
             Button(L10n.t(.commonOk)) {
-                deleteError = nil
+                actionError = nil
             }
         } message: {
-            if let deleteError {
-                Text(deleteError)
+            if let actionError {
+                Text(actionError)
             }
         }
         .task {
@@ -123,7 +143,7 @@ struct SessionListView: View {
         dismiss()
     }
 
-    private func sessionNodes(_ nodes: [SessionNode], depth: Int = 0) -> AnyView {
+    private func sessionNodes(_ nodes: [SessionNode], archived: Bool, depth: Int = 0) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
                 let session = node.session
@@ -133,41 +153,88 @@ struct SessionListView: View {
                     session: session,
                     status: status,
                     isSelected: state.currentSessionID == session.id,
-                    isDeleting: deletingSessionID == session.id,
+                    isMutating: mutatingSessionID == session.id,
+                    isArchived: archived,
                     depth: depth,
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     onSelect: { selectSession(session) },
                     onToggleCollapse: { state.toggleSessionExpanded(session.id) }
                 )
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        mutateSession(session) {
+                            if archived {
+                                try await state.restoreSession(sessionID: session.id)
+                            } else {
+                                try await state.archiveSession(sessionID: session.id)
+                            }
+                        }
+                    } label: {
+                        Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
+                    }
+                    .tint(DesignColors.Brand.primary.opacity(0.7))
+                    .disabled(mutatingSessionID != nil)
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
-                        pendingDeleteSession = session
+                        mutateSession(session) {
+                            try await state.deleteSession(sessionID: session.id)
+                        }
                     } label: {
                         Label(L10n.t(.sessionsDelete), systemImage: "trash")
                     }
                     .tint(.red)
-                    .disabled(deletingSessionID != nil)
+                    .disabled(mutatingSessionID != nil)
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {
-                    sessionNodes(node.children, depth: depth + 1)
+                    sessionNodes(node.children, archived: archived, depth: depth + 1)
                 }
             }
         )
     }
 
-    private func confirmDelete(_ session: Session) {
-        guard deletingSessionID == nil else { return }
-        deletingSessionID = session.id
+    private func mutateSession(_ session: Session, action: @escaping () async throws -> Void) {
+        guard mutatingSessionID == nil else { return }
+        mutatingSessionID = session.id
         Task {
             do {
-                try await state.deleteSession(sessionID: session.id)
+                try await action()
             } catch {
-                deleteError = error.localizedDescription
+                actionError = error.localizedDescription
             }
-            deletingSessionID = nil
+            mutatingSessionID = nil
         }
+    }
+}
+
+struct SessionSectionHeader: View {
+    let title: String
+    let isExpanded: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: DesignSpacing.sm) {
+                Text(title)
+                    .font(DesignTypography.meta.weight(.semibold))
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+
+                Spacer()
+
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(DesignTypography.micro.weight(.semibold))
+                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+                    .frame(width: 20, height: 20)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .textCase(nil)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 }
 
@@ -175,7 +242,8 @@ struct SessionRowView: View {
     let session: Session
     let status: SessionStatus?
     let isSelected: Bool
-    let isDeleting: Bool
+    let isMutating: Bool
+    let isArchived: Bool
     var depth: Int = 0
     var hasChildren: Bool = false
     var isCollapsed: Bool = false
@@ -193,11 +261,13 @@ struct SessionRowView: View {
     private var selectionBackground: some View {
         if isSelected {
             RoundedRectangle(cornerRadius: DesignCorners.medium)
-                .fill(DesignColors.Brand.primary.opacity(DesignColors.Opacity.selectionFill))
+                .fill((isArchived ? DesignColors.Neutral.textTertiary : DesignColors.Brand.primary).opacity(DesignColors.Opacity.selectionFill))
                 .overlay(alignment: .leading) {
-                    Rectangle()
-                        .fill(DesignColors.Brand.primary)
-                        .frame(width: 3)
+                    if !isArchived {
+                        Rectangle()
+                            .fill(DesignColors.Brand.primary)
+                            .frame(width: 3)
+                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         } else {
@@ -231,13 +301,13 @@ struct SessionRowView: View {
             VStack(alignment: .leading, spacing: DesignSpacing.xs) {
                 Text(session.title.isEmpty ? L10n.t(.sessionsUntitled) : session.title)
                     .font(depth > 0 ? DesignTypography.body : DesignTypography.headline)
-                    .foregroundStyle(depth > 0 ? DesignColors.Neutral.textSecondary : (isBusy ? DesignColors.Brand.primary : DesignColors.Neutral.text))
+                    .foregroundStyle(titleColor(depth: depth, isBusy: isBusy))
                     .lineLimit(1)
 
                 HStack(spacing: DesignSpacing.sm) {
                     Text(formattedDate(session.time.updated))
                         .font(DesignTypography.meta)
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
+                        .foregroundStyle(isArchived ? DesignColors.Neutral.textTertiary : DesignColors.Neutral.textSecondary)
 
                     if let status {
                         Text(statusLabel(status))
@@ -249,19 +319,16 @@ struct SessionRowView: View {
 
             Spacer()
 
-            if isDeleting {
+            if isMutating {
                 ProgressView()
                     .controlSize(.small)
-            } else if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(DesignColors.Brand.primary.opacity(0.6))
             }
         }
         .padding(.vertical, DesignSpacing.sm)
         .padding(.leading, CGFloat(depth) * DesignSpacing.xl)
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isDeleting else { return }
+            guard !isMutating else { return }
             onSelect()
         }
         // Selected row: a single rounded fill with the accent bar baked into its
@@ -294,5 +361,11 @@ struct SessionRowView: View {
         case "busy", "retry": return DesignColors.Brand.primary
         default: return DesignColors.Neutral.textSecondary
         }
+    }
+
+    private func titleColor(depth: Int, isBusy: Bool) -> Color {
+        if isArchived { return DesignColors.Neutral.textSecondary }
+        if depth > 0 { return DesignColors.Neutral.textSecondary }
+        return DesignColors.Neutral.text
     }
 }

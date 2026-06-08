@@ -7,7 +7,8 @@ import os
 ///   probes `/health` and kicks off SSE on success.
 /// - Session list: `loadSessions` / `loadMoreSessions` / `refreshSessions`
 ///   pull a window of sessions; `upsertSession` / `selectSession` /
-///   `createSession` / `forkSession` / `deleteSession` are user actions.
+///   `createSession` / `forkSession` / `archiveSession` / `restoreSession` /
+///   `deleteSession` are user actions.
 /// - Bootstrap: `bootstrapSyncCurrentSession` runs after SSE
 ///   reconnect to make sure the currently selected session is still valid
 ///   and its derived state (messages, permissions, status) is fresh.
@@ -15,7 +16,7 @@ extension AppState {
     func fetchSessions(limit: Int) async throws -> [Session] {
         let directory = effectiveProjectDirectory
         let loaded = try await apiClient.sessions(directory: directory, limit: limit)
-        let archivedCount = loaded.filter { $0.time.archived != nil }.count
+        let archivedCount = loaded.filter(\.isArchived).count
         Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) limit=\(limit, privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
         return loaded
     }
@@ -304,6 +305,35 @@ extension AppState {
             currentSessionID = nil
             pendingPermissions = []
         }
+    }
+
+    func archiveSession(sessionID: String) async throws {
+        let archived = Int(Date().timeIntervalSince1970 * 1000)
+        for id in sessionSubtreeIDs(rootedAt: sessionID, parentFirst: false) {
+            let updated = try await apiClient.updateSessionArchived(sessionID: id, archived: archived)
+            upsertSession(updated)
+        }
+    }
+
+    func restoreSession(sessionID: String) async throws {
+        for id in sessionSubtreeIDs(rootedAt: sessionID, parentFirst: true) {
+            let updated = try await apiClient.updateSessionArchived(sessionID: id, archived: -1)
+            upsertSession(updated)
+        }
+    }
+
+    private func sessionSubtreeIDs(rootedAt rootID: String, parentFirst: Bool) -> [String] {
+        var childrenByParent: [String: [String]] = [:]
+        for session in sessions {
+            guard let parentID = session.parentID else { continue }
+            childrenByParent[parentID, default: []].append(session.id)
+        }
+
+        func collect(_ id: String) -> [String] {
+            let children = (childrenByParent[id] ?? []).flatMap(collect)
+            return parentFirst ? [id] + children : children + [id]
+        }
+        return collect(rootID)
     }
 
     func bootstrapSyncCurrentSession(reason: String) async {

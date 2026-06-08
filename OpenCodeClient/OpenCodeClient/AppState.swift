@@ -361,17 +361,17 @@ final class AppState {
     var sessions: [Session] { get { sessionStore.sessions } set { sessionStore.sessions = newValue } }
     var sortedSessions: [Session] {
         sessions
-            .filter { showArchivedSessions || $0.time.archived == nil }
+            .filter { showArchivedSessions || !$0.isArchived }
             .sorted { $0.time.updated > $1.time.updated }
     }
     var sidebarSessions: [Session] {
         sessions
-            .filter { showArchivedSessions || $0.time.archived == nil }
+            .filter { showArchivedSessions || !$0.isArchived }
             .filter { $0.parentID == nil }
             .sorted { $0.time.updated > $1.time.updated }
     }
     var sessionTree: [SessionNode] {
-        let filtered = sessions.filter { showArchivedSessions || $0.time.archived == nil }
+        let filtered = sessions.filter { showArchivedSessions || !$0.isArchived }
         return Self.buildSessionTree(from: filtered)
     }
     var currentSessionID: String? { get { sessionStore.currentSessionID } set { sessionStore.currentSessionID = newValue } }
@@ -412,6 +412,16 @@ final class AppState {
     }
     var _showArchivedSessions: Bool = false
     var expandedSessionIDs: Set<String> = []
+
+    func filteredSessions(archived: Bool) -> [Session] {
+        return sessions
+            .filter { $0.isArchived == archived }
+            .sorted { $0.time.updated > $1.time.updated }
+    }
+
+    func sessionTree(archived: Bool) -> [SessionNode] {
+        Self.buildSessionTree(from: filteredSessions(archived: archived))
+    }
 
     var projects: [Project] = []
     var isLoadingProjects: Bool = false

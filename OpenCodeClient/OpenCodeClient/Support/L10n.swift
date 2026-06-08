@@ -170,6 +170,11 @@ enum L10n {
         case sessionsStatusBusy
         case sessionsStatusRetry
         case sessionsStatusIdle
+        case sessionsActive
+        case sessionsArchived
+        case sessionsArchive
+        case sessionsRestore
+        case sessionsActionFailedTitle
         case sessionsDelete
         case sessionsDeleteConfirmTitle
         case sessionsDeleteConfirmMessage
@@ -386,6 +391,11 @@ enum L10n {
         Key.sessionsStatusBusy.rawValue: "Running",
         Key.sessionsStatusRetry.rawValue: "Retrying",
         Key.sessionsStatusIdle.rawValue: "Idle",
+        Key.sessionsActive.rawValue: "Active",
+        Key.sessionsArchived.rawValue: "Archived",
+        Key.sessionsArchive.rawValue: "Archive",
+        Key.sessionsRestore.rawValue: "Restore",
+        Key.sessionsActionFailedTitle.rawValue: "Session Action Failed",
         Key.sessionsDelete.rawValue: "Delete",
         Key.sessionsDeleteConfirmTitle.rawValue: "Delete Session",
         Key.sessionsDeleteConfirmMessage.rawValue: "Delete this session and all its messages? This cannot be undone.",
@@ -606,6 +616,11 @@ enum L10n {
         Key.sessionsStatusBusy.rawValue: "运行中",
         Key.sessionsStatusRetry.rawValue: "重试中",
         Key.sessionsStatusIdle.rawValue: "空闲",
+        Key.sessionsActive.rawValue: "活跃",
+        Key.sessionsArchived.rawValue: "已归档",
+        Key.sessionsArchive.rawValue: "归档",
+        Key.sessionsRestore.rawValue: "恢复",
+        Key.sessionsActionFailedTitle.rawValue: "会话操作失败",
         Key.sessionsDelete.rawValue: "删除",
         Key.sessionsDeleteConfirmTitle.rawValue: "删除会话",
         Key.sessionsDeleteConfirmMessage.rawValue: "确认删除这个会话及其全部消息吗？此操作无法撤销。",
