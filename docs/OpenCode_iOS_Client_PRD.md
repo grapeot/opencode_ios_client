@@ -275,7 +275,7 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 VoiceFlowKit 一边发送 live PCM，一边把同一份 PCM 追加写入内部临时 `.pcm` 文件；若 heartbeat 或 live send 发现 WebSocket 断开，Kit 不中断录音，而是新建 session 并从本地缓存重放完整 PCM，追上当前录音后继续 live 发送。停止录音时等待恢复完成后发送 `commit` / `stop`，将 transcript 追加到 text review field。
 
-转写等待或卡住时，voice rail 显示 processing waveform 和明确的恢复动作，例如 `Stop transcription wait`。这个动作调用 `abortPreservingAudio()` 关闭 WebSocket/finalize 等待并保留已录 PCM；随后 rail 进入 preserved-audio 状态，显示 `Retry this segment`，调用 `transcribe(preservedAudio:)` 重新识别同一段音频。retry 是重转同一段已保存音频，不是续录，也不要求用户重新说。
+转写等待或卡住时，voice rail 显示 processing waveform 和明确的恢复动作，例如 `Stop transcription wait`。这个动作调用 `abortPreservingAudio()` 关闭 WebSocket/finalize 等待并保留已录 PCM；随后 rail 进入 preserved-audio 状态，左侧 transport 变为 `Retry this segment` 图标按钮，调用 `transcribe(preservedAudio:)` 重新识别同一段音频；右侧轻量动作变为 `Discard audio`，用于放弃这段已保存音频并回到正常输入。retry 是重转同一段已保存音频，不是续录，也不要求用户重新说。retry 失败后保留 preserved audio，用户可以继续 retry，也可以 discard 退出恢复状态。
 
 **Text review field**：下方文本框支持多行文本，承接转写结果、人工修正和 fallback 打字。录音状态下 placeholder 表达“转写会出现在这里”，避免在 voice rail/status row 已显示 Listening 时重复同一状态。发送按钮固定在文本框右侧；即使 session busy 也保留，因为 `prompt_async` 支持服务端排队。
 

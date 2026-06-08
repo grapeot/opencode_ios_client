@@ -111,6 +111,7 @@ enum L10n {
         case chatSpeechPreservedAudio
         case chatSpeechStopWaiting
         case chatSpeechRetrySegment
+        case chatSpeechDiscardAudio
         case chatAbortAgent
         case chatAgentRunning
         case chatMicrophoneDenied
@@ -343,6 +344,7 @@ enum L10n {
         Key.chatSpeechPreservedAudio.rawValue: "Audio saved. Retry this segment.",
         Key.chatSpeechStopWaiting.rawValue: "Stop transcription wait",
         Key.chatSpeechRetrySegment.rawValue: "Retry this segment",
+        Key.chatSpeechDiscardAudio.rawValue: "Discard audio",
         Key.chatAbortAgent.rawValue: "Interrupt agent",
         Key.chatAgentRunning.rawValue: "Agent running",
         Key.chatMicrophoneDenied.rawValue: "Microphone permission denied",
@@ -579,6 +581,7 @@ enum L10n {
         Key.chatSpeechPreservedAudio.rawValue: "音频已保留，可重试这段。",
         Key.chatSpeechStopWaiting.rawValue: "停止转写等待",
         Key.chatSpeechRetrySegment.rawValue: "重试这段",
+        Key.chatSpeechDiscardAudio.rawValue: "丢弃音频",
         Key.chatAbortAgent.rawValue: "中断 agent",
         Key.chatAgentRunning.rawValue: "Agent 正在运行",
         Key.chatMicrophoneDenied.rawValue: "未授权麦克风权限",

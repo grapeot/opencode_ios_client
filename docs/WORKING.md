@@ -15,7 +15,7 @@
 - Chat composer 从“输入框内附属麦克风”收敛为 `voice rail + text review field`：voice rail 承载录音 transport、真实 waveform、转写等待、stop-wait、preserved-audio retry；文本框承载转写审阅、修正、fallback 打字和固定 send。
 - agent running 降为 composer 附近的 quiet status row，`Interrupt agent` 放入 `⋯` 菜单，避免低频破坏性动作抢过语音 steer 主路径。
 - 录音中 waveform 使用 `VoiceFlowMicrophone.audioLevel` 的真实 mic level；每次开始新录音前重建 `VoiceFlowMicrophone`，避免第二次录音后 audioLevel stream 不再产出。
-- 转写等待保留主动出口 `Stop transcription wait`，调用 abort-preserving-audio；preserved-audio 状态显示 `Retry this segment`，明确是重转同一段已保存音频。
+- 转写等待保留主动出口 `Stop transcription wait`，调用 abort-preserving-audio；preserved-audio 状态下左侧图标按钮负责 `Retry this segment`，右侧轻量动作负责 `Discard audio`，避免两个 retry 入口并给 retry 失败后的状态一个明确出口。
 - 新增 `UITEST_F3_TRANSCRIBING_FIXTURE` / `UITEST_F3_RETRY_FIXTURE` 与对应 UI tests，覆盖 transcribing + agent running、preserved-audio retry 两个关键状态。
 
 ### 2026-05-30 — Speech abort/retry
