@@ -135,7 +135,9 @@ extension AppState {
         loadedMessageLimitBySessionID[sessionID] = Self.nextMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
         let requestedLimit = loadedMessageLimitBySessionID[sessionID] ?? Self.normalizedMessageFetchLimit(current: nil)
         Self.logger.debug("loadOlderMessages begin: session=\(sessionID, privacy: .public) previousCount=\(previousCount, privacy: .public) requestedLimit=\(requestedLimit, privacy: .public)")
-        await loadMessages()
+        await Task { @MainActor in
+            await self.loadMessages()
+        }.value
         let newCount = messages.count
         let didLoadMore = newCount > previousCount
         Self.logger.debug("loadOlderMessages end: session=\(sessionID, privacy: .public) newCount=\(newCount, privacy: .public) didLoadMore=\(didLoadMore, privacy: .public) hasMore=\(self.hasMoreHistoryBySessionID[sessionID] ?? false, privacy: .public)")

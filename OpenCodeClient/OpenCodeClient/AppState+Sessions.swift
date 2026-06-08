@@ -31,6 +31,8 @@ extension AppState {
 
     func upsertSession(_ session: Session) {
         let existingIndex = sessions.firstIndex(where: { $0.id == session.id })
+        if let existingIndex, sessions[existingIndex] == session { return }
+
         sessions.removeAll { $0.id == session.id }
 
         let targetIndex: Int

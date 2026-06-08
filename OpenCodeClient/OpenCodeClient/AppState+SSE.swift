@@ -60,6 +60,7 @@ extension AppState {
                 if let status = try? JSONSerialization.data(withJSONObject: statusObj),
                     let decoded = try? JSONDecoder().decode(SessionStatus.self, from: status) {
                     let prev = sessionStatuses[sessionID]
+                    guard prev != decoded else { return }
 
                     sessionStatuses[sessionID] = decoded
                     sessionStatusUpdatedAt[sessionID] = Date()
@@ -88,6 +89,8 @@ extension AppState {
                 let matchesProject = dir == nil || session.directory == dir
                 let shouldApply = matchesProject || isCurrent
                 if shouldApply {
+                    if sessions.first(where: { $0.id == session.id }) == session { return }
+
                     let wasUpdate = sessions.contains(where: { $0.id == session.id })
                     Self.logger.debug("session.updated id=\(session.id, privacy: .public) archived=\(session.time.archived.map { String($0) } ?? "nil", privacy: .public) dir=\(session.directory, privacy: .public) op=\(wasUpdate ? "replace" : "insert", privacy: .public)")
                     upsertSession(session)
@@ -172,6 +175,8 @@ extension AppState {
                 continue
             }
             let prev = sessionStatuses[sid]
+            guard prev != st else { continue }
+
             sessionStatuses[sid] = st
             updateSessionActivity(sessionID: sid, previous: prev, current: st)
             if sid == currentSessionID, !isBusySession(st) {
