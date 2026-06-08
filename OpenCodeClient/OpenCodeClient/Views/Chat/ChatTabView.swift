@@ -78,9 +78,32 @@ struct ChatTabView: View {
 
     private var useGridCards: Bool { sizeClass == .regular }
 
+    private static var hasUITestF3TranscribingFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_F3_TRANSCRIBING_FIXTURE")
+    }
+
+    private static var hasUITestF3RetryFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_F3_RETRY_FIXTURE")
+    }
+
+    private var isShowingTranscribingUI: Bool {
+        isTranscribing || Self.hasUITestF3TranscribingFixture
+    }
+
+    private var hasPreservedSpeechAudioForUI: Bool {
+        preservedSpeechAudio != nil || Self.hasUITestF3RetryFixture
+    }
+
+    private var composerPlaceholderText: String {
+        if isRecording { return L10n.t(.chatSpeechListening) }
+        if isShowingTranscribingUI { return L10n.t(.chatSpeechTranscribing) }
+        if hasPreservedSpeechAudioForUI { return L10n.t(.chatSpeechPreservedAudio) }
+        return L10n.t(.chatInputPlaceholder)
+    }
+
     private var canSendNow: Bool {
         ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText)
-            && !isRecording && !isTranscribing && !isRetryingSpeech
+            && !isRecording && !isShowingTranscribingUI && !isRetryingSpeech
     }
 
     fileprivate struct TurnActivity: Identifiable {
@@ -292,6 +315,42 @@ struct ChatTabView: View {
         return result
     }
 
+    private var agentInterruptBanner: some View {
+        HStack(spacing: DesignSpacing.sm) {
+            Image(systemName: "stop.fill")
+                .font(DesignTypography.meta.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background {
+                    RoundedRectangle(cornerRadius: DesignCorners.small).fill(Color.red)
+                }
+
+            Text(L10n.t(.chatSessionStatusBusy))
+                .font(DesignTypography.meta.weight(.semibold))
+                .foregroundStyle(DesignColors.Neutral.text)
+
+            Spacer(minLength: 0)
+
+            Button {
+                Task { await state.abortSession() }
+            } label: {
+                Text(L10n.t(.chatAbortAgent))
+                    .font(DesignTypography.meta.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, DesignSpacing.md)
+                    .padding(.vertical, 7)
+                    .background {
+                        RoundedRectangle(cornerRadius: DesignCorners.medium).fill(Color.red)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("agent-interrupt")
+        }
+        .padding(.horizontal, DesignControls.composerContainerHorizontalPadding)
+        .padding(.vertical, DesignSpacing.sm)
+        .background(colorScheme == .dark ? DesignColors.Neutral.surfaceDark : DesignColors.Neutral.surfaceLight)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -305,6 +364,10 @@ struct ChatTabView: View {
                     showCreateSessionInToolbar: showCreateSessionInToolbar,
                     onSettingsTap: onSettingsTap
                 )
+
+                if state.isBusy {
+                    agentInterruptBanner
+                }
 
                 ScrollViewReader { proxy in
                     GeometryReader { scrollGeometry in
@@ -473,11 +536,12 @@ struct ChatTabView: View {
                     .opacity(0.5)
                  HStack(alignment: .bottom, spacing: DesignSpacing.sm) {
                     VStack(spacing: DesignControls.composerActionButtonSpacing) {
-                        if isTranscribing {
+                        if isShowingTranscribingUI {
                             Button {
+                                guard !Self.hasUITestF3TranscribingFixture else { return }
                                 Task { await abortSpeechRecognition() }
                             } label: {
-                                Image(systemName: "stop.fill")
+                                Image(systemName: "xmark")
                                     .font(DesignControls.composerActionIconFont.bold())
                                     .foregroundStyle(.white)
                                     .frame(width: DesignControls.composerActionButtonSize, height: DesignControls.composerActionButtonSize)
@@ -485,9 +549,12 @@ struct ChatTabView: View {
                                     .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
                                     .hoverEffect(.lift)
                             }
+                            .accessibilityIdentifier("speech-stop-waiting")
+                            .accessibilityLabel(L10n.t(.chatSpeechStopWaiting))
                             .buttonStyle(.plain)
-                        } else if preservedSpeechAudio != nil {
+                        } else if hasPreservedSpeechAudioForUI {
                             Button {
+                                guard !Self.hasUITestF3RetryFixture else { return }
                                 Task { await retryPreservedSpeechAudio() }
                             } label: {
                                 Image(systemName: "arrow.clockwise")
@@ -498,6 +565,8 @@ struct ChatTabView: View {
                                     .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
                                     .hoverEffect(.lift)
                             }
+                            .accessibilityIdentifier("speech-retry-segment")
+                            .accessibilityLabel(L10n.t(.chatSpeechRetrySegment))
                             .disabled(isRetryingSpeech || isStartingRecording || isSending)
                             .buttonStyle(.plain)
                         }
@@ -507,7 +576,7 @@ struct ChatTabView: View {
                             Task { await toggleRecording() }
                         } label: {
                             ZStack {
-                                if isTranscribing || isRetryingSpeech {
+                                if isShowingTranscribingUI || isRetryingSpeech {
                                     ProgressView()
                                         .controlSize(.small)
                                 } else {
@@ -525,7 +594,7 @@ struct ChatTabView: View {
                             .contentShape(.hoverEffect, Circle())
                             .hoverEffect(.lift)
                         }
-                        .disabled(isSending || isTranscribing || isStartingRecording || isRetryingSpeech)
+                        .disabled(isSending || isShowingTranscribingUI || isStartingRecording || isRetryingSpeech)
                         .buttonStyle(.plain)
                     }
                     .padding(.bottom, 2)
@@ -544,7 +613,7 @@ struct ChatTabView: View {
                         .accessibilityIdentifier("chat-input")
 
                         if inputText.isEmpty {
-                            Text(L10n.t(.chatInputPlaceholder))
+                            Text(composerPlaceholderText)
                                 .foregroundStyle(DesignColors.Neutral.textTertiary)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
@@ -552,26 +621,9 @@ struct ChatTabView: View {
                     }
 
                     // Send is ALWAYS present and keeps the bottom slot. The stop
-                    // button is transient and stacks above it so the send target
-                    // never moves when busy state changes.
+                    // target never moves when busy state changes; agent interrupt
+                    // lives in the message-flow banner above, not in this stack.
                     VStack(spacing: DesignControls.composerActionButtonSpacing) {
-                        if state.isBusy {
-                            Button {
-                                Task { await state.abortSession() }
-                            } label: {
-                                Image(systemName: "stop.fill")
-                                    .font(DesignControls.composerActionIconFont.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: DesignCorners.medium)
-                                            .fill(Color.red)
-                                    }
-                                    .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: DesignCorners.medium))
-                                    .hoverEffect(.lift)
-                            }
-                        }
-
                         Button {
                             sendCurrentInput()
                         } label: {

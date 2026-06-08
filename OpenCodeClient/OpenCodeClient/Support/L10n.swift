@@ -102,6 +102,12 @@ enum L10n {
         case chatSpeechTesting
         case chatSpeechNotPassed
         case chatSpeechStreamDisconnected
+        case chatSpeechListening
+        case chatSpeechTranscribing
+        case chatSpeechPreservedAudio
+        case chatSpeechStopWaiting
+        case chatSpeechRetrySegment
+        case chatAbortAgent
         case chatMicrophoneDenied
         case chatSessionStatusBusy
         case chatSessionStatusRetrying
@@ -323,6 +329,12 @@ enum L10n {
         Key.chatSpeechTesting.rawValue: "AI Builder connection is being tested, please wait.",
         Key.chatSpeechNotPassed.rawValue: "AI Builder connection test failed. Go to Settings → Speech Recognition, tap Test Connection, and confirm it's OK before recording.",
         Key.chatSpeechStreamDisconnected.rawValue: "The speech connection was lost and couldn't recover. Tap stop and try again.",
+        Key.chatSpeechListening.rawValue: "Listening...",
+        Key.chatSpeechTranscribing.rawValue: "Transcribing...",
+        Key.chatSpeechPreservedAudio.rawValue: "Audio saved. Retry this segment.",
+        Key.chatSpeechStopWaiting.rawValue: "Stop transcription wait",
+        Key.chatSpeechRetrySegment.rawValue: "Retry this segment",
+        Key.chatAbortAgent.rawValue: "Interrupt agent",
         Key.chatMicrophoneDenied.rawValue: "Microphone permission denied",
         Key.chatSessionStatusBusy.rawValue: "Running",
         Key.chatSessionStatusRetrying.rawValue: "Retrying",
@@ -548,6 +560,12 @@ enum L10n {
         Key.chatSpeechTesting.rawValue: "AI Builder 正在测试连接，请稍候。",
         Key.chatSpeechNotPassed.rawValue: "AI Builder 连接未通过测试：请先到 Settings -> Speech Recognition 点击 Test Connection，确认 OK 后再录音。",
         Key.chatSpeechStreamDisconnected.rawValue: "语音连接断开且无法恢复，请按停止后重试。",
+        Key.chatSpeechListening.rawValue: "正在听…",
+        Key.chatSpeechTranscribing.rawValue: "正在转写…",
+        Key.chatSpeechPreservedAudio.rawValue: "音频已保留，可重试这段。",
+        Key.chatSpeechStopWaiting.rawValue: "停止转写等待",
+        Key.chatSpeechRetrySegment.rawValue: "重试这段",
+        Key.chatAbortAgent.rawValue: "中断 agent",
         Key.chatMicrophoneDenied.rawValue: "未授权麦克风权限",
         Key.chatSessionStatusBusy.rawValue: "运行中",
         Key.chatSessionStatusRetrying.rawValue: "重试中",

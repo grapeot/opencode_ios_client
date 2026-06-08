@@ -106,6 +106,32 @@ final class OpenCodeClientUITests: XCTestCase {
         try data.write(to: URL(fileURLWithPath: path))
     }
 
+    @MainActor
+    func testF3TranscribingComposerFixtureScreenshot() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_F3_TRANSCRIBING_FIXTURE"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["agent-interrupt"].waitForExistence(timeout: 8), "agent 中断 banner 应可见")
+        XCTAssertTrue(app.buttons["speech-stop-waiting"].waitForExistence(timeout: 8), "转写等待停止按钮应可见")
+        XCTAssertTrue(app.buttons["chat-send"].waitForExistence(timeout: 8), "send 按钮应保留固定槽位")
+
+        try captureF3Screenshot(named: "f3_transcribing_agent_running")
+    }
+
+    @MainActor
+    func testF3RetryComposerFixtureScreenshot() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_F3_RETRY_FIXTURE"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["agent-interrupt"].waitForExistence(timeout: 8), "agent 中断 banner 应可见")
+        XCTAssertTrue(app.buttons["speech-retry-segment"].waitForExistence(timeout: 8), "重试这段按钮应可见")
+        XCTAssertTrue(app.buttons["chat-send"].waitForExistence(timeout: 8), "send 按钮应保留固定槽位")
+
+        try captureF3Screenshot(named: "f3_retry_preserved_audio")
+    }
+
     private func tier4ScreenshotPath() -> String? {
         if let path = ProcessInfo.processInfo.environment["TIER4_SCREENSHOT_PATH"], !path.isEmpty {
             return path
@@ -117,6 +143,23 @@ final class OpenCodeClientUITests: XCTestCase {
             return nil
         }
         return object["screenshot_path"] as? String
+    }
+
+    @MainActor
+    private func captureF3Screenshot(named name: String) throws {
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        guard let dir = ProcessInfo.processInfo.environment["F3_SCREENSHOT_DIR"], !dir.isEmpty else {
+            return
+        }
+
+        let directory = URL(fileURLWithPath: dir, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try screenshot.pngRepresentation.write(to: directory.appendingPathComponent("\(name).png"))
     }
 
     @MainActor
