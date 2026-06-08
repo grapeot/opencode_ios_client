@@ -396,7 +396,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **Session 列表样式**：避免系统默认链接蓝；文本用中性色，当前 Session 用背景高亮
 - **权限**：`permission.asked` 时展示卡片，用户手动批准/拒绝，调用 `POST /session/:id/permissions/:permissionID`
 - **Question**：`question.asked` 时展示 question card；启动时通过 `GET /question` 补拉 pending questions；回答与拒绝分别调用 `/question/{id}/reply`、`/question/{id}/reject`
-- **Composer**：采用 `voice rail + text review field` 两行结构。voice rail 在上方承载语音 transport、waveform/status、转写等待恢复和 preserved-audio retry；text review field 在下方承载转写文本、人工修正、fallback 打字和固定 send 按钮。busy 时 send 仍调用 `prompt_async`，消息由服务端排队
+- **Composer**：采用 `voice rail + text review field` 两行结构。voice rail 在上方承载语音 transport、waveform/status、转写等待恢复和 preserved-audio retry；text review field 在下方承载转写文本、人工修正、fallback 打字和固定 send 按钮。语音转写或 preserved-audio retry 流式返回 partial transcript 时，text review field 自动滚到末尾，保持最新文字可见；普通手动输入和草稿恢复不强制滚动。busy 时 send 仍调用 `prompt_async`，消息由服务端排队
 - **草稿**：按 sessionID 持久化未发送输入；切换 session 可恢复；发送成功后清空
 - **模型选择**：按 sessionID 记忆当前选择的模型；切换 Session 自动恢复（避免全局 model 覆盖）
 - **Agent 选择**：按 sessionID 记忆当前选择的 agent（与 model 同理）；发送消息时在 body 中携带 `agent: string` 字段
