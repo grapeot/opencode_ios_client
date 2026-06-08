@@ -19,6 +19,12 @@
 - 语音转写和 preserved-audio retry 的 partial transcript 写入 text review field 时自动滚到末尾，让用户能持续看到最新转写文字；普通手动输入和草稿恢复不强制滚动。
 - 新增 `UITEST_F3_TRANSCRIBING_FIXTURE` / `UITEST_F3_RETRY_FIXTURE` 与对应 UI tests，覆盖 transcribing + agent running、preserved-audio retry 两个关键状态。
 
+### 2026-06-08 — Chat history load-more diagnostics
+
+- 对照 Android 后修复 iOS message part `files` 解码兼容性：旧历史中可能出现 `files: ["path"]` 或缺少 `additions/deletions` 的对象，Android 已兼容，iOS 之前要求完整对象，扩大 message limit 后可能静默丢掉旧记录。
+- `loadMessages` / `loadOlderMessagesForCurrentSession` 增加 limit、返回条数、是否增加历史和 fallback decoder dropped record 日志，便于复现“下拉结束但历史没增加”的问题。
+- 新增回归测试覆盖 `files` 字符串形态，以及 load older 从 20 扩到 40 后应用更大 message window。
+
 ### 2026-05-30 — Speech abort/retry
 
 - VoiceFlowKit pin 更新到 merged revision `dbbe297ea52e3a3438d227a54001b23c138c47b7`。

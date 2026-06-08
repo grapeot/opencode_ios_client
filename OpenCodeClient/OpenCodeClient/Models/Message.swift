@@ -255,6 +255,34 @@ nonisolated struct Part: Codable, Identifiable {
         let additions: Int
         let deletions: Int
         let status: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case path, additions, deletions, status
+        }
+
+        init(path: String, additions: Int = 0, deletions: Int = 0, status: String? = nil) {
+            self.path = path
+            self.additions = additions
+            self.deletions = deletions
+            self.status = status
+        }
+
+        init(from decoder: Decoder) throws {
+            let single = try decoder.singleValueContainer()
+            if let path = try? single.decode(String.self) {
+                self.path = path
+                additions = 0
+                deletions = 0
+                status = nil
+                return
+            }
+
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            path = try c.decode(String.self, forKey: .path)
+            additions = (try? c.decode(Int.self, forKey: .additions)) ?? 0
+            deletions = (try? c.decode(Int.self, forKey: .deletions)) ?? 0
+            status = try? c.decode(String.self, forKey: .status)
+        }
     }
 
     struct PartMetadata: Codable {
