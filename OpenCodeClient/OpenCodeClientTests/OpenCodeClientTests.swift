@@ -2932,6 +2932,22 @@ struct AppStateFlowTests {
         #expect(state.sessions.first?.version == "2")
     }
 
+    @Test @MainActor func sessionUpdatedNoOpsWhenPayloadIsUnchanged() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let current = Self.makeSession(id: "s-current", updated: 10, title: "Current")
+        state.sessions = [
+            current,
+            Self.makeSession(id: "s-other", updated: 8, title: "Other")
+        ]
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"session.updated","properties":{"session":{"id":"s-current","slug":"s-current","projectID":"p1","directory":"/tmp","parentID":null,"title":"Current","version":"1","time":{"created":0,"updated":10},"share":null,"summary":null}}}}
+        """))
+
+        #expect(state.sessions == [current, Self.makeSession(id: "s-other", updated: 8, title: "Other")])
+    }
+
     @Test @MainActor func messagePartUpdatedAccumulatesStreamingMessageText() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
