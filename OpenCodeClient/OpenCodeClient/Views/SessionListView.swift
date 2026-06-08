@@ -42,16 +42,20 @@ struct SessionListView: View {
                     )
                 } else {
                     List {
-                        DisclosureGroup(isExpanded: $activeExpanded) {
-                            sessionNodes(activeNodes, archived: false)
-                        } label: {
-                            SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount)
+                        SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount, isExpanded: activeExpanded) {
+                            activeExpanded.toggle()
                         }
 
-                        DisclosureGroup(isExpanded: $archivedExpanded) {
+                        if activeExpanded {
+                            sessionNodes(activeNodes, archived: false)
+                        }
+
+                        SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount, isExpanded: archivedExpanded) {
+                            archivedExpanded.toggle()
+                        }
+
+                        if archivedExpanded {
                             sessionNodes(archivedNodes, archived: true)
-                        } label: {
-                            SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount)
                         }
 
                         if state.isLoadingMoreSessions {
@@ -206,18 +210,30 @@ struct SessionListView: View {
 struct SessionSectionHeader: View {
     let title: String
     let count: Int
+    let isExpanded: Bool
+    let onToggle: () -> Void
 
     var body: some View {
-        HStack {
-            Text(title)
-                .font(DesignTypography.meta.weight(.semibold))
-                .foregroundStyle(DesignColors.Neutral.textSecondary)
-            Spacer()
-            Text("\(count)")
-                .font(DesignTypography.meta)
-                .foregroundStyle(DesignColors.Neutral.textTertiary)
+        Button(action: onToggle) {
+            HStack(spacing: DesignSpacing.sm) {
+                Text(title)
+                    .font(DesignTypography.meta.weight(.semibold))
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+                Spacer()
+                Text("\(count)")
+                    .font(DesignTypography.meta)
+                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(DesignTypography.micro.weight(.semibold))
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+            }
+            .padding(.vertical, DesignSpacing.xs)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .textCase(nil)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 }
 
@@ -352,7 +368,6 @@ struct SessionRowView: View {
     private func titleColor(depth: Int, isBusy: Bool) -> Color {
         if isArchived { return DesignColors.Neutral.textTertiary }
         if depth > 0 { return DesignColors.Neutral.textSecondary }
-        if isBusy { return DesignColors.Brand.primary }
         return DesignColors.Neutral.text
     }
 }

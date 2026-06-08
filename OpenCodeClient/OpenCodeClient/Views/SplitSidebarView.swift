@@ -101,16 +101,20 @@ private struct SessionsSidebarList: View {
     var body: some View {
         List {
             Section {
-                DisclosureGroup(isExpanded: $activeExpanded) {
-                    sessionNodes(activeNodes, archived: false)
-                } label: {
-                    SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount)
+                SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount, isExpanded: activeExpanded) {
+                    activeExpanded.toggle()
                 }
 
-                DisclosureGroup(isExpanded: $archivedExpanded) {
+                if activeExpanded {
+                    sessionNodes(activeNodes, archived: false)
+                }
+
+                SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount, isExpanded: archivedExpanded) {
+                    archivedExpanded.toggle()
+                }
+
+                if archivedExpanded {
                     sessionNodes(archivedNodes, archived: true)
-                } label: {
-                    SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount)
                 }
 
                 if state.isLoadingMoreSessions {
