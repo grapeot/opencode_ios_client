@@ -490,20 +490,12 @@ private struct TabletSessionsColumn: View {
         state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
     }
 
-    private var activeCount: Int {
-        state.filteredSessions(archived: false, searchQuery: sessionSearchQuery).count
-    }
-
-    private var archivedCount: Int {
-        state.filteredSessions(archived: true, searchQuery: sessionSearchQuery).count
-    }
-
     var body: some View {
         NavigationStack {
             Group {
                 if showSettings {
                     SettingsTabView(state: state)
-                } else if activeCount == 0 && archivedCount == 0 {
+                } else if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -511,7 +503,7 @@ private struct TabletSessionsColumn: View {
                     )
                 } else {
                     List {
-                        SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount, isExpanded: activeExpanded) {
+                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
                             activeExpanded.toggle()
                         }
 
@@ -519,7 +511,7 @@ private struct TabletSessionsColumn: View {
                             sessionNodes(activeNodes, archived: false)
                         }
 
-                        SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount, isExpanded: archivedExpanded) {
+                        SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
                             archivedExpanded.toggle()
                         }
 

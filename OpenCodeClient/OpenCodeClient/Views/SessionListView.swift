@@ -23,18 +23,10 @@ struct SessionListView: View {
         state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
     }
 
-    private var activeCount: Int {
-        state.filteredSessions(archived: false, searchQuery: sessionSearchQuery).count
-    }
-
-    private var archivedCount: Int {
-        state.filteredSessions(archived: true, searchQuery: sessionSearchQuery).count
-    }
-
     var body: some View {
         NavigationStack {
             Group {
-                if activeCount == 0 && archivedCount == 0 {
+                if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -42,7 +34,7 @@ struct SessionListView: View {
                     )
                 } else {
                     List {
-                        SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount, isExpanded: activeExpanded) {
+                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
                             activeExpanded.toggle()
                         }
 
@@ -50,7 +42,7 @@ struct SessionListView: View {
                             sessionNodes(activeNodes, archived: false)
                         }
 
-                        SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount, isExpanded: archivedExpanded) {
+                        SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
                             archivedExpanded.toggle()
                         }
 
@@ -209,25 +201,32 @@ struct SessionListView: View {
 
 struct SessionSectionHeader: View {
     let title: String
-    let count: Int
     let isExpanded: Bool
     let onToggle: () -> Void
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: DesignSpacing.sm) {
-                Text(title)
-                    .font(DesignTypography.meta.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
-                Spacer()
-                Text("\(count)")
-                    .font(DesignTypography.meta)
+            HStack(spacing: DesignSpacing.md) {
+                Text(title.uppercased())
+                    .font(DesignTypography.micro.weight(.semibold))
+                    .tracking(1.1)
                     .foregroundStyle(DesignColors.Neutral.textTertiary)
+
+                Rectangle()
+                    .fill(DesignColors.Neutral.textTertiary.opacity(0.22))
+                    .frame(height: 1)
+
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(DesignTypography.micro.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        Circle()
+                            .fill(DesignColors.Neutral.textTertiary.opacity(0.08))
+                    )
             }
-            .padding(.vertical, DesignSpacing.xs)
+            .padding(.top, DesignSpacing.md)
+            .padding(.bottom, DesignSpacing.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

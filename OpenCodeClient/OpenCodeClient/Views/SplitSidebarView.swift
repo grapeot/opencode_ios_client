@@ -90,18 +90,10 @@ private struct SessionsSidebarList: View {
         state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
     }
 
-    private var activeCount: Int {
-        state.filteredSessions(archived: false, searchQuery: sessionSearchQuery).count
-    }
-
-    private var archivedCount: Int {
-        state.filteredSessions(archived: true, searchQuery: sessionSearchQuery).count
-    }
-
     var body: some View {
         List {
             Section {
-                SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount, isExpanded: activeExpanded) {
+                SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
                     activeExpanded.toggle()
                 }
 
@@ -109,7 +101,7 @@ private struct SessionsSidebarList: View {
                     sessionNodes(activeNodes, archived: false)
                 }
 
-                SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount, isExpanded: archivedExpanded) {
+                SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
                     archivedExpanded.toggle()
                 }
 
