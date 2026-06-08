@@ -24,6 +24,7 @@
 - 对照 Android 后修复 iOS message part `files` 解码兼容性：旧历史中可能出现 `files: ["path"]` 或缺少 `additions/deletions` 的对象，Android 已兼容，iOS 之前要求完整对象，扩大 message limit 后可能静默丢掉旧记录。
 - `loadMessages` / `loadOlderMessagesForCurrentSession` 增加 limit、返回条数、是否增加历史和 fallback decoder dropped record 日志，便于复现“下拉结束但历史没增加”的问题。
 - 新增回归测试覆盖 `files` 字符串形态，以及 load older 从 20 扩到 40 后应用更大 message window。
+- 进一步从真机日志确认：chat history limit 已从 20 扩到 40/60，但 message 请求被取消；同时 session list 的底部 `onAppear` 自动分页在 archived-heavy 数据下从 6500 连续加载到 8000。将 session list 的自动 sentinel 改为显式“Load more sessions”按钮，避免折叠 archived 区域触发无限分页并抢占 chat history 请求。
 
 ### 2026-05-30 — Speech abort/retry
 
