@@ -3330,7 +3330,8 @@ actor MockAPIClient: APIClientProtocol {
     var messageLimitRequests: [Int?] = []
     var messagesCallCount = 0
     var promptError: Error?
-    var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
+        var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
+        var promptAsyncMessageIDs: [String] = []
     var promptStructuredCalls: [(sessionID: String, messageID: String?, text: String, system: String, agent: String, providerID: String, modelID: String)] = []
     var promptStructuredResult: MessageWithParts?
     var promptStructuredDelayNanoseconds: UInt64 = 0
@@ -3437,7 +3438,7 @@ actor MockAPIClient: APIClientProtocol {
         if let sessionError { throw sessionError }
         return sessionResult ?? createSessionResult
     }
-    func createSession(title: String?) async throws -> Session { createSessionResult }
+    func createSession(title: String?, directory: String?) async throws -> Session { createSessionResult }
 
     func updateSession(sessionID: String, title: String) async throws -> Session {
         updateSessionCalls.append((sessionID, title))
@@ -3482,8 +3483,9 @@ actor MockAPIClient: APIClientProtocol {
         return messagesResult
     }
 
-    func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?) async throws {
+    func promptAsync(sessionID: String, messageID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?, directory: String?) async throws {
         promptAsyncCalls.append((sessionID, text, attachments))
+        promptAsyncMessageIDs.append(messageID)
         if let promptError { throw promptError }
     }
 
