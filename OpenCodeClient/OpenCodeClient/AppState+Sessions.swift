@@ -7,7 +7,8 @@ import os
 ///   probes `/health` and kicks off SSE on success.
 /// - Session list: `loadSessions` / `loadMoreSessions` / `refreshSessions`
 ///   pull a window of sessions; `upsertSession` / `selectSession` /
-///   `createSession` / `forkSession` / `deleteSession` are user actions.
+///   `createSession` / `forkSession` / `archiveSession` / `restoreSession` /
+///   `deleteSession` are user actions.
 /// - Bootstrap: `bootstrapSyncCurrentSession` runs after SSE
 ///   reconnect to make sure the currently selected session is still valid
 ///   and its derived state (messages, permissions, status) is fresh.
@@ -15,7 +16,7 @@ extension AppState {
     func fetchSessions(limit: Int) async throws -> [Session] {
         let directory = effectiveProjectDirectory
         let loaded = try await apiClient.sessions(directory: directory, limit: limit)
-        let archivedCount = loaded.filter { $0.time.archived != nil }.count
+        let archivedCount = loaded.filter(\.isArchived).count
         Self.logger.debug("loadSessions: directory=\(directory ?? "nil", privacy: .public) limit=\(limit, privacy: .public) count=\(loaded.count, privacy: .public) archived=\(archivedCount, privacy: .public) ids=\(loaded.prefix(5).map(\.id).joined(separator: ","), privacy: .public)")
         return loaded
     }
@@ -304,6 +305,17 @@ extension AppState {
             currentSessionID = nil
             pendingPermissions = []
         }
+    }
+
+    func archiveSession(sessionID: String) async throws {
+        let archived = Int(Date().timeIntervalSince1970 * 1000)
+        let updated = try await apiClient.updateSessionArchived(sessionID: sessionID, archived: archived)
+        upsertSession(updated)
+    }
+
+    func restoreSession(sessionID: String) async throws {
+        let updated = try await apiClient.updateSessionArchived(sessionID: sessionID, archived: -1)
+        upsertSession(updated)
     }
 
     func bootstrapSyncCurrentSession(reason: String) async {

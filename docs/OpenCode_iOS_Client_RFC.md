@@ -403,6 +403,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **语音输入**：输入框左侧麦克风按钮；开始录音时创建 VoiceFlowKit realtime session，`AVAudioEngine` 输出 PCM16 mono 24kHz chunk；Kit 内部把每个 chunk 写入临时 `.pcm` cache 并发送到当前 WebSocket。heartbeat / send failure 触发 Kit recovery：取消坏 session，创建新 session，从 cache 文件 offset 0 顺序 replay 到当前文件末尾，之后继续 live 发送。停止录音时等待恢复完成，发送 `commit` / `stop`，将 transcript 追加到输入框。录音或转写中显示左侧辅助 stop；点击后调用 `abortPreservingAudio()` 立即释放 UI 并保留 cache，之后显示 retry，点击后用 `transcribe(preservedAudio:)` 重新识别同一段 PCM。Base URL 与 token 在 Settings → Speech Recognition 配置并存 Keychain
 - **Abort**：提供按钮调用 `POST /session/:id/abort`
 - **历史加载交互**：Chat 顶部显示“下拉加载更多历史消息”提示；加载中显示“正在加载更多历史消息...”，支持中英文本地化
+- **Session Archive**：Session List 按 Active / Archived 两个分区展示。归档语义复用 `PATCH /session/:id`：Archive 写入正数 archived timestamp，Restore 写入 `-1` 作为 legacy restore sentinel；客户端按 `time.archived > 0` 判断 Archived。客户端不把 archive 当作 delete 的变体。Archive / Restore 成功后使用返回的 `Session` 更新本地列表，并重新计算 Active / Archived 分区。iPhone sheet 与 iPad sidebar 使用同一组规则：leading swipe 为 Archive/Restore，trailing swipe 为 Delete；所有 swipe action 禁用 full swipe，Delete 不弹确认框。搜索只做 title 本地过滤，结果仍保留 Active / Archived 分区。
 
 #### 6.1 Fork Session（会话分叉）
 

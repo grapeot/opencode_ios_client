@@ -1769,14 +1769,75 @@ struct ArchivedSessionTests {
         #expect(state.sortedSessions.count == 2)
     }
 
-    private func makeSession(id: String, archived: Int?) -> Session {
+    @Test @MainActor func activeAndArchivedSessionFiltersUseArchivedTimestampSign() {
+        let state = AppState()
+        state.sessions = [
+            makeSession(id: "active", title: "Active", archived: nil),
+            makeSession(id: "restored", title: "Restored", archived: -1),
+            makeSession(id: "archived", title: "Archived", archived: 123),
+        ]
+
+        #expect(state.filteredSessions(archived: false).map(\.id) == ["active", "restored"])
+        #expect(state.filteredSessions(archived: true).map(\.id) == ["archived"])
+    }
+
+    @Test @MainActor func sessionSearchFiltersActiveAndArchivedByTitle() {
+        let state = AppState()
+        state.sessions = [
+            makeSession(id: "active-hit", title: "Refactor auth", archived: nil),
+            makeSession(id: "active-miss", title: "Update README", archived: nil),
+            makeSession(id: "archived-hit", title: "Auth experiment", archived: 123),
+        ]
+
+        #expect(state.filteredSessions(archived: false, searchQuery: "auth").map(\.id) == ["active-hit"])
+        #expect(state.filteredSessions(archived: true, searchQuery: "auth").map(\.id) == ["archived-hit"])
+    }
+
+    @Test @MainActor func archiveAndRestoreSessionPatchArchivedTimestamp() async throws {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.sessions = [makeSession(id: "s1", title: "Session", archived: nil)]
+
+        try await state.archiveSession(sessionID: "s1")
+        var calls = await apiClient.updateSessionArchivedCalls
+        #expect(calls.count == 1)
+        #expect(calls[0].0 == "s1")
+        #expect(calls[0].1 > 0)
+        #expect(state.filteredSessions(archived: true).map(\.id) == ["s1"])
+
+        try await state.restoreSession(sessionID: "s1")
+        calls = await apiClient.updateSessionArchivedCalls
+        #expect(calls.count == 2)
+        #expect(calls[1].0 == "s1")
+        #expect(calls[1].1 == -1)
+        #expect(state.filteredSessions(archived: false).map(\.id) == ["s1"])
+    }
+
+    @Test @MainActor func sendingArchivedSessionRestoresBeforePrompt() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        state.sessions = [makeSession(id: "s1", title: "Archived", archived: 123)]
+
+        let success = await state.sendMessage("continue")
+
+        #expect(success)
+        let archiveCalls = await apiClient.updateSessionArchivedCalls
+        #expect(archiveCalls.count == 1)
+        #expect(archiveCalls[0].0 == "s1")
+        #expect(archiveCalls[0].1 == -1)
+        #expect(await apiClient.promptAsyncCalls.map(\.0) == ["s1"])
+        #expect(state.filteredSessions(archived: false).map(\.id) == ["s1"])
+    }
+
+    private func makeSession(id: String, title: String = "Title", archived: Int?) -> Session {
         Session(
             id: id,
             slug: id,
             projectID: "p1",
             directory: "/tmp",
             parentID: nil,
-            title: "Title",
+            title: title,
             version: "1",
             time: .init(created: 0, updated: 0, archived: archived),
             share: nil,
@@ -2266,8 +2327,10 @@ actor MockAPIClient: APIClientProtocol {
     var messagesResult: [MessageWithParts] = []
     var messagesCallCount = 0
     var promptError: Error?
+    var promptAsyncCalls: [(String, String)] = []
     var deletedSessionIDs: [String] = []
     var updateSessionCalls: [(String, String)] = []
+    var updateSessionArchivedCalls: [(String, Int)] = []
     var sessionDiffResult: [FileDiff] = []
     var sessionDiffCallCount = 0
     var fileListResults: [String: [FileNode]] = [:]
@@ -2348,6 +2411,22 @@ actor MockAPIClient: APIClientProtocol {
         )
     }
 
+    func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session {
+        updateSessionArchivedCalls.append((sessionID, archived))
+        return Session(
+            id: sessionID,
+            slug: sessionID,
+            projectID: "p1",
+            directory: "/tmp",
+            parentID: nil,
+            title: sessionID,
+            version: "1",
+            time: .init(created: 1, updated: 1, archived: archived),
+            share: nil,
+            summary: nil
+        )
+    }
+
     func deleteSession(sessionID: String) async throws {
         deletedSessionIDs.append(sessionID)
     }
@@ -2358,6 +2437,7 @@ actor MockAPIClient: APIClientProtocol {
     }
 
     func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws {
+        promptAsyncCalls.append((sessionID, text))
         if let promptError { throw promptError }
     }
 

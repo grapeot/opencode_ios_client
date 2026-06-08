@@ -17,6 +17,11 @@ struct Session: Identifiable {
     let share: ShareInfo?
     let summary: SummaryInfo?
 
+    var isArchived: Bool {
+        guard let archived = time.archived else { return false }
+        return archived > 0
+    }
+
     struct TimeInfo: Codable {
         let created: Int
         let updated: Int

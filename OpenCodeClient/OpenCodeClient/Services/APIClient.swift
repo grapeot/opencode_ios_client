@@ -124,6 +124,20 @@ actor APIClient {
         return try JSONDecoder().decode(Session.self, from: responseData)
     }
 
+    func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session {
+        struct Body: Encodable {
+            struct Time: Encodable {
+                let archived: Int
+            }
+
+            let time: Time
+        }
+
+        let data = try JSONEncoder().encode(Body(time: .init(archived: archived)))
+        let (responseData, _) = try await makeRequest(path: "/session/\(sessionID)", method: "PATCH", body: data)
+        return try JSONDecoder().decode(Session.self, from: responseData)
+    }
+
     func deleteSession(sessionID: String) async throws {
         _ = try await makeRequest(path: "/session/\(sessionID)", method: "DELETE")
     }
@@ -615,6 +629,7 @@ protocol APIClientProtocol: Actor {
     func sessions(directory: String?, limit: Int) async throws -> [Session]
     func createSession(title: String?) async throws -> Session
     func updateSession(sessionID: String, title: String) async throws -> Session
+    func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
     func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws

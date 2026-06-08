@@ -8,15 +8,33 @@ import SwiftUI
 struct SessionListView: View {
     @Bindable var state: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var pendingDeleteSession: Session?
-    @State private var deletingSessionID: String?
-    @State private var deleteError: String?
+    @State private var sessionSearchQuery = ""
+    @State private var activeExpanded = true
+    @State private var archivedExpanded = false
+    @State private var mutatingSessionID: String?
+    @State private var actionError: String?
     @State private var showCreateDisabledAlert = false
+
+    private var activeNodes: [SessionNode] {
+        state.sessionTree(archived: false, searchQuery: sessionSearchQuery)
+    }
+
+    private var archivedNodes: [SessionNode] {
+        state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
+    }
+
+    private var activeCount: Int {
+        state.filteredSessions(archived: false, searchQuery: sessionSearchQuery).count
+    }
+
+    private var archivedCount: Int {
+        state.filteredSessions(archived: true, searchQuery: sessionSearchQuery).count
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if state.sidebarSessions.isEmpty {
+                if activeCount == 0 && archivedCount == 0 {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -24,7 +42,17 @@ struct SessionListView: View {
                     )
                 } else {
                     List {
-                        sessionNodes(state.sessionTree)
+                        DisclosureGroup(isExpanded: $activeExpanded) {
+                            sessionNodes(activeNodes, archived: false)
+                        } label: {
+                            SessionSectionHeader(title: L10n.t(.sessionsActive), count: activeCount)
+                        }
+
+                        DisclosureGroup(isExpanded: $archivedExpanded) {
+                            sessionNodes(archivedNodes, archived: true)
+                        } label: {
+                            SessionSectionHeader(title: L10n.t(.sessionsArchived), count: archivedCount)
+                        }
 
                         if state.isLoadingMoreSessions {
                             HStack {
@@ -51,6 +79,7 @@ struct SessionListView: View {
             }
             .navigationTitle(L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $sessionSearchQuery, prompt: L10n.t(.sessionsSearch))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.t(.sessionsClose)) { dismiss() }
@@ -81,33 +110,18 @@ struct SessionListView: View {
             }
         }
         .alert(
-            L10n.t(.sessionsDeleteConfirmTitle),
+            L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(
-                get: { pendingDeleteSession != nil },
-                set: { if !$0 { pendingDeleteSession = nil } }
-            ),
-            presenting: pendingDeleteSession
-        ) { session in
-            Button(L10n.t(.commonCancel), role: .cancel) {}
-            Button(L10n.t(.sessionsDelete), role: .destructive) {
-                confirmDelete(session)
-            }
-        } message: { session in
-            Text(L10n.t(.sessionsDeleteConfirmMessage))
-        }
-        .alert(
-            L10n.t(.sessionsDeleteFailedTitle),
-            isPresented: Binding(
-                get: { deleteError != nil },
-                set: { if !$0 { deleteError = nil } }
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
             )
         ) {
             Button(L10n.t(.commonOk)) {
-                deleteError = nil
+                actionError = nil
             }
         } message: {
-            if let deleteError {
-                Text(deleteError)
+            if let actionError {
+                Text(actionError)
             }
         }
         .task {
@@ -123,7 +137,7 @@ struct SessionListView: View {
         dismiss()
     }
 
-    private func sessionNodes(_ nodes: [SessionNode], depth: Int = 0) -> AnyView {
+    private func sessionNodes(_ nodes: [SessionNode], archived: Bool, depth: Int = 0) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
                 let session = node.session
@@ -133,41 +147,77 @@ struct SessionListView: View {
                     session: session,
                     status: status,
                     isSelected: state.currentSessionID == session.id,
-                    isDeleting: deletingSessionID == session.id,
+                    isMutating: mutatingSessionID == session.id,
+                    isArchived: archived,
                     depth: depth,
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     onSelect: { selectSession(session) },
                     onToggleCollapse: { state.toggleSessionExpanded(session.id) }
                 )
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        mutateSession(session) {
+                            if archived {
+                                try await state.restoreSession(sessionID: session.id)
+                            } else {
+                                try await state.archiveSession(sessionID: session.id)
+                            }
+                        }
+                    } label: {
+                        Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
+                    }
+                    .tint(DesignColors.Brand.primary.opacity(0.7))
+                    .disabled(mutatingSessionID != nil)
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
-                        pendingDeleteSession = session
+                        mutateSession(session) {
+                            try await state.deleteSession(sessionID: session.id)
+                        }
                     } label: {
                         Label(L10n.t(.sessionsDelete), systemImage: "trash")
                     }
                     .tint(.red)
-                    .disabled(deletingSessionID != nil)
+                    .disabled(mutatingSessionID != nil)
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {
-                    sessionNodes(node.children, depth: depth + 1)
+                    sessionNodes(node.children, archived: archived, depth: depth + 1)
                 }
             }
         )
     }
 
-    private func confirmDelete(_ session: Session) {
-        guard deletingSessionID == nil else { return }
-        deletingSessionID = session.id
+    private func mutateSession(_ session: Session, action: @escaping () async throws -> Void) {
+        guard mutatingSessionID == nil else { return }
+        mutatingSessionID = session.id
         Task {
             do {
-                try await state.deleteSession(sessionID: session.id)
+                try await action()
             } catch {
-                deleteError = error.localizedDescription
+                actionError = error.localizedDescription
             }
-            deletingSessionID = nil
+            mutatingSessionID = nil
         }
+    }
+}
+
+struct SessionSectionHeader: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(DesignTypography.meta.weight(.semibold))
+                .foregroundStyle(DesignColors.Neutral.textSecondary)
+            Spacer()
+            Text("\(count)")
+                .font(DesignTypography.meta)
+                .foregroundStyle(DesignColors.Neutral.textTertiary)
+        }
+        .textCase(nil)
     }
 }
 
@@ -175,7 +225,8 @@ struct SessionRowView: View {
     let session: Session
     let status: SessionStatus?
     let isSelected: Bool
-    let isDeleting: Bool
+    let isMutating: Bool
+    let isArchived: Bool
     var depth: Int = 0
     var hasChildren: Bool = false
     var isCollapsed: Bool = false
@@ -193,11 +244,13 @@ struct SessionRowView: View {
     private var selectionBackground: some View {
         if isSelected {
             RoundedRectangle(cornerRadius: DesignCorners.medium)
-                .fill(DesignColors.Brand.primary.opacity(DesignColors.Opacity.selectionFill))
+                .fill((isArchived ? DesignColors.Neutral.textTertiary : DesignColors.Brand.primary).opacity(DesignColors.Opacity.selectionFill))
                 .overlay(alignment: .leading) {
-                    Rectangle()
-                        .fill(DesignColors.Brand.primary)
-                        .frame(width: 3)
+                    if !isArchived {
+                        Rectangle()
+                            .fill(DesignColors.Brand.primary)
+                            .frame(width: 3)
+                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         } else {
@@ -231,13 +284,13 @@ struct SessionRowView: View {
             VStack(alignment: .leading, spacing: DesignSpacing.xs) {
                 Text(session.title.isEmpty ? L10n.t(.sessionsUntitled) : session.title)
                     .font(depth > 0 ? DesignTypography.body : DesignTypography.headline)
-                    .foregroundStyle(depth > 0 ? DesignColors.Neutral.textSecondary : (isBusy ? DesignColors.Brand.primary : DesignColors.Neutral.text))
+                    .foregroundStyle(titleColor(depth: depth, isBusy: isBusy))
                     .lineLimit(1)
 
                 HStack(spacing: DesignSpacing.sm) {
                     Text(formattedDate(session.time.updated))
                         .font(DesignTypography.meta)
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
+                        .foregroundStyle(isArchived ? DesignColors.Neutral.textTertiary : DesignColors.Neutral.textSecondary)
 
                     if let status {
                         Text(statusLabel(status))
@@ -249,7 +302,7 @@ struct SessionRowView: View {
 
             Spacer()
 
-            if isDeleting {
+            if isMutating {
                 ProgressView()
                     .controlSize(.small)
             } else if isSelected {
@@ -261,7 +314,7 @@ struct SessionRowView: View {
         .padding(.leading, CGFloat(depth) * DesignSpacing.xl)
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !isDeleting else { return }
+            guard !isMutating else { return }
             onSelect()
         }
         // Selected row: a single rounded fill with the accent bar baked into its
@@ -294,5 +347,12 @@ struct SessionRowView: View {
         case "busy", "retry": return DesignColors.Brand.primary
         default: return DesignColors.Neutral.textSecondary
         }
+    }
+
+    private func titleColor(depth: Int, isBusy: Bool) -> Color {
+        if isArchived { return DesignColors.Neutral.textTertiary }
+        if depth > 0 { return DesignColors.Neutral.textSecondary }
+        if isBusy { return DesignColors.Brand.primary }
+        return DesignColors.Neutral.text
     }
 }

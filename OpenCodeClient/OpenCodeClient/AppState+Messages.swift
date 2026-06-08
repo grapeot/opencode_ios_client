@@ -151,6 +151,15 @@ extension AppState {
             sendError = L10n.t(.chatSelectSessionFirst)
             return false
         }
+        do {
+            if sessions.first(where: { $0.id == sessionID })?.isArchived == true {
+                try await restoreSession(sessionID: sessionID)
+            }
+        } catch {
+            sendError = error.localizedDescription
+            return false
+        }
+
         let tempMessageID = appendOptimisticUserMessage(text)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
         let agentName = selectedAgent?.name ?? "build"
