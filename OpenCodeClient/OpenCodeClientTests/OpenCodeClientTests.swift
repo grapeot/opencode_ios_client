@@ -1039,6 +1039,12 @@ struct ChatComposerSpeechTests {
         #expect(ChatTabView.speechFailureInput(prefix: "Existing draft", lastPartialTranscript: "   ") == "Existing draft")
     }
 
+    @Test func speechTranscriptAutoScrollsOnlyDuringGeneratedUpdates() {
+        #expect(ChatTabView.shouldAutoScrollSpeechTranscript(isTranscribing: true, isRetryingSpeech: false) == true)
+        #expect(ChatTabView.shouldAutoScrollSpeechTranscript(isTranscribing: false, isRetryingSpeech: true) == true)
+        #expect(ChatTabView.shouldAutoScrollSpeechTranscript(isTranscribing: false, isRetryingSpeech: false) == false)
+    }
+
     @Test func chatComposerReturnUsesSystemDuringMarkedTextComposition() {
         #expect(ChatComposerKeyAction.action(for: "\n", hasMarkedText: true, isShiftReturn: false) == .system)
     }

@@ -26,6 +26,7 @@ struct ChatComposerTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var hasMarkedText: Bool
     let placeholder: String
+    let autoScrollToBottomOnTextChange: Bool
     let onSubmit: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -59,6 +60,9 @@ struct ChatComposerTextView: UIViewRepresentable {
     func updateUIView(_ uiView: IMEAwareTextView, context: Context) {
         if uiView.text != text {
             uiView.text = text
+            if autoScrollToBottomOnTextChange {
+                context.coordinator.scrollToBottom(uiView)
+            }
         }
         uiView.accessibilityLabel = placeholder
         uiView.onShiftReturn = {
@@ -118,6 +122,16 @@ struct ChatComposerTextView: UIViewRepresentable {
 
         func updateMarkedTextState(for textView: UITextView) {
             hasMarkedText = textView.markedTextRange != nil
+        }
+
+        func scrollToBottom(_ textView: UITextView) {
+            let end = NSRange(location: (textView.text as NSString).length, length: 0)
+            textView.selectedRange = end
+            textView.layoutIfNeeded()
+            textView.scrollRangeToVisible(end)
+            let minY = -textView.adjustedContentInset.top
+            let maxY = max(minY, textView.contentSize.height - textView.bounds.height + textView.adjustedContentInset.bottom)
+            textView.setContentOffset(CGPoint(x: textView.contentOffset.x, y: maxY), animated: false)
         }
     }
 }

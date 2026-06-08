@@ -44,6 +44,10 @@ struct ChatTabView: View {
         category: "SpeechProfile"
     )
 
+    static func shouldAutoScrollSpeechTranscript(isTranscribing: Bool, isRetryingSpeech: Bool) -> Bool {
+        isTranscribing || isRetryingSpeech
+    }
+
     @Bindable var state: AppState
     var showSettingsInToolbar: Bool = false
     var showSessionListInToolbar: Bool = true
@@ -677,6 +681,10 @@ struct ChatTabView: View {
                                 text: $inputText,
                                 hasMarkedText: $hasMarkedText,
                                 placeholder: L10n.t(.chatInputPlaceholder),
+                                autoScrollToBottomOnTextChange: Self.shouldAutoScrollSpeechTranscript(
+                                    isTranscribing: isTranscribing,
+                                    isRetryingSpeech: isRetryingSpeech
+                                ),
                                 onSubmit: sendCurrentInput
                             )
                             .frame(
