@@ -220,18 +220,23 @@ struct SessionRowView: View {
         }
     }
 
-    /// Leading status bar color + width. `nil` width = no bar.
+    /// Leading status bar color + width. `nil` = no bar.
+    ///
+    /// The bar is reserved for the two states that genuinely need attention
+    /// (needsYou / running). Done-unread does NOT get a bar — unread is carried
+    /// by title weight instead (see `titleFont`), so the bar stays a scarce,
+    /// high-signal cue rather than appearing on nearly every row.
     private var statusBar: (color: Color, width: CGFloat)? {
         switch displayState {
-        case .needsYou: return (DesignColors.Brand.primary, 4)
+        case .needsYou: return (DesignColors.Brand.primary, 3)
         case .running: return (DesignColors.Brand.teal, 3)
-        case .doneUnread: return (DesignColors.Brand.primary, 2)
-        case .doneRead, .stale: return nil
+        case .doneUnread, .doneRead, .stale: return nil
         }
     }
 
-    /// Title color, per the state dimming ladder. Child rows keep a slightly
-    /// lighter baseline but the state dimming for done/stale still applies.
+    /// Title color, per the state dimming ladder: attention/unread at full text,
+    /// read recedes to secondary, stale to tertiary. This dimming is the time-
+    /// depth axis — newer/unattended stays bright, old fades down.
     private var titleColor: Color {
         switch displayState {
         case .needsYou, .running, .doneUnread:
@@ -243,8 +248,11 @@ struct SessionRowView: View {
         }
     }
 
-    /// Title font weight: active/unread states use headline, settled states use
-    /// body. Child rows always use body to preserve the tree's lighter treatment.
+    /// Title weight IS the unread signal. Unread (and the two attention states)
+    /// render in semibold headline; once read, the title drops to regular body.
+    /// With no separate unread dot, a screenful of unread reads as a calm field
+    /// of bolder titles rather than a field of blinking dots. Child rows stay
+    /// body to preserve the tree's lighter treatment.
     private var titleFont: Font {
         if depth > 0 { return DesignTypography.body }
         switch displayState {
@@ -292,50 +300,60 @@ struct SessionRowView: View {
                 .opacity(isPulsing ? 0.35 : 1.0)
                 .animation(DesignAnimation.breathing, value: isPulsing)
                 .onAppear { isPulsing = true }
-        case .doneUnread:
-            Circle()
-                .fill(DesignColors.Brand.primary)
-                .frame(width: 7, height: 7)
-        case .doneRead, .stale:
+        case .doneUnread, .doneRead, .stale:
+            // Unread is carried by title weight, not a separate dot — keeps the
+            // leading column to one signal (state) instead of stacking dot + bar.
             EmptyView()
         }
     }
 
+    /// Only the two attention states get a leading icon. Unread reads through
+    /// title weight, so it doesn't occupy the icon column.
     private var hasStateIcon: Bool {
         switch displayState {
-        case .needsYou, .running, .doneUnread: return true
-        case .doneRead, .stale: return false
+        case .needsYou, .running: return true
+        case .doneUnread, .doneRead, .stale: return false
         }
     }
 
     var body: some View {
         HStack(spacing: DesignSpacing.sm) {
-            if hasChildren {
-                Button {
-                    onToggleCollapse?()
-                } label: {
-                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                        .font(DesignTypography.micro)
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
+            // Column 1 — hierarchy (tree): expand chevron, child dot, or empty.
+            // Always a fixed 12pt so this axis stays its own column and never
+            // shares space with the state cue.
+            Group {
+                if hasChildren {
+                    Button {
+                        onToggleCollapse?()
+                    } label: {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(DesignTypography.micro)
+                            .foregroundStyle(DesignColors.Neutral.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("session-toggle-\(session.id)")
+                } else if depth > 0 {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(DesignColors.Neutral.textTertiary)
+                        .frame(width: 3, height: 3)
+                } else {
+                    Color.clear
                 }
-                .buttonStyle(.plain)
-                .frame(width: 12)
-                .accessibilityIdentifier("session-toggle-\(session.id)")
-            } else if depth > 0 {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(DesignColors.Neutral.textTertiary)
-                    .frame(width: 3, height: 3)
-                    .padding(.leading, 4.5)
-            } else {
-                Color.clear
-                    .frame(width: 12)
             }
+            .frame(width: 12)
 
-            if hasStateIcon {
-                stateIcon
-                    .frame(width: 12)
-                    .accessibilityIdentifier("session-state-\(session.id)-\(stateName)")
+            // Column 2 — state cue: needsYou bell / running pulse, or an empty
+            // reserved slot so every title aligns on the same vertical line
+            // whether or not the row carries a state icon.
+            Group {
+                if hasStateIcon {
+                    stateIcon
+                        .accessibilityIdentifier("session-state-\(session.id)-\(stateName)")
+                } else {
+                    Color.clear
+                }
             }
+            .frame(width: 12)
 
             VStack(alignment: .leading, spacing: DesignSpacing.xs) {
                 Text(displayTitle)
