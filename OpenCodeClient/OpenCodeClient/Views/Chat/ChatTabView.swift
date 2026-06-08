@@ -337,6 +337,21 @@ struct ChatTabView: View {
         return L10n.t(.chatSpeechTapToSpeak)
     }
 
+    private var voiceStatusText: String? {
+        if speechRecoveryActive { return L10n.t(.chatSpeechRecovering) }
+        if isRecording { return L10n.t(.chatSpeechListening) }
+        if isShowingTranscribingUI { return L10n.t(.chatSpeechTranscribing) }
+        if isRetryingSpeech { return L10n.t(.chatSpeechRetrySegment) }
+        if hasPreservedSpeechAudioForUI { return L10n.t(.chatSpeechPreservedAudio) }
+        return nil
+    }
+
+    private var composerStatusText: String? {
+        let parts = [state.isBusy ? L10n.t(.chatAgentRunning) : nil, voiceStatusText].compactMap { $0 }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
+    }
+
     private var voiceRailTransportIcon: String {
         if isRecording { return "stop.circle.fill" }
         if isShowingTranscribingUI || isRetryingSpeech { return "circle.dotted" }
@@ -344,38 +359,86 @@ struct ChatTabView: View {
         return "mic.fill"
     }
 
-    private var quietRunStatus: some View {
+    private var quietComposerStatus: some View {
         HStack(spacing: DesignSpacing.sm) {
-            Circle()
-                .fill(DesignColors.Brand.gold)
-                .frame(width: 6, height: 6)
-                .shadow(color: DesignColors.Brand.gold.opacity(0.25), radius: 4)
+            if state.isBusy {
+                Circle()
+                    .fill(DesignColors.Brand.gold)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: DesignColors.Brand.gold.opacity(0.25), radius: 4)
+            }
 
-            Text(L10n.t(.chatAgentRunning))
+            Text(composerStatusText ?? "")
                 .font(DesignTypography.meta)
                 .foregroundStyle(DesignColors.Neutral.textSecondary)
+                .lineLimit(1)
 
             Spacer(minLength: 0)
 
-            Menu {
-                Button(role: .destructive) {
-                    Task { await state.abortSession() }
+            if state.isBusy {
+                Menu {
+                    Button(role: .destructive) {
+                        Task { await state.abortSession() }
+                    } label: {
+                        Label(L10n.t(.chatAbortAgent), systemImage: "stop.fill")
+                    }
                 } label: {
-                    Label(L10n.t(.chatAbortAgent), systemImage: "stop.fill")
+                    Image(systemName: "ellipsis")
+                        .font(DesignTypography.meta.weight(.semibold))
+                        .foregroundStyle(DesignColors.Neutral.textTertiary)
+                        .frame(width: 30, height: 24)
+                        .contentShape(Rectangle())
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(DesignTypography.meta.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textTertiary)
-                    .frame(width: 30, height: 24)
-                    .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("agent-interrupt-menu")
+                .accessibilityLabel(L10n.t(.chatAbortAgent))
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("agent-interrupt-menu")
-            .accessibilityLabel(L10n.t(.chatAbortAgent))
         }
         .padding(.horizontal, DesignSpacing.xs)
         .padding(.bottom, DesignSpacing.xs)
+    }
+
+    private var shouldShowComposerStatus: Bool {
+        composerStatusText != nil
+    }
+
+    private var voiceRailTrailingAction: some View {
+        Group {
+            if isShowingTranscribingUI {
+                Button {
+                    guard !Self.hasUITestF3TranscribingFixture else { return }
+                    Task { await abortSpeechRecognition() }
+                } label: {
+                    Text(L10n.t(.chatSpeechStopWaiting))
+                        .font(DesignTypography.meta.weight(.semibold))
+                        .foregroundStyle(DesignColors.Neutral.textSecondary)
+                        .padding(.horizontal, DesignSpacing.md)
+                        .padding(.vertical, 7)
+                        .background {
+                            Capsule().fill(DesignColors.Neutral.textSecondary.opacity(0.10))
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("speech-stop-waiting")
+            } else if hasPreservedSpeechAudioForUI {
+                Button {
+                    guard !Self.hasUITestF3RetryFixture else { return }
+                    Task { await retryPreservedSpeechAudio() }
+                } label: {
+                    Text(L10n.t(.chatSpeechRetrySegment))
+                        .font(DesignTypography.meta.weight(.semibold))
+                        .foregroundStyle(DesignColors.Brand.primary)
+                        .padding(.horizontal, DesignSpacing.md)
+                        .padding(.vertical, 7)
+                        .background {
+                            Capsule().fill(DesignColors.Brand.primary.opacity(0.12))
+                        }
+                }
+                .disabled(isRetryingSpeech || isStartingRecording || isSending)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("speech-retry-segment-action")
+            }
+        }
     }
 
     private var voiceRail: some View {
@@ -410,45 +473,11 @@ struct ChatTabView: View {
             .accessibilityIdentifier(hasPreservedSpeechAudioForUI ? "speech-retry-segment" : "speech-transport")
             .accessibilityLabel(hasPreservedSpeechAudioForUI ? L10n.t(.chatSpeechRetrySegment) : voiceRailTitle)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(voiceRailTitle)
-                    .font(DesignTypography.meta.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
-                    .lineLimit(1)
+            VoiceRailWaveformView(mode: voiceRailMode, color: voiceRailColor, level: speechAudioLevel)
+                .frame(height: 22)
+                .accessibilityIdentifier("speech-waveform")
 
-                VoiceRailWaveformView(mode: voiceRailMode, color: voiceRailColor, level: speechAudioLevel)
-                    .frame(height: 18)
-                    .accessibilityIdentifier("speech-waveform")
-            }
-
-            if isShowingTranscribingUI {
-                Button {
-                    guard !Self.hasUITestF3TranscribingFixture else { return }
-                    Task { await abortSpeechRecognition() }
-                } label: {
-                    Text(L10n.t(.chatSpeechStopWaiting))
-                        .font(DesignTypography.meta.weight(.semibold))
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
-                        .padding(.horizontal, DesignSpacing.sm)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("speech-stop-waiting")
-            } else if hasPreservedSpeechAudioForUI {
-                Button {
-                    guard !Self.hasUITestF3RetryFixture else { return }
-                    Task { await retryPreservedSpeechAudio() }
-                } label: {
-                    Text(L10n.t(.chatSpeechRetrySegment))
-                        .font(DesignTypography.meta.weight(.semibold))
-                        .foregroundStyle(DesignColors.Brand.primary)
-                        .padding(.horizontal, DesignSpacing.sm)
-                        .padding(.vertical, 6)
-                }
-                .disabled(isRetryingSpeech || isStartingRecording || isSending)
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("speech-retry-segment-action")
-            }
+            voiceRailTrailingAction
         }
         .padding(.horizontal, DesignSpacing.xs)
         .padding(.bottom, DesignSpacing.sm)
@@ -634,8 +663,8 @@ struct ChatTabView: View {
                  Divider()
                     .opacity(0.5)
                  VStack(spacing: 0) {
-                    if state.isBusy {
-                        quietRunStatus
+                    if shouldShowComposerStatus {
+                        quietComposerStatus
                     }
 
                     voiceRail
@@ -938,10 +967,9 @@ private struct VoiceRailWaveformView: View {
     var color: Color
     var level: Float = 0
 
-    private let barCount = 18
     private let barWidth: CGFloat = 4
     private let barSpacing: CGFloat = 5
-    @State private var history: [Float] = Array(repeating: 0.02, count: 18)
+    @State private var history: [Float] = Array(repeating: 0.02, count: 64)
     @State private var lastTick: TimeInterval = 0
 
     var body: some View {
@@ -949,13 +977,12 @@ private struct VoiceRailWaveformView: View {
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 let centerY = size.height / 2
-                let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barSpacing
-                let originX = max(0, (size.width - totalWidth) / 2)
-                let bars = currentBars(at: t)
+                let barCount = max(1, Int((size.width + barSpacing) / (barWidth + barSpacing)))
+                let bars = currentBars(at: t, count: barCount)
 
-                for index in 0..<barCount {
+                for index in 0..<bars.count {
                     let height = max(2, bars[index] * (size.height - 2))
-                    let x = originX + CGFloat(index) * (barWidth + barSpacing)
+                    let x = CGFloat(index) * (barWidth + barSpacing)
                     let rect = CGRect(
                         x: x,
                         y: centerY - height / 2,
@@ -984,18 +1011,21 @@ private struct VoiceRailWaveformView: View {
         history.append(sample)
     }
 
-    private func currentBars(at t: TimeInterval) -> [CGFloat] {
+    private func currentBars(at t: TimeInterval, count: Int) -> [CGFloat] {
         switch mode {
         case .idle:
-            return Array(repeating: 0.03, count: barCount)
+            return Array(repeating: 0.03, count: count)
         case .active:
-            return history.map { CGFloat($0) }
+            if history.count >= count {
+                return history.suffix(count).map { CGFloat($0) }
+            }
+            return Array(repeating: 0.03, count: count - history.count) + history.map { CGFloat($0) }
         case .generating:
-            let position = (t * 12.0).truncatingRemainder(dividingBy: Double(barCount))
-            return (0..<barCount).map { index in
+            let position = (t * 12.0).truncatingRemainder(dividingBy: Double(count))
+            return (0..<count).map { index in
                 let distance = min(
                     abs(Double(index) - position),
-                    Double(barCount) - abs(Double(index) - position)
+                    Double(count) - abs(Double(index) - position)
                 )
                 let intensity = max(0, 1 - distance / 3)
                 return CGFloat(0.05 + intensity * 0.85)

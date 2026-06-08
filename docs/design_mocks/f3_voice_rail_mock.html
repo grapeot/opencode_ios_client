@@ -16,6 +16,7 @@
       --divider: #23272b;
       --accent: #3b82f6;
       --gold: #d9a621;
+      --red: #ff453a;
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
     }
 
@@ -24,23 +25,44 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background: radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.13), transparent 38rem), var(--bg);
       color: var(--text);
-      display: grid;
-      place-items: center;
-      padding: 40px;
+      padding: 32px;
     }
 
-    .phone {
-      width: 390px;
-      height: 844px;
-      border-radius: 42px;
+    .stage {
+      display: grid;
+      grid-template-columns: 420px minmax(620px, 1fr);
+      gap: 34px;
+      align-items: end;
+      max-width: 1220px;
+      margin: 0 auto;
+    }
+
+    .caption {
+      color: var(--secondary);
+      font-size: 13px;
+      margin: 0 0 12px;
+    }
+
+    .phone, .ipad {
       background: var(--bg);
       border: 1px solid #2a2f35;
       overflow: hidden;
       box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
+    }
+
+    .phone {
+      width: 390px;
+      height: 844px;
+      border-radius: 42px;
+    }
+
+    .ipad {
+      height: 720px;
+      border-radius: 28px;
     }
 
     .topbar {
@@ -54,16 +76,38 @@
       font-size: 13px;
     }
 
-    .title {
-      color: var(--text);
-      font-weight: 650;
-      letter-spacing: -0.01em;
+    .ipad .topbar { padding: 0 24px; }
+    .title { color: var(--text); font-weight: 650; letter-spacing: -0.01em; }
+
+    .ipad-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 190px 1fr 220px;
+      min-height: 0;
     }
+
+    .side, .preview {
+      background: rgba(20, 22, 25, 0.64);
+      padding: 18px;
+      color: var(--secondary);
+      font-size: 13px;
+    }
+
+    .side { border-right: 1px solid rgba(255,255,255,.04); }
+    .preview { border-left: 1px solid rgba(255,255,255,.04); }
+    .chat-col { display: flex; flex-direction: column; min-width: 0; }
 
     .messages {
       flex: 1;
       padding: 20px 18px;
       overflow: hidden;
+    }
+
+    .ipad .messages {
+      padding: 28px 36px;
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
     }
 
     .user {
@@ -105,47 +149,40 @@
       border-top: 1px solid rgba(255, 255, 255, 0.04);
     }
 
-    .run-status {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 26px;
-      color: var(--secondary);
-      font-size: 12px;
-      padding: 0 4px 6px;
-    }
-
-    .run-left {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-    }
-
-    .pulse {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--gold);
-      box-shadow: 0 0 0 5px rgba(217, 166, 33, 0.12);
-    }
-
-    .more {
-      color: var(--tertiary);
-      letter-spacing: 0.14em;
+    .ipad .composer-wrap {
+      padding: 14px 36px 22px;
     }
 
     .composer {
       background: var(--surface);
       border-radius: 18px;
       padding: 10px;
+      max-width: 720px;
+      margin: 0 auto;
     }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 24px;
+      color: var(--secondary);
+      font-size: 12px;
+      padding: 0 4px 7px;
+    }
+
+    .status-left { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 5px rgba(217,166,33,.11); flex: 0 0 auto; }
+    .status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .more { color: var(--tertiary); letter-spacing: .14em; padding: 0 4px; }
 
     .voice-rail {
       display: grid;
-      grid-template-columns: 38px 1fr auto;
+      grid-template-columns: 38px minmax(0, 1fr) auto;
       align-items: center;
       gap: 10px;
-      min-height: 42px;
+      min-height: 38px;
       padding: 0 2px 9px;
     }
 
@@ -156,41 +193,19 @@
       border: 0;
       display: grid;
       place-items: center;
-      color: white;
-      background: rgba(59, 130, 246, 0.22);
+      color: var(--accent);
+      background: rgba(59, 130, 246, 0.16);
       font-size: 15px;
+      box-shadow: inset 0 0 0 1px rgba(59,130,246,.12);
     }
 
-    .transport.recording { background: rgba(255, 69, 58, 0.16); color: #ff6b63; }
-    .transport.processing { background: rgba(59, 130, 246, 0.16); color: var(--accent); }
-    .transport.retry { background: rgba(59, 130, 246, 0.2); color: var(--accent); }
+    .transport.recording { background: rgba(255, 69, 58, 0.14); color: var(--red); box-shadow: inset 0 0 0 1px rgba(255,69,58,.18); }
+    .rail-action { border: 0; border-radius: 999px; background: rgba(155,161,166,.10); color: var(--secondary); font: inherit; font-size: 12px; font-weight: 650; padding: 7px 12px; white-space: nowrap; }
+    .rail-action.primary { color: var(--accent); background: rgba(59,130,246,.12); }
 
-    .voice-main {
-      min-width: 0;
-    }
-
-    .voice-label {
-      color: var(--secondary);
-      font-size: 12px;
-      margin-bottom: 5px;
-    }
-
-    .wave {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      height: 18px;
-      overflow: hidden;
-    }
-
-    .wave span {
-      width: 4px;
-      border-radius: 999px;
-      background: var(--accent);
-      opacity: 0.9;
-    }
-
-    .idle .wave span { height: 2px; background: var(--tertiary); opacity: 0.55; }
+    .wave { display: flex; align-items: center; justify-content: stretch; gap: 5px; height: 24px; overflow: hidden; }
+    .wave span { width: 4px; border-radius: 999px; background: var(--accent); opacity: .9; }
+    .idle .wave span { height: 2px; background: var(--tertiary); opacity: .55; }
     .recording .wave span:nth-child(1) { height: 4px; opacity: .35; }
     .recording .wave span:nth-child(2) { height: 10px; opacity: .55; }
     .recording .wave span:nth-child(3) { height: 17px; opacity: .85; }
@@ -201,20 +216,10 @@
     .recording .wave span:nth-child(8) { height: 9px; opacity: .52; }
     .recording .wave span:nth-child(9) { height: 5px; opacity: .38; }
     .recording .wave span:nth-child(10) { height: 14px; opacity: .78; }
+    .recording .wave span:nth-child(11) { height: 7px; opacity: .45; }
+    .recording .wave span:nth-child(12) { height: 16px; opacity: .82; }
     .processing .wave span { background: var(--accent); opacity: .28; height: 5px; }
-    .processing .wave span:nth-child(4), .processing .wave span:nth-child(5), .processing .wave span:nth-child(6) { opacity: .95; height: 17px; }
-    .retry .wave span { background: var(--accent); height: 5px; opacity: .45; }
-
-    .rail-action {
-      border: 0;
-      background: transparent;
-      color: var(--secondary);
-      font: inherit;
-      font-size: 12px;
-      padding: 6px 7px;
-    }
-
-    .rail-action.primary { color: var(--accent); font-weight: 650; }
+    .processing .wave span:nth-child(5), .processing .wave span:nth-child(6), .processing .wave span:nth-child(7) { opacity: .95; height: 17px; }
 
     .input-row {
       display: grid;
@@ -225,114 +230,73 @@
       padding-top: 9px;
     }
 
-    .input {
-      min-height: 34px;
-      color: var(--tertiary);
-      font-size: 15px;
-      line-height: 1.35;
-      display: flex;
-      align-items: center;
-      padding-left: 2px;
-    }
+    .input { min-height: 34px; color: var(--tertiary); font-size: 15px; line-height: 1.35; display: flex; align-items: center; padding-left: 2px; }
+    .send { width: 34px; height: 34px; border-radius: 12px; border: 0; background: var(--accent); color: white; font-size: 17px; }
 
-    .send {
-      width: 34px;
-      height: 34px;
-      border-radius: 12px;
-      border: 0;
-      background: var(--accent);
-      color: white;
-      font-size: 17px;
-    }
+    .option-stack { display: grid; gap: 16px; }
+    .variant-label { color: var(--tertiary); font-size: 11px; margin: 0 0 7px 4px; }
 
-    .state-grid {
-      display: grid;
-      gap: 16px;
-    }
-
-    .caption {
-      color: var(--tertiary);
-      font-size: 11px;
-      margin: 0 0 7px 4px;
+    @media (max-width: 980px) {
+      .stage { grid-template-columns: 1fr; }
+      .ipad { display: none; }
     }
   </style>
 </head>
 <body>
-  <main class="phone">
-    <header class="topbar">
-      <span>‹ Sessions</span>
-      <span class="title">F3 Voice Steer</span>
-      <span>◌  ⚙</span>
-    </header>
-
-    <section class="messages">
-      <div class="user">Refactor the auth middleware. First inspect token refresh and session retry behavior.</div>
-      <div class="assistant-title">OpenCode</div>
-      <div class="assistant">
-        I’ll inspect the auth flow and compare the retry paths before touching code.
-        <div class="tool">▸ 3 tool calls</div>
+  <main class="stage">
+    <section>
+      <p class="caption">iPhone: status in one quiet row, voice rail as pure control</p>
+      <div class="phone">
+        <header class="topbar"><span>‹ Sessions</span><span class="title">F3 Voice Steer</span><span>◌ ⚙</span></header>
+        <section class="messages">
+          <div class="user">Refactor the auth middleware. First inspect token refresh and session retry behavior.</div>
+          <div class="assistant-title">OpenCode</div>
+          <div class="assistant">I’ll inspect the auth flow and compare retry paths before touching code.<div class="tool">▸ 3 tool calls</div></div>
+        </section>
+        <section class="composer-wrap">
+          <div class="option-stack">
+            <div>
+              <p class="variant-label">Recording</p>
+              <div class="composer recording">
+                <div class="status-row"><span class="status-left"><span class="dot"></span><span class="status-text">Agent running · Listening</span></span><span class="more">•••</span></div>
+                <div class="voice-rail"><button class="transport recording">●</button><div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><span></span></div>
+                <div class="input-row"><div class="input">Transcript will appear here</div><button class="send">↑</button></div>
+              </div>
+            </div>
+            <div>
+              <p class="variant-label">Transcribing</p>
+              <div class="composer processing">
+                <div class="status-row"><span class="status-left"><span class="dot"></span><span class="status-text">Agent running · Transcribing</span></span><span class="more">•••</span></div>
+                <div class="voice-rail"><button class="transport">◌</button><div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><button class="rail-action">Stop wait</button></div>
+                <div class="input-row"><div class="input">Audio will be kept if you stop waiting</div><button class="send">↑</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="composer-wrap">
-      <div class="run-status">
-        <span class="run-left"><span class="pulse"></span>Agent running · 2m 14s</span>
-        <span class="more">•••</span>
-      </div>
-
-      <div class="state-grid">
-        <div>
-          <p class="caption">Target state: listening</p>
-          <div class="composer recording">
-            <div class="voice-rail">
-              <button class="transport recording">●</button>
-              <div class="voice-main">
-                <div class="voice-label">Listening</div>
-                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <section>
+      <p class="caption">iPad: same structure, wider rail, status stays quiet</p>
+      <div class="ipad">
+        <header class="topbar"><span>Sessions</span><span class="title">F3 Voice Steer</span><span>◌ ⚙</span></header>
+        <div class="ipad-body">
+          <aside class="side">▸ Files<br><br>Sessions<br>▎F3 Voice Steer<br>auth refactor<br>mobile QA</aside>
+          <section class="chat-col">
+            <section class="messages">
+              <div class="user">Refactor the auth middleware. First inspect token refresh and session retry behavior.</div>
+              <div class="assistant-title">OpenCode</div>
+              <div class="assistant">I’ll inspect the auth flow and compare retry paths before touching code.<div class="tool">▸ 3 tool calls</div></div>
+            </section>
+            <section class="composer-wrap">
+              <div class="composer recording">
+                <div class="status-row"><span class="status-left"><span class="dot"></span><span class="status-text">Agent running · Listening</span></span><span class="more">•••</span></div>
+                <div class="voice-rail"><button class="transport recording">●</button><div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><span></span></div>
+                <div class="input-row"><div class="input">Transcript will appear here</div><button class="send">↑</button></div>
               </div>
-              <button class="rail-action">Tap to finish</button>
-            </div>
-            <div class="input-row">
-              <div class="input">Transcript will appear here</div>
-              <button class="send">↑</button>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <p class="caption">Target state: transcribing with escape hatch</p>
-          <div class="composer processing">
-            <div class="voice-rail">
-              <button class="transport processing">◌</button>
-              <div class="voice-main">
-                <div class="voice-label">Transcribing</div>
-                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-              </div>
-              <button class="rail-action">Stop wait</button>
-            </div>
-            <div class="input-row">
-              <div class="input">Transcribing… audio will be kept if you stop waiting</div>
-              <button class="send">↑</button>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <p class="caption">Target state: preserved audio</p>
-          <div class="composer retry">
-            <div class="voice-rail">
-              <button class="transport retry">↻</button>
-              <div class="voice-main">
-                <div class="voice-label">Audio saved</div>
-                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-              </div>
-              <button class="rail-action primary">Retry</button>
-            </div>
-            <div class="input-row">
-              <div class="input">Audio saved. Retry this segment.</div>
-              <button class="send">↑</button>
-            </div>
-          </div>
+            </section>
+          </section>
+          <aside class="preview">auth.ts<br><br>1 import …<br>2 export …<br>3 …</aside>
         </div>
       </div>
     </section>

@@ -198,6 +198,10 @@ extension ChatTabView {
             }
         } else {
             guard !isStartingRecording else { return }
+            // VoiceFlowMicrophone.audioLevel is tied to the microphone instance's
+            // AsyncStream continuation. Recreate it per capture so repeated
+            // start/stop cycles keep publishing real levels for the waveform.
+            microphone = VoiceFlowMicrophone()
             let token = state.aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines)
             if token.isEmpty {
                 speechError = L10n.t(.chatSpeechTokenMissing)
