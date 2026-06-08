@@ -65,6 +65,26 @@ extension ChatTabView {
         speechHeartbeatTask = nil
     }
 
+    func startSpeechAudioLevelConsumer() {
+        speechAudioLevelTask?.cancel()
+        speechAudioLevel = 0
+        let levels = microphone.audioLevel
+        speechAudioLevelTask = Task {
+            for await level in levels {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    speechAudioLevel = level
+                }
+            }
+        }
+    }
+
+    func stopSpeechAudioLevelConsumer() {
+        speechAudioLevelTask?.cancel()
+        speechAudioLevelTask = nil
+        speechAudioLevel = 0
+    }
+
     /// Drain `session.events` so the UI sees phase transitions and recovery
     /// state mid-recording. Otherwise a stream blip is invisible until the
     /// user hits stop and `commitAndStop` either succeeds late or fails.
@@ -117,6 +137,7 @@ extension ChatTabView {
     func stopSpeechForBackground() async {
         stopSpeechHeartbeat()
         stopSpeechEventConsumer()
+        stopSpeechAudioLevelConsumer()
         _ = try? await microphone.stop()
 
         let session = speechSession
@@ -134,6 +155,7 @@ extension ChatTabView {
         if isRecording {
             stopSpeechHeartbeat()
             stopSpeechEventConsumer()
+            stopSpeechAudioLevelConsumer()
             let stopStart = ProcessInfo.processInfo.systemUptime
             _ = try? await microphone.stop()
             isRecording = false
@@ -205,6 +227,7 @@ extension ChatTabView {
                 recordingInputPrefix = inputText
                 speechSession = session
                 startSpeechEventConsumer(for: session)
+                startSpeechAudioLevelConsumer()
 
                 try await microphone.start { chunk in
                     Task {
@@ -219,6 +242,7 @@ extension ChatTabView {
                 _ = try? await microphone.stop()
                 stopSpeechHeartbeat()
                 stopSpeechEventConsumer()
+                stopSpeechAudioLevelConsumer()
                 isStartingRecording = false
                 if let speechSession {
                     await terminateSpeechSession(speechSession)
@@ -233,6 +257,7 @@ extension ChatTabView {
     func abortSpeechRecognition() async {
         stopSpeechHeartbeat()
         stopSpeechEventConsumer()
+        stopSpeechAudioLevelConsumer()
         _ = try? await microphone.stop()
 
         let session = speechSession

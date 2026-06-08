@@ -112,7 +112,8 @@ final class OpenCodeClientUITests: XCTestCase {
         app.launchArguments = ["UITEST_F3_TRANSCRIBING_FIXTURE"]
         app.launch()
 
-        XCTAssertTrue(app.buttons["agent-interrupt"].waitForExistence(timeout: 8), "agent 中断 banner 应可见")
+        XCTAssertTrue(app.buttons["agent-interrupt-menu"].waitForExistence(timeout: 8), "agent 中断菜单应可见但降级为 quiet status")
+        XCTAssertTrue(app.otherElements["speech-waveform"].waitForExistence(timeout: 8), "语音 waveform rail 应可见")
         XCTAssertTrue(app.buttons["speech-stop-waiting"].waitForExistence(timeout: 8), "转写等待停止按钮应可见")
         XCTAssertTrue(app.buttons["chat-send"].waitForExistence(timeout: 8), "send 按钮应保留固定槽位")
 
@@ -125,7 +126,8 @@ final class OpenCodeClientUITests: XCTestCase {
         app.launchArguments = ["UITEST_F3_RETRY_FIXTURE"]
         app.launch()
 
-        XCTAssertTrue(app.buttons["agent-interrupt"].waitForExistence(timeout: 8), "agent 中断 banner 应可见")
+        XCTAssertTrue(app.buttons["agent-interrupt-menu"].waitForExistence(timeout: 8), "agent 中断菜单应可见但降级为 quiet status")
+        XCTAssertTrue(app.otherElements["speech-waveform"].waitForExistence(timeout: 8), "语音 waveform rail 应可见")
         XCTAssertTrue(app.buttons["speech-retry-segment"].waitForExistence(timeout: 8), "重试这段按钮应可见")
         XCTAssertTrue(app.buttons["chat-send"].waitForExistence(timeout: 8), "send 按钮应保留固定槽位")
 
