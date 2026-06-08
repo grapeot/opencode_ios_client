@@ -396,12 +396,12 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **Session 列表样式**：避免系统默认链接蓝；文本用中性色，当前 Session 用背景高亮
 - **权限**：`permission.asked` 时展示卡片，用户手动批准/拒绝，调用 `POST /session/:id/permissions/:permissionID`
 - **Question**：`question.asked` 时展示 question card；启动时通过 `GET /question` 补拉 pending questions；回答与拒绝分别调用 `/question/{id}/reply`、`/question/{id}/reject`
-- **输入**：支持多行，发送用 `prompt_async`；busy 时消息由服务端排队
+- **Composer**：采用 `voice rail + text review field` 两行结构。voice rail 在上方承载语音 transport、waveform/status、转写等待恢复和 preserved-audio retry；text review field 在下方承载转写文本、人工修正、fallback 打字和固定 send 按钮。busy 时 send 仍调用 `prompt_async`，消息由服务端排队
 - **草稿**：按 sessionID 持久化未发送输入；切换 session 可恢复；发送成功后清空
 - **模型选择**：按 sessionID 记忆当前选择的模型；切换 Session 自动恢复（避免全局 model 覆盖）
 - **Agent 选择**：按 sessionID 记忆当前选择的 agent（与 model 同理）；发送消息时在 body 中携带 `agent: string` 字段
-- **语音输入**：输入框左侧麦克风按钮；开始录音时创建 VoiceFlowKit realtime session，`AVAudioEngine` 输出 PCM16 mono 24kHz chunk；Kit 内部把每个 chunk 写入临时 `.pcm` cache 并发送到当前 WebSocket。heartbeat / send failure 触发 Kit recovery：取消坏 session，创建新 session，从 cache 文件 offset 0 顺序 replay 到当前文件末尾，之后继续 live 发送。停止录音时等待恢复完成，发送 `commit` / `stop`，将 transcript 追加到输入框。录音或转写中显示左侧辅助 stop；点击后调用 `abortPreservingAudio()` 立即释放 UI 并保留 cache，之后显示 retry，点击后用 `transcribe(preservedAudio:)` 重新识别同一段 PCM。Base URL 与 token 在 Settings → Speech Recognition 配置并存 Keychain
-- **Abort**：提供按钮调用 `POST /session/:id/abort`
+- **语音输入**：开始录音时创建 VoiceFlowKit realtime session，`AVAudioEngine` 输出 PCM16 mono 24kHz chunk；Kit 内部把每个 chunk 写入临时 `.pcm` cache 并发送到当前 WebSocket。录音期间 voice rail waveform 消费 `VoiceFlowMicrophone.audioLevel` 的真实 0..1 smoothed mic level。heartbeat / send failure 触发 Kit recovery：取消坏 session，创建新 session，从 cache 文件 offset 0 顺序 replay 到当前文件末尾，之后继续 live 发送。停止录音时等待恢复完成，发送 `commit` / `stop`，将 transcript 追加到 text review field。转写等待时显示 processing waveform 和 `Stop transcription wait`，点击后调用 `abortPreservingAudio()` 立即释放 UI 并保留 cache；preserved-audio 状态显示 `Retry this segment`，点击后用 `transcribe(preservedAudio:)` 重新识别同一段 PCM。Base URL 与 token 在 Settings → Speech Recognition 配置并存 Keychain
+- **Agent abort**：`Interrupt agent` 作为 composer 状态行 `⋯` 菜单项调用 `POST /session/:id/abort`。它是低频 escape hatch，不和语音转写恢复共用 transport slot 或 stop glyph
 - **历史加载交互**：Chat 顶部显示“下拉加载更多历史消息”提示；加载中显示“正在加载更多历史消息...”，支持中英文本地化
 - **Session Archive**：Session List 按 Active / Archived 两个分区展示。归档语义复用 `PATCH /session/:id`：Archive 写入正数 archived timestamp，Restore 写入 `-1` 作为 legacy restore sentinel；客户端按 `time.archived > 0` 判断 Archived。客户端不把 archive 当作 delete 的变体。Archive / Restore 成功后使用返回的 `Session` 更新本地列表，并重新计算 Active / Archived 分区。Archive 对 session subtree 递归生效，顺序为 children-first、parent-last，避免父 session 先隐藏后 active children 被临时提升为 root；Restore 顺序为 parent-first、children-after，避免子 session 在父级仍 archived 时临时游离。iPhone sheet 与 iPad sidebar 使用同一组规则：leading swipe 为 Archive/Restore，trailing swipe 为 Delete；所有 swipe action 禁用 full swipe，Delete 不弹确认框。本轮不提供 session search，避免本地 title filter 被误解为全量历史搜索。
 

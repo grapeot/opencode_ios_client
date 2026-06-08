@@ -4,11 +4,19 @@
 
 ## 当前状态
 
-- **最后更新**：2026-05-30
-- **分支**：`feature/speech-abort-retry`（from master）
-- **编译**：✅ iPhone 16 Pro Simulator build 通过
-- **测试**：⏳ 待用户实测 composer send/stop 行为
-- **Phase**：Speech abort/retry via VoiceFlowKit preserved audio
+- **最后更新**：2026-06-08
+- **分支**：`design/f3-voice-steer`（PR #84）
+- **编译**：✅ iPhone 16 Simulator build 通过
+- **测试**：✅ F3 deterministic composer UI tests 通过
+- **Phase**：F3 voice rail composer ready to merge
+
+### 2026-06-08 — F3 voice rail composer
+
+- Chat composer 从“输入框内附属麦克风”收敛为 `voice rail + text review field`：voice rail 承载录音 transport、真实 waveform、转写等待、stop-wait、preserved-audio retry；文本框承载转写审阅、修正、fallback 打字和固定 send。
+- agent running 降为 composer 附近的 quiet status row，`Interrupt agent` 放入 `⋯` 菜单，避免低频破坏性动作抢过语音 steer 主路径。
+- 录音中 waveform 使用 `VoiceFlowMicrophone.audioLevel` 的真实 mic level；每次开始新录音前重建 `VoiceFlowMicrophone`，避免第二次录音后 audioLevel stream 不再产出。
+- 转写等待保留主动出口 `Stop transcription wait`，调用 abort-preserving-audio；preserved-audio 状态显示 `Retry this segment`，明确是重转同一段已保存音频。
+- 新增 `UITEST_F3_TRANSCRIBING_FIXTURE` / `UITEST_F3_RETRY_FIXTURE` 与对应 UI tests，覆盖 transcribing + agent running、preserved-audio retry 两个关键状态。
 
 ### 2026-05-30 — Speech abort/retry
 
