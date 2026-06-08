@@ -286,13 +286,13 @@ OpenCode 绝大多数情况下不会请求 permission，若出现 `permission.as
 
 在 iPhone 上，除顶部 `Session 列表` 按钮外，还支持从屏幕左边缘向右滑入的手势来打开同一个 Session List。这个手势的目标不是提供新的导航分支，而是复用现有列表入口，降低单手操作时点按左上角按钮的成本。
 
-Session List 是当前工作集的管理面板，而不是单纯历史列表。默认显示 Active sessions，按更新时间倒序；Archived sessions 作为同一列表内的独立折叠分区存在，不要求用户进入 Settings 才能找回。iPhone 的 Session sheet 顶部显示 `Search sessions`，搜索仅按 title 做本地过滤；空 query 时保留 Active / Archived 两个分区，有 query 时仍按分区展示匹配项。iPad / Vision Pro 的左 sidebar 同样采用搜索框 + Active 分区 + Archived 分区，两个分区独立展开/折叠。
+Session List 是当前工作集的管理面板，而不是单纯历史列表。默认显示 Active sessions，按更新时间倒序；Archived sessions 作为同一列表内的独立折叠分区存在，不要求用户进入 Settings 才能找回。iPhone 的 Session sheet 和 iPad / Vision Pro 的左 sidebar 都采用 Active 分区 + Archived 分区，两个分区独立展开/折叠。本轮不提供 session search，避免本地 title filter 被误解为全量历史搜索。
 
 每个条目显示：标题、更新时间、`summary.files`（该 session diff 涉及文件数）和状态（idle/busy/retry）。Active session 支持新建、切换、归档和删除。Archived session 支持切换查看、恢复和删除。Archive / Restore / Delete 都通过 swipe action 暴露，按钮样式沿用当前实现：SF Symbol 图标在上、文字在下。Delete 始终位于 trailing swipe，红色破坏性样式；Archive / Restore 始终位于 leading swipe，使用克制的电蓝/中性色。所有 swipe action 均禁用 full swipe，避免误触。Delete 不再弹确认框；用户已经先滑动再点按钮，意图足够明确。
 
-Archive 行为：点击 Archive 后，session 立即从 Active 分区移入 Archived 分区，当前列表不再占用扫描空间。Restore 行为：点击 Restore 后，session 回到 Active 分区。若用户直接打开 archived session 并继续发送消息，客户端应先恢复该 session，再发送消息，确保“继续工作”的 session 回到当前工作集。Pin 不在本阶段实现。
+Archive 行为：点击 Archive 后，session 立即从 Active 分区移入 Archived 分区，当前列表不再占用扫描空间。如果被归档的 session 有子 session，客户端必须递归归档整个 subtree，并且先归档子 session、最后归档父 session，避免父 session 先隐藏后子 session 短暂变成 Active root。Restore 行为：点击 Restore 后，session 回到 Active 分区；恢复 subtree 时顺序相反，先恢复父 session、再恢复子 session，避免子 session 在父级仍 archived 时短暂游离。若用户直接打开 archived session 并继续发送消息，客户端应先恢复该 session，再发送消息，确保“继续工作”的 session 回到当前工作集。Pin 不在本阶段实现。
 
-视觉与交互：列表文本默认使用中性色（灰）以避免 iOS 默认的"链接蓝"。当前活跃 Session 使用轻量背景色高亮，左缘嵌一条 3pt 电蓝 accent 色条（与用户消息、操作卡片同一套"左色条"语言；色条与圆角选中背景合为一体并裁切在圆角内，不外溢、不与展开 chevron/缩进冲突），并在右侧显示选中标记。Archived rows 仍可点击查看，但视觉层级低于 Active rows：标题和时间使用更弱的中性色，不画选中 accent，避免读起来像当前工作项。
+视觉与交互：列表文本默认使用中性色（灰）以避免 iOS 默认的"链接蓝"。当前活跃 Session 使用轻量背景色高亮，左缘嵌一条 3pt 电蓝 accent 色条（与用户消息、操作卡片同一套"左色条"语言；色条与圆角选中背景合为一体并裁切在圆角内，不外溢、不与展开 chevron/缩进冲突）。选中态不再显示额外 checkmark，避免把当前 session 误读成完成状态或多选状态。Archived rows 仍可点击查看，但视觉层级低于 Active rows：标题和时间使用更弱的中性色，不画选中 accent，避免读起来像当前工作项。
 
 #### 4.2.6 Fork Session（会话分叉）
 

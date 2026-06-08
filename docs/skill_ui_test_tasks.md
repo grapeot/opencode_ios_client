@@ -46,6 +46,14 @@ The preferred Tier 4 bridge is `run-xcuitest` or XCTest-backed `tree`: it invoke
 
 When a prompt asks for read/write card distinction, prefer evidence from `toolcard.read.*` / `toolcard.write.*` XCUITest or visible screenshot labels. If neither is available, return BLOCKED and say the driver needs richer accessibility observation.
 
+## Deterministic Screenshot QA
+
+Curated fixture data can still be Tier 4 when the run drives the real app on a real simulator, captures a screenshot, and the agent judges the rendered UX. The boundary is not whether data is synthetic; it is whether the output is only fixed assertions (Tier 2) or visual/interaction evidence used for a scenario verdict (Tier 4).
+
+Prefer deterministic screenshot harnesses for design QA. They avoid live server drift, secrets, stale real sessions, and network timing while still proving whether the UI actually rendered on iPhone/iPad. For archive UI, `OpenCodeClientUITests/testCaptureSessionArchiveFixtureScreenshot` is the reusable harness: set `TIER4_SCREENSHOT_PATH` or `/tmp/opencode-ios-tier4-config.json` with `screenshot_path`, run that focused test, then inspect the PNG under `tmp/visual_qa/`.
+
+Check in reusable code that improves the workflow: launch arguments, fixtures, screenshot harnesses, `ui_driver` commands, redaction helpers, and docs. Do not check in screenshots, `.xcresult`, `/tmp/opencode-ios-tier4-config.json`, DerivedData, Xcode `xcuserdata`, credential JSON, or real session captures.
+
 ## Safety Boundary
 
 Live server Tier 4 tests must be read-only. Do not send prompts that create, edit, or write files against the shared workspace. Keep screenshots and artifacts out of git.

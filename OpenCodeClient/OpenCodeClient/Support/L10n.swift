@@ -170,7 +170,6 @@ enum L10n {
         case sessionsStatusBusy
         case sessionsStatusRetry
         case sessionsStatusIdle
-        case sessionsSearch
         case sessionsActive
         case sessionsArchived
         case sessionsArchive
@@ -392,7 +391,6 @@ enum L10n {
         Key.sessionsStatusBusy.rawValue: "Running",
         Key.sessionsStatusRetry.rawValue: "Retrying",
         Key.sessionsStatusIdle.rawValue: "Idle",
-        Key.sessionsSearch.rawValue: "Search sessions",
         Key.sessionsActive.rawValue: "Active",
         Key.sessionsArchived.rawValue: "Archived",
         Key.sessionsArchive.rawValue: "Archive",
@@ -618,7 +616,6 @@ enum L10n {
         Key.sessionsStatusBusy.rawValue: "运行中",
         Key.sessionsStatusRetry.rawValue: "重试中",
         Key.sessionsStatusIdle.rawValue: "空闲",
-        Key.sessionsSearch.rawValue: "搜索会话",
         Key.sessionsActive.rawValue: "活跃",
         Key.sessionsArchived.rawValue: "已归档",
         Key.sessionsArchive.rawValue: "归档",

@@ -63,9 +63,33 @@ struct ContentView: View {
                 share: nil,
                 summary: nil
             ),
+            Session(
+                id: "archived-session",
+                slug: "archived-session",
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: "Archived Session",
+                version: "1",
+                time: .init(created: 0, updated: 1_200, archived: 3_000),
+                share: nil,
+                summary: nil
+            ),
+            Session(
+                id: "archived-child-session",
+                slug: "archived-child-session",
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: "archived-session",
+                title: "Archived Child",
+                version: "1",
+                time: .init(created: 0, updated: 1_100, archived: 3_000),
+                share: nil,
+                summary: nil
+            ),
         ]
         state.currentSessionID = "root-session"
-        state.expandedSessionIDs = ["root-session"]
+        state.expandedSessionIDs = ["root-session", "archived-session"]
         return state
     }
 
@@ -475,7 +499,6 @@ private struct TabletFilesColumn: View {
 private struct TabletSessionsColumn: View {
     @Bindable var state: AppState
     @Binding var showSettings: Bool
-    @State private var sessionSearchQuery = ""
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
     @State private var mutatingSessionID: String?
@@ -483,11 +506,11 @@ private struct TabletSessionsColumn: View {
     @State private var showCreateDisabledAlert = false
 
     private var activeNodes: [SessionNode] {
-        state.sessionTree(archived: false, searchQuery: sessionSearchQuery)
+        state.sessionTree(archived: false)
     }
 
     private var archivedNodes: [SessionNode] {
-        state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
+        state.sessionTree(archived: true)
     }
 
     var body: some View {
@@ -537,10 +560,10 @@ private struct TabletSessionsColumn: View {
                         }
                     }
                     .listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
                     .refreshable {
                         await state.refreshSessions()
                     }
-                    .searchable(text: $sessionSearchQuery, prompt: L10n.t(.sessionsSearch))
                 }
             }
             .navigationTitle(showSettings ? L10n.t(.navSettings) : L10n.t(.sessionsTitle))

@@ -60,7 +60,7 @@ final class OpenCodeClientUITests: XCTestCase {
     }
 
     @MainActor
-    func testSessionListFixtureShowsChildSession() throws {
+    func testSessionListFixtureShowsArchiveSections() throws {
         let app = XCUIApplication()
         app.launchArguments.append("UITEST_SESSION_TREE_FIXTURE")
         app.launch()
@@ -69,6 +69,54 @@ final class OpenCodeClientUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Root Session"].waitForExistence(timeout: 8), "Root session 应可见")
         XCTAssertTrue(app.staticTexts["Child Session"].waitForExistence(timeout: 8), "Child session 应可见，避免回归到 root-only 列表")
+        XCTAssertTrue(app.staticTexts["Archived"].waitForExistence(timeout: 8), "Archived section header 应可见")
+
+        app.staticTexts["Archived"].tap()
+
+        XCTAssertTrue(app.staticTexts["Archived Session"].waitForExistence(timeout: 8), "Archived session 应可见")
+        XCTAssertTrue(app.staticTexts["Archived Child"].waitForExistence(timeout: 8), "Archived child 应可见")
+
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = "session-archive-fixture"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func testCaptureSessionArchiveFixtureScreenshot() throws {
+        guard let path = tier4ScreenshotPath(), !path.isEmpty else {
+            throw XCTSkip("Set TIER4_SCREENSHOT_PATH to write a deterministic archive UI screenshot")
+        }
+
+        let app = XCUIApplication()
+        app.launchArguments.append("UITEST_SESSION_TREE_FIXTURE")
+        app.launch()
+
+        if app.buttons["chat-toolbar-session-list"].waitForExistence(timeout: 8) {
+            app.buttons["chat-toolbar-session-list"].tap()
+        }
+
+        XCTAssertTrue(app.staticTexts["Archived"].waitForExistence(timeout: 8), "Archived section header 应可见")
+        app.staticTexts["Archived"].tap()
+        XCTAssertTrue(app.staticTexts["Archived Session"].waitForExistence(timeout: 8), "Archived session 应可见")
+        XCTAssertTrue(app.staticTexts["Archived Child"].waitForExistence(timeout: 8), "Archived child 应可见")
+
+        let data = XCUIScreen.main.screenshot().pngRepresentation
+        try data.write(to: URL(fileURLWithPath: path))
+    }
+
+    private func tier4ScreenshotPath() -> String? {
+        if let path = ProcessInfo.processInfo.environment["TIER4_SCREENSHOT_PATH"], !path.isEmpty {
+            return path
+        }
+
+        let url = URL(fileURLWithPath: "/tmp/opencode-ios-tier4-config.json")
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object["screenshot_path"] as? String
     }
 
     @MainActor

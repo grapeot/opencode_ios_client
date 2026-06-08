@@ -8,7 +8,6 @@ import SwiftUI
 struct SessionListView: View {
     @Bindable var state: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var sessionSearchQuery = ""
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
     @State private var mutatingSessionID: String?
@@ -16,15 +15,55 @@ struct SessionListView: View {
     @State private var showCreateDisabledAlert = false
 
     private var activeNodes: [SessionNode] {
-        state.sessionTree(archived: false, searchQuery: sessionSearchQuery)
+        state.sessionTree(archived: false)
     }
 
     private var archivedNodes: [SessionNode] {
-        state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
+        state.sessionTree(archived: true)
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                Button(L10n.t(.sessionsClose)) { dismiss() }
+                    .frame(width: 88, alignment: .leading)
+
+                Spacer()
+
+                Text(L10n.t(.sessionsTitle))
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(DesignColors.Neutral.text)
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task {
+                            await state.createSession()
+                            dismiss()
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 28, weight: .regular))
+                    }
+                    .disabled(!state.canCreateSession)
+                    .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+
+                    if !state.canCreateSession {
+                        Button {
+                            showCreateDisabledAlert = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .frame(width: 88, alignment: .trailing)
+            }
+            .padding(.horizontal, DesignSpacing.lg)
+            .padding(.top, DesignSpacing.lg)
+            .padding(.bottom, DesignSpacing.md)
+
             Group {
                 if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
@@ -67,40 +106,11 @@ struct SessionListView: View {
                                 .id("load-more-\(lastSessionID)")
                         }
                     }
+                    .listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
                     .accessibilityIdentifier("session-list")
                     .refreshable {
                         await state.refreshSessions()
-                    }
-                }
-            }
-            .navigationTitle(L10n.t(.sessionsTitle))
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $sessionSearchQuery, prompt: L10n.t(.sessionsSearch))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.t(.sessionsClose)) { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 8) {
-                        Button {
-                            Task {
-                                await state.createSession()
-                                dismiss()
-                            }
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .disabled(!state.canCreateSession)
-                        .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
-
-                        if !state.canCreateSession {
-                            Button {
-                                showCreateDisabledAlert = true
-                            } label: {
-                                Image(systemName: "info.circle")
-                            }
-                            .foregroundColor(.secondary)
-                        }
                     }
                 }
             }
@@ -206,27 +216,19 @@ struct SessionSectionHeader: View {
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: DesignSpacing.md) {
-                Text(title.uppercased())
-                    .font(DesignTypography.micro.weight(.semibold))
-                    .tracking(1.1)
-                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+            HStack(spacing: DesignSpacing.sm) {
+                Text(title)
+                    .font(DesignTypography.meta.weight(.semibold))
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
 
-                Rectangle()
-                    .fill(DesignColors.Neutral.textTertiary.opacity(0.22))
-                    .frame(height: 1)
+                Spacer()
 
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(DesignTypography.micro.weight(.semibold))
                     .foregroundStyle(DesignColors.Neutral.textTertiary)
-                    .frame(width: 18, height: 18)
-                    .background(
-                        Circle()
-                            .fill(DesignColors.Neutral.textTertiary.opacity(0.08))
-                    )
+                    .frame(width: 20, height: 20)
             }
-            .padding(.top, DesignSpacing.md)
-            .padding(.bottom, DesignSpacing.xs)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -320,9 +322,6 @@ struct SessionRowView: View {
             if isMutating {
                 ProgressView()
                     .controlSize(.small)
-            } else if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(DesignColors.Brand.primary.opacity(0.6))
             }
         }
         .padding(.vertical, DesignSpacing.sm)
@@ -365,7 +364,7 @@ struct SessionRowView: View {
     }
 
     private func titleColor(depth: Int, isBusy: Bool) -> Color {
-        if isArchived { return DesignColors.Neutral.textTertiary }
+        if isArchived { return DesignColors.Neutral.textSecondary }
         if depth > 0 { return DesignColors.Neutral.textSecondary }
         return DesignColors.Neutral.text
     }

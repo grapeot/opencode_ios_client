@@ -309,13 +309,31 @@ extension AppState {
 
     func archiveSession(sessionID: String) async throws {
         let archived = Int(Date().timeIntervalSince1970 * 1000)
-        let updated = try await apiClient.updateSessionArchived(sessionID: sessionID, archived: archived)
-        upsertSession(updated)
+        for id in sessionSubtreeIDs(rootedAt: sessionID, parentFirst: false) {
+            let updated = try await apiClient.updateSessionArchived(sessionID: id, archived: archived)
+            upsertSession(updated)
+        }
     }
 
     func restoreSession(sessionID: String) async throws {
-        let updated = try await apiClient.updateSessionArchived(sessionID: sessionID, archived: -1)
-        upsertSession(updated)
+        for id in sessionSubtreeIDs(rootedAt: sessionID, parentFirst: true) {
+            let updated = try await apiClient.updateSessionArchived(sessionID: id, archived: -1)
+            upsertSession(updated)
+        }
+    }
+
+    private func sessionSubtreeIDs(rootedAt rootID: String, parentFirst: Bool) -> [String] {
+        var childrenByParent: [String: [String]] = [:]
+        for session in sessions {
+            guard let parentID = session.parentID else { continue }
+            childrenByParent[parentID, default: []].append(session.id)
+        }
+
+        func collect(_ id: String) -> [String] {
+            let children = (childrenByParent[id] ?? []).flatMap(collect)
+            return parentFirst ? [id] + children : children + [id]
+        }
+        return collect(rootID)
     }
 
     func bootstrapSyncCurrentSession(reason: String) async {

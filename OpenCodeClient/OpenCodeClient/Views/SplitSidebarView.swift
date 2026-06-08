@@ -76,18 +76,17 @@ struct SplitSidebarView: View {
 
 private struct SessionsSidebarList: View {
     @Bindable var state: AppState
-    @State private var sessionSearchQuery = ""
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
     @State private var mutatingSessionID: String?
     @State private var actionError: String?
 
     private var activeNodes: [SessionNode] {
-        state.sessionTree(archived: false, searchQuery: sessionSearchQuery)
+        state.sessionTree(archived: false)
     }
 
     private var archivedNodes: [SessionNode] {
-        state.sessionTree(archived: true, searchQuery: sessionSearchQuery)
+        state.sessionTree(archived: true)
     }
 
     var body: some View {
@@ -129,7 +128,6 @@ private struct SessionsSidebarList: View {
         }
         .listStyle(.plain)
         .tint(DesignColors.Brand.primary)
-        .searchable(text: $sessionSearchQuery, prompt: L10n.t(.sessionsSearch))
         .refreshable {
             await state.refreshSessions()
         }

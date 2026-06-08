@@ -413,16 +413,14 @@ final class AppState {
     var _showArchivedSessions: Bool = false
     var expandedSessionIDs: Set<String> = []
 
-    func filteredSessions(archived: Bool, searchQuery: String = "") -> [Session] {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    func filteredSessions(archived: Bool) -> [Session] {
         return sessions
             .filter { $0.isArchived == archived }
-            .filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
             .sorted { $0.time.updated > $1.time.updated }
     }
 
-    func sessionTree(archived: Bool, searchQuery: String = "") -> [SessionNode] {
-        Self.buildSessionTree(from: filteredSessions(archived: archived, searchQuery: searchQuery))
+    func sessionTree(archived: Bool) -> [SessionNode] {
+        Self.buildSessionTree(from: filteredSessions(archived: archived))
     }
 
     var projects: [Project] = []

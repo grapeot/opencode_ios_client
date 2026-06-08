@@ -1781,18 +1781,6 @@ struct ArchivedSessionTests {
         #expect(state.filteredSessions(archived: true).map(\.id) == ["archived"])
     }
 
-    @Test @MainActor func sessionSearchFiltersActiveAndArchivedByTitle() {
-        let state = AppState()
-        state.sessions = [
-            makeSession(id: "active-hit", title: "Refactor auth", archived: nil),
-            makeSession(id: "active-miss", title: "Update README", archived: nil),
-            makeSession(id: "archived-hit", title: "Auth experiment", archived: 123),
-        ]
-
-        #expect(state.filteredSessions(archived: false, searchQuery: "auth").map(\.id) == ["active-hit"])
-        #expect(state.filteredSessions(archived: true, searchQuery: "auth").map(\.id) == ["archived-hit"])
-    }
-
     @Test @MainActor func archiveAndRestoreSessionPatchArchivedTimestamp() async throws {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
@@ -1813,6 +1801,42 @@ struct ArchivedSessionTests {
         #expect(state.filteredSessions(archived: false).map(\.id) == ["s1"])
     }
 
+    @Test @MainActor func archiveParentSessionArchivesChildrenRecursively() async throws {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.sessions = [
+            makeSession(id: "parent", title: "Parent", archived: nil),
+            makeSession(id: "child-a", title: "Child A", parentID: "parent", archived: nil),
+            makeSession(id: "child-b", title: "Child B", parentID: "parent", archived: nil),
+        ]
+
+        try await state.archiveSession(sessionID: "parent")
+
+        let calls = await apiClient.updateSessionArchivedCalls
+        #expect(Set(calls.map(\.0)) == Set(["parent", "child-a", "child-b"]))
+        #expect(calls.last?.0 == "parent")
+        #expect(calls.allSatisfy { $0.1 > 0 })
+        #expect(state.filteredSessions(archived: false).isEmpty)
+        #expect(Set(state.filteredSessions(archived: true).map(\.id)) == Set(["parent", "child-a", "child-b"]))
+    }
+
+    @Test @MainActor func restoreParentSessionRestoresParentBeforeChildren() async throws {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.sessions = [
+            makeSession(id: "parent", title: "Parent", archived: 123),
+            makeSession(id: "child-a", title: "Child A", parentID: "parent", archived: 123),
+            makeSession(id: "child-b", title: "Child B", parentID: "parent", archived: 123),
+        ]
+
+        try await state.restoreSession(sessionID: "parent")
+
+        let calls = await apiClient.updateSessionArchivedCalls
+        #expect(Set(calls.map(\.0)) == Set(["parent", "child-a", "child-b"]))
+        #expect(calls.first?.0 == "parent")
+        #expect(calls.allSatisfy { $0.1 == -1 })
+    }
+
     @Test @MainActor func sendingArchivedSessionRestoresBeforePrompt() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
@@ -1830,13 +1854,13 @@ struct ArchivedSessionTests {
         #expect(state.filteredSessions(archived: false).map(\.id) == ["s1"])
     }
 
-    private func makeSession(id: String, title: String = "Title", archived: Int?) -> Session {
+    private func makeSession(id: String, title: String = "Title", parentID: String? = nil, archived: Int?) -> Session {
         Session(
             id: id,
             slug: id,
             projectID: "p1",
             directory: "/tmp",
-            parentID: nil,
+            parentID: parentID,
             title: title,
             version: "1",
             time: .init(created: 0, updated: 0, archived: archived),
