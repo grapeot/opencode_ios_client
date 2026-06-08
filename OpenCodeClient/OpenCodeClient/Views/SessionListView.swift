@@ -128,10 +128,23 @@ struct SessionListView: View {
             ForEach(nodes) { node in
                 let session = node.session
                 let status = state.sessionStatuses[session.id]
+                let displayState = SessionDisplayState.derive(
+                    session: session,
+                    status: status,
+                    isBlocked: state.isSessionBlocked(session.id),
+                    lastViewedAt: state.lastViewedAt(for: session.id),
+                    now: Int(Date().timeIntervalSince1970 * 1000)
+                )
+                // Title summary only has messages for the currently-open session;
+                // every other row falls back to the existing title inside the helper.
+                let rowMessages = state.currentSessionID == session.id ? state.messages : []
 
                 SessionRowView(
                     session: session,
                     status: status,
+                    displayState: displayState,
+                    blockKind: state.sessionBlockKind(session.id),
+                    titleSummary: SessionTitleSummary.summary(for: session, messages: rowMessages),
                     isSelected: state.currentSessionID == session.id,
                     isDeleting: deletingSessionID == session.id,
                     depth: depth,
@@ -174,6 +187,13 @@ struct SessionListView: View {
 struct SessionRowView: View {
     let session: Session
     let status: SessionStatus?
+    /// The derived state driving every per-row visual cue (bar / icon / dimming /
+    /// trailing). Computed at the call site via `SessionDisplayState.derive`.
+    var displayState: SessionDisplayState = .doneRead
+    /// When `.needsYou`, which interaction is pending — picks the trailing label.
+    var blockKind: AppState.SessionBlockKind? = nil
+    /// Intent summary (or original title) from `SessionTitleSummary`.
+    var titleSummary: String? = nil
     let isSelected: Bool
     let isDeleting: Bool
     var depth: Int = 0
@@ -183,10 +203,69 @@ struct SessionRowView: View {
     var onToggleCollapse: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
-    
-    private var isBusy: Bool {
-        guard let status else { return false }
-        return status.type == "busy" || status.type == "retry"
+    /// Drives the subtle running-state icon pulse.
+    @State private var isPulsing = false
+
+    // MARK: Display-state derived styling
+
+    /// Stable name used in accessibility identifiers / values so UI tests can
+    /// assert the row's state without inspecting colors.
+    private var stateName: String {
+        switch displayState {
+        case .needsYou: return "needsYou"
+        case .running: return "running"
+        case .doneUnread: return "doneUnread"
+        case .doneRead: return "doneRead"
+        case .stale: return "stale"
+        }
+    }
+
+    /// Leading status bar color + width. `nil` = no bar.
+    ///
+    /// The bar is reserved for the two states that genuinely need attention
+    /// (needsYou / running). Done-unread does NOT get a bar — unread is carried
+    /// by title weight instead (see `titleFont`), so the bar stays a scarce,
+    /// high-signal cue rather than appearing on nearly every row.
+    private var statusBar: (color: Color, width: CGFloat)? {
+        switch displayState {
+        case .needsYou: return (DesignColors.Brand.primary, 3)
+        case .running: return (DesignColors.Brand.teal, 3)
+        case .doneUnread, .doneRead, .stale: return nil
+        }
+    }
+
+    /// Title color, per the state dimming ladder: attention/unread at full text,
+    /// read recedes to secondary, stale to tertiary. This dimming is the time-
+    /// depth axis — newer/unattended stays bright, old fades down.
+    private var titleColor: Color {
+        switch displayState {
+        case .needsYou, .running, .doneUnread:
+            return depth > 0 ? DesignColors.Neutral.textSecondary : DesignColors.Neutral.text
+        case .doneRead:
+            return DesignColors.Neutral.textSecondary
+        case .stale:
+            return DesignColors.Neutral.textTertiary
+        }
+    }
+
+    /// Title weight IS the unread signal. Unread (and the two attention states)
+    /// render in semibold headline; once read, the title drops to regular body.
+    /// With no separate unread dot, a screenful of unread reads as a calm field
+    /// of bolder titles rather than a field of blinking dots. Child rows stay
+    /// body to preserve the tree's lighter treatment.
+    private var titleFont: Font {
+        if depth > 0 { return DesignTypography.body }
+        switch displayState {
+        case .needsYou, .running, .doneUnread:
+            return DesignTypography.headline
+        case .doneRead, .stale:
+            return DesignTypography.body
+        }
+    }
+
+    private var displayTitle: String {
+        if let titleSummary, !titleSummary.isEmpty { return titleSummary }
+        return session.title.isEmpty ? L10n.t(.sessionsUntitled) : session.title
     }
 
     @ViewBuilder
@@ -205,44 +284,96 @@ struct SessionRowView: View {
         }
     }
 
+    // MARK: Leading state icon
+
+    @ViewBuilder
+    private var stateIcon: some View {
+        switch displayState {
+        case .needsYou:
+            Image(systemName: "bell.fill")
+                .font(DesignTypography.meta)
+                .foregroundStyle(DesignColors.Brand.primary)
+        case .running:
+            Image(systemName: "circle.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(DesignColors.Brand.teal)
+                .opacity(isPulsing ? 0.35 : 1.0)
+                .animation(DesignAnimation.breathing, value: isPulsing)
+                .onAppear { isPulsing = true }
+        case .doneUnread, .doneRead, .stale:
+            // Unread is carried by title weight, not a separate dot — keeps the
+            // leading column to one signal (state) instead of stacking dot + bar.
+            EmptyView()
+        }
+    }
+
+    /// Only the two attention states get a leading icon. Unread reads through
+    /// title weight, so it doesn't occupy the icon column.
+    private var hasStateIcon: Bool {
+        switch displayState {
+        case .needsYou, .running: return true
+        case .doneUnread, .doneRead, .stale: return false
+        }
+    }
+
     var body: some View {
         HStack(spacing: DesignSpacing.sm) {
-            if hasChildren {
-                Button {
-                    onToggleCollapse?()
-                } label: {
-                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                        .font(DesignTypography.micro)
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
+            // Column 1 — hierarchy (tree): expand chevron, child dot, or empty.
+            // Always a fixed 12pt so this axis stays its own column and never
+            // shares space with the state cue.
+            Group {
+                if hasChildren {
+                    Button {
+                        onToggleCollapse?()
+                    } label: {
+                        Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(DesignTypography.micro)
+                            .foregroundStyle(DesignColors.Neutral.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("session-toggle-\(session.id)")
+                } else if depth > 0 {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(DesignColors.Neutral.textTertiary)
+                        .frame(width: 3, height: 3)
+                } else {
+                    Color.clear
                 }
-                .buttonStyle(.plain)
-                .frame(width: 12)
-                .accessibilityIdentifier("session-toggle-\(session.id)")
-            } else if depth > 0 {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(DesignColors.Neutral.textTertiary)
-                    .frame(width: 3, height: 3)
-                    .padding(.leading, 4.5)
-            } else {
-                Color.clear
-                    .frame(width: 12)
             }
+            .frame(width: 12)
+
+            // Column 2 — state cue: needsYou bell / running pulse, or an empty
+            // reserved slot so every title aligns on the same vertical line
+            // whether or not the row carries a state icon.
+            Group {
+                if hasStateIcon {
+                    stateIcon
+                        .accessibilityIdentifier("session-state-\(session.id)-\(stateName)")
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 12)
 
             VStack(alignment: .leading, spacing: DesignSpacing.xs) {
-                Text(session.title.isEmpty ? L10n.t(.sessionsUntitled) : session.title)
-                    .font(depth > 0 ? DesignTypography.body : DesignTypography.headline)
-                    .foregroundStyle(depth > 0 ? DesignColors.Neutral.textSecondary : (isBusy ? DesignColors.Brand.primary : DesignColors.Neutral.text))
+                Text(displayTitle)
+                    .font(titleFont)
+                    .foregroundStyle(titleColor)
                     .lineLimit(1)
 
                 HStack(spacing: DesignSpacing.sm) {
-                    Text(formattedDate(session.time.updated))
-                        .font(DesignTypography.meta)
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
-
-                    if let status {
-                        Text(statusLabel(status))
+                    if case .running = displayState {
+                        // Live elapsed timer, refreshed once a second, without
+                        // owning a manual Timer (TimelineView pauses off-screen).
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text("\(L10n.t(.sessionsStateRunning)) · \(elapsedText(sinceMS: session.time.updated, now: context.date))")
+                                .font(DesignTypography.meta)
+                                .foregroundStyle(trailingColor)
+                        }
+                    } else {
+                        trailingText
                             .font(DesignTypography.meta)
-                            .foregroundStyle(statusColor(status))
+                            .foregroundStyle(trailingColor)
                     }
                 }
             }
@@ -268,9 +399,46 @@ struct SessionRowView: View {
         // left edge. Drawing the bar as part of the background (rather than a
         // separate overlay) keeps it clipped to the rounded corners, so it can't
         // poke out past the pill or collide with the expand/indent of child rows.
+        // The status bar is a thin leading rule layered on top of the row content
+        // (and over the selection fill), color/width keyed off the display state.
         .listRowBackground(selectionBackground)
+        .overlay(alignment: .leading) {
+            if let statusBar {
+                Rectangle()
+                    .fill(statusBar.color)
+                    .frame(width: statusBar.width)
+                    .accessibilityHidden(true)
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("session-row-\(session.id)")
+        .accessibilityValue(stateName)
+    }
+
+    // MARK: Trailing (time / status) text
+
+    /// Static trailing text. `.running` renders its own live TimelineView in the
+    /// body instead of using this branch.
+    private var trailingText: Text {
+        switch displayState {
+        case .needsYou:
+            let label = blockKind == .question
+                ? L10n.t(.sessionsStateNeedsAnswer)
+                : L10n.t(.sessionsStateNeedsAuth)
+            return Text("\(label) · \(blockedDurationText)")
+        case .running:
+            return Text("\(L10n.t(.sessionsStateRunning)) · \(elapsedText(sinceMS: session.time.updated, now: Date()))")
+        case .doneUnread, .doneRead, .stale:
+            return Text(formattedDate(session.time.updated))
+        }
+    }
+
+    private var trailingColor: Color {
+        switch displayState {
+        case .needsYou: return DesignColors.Brand.primary
+        case .running: return DesignColors.Brand.teal
+        case .doneUnread, .doneRead, .stale: return DesignColors.Neutral.textSecondary
+        }
     }
 
     private func formattedDate(_ timestamp: Int) -> String {
@@ -281,18 +449,19 @@ struct SessionRowView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private func statusLabel(_ status: SessionStatus) -> String {
-        switch status.type {
-        case "busy": return L10n.t(.sessionsStatusBusy)
-        case "retry": return L10n.t(.sessionsStatusRetry)
-        default: return L10n.t(.sessionsStatusIdle)
-        }
+    /// Coarse, live-enough blocked duration ("等了 Xm") since the session last
+    /// updated — proxy for "how long it has been waiting on you".
+    private var blockedDurationText: String {
+        elapsedText(sinceMS: session.time.updated, now: Date())
     }
 
-    private func statusColor(_ status: SessionStatus) -> Color {
-        switch status.type {
-        case "busy", "retry": return DesignColors.Brand.primary
-        default: return DesignColors.Neutral.textSecondary
-        }
+    private func elapsedText(sinceMS: Int, now: Date) -> String {
+        let elapsed = max(0, now.timeIntervalSince1970 - TimeInterval(sinceMS) / 1000)
+        let seconds = Int(elapsed)
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        return "\(hours)h\(minutes % 60)m"
     }
 }
