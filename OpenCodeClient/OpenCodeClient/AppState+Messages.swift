@@ -14,6 +14,7 @@ extension AppState {
             let fetchLimit = Self.normalizedMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
             loadedMessageLimitBySessionID[sessionID] = fetchLimit
             let loaded = try await apiClient.messages(sessionID: sessionID, limit: fetchLimit)
+            Self.logger.debug("loadMessages: session=\(sessionID, privacy: .public) limit=\(fetchLimit, privacy: .public) returned=\(loaded.count, privacy: .public)")
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
                 Self.logger.debug("drop stale loadMessages result requested=\(sessionID, privacy: .public) current=\(self.currentSessionID ?? "nil", privacy: .public)")
                 return
@@ -116,15 +117,31 @@ extension AppState {
         }
     }
 
-    func loadOlderMessagesForCurrentSession() async {
-        guard let sessionID = currentSessionID else { return }
-        guard hasMoreHistoryBySessionID[sessionID] ?? true else { return }
-        guard !loadingOlderMessagesSessionIDs.contains(sessionID) else { return }
+    @discardableResult
+    func loadOlderMessagesForCurrentSession() async -> Bool {
+        guard let sessionID = currentSessionID else { return false }
+        guard hasMoreHistoryBySessionID[sessionID] ?? true else {
+            Self.logger.debug("loadOlderMessages skipped: no more history session=\(sessionID, privacy: .public)")
+            return false
+        }
+        guard !loadingOlderMessagesSessionIDs.contains(sessionID) else {
+            Self.logger.debug("loadOlderMessages skipped: already loading session=\(sessionID, privacy: .public)")
+            return false
+        }
 
         loadingOlderMessagesSessionIDs.insert(sessionID)
+        defer { loadingOlderMessagesSessionIDs.remove(sessionID) }
+        let previousCount = messages.count
         loadedMessageLimitBySessionID[sessionID] = Self.nextMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
-        await loadMessages()
-        loadingOlderMessagesSessionIDs.remove(sessionID)
+        let requestedLimit = loadedMessageLimitBySessionID[sessionID] ?? Self.normalizedMessageFetchLimit(current: nil)
+        Self.logger.debug("loadOlderMessages begin: session=\(sessionID, privacy: .public) previousCount=\(previousCount, privacy: .public) requestedLimit=\(requestedLimit, privacy: .public)")
+        await Task { @MainActor in
+            await self.loadMessages()
+        }.value
+        let newCount = messages.count
+        let didLoadMore = newCount > previousCount
+        Self.logger.debug("loadOlderMessages end: session=\(sessionID, privacy: .public) newCount=\(newCount, privacy: .public) didLoadMore=\(didLoadMore, privacy: .public) hasMore=\(self.hasMoreHistoryBySessionID[sessionID] ?? false, privacy: .public)")
+        return didLoadMore
     }
 
     func loadSessionDiff() async {

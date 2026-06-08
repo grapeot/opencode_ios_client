@@ -4,8 +4,14 @@
 //
 
 import Foundation
+import os
 
 actor APIClient {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "OpenCodeClient",
+        category: "APIClient"
+    )
+
     private var baseURL: String
     private var username: String?
     private var password: String?
@@ -189,6 +195,10 @@ actor APIClient {
         guard !containers.isEmpty else { return nil }
 
         let messages = containers.compactMap { decodeMessageRecord(from: $0, decoder: decoder) }
+        let dropped = containers.count - messages.count
+        if dropped > 0 {
+            Self.logger.warning("messages fallback decoder dropped records: total=\(containers.count, privacy: .public) decoded=\(messages.count, privacy: .public) dropped=\(dropped, privacy: .public)")
+        }
         return messages.isEmpty ? nil : messages
     }
 

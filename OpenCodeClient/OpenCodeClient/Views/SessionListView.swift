@@ -90,20 +90,11 @@ struct SessionListView: View {
                         }
 
                         if state.isLoadingMoreSessions {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                Spacer()
+                            LoadMoreSessionsRow(isLoading: true) {}
+                        } else if state.canLoadMoreSessions {
+                            LoadMoreSessionsRow(isLoading: false) {
+                                Task { await state.loadMoreSessions() }
                             }
-                            .listRowSeparator(.hidden)
-                        } else if state.canLoadMoreSessions, let lastSessionID = state.sidebarSessions.last?.id {
-                            Color.clear
-                                .frame(height: 1)
-                                .listRowSeparator(.hidden)
-                                .onAppear {
-                                    Task { await state.loadMoreSessions() }
-                                }
-                                .id("load-more-\(lastSessionID)")
                         }
                     }
                     .listStyle(.plain)
@@ -233,6 +224,35 @@ struct SessionSectionHeader: View {
         }
         .buttonStyle(.plain)
         .textCase(nil)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+}
+
+struct LoadMoreSessionsRow: View {
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DesignSpacing.sm) {
+                Spacer()
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "ellipsis.circle")
+                    Text(L10n.t(.sessionsLoadMore))
+                }
+                Spacer()
+            }
+            .font(DesignTypography.body.weight(.semibold))
+            .foregroundStyle(DesignColors.Brand.primary)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
     }

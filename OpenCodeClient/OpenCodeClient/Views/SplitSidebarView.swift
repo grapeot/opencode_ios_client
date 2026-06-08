@@ -109,20 +109,11 @@ private struct SessionsSidebarList: View {
                 }
 
                 if state.isLoadingMoreSessions {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
+                    LoadMoreSessionsRow(isLoading: true) {}
+                } else if state.canLoadMoreSessions {
+                    LoadMoreSessionsRow(isLoading: false) {
+                        Task { await state.loadMoreSessions() }
                     }
-                    .listRowSeparator(.hidden)
-                } else if state.canLoadMoreSessions, let lastSessionID = state.sidebarSessions.last?.id {
-                    Color.clear
-                        .frame(height: 1)
-                        .listRowSeparator(.hidden)
-                        .onAppear {
-                            Task { await state.loadMoreSessions() }
-                        }
-                        .id("load-more-\(lastSessionID)")
                 }
             }
         }

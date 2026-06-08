@@ -186,6 +186,7 @@ enum L10n {
         case sessionsArchived
         case sessionsArchive
         case sessionsRestore
+        case sessionsLoadMore
         case sessionsActionFailedTitle
         case sessionsDelete
         case sessionsDeleteConfirmTitle
@@ -419,6 +420,7 @@ enum L10n {
         Key.sessionsArchived.rawValue: "Archived",
         Key.sessionsArchive.rawValue: "Archive",
         Key.sessionsRestore.rawValue: "Restore",
+        Key.sessionsLoadMore.rawValue: "Load more sessions",
         Key.sessionsActionFailedTitle.rawValue: "Session Action Failed",
         Key.sessionsDelete.rawValue: "Delete",
         Key.sessionsDeleteConfirmTitle.rawValue: "Delete Session",
@@ -656,6 +658,7 @@ enum L10n {
         Key.sessionsArchived.rawValue: "已归档",
         Key.sessionsArchive.rawValue: "归档",
         Key.sessionsRestore.rawValue: "恢复",
+        Key.sessionsLoadMore.rawValue: "加载更多会话",
         Key.sessionsActionFailedTitle.rawValue: "会话操作失败",
         Key.sessionsDelete.rawValue: "删除",
         Key.sessionsDeleteConfirmTitle.rawValue: "删除会话",

@@ -205,6 +205,15 @@ struct OpenCodeClientTests {
         #expect(part.stateDisplay == "completed")
     }
 
+    @Test func partDecodingAcceptsStringFileEntries() throws {
+        let partJson = """
+        {"id":"p1","messageID":"m1","sessionID":"s1","type":"patch","text":null,"tool":null,"callID":null,"state":null,"metadata":null,"files":["src/main.swift",{"path":"src/utils.swift"}]}
+        """
+        let data = partJson.data(using: .utf8)!
+        let part = try JSONDecoder().decode(Part.self, from: data)
+        #expect(part.filePathsForNavigation == ["src/main.swift", "src/utils.swift"])
+    }
+
     @Test func partDecodingTodoFromMetadataWithObjectInput() throws {
         let partJson = """
         {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","text":null,"tool":"todowrite","callID":"c1","state":{"status":"completed","input":{},"output":"[{\\"content\\":\\"Write tests\\",\\"status\\":\\"pending\\",\\"priority\\":\\"high\\"}]","title":"1 todo","metadata":{"todos":[{"content":"Write tests","status":"pending","priority":"high"}],"input":{"todos":[{"content":"Write tests","status":"pending","priority":"high"}]},"description":"todo update"},"time":{"start":0,"end":1}},"metadata":{"input":{"todos":[{"content":"Write tests","status":"pending","priority":"high"}]},"todos":[{"content":"Write tests","status":"pending","priority":"high"}]},"files":null}
@@ -2355,6 +2364,8 @@ actor MockAPIClient: APIClientProtocol {
     var forkSessionError: Error?
     var forkSessionCalls: [(String, String?)] = []
     var messagesResult: [MessageWithParts] = []
+    var messagesByLimit: [Int: [MessageWithParts]] = [:]
+    var messageLimitRequests: [Int?] = []
     var messagesCallCount = 0
     var promptError: Error?
     var promptAsyncCalls: [(String, String)] = []
@@ -2384,6 +2395,10 @@ actor MockAPIClient: APIClientProtocol {
 
     func setMessagesResult(_ messages: [MessageWithParts]) {
         messagesResult = messages
+    }
+
+    func setMessagesResult(_ messages: [MessageWithParts], forLimit limit: Int) {
+        messagesByLimit[limit] = messages
     }
 
     func setSessionDiffResult(_ diffs: [FileDiff]) {
@@ -2463,6 +2478,8 @@ actor MockAPIClient: APIClientProtocol {
 
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts] {
         messagesCallCount += 1
+        messageLimitRequests.append(limit)
+        if let limit, let messages = messagesByLimit[limit] { return messages }
         return messagesResult
     }
 
@@ -2706,6 +2723,47 @@ struct AppStateFlowTests {
         #expect(state.partsByMessage["m1"]?.first?.text == "hi")
     }
 
+    @Test @MainActor func loadOlderMessagesIncreasesLimitAndAppliesLargerWindow() async {
+        let apiClient = MockAPIClient()
+        let firstPage = (0..<20).map { index in
+            Self.makeMessageRow(messageID: "m\(index)", sessionID: "s1", text: "message \(index)")
+        }
+        let expandedPage = (0..<40).map { index in
+            Self.makeMessageRow(messageID: "m\(index)", sessionID: "s1", text: "message \(index)")
+        }
+        await apiClient.setMessagesResult(firstPage, forLimit: 20)
+        await apiClient.setMessagesResult(expandedPage, forLimit: 40)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.loadMessages()
+        let didLoadOlder = await state.loadOlderMessagesForCurrentSession()
+
+        #expect(didLoadOlder == true)
+        #expect(await apiClient.messageLimitRequests == [20, 40])
+        #expect(state.messages.count == 40)
+        #expect(state.loadedMessageLimitBySessionID["s1"] == 40)
+        #expect(state.hasMoreHistoryBySessionID["s1"] == true)
+    }
+
+    @Test @MainActor func loadOlderMessagesSkipsWhenInitialWindowIsNotFull() async {
+        let apiClient = MockAPIClient()
+        let firstPage = (0..<10).map { index in
+            Self.makeMessageRow(messageID: "m\(index)", sessionID: "s1", text: "message \(index)")
+        }
+        await apiClient.setMessagesResult(firstPage, forLimit: 20)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.loadMessages()
+        let didLoadOlder = await state.loadOlderMessagesForCurrentSession()
+
+        #expect(didLoadOlder == false)
+        #expect(await apiClient.messageLimitRequests == [20])
+        #expect(state.messages.count == 10)
+        #expect(state.hasMoreHistoryBySessionID["s1"] == false)
+    }
+
     @Test @MainActor func loadMessagesDedupesOptimisticUserRowWhenPersistedTextNormalizesWhitespace() async {
         let apiClient = MockAPIClient()
         let now = Int(Date().timeIntervalSince1970 * 1000)
@@ -2872,6 +2930,22 @@ struct AppStateFlowTests {
         #expect(state.sessions.map(\.id) == ["s-current", "s-other"])
         #expect(state.sessions.first?.title == "Fresh")
         #expect(state.sessions.first?.version == "2")
+    }
+
+    @Test @MainActor func sessionUpdatedNoOpsWhenPayloadIsUnchanged() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let current = Self.makeSession(id: "s-current", updated: 10, title: "Current")
+        state.sessions = [
+            current,
+            Self.makeSession(id: "s-other", updated: 8, title: "Other")
+        ]
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"session.updated","properties":{"session":{"id":"s-current","slug":"s-current","projectID":"p1","directory":"/tmp","parentID":null,"title":"Current","version":"1","time":{"created":0,"updated":10},"share":null,"summary":null}}}}
+        """))
+
+        #expect(state.sessions == [current, Self.makeSession(id: "s-other", updated: 8, title: "Other")])
     }
 
     @Test @MainActor func messagePartUpdatedAccumulatesStreamingMessageText() async {

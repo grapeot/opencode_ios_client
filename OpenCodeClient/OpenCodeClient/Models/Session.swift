@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct Session: Identifiable {
+struct Session: Identifiable, Equatable {
     let id: String
     let slug: String
     let projectID: String
@@ -22,17 +22,17 @@ struct Session: Identifiable {
         return archived > 0
     }
 
-    struct TimeInfo: Codable {
+    struct TimeInfo: Codable, Equatable {
         let created: Int
         let updated: Int
         let archived: Int?
     }
 
-    struct ShareInfo: Codable {
+    struct ShareInfo: Codable, Equatable {
         let url: String
     }
 
-    struct SummaryInfo: Codable {
+    struct SummaryInfo: Codable, Equatable {
         let additions: Int
         let deletions: Int
         let files: Int
@@ -41,7 +41,7 @@ struct Session: Identifiable {
 
 nonisolated extension Session: Codable {}
 
-struct SessionStatus: Codable {
+struct SessionStatus: Codable, Equatable {
     let type: String // "idle" | "busy" | "retry"
     let attempt: Int?
     let message: String?
