@@ -351,7 +351,8 @@ struct ChatTabView: View {
     }
 
     private var composerStatusText: String? {
-        let parts = [state.isBusy ? L10n.t(.chatAgentRunning) : nil, voiceStatusText].compactMap { $0 }
+        let agentStatus = state.isBusy ? (runningTurnActivity?.text ?? L10n.t(.chatAgentRunning)) : nil
+        let parts = [agentStatus, voiceStatusText].compactMap { $0 }
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: " · ")
     }
@@ -364,6 +365,21 @@ struct ChatTabView: View {
     }
 
     private var quietComposerStatus: some View {
+        Group {
+            if let activity = runningTurnActivity {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    quietComposerStatusRow(activity: activity, now: context.date)
+                }
+            } else {
+                quietComposerStatusRow(activity: nil, now: Date())
+            }
+        }
+        .padding(.horizontal, DesignSpacing.xs)
+        .padding(.top, DesignSpacing.xs)
+        .padding(.bottom, DesignSpacing.sm)
+    }
+
+    private func quietComposerStatusRow(activity: TurnActivity?, now: Date) -> some View {
         HStack(spacing: DesignSpacing.sm) {
             if state.isBusy {
                 Circle()
@@ -378,6 +394,13 @@ struct ChatTabView: View {
                 .lineLimit(1)
 
             Spacer(minLength: 0)
+
+            if let activity {
+                Text(activity.elapsedString(now: now))
+                    .font(DesignTypography.meta)
+                    .monospacedDigit()
+                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+            }
 
             if state.isBusy {
                 Menu {
@@ -398,9 +421,6 @@ struct ChatTabView: View {
                 .accessibilityLabel(L10n.t(.chatAbortAgent))
             }
         }
-        .padding(.horizontal, DesignSpacing.xs)
-        .padding(.top, DesignSpacing.xs)
-        .padding(.bottom, DesignSpacing.sm)
     }
 
     private var shouldShowComposerStatus: Bool {
@@ -613,10 +633,6 @@ struct ChatTabView: View {
                                             }
                                         )
                                     }
-                                }
-
-                                if let a = runningTurnActivity {
-                                    TurnActivityRowView(activity: a)
                                 }
 
                                 Color.clear
