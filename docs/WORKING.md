@@ -12,7 +12,7 @@
 
 ### 2026-06-10 — Ollama Cloud Kimi model preset
 
-- 模型列表中将 `MiniMax M3`（`ollama-cloud/minimax-m3`）替换为 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6:cloud`）。Model ID 取自 Ollama 官方 `kimi-k2.6` library 页面，cloud tag 为 `kimi-k2.6:cloud`。
+- 模型列表中将 `MiniMax M3`（`ollama-cloud/minimax-m3`）替换为 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6`）。OpenCode server 的 `ollama-cloud` provider registry 暴露的 model key 是 `kimi-k2.6`；直接传 Ollama library tag `kimi-k2.6:cloud` 会让 `prompt_async` 返回 204 但后台不生成 assistant message。
 - `ModelPreset.shortName` 新增 `Ollama Kimi K2.6 -> Kimi`，保持窄屏 model chip 简短。
 
 ### 2026-06-08 — F3 voice rail composer
