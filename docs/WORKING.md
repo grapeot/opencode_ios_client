@@ -10,6 +10,11 @@
 - **测试**：✅ F3 deterministic composer UI tests 通过
 - **Phase**：F3 voice rail composer ready to merge
 
+### 2026-06-10 — Ollama Cloud Kimi model preset
+
+- 模型列表中将 `MiniMax M3`（`ollama-cloud/minimax-m3`）替换为 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6:cloud`）。Model ID 取自 Ollama 官方 `kimi-k2.6` library 页面，cloud tag 为 `kimi-k2.6:cloud`。
+- `ModelPreset.shortName` 新增 `Ollama Kimi K2.6 -> Kimi`，保持窄屏 model chip 简短。
+
 ### 2026-06-08 — F3 voice rail composer
 
 - Chat composer 从“输入框内附属麦克风”收敛为 `voice rail + text review field`：voice rail 承载录音 transport、真实 waveform、转写等待、stop-wait、preserved-audio retry；文本框承载转写审阅、修正、fallback 打字和固定 send。
