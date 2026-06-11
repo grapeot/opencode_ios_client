@@ -20,7 +20,6 @@ enum ImageFileUtils {
 struct FileContentView: View {
     @Bindable var state: AppState
     let filePath: String
-    var refreshTrigger: Int = 0
     @State private var content: String?
     @State private var imageData: Data?
     @State private var isLoading = false
@@ -41,6 +40,16 @@ struct FileContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                loadContent()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .disabled(isLoading)
+            .accessibilityLabel(L10n.t(.contentRefreshHelp))
+            .help(L10n.t(.contentRefreshHelp))
+        }
         if let content {
             ToolbarItem(placement: .primaryAction) {
                 ShareLink(item: content, subject: Text(fileName)) {
@@ -89,9 +98,6 @@ struct FileContentView: View {
             loadContent()
         }
         .refreshable {
-            loadContent()
-        }
-        .onChange(of: refreshTrigger) { _, _ in
             loadContent()
         }
     }
