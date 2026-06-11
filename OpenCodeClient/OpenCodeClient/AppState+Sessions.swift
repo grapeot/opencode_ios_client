@@ -229,7 +229,7 @@ extension AppState {
         sessionLoadingID = loadingID
 
         do {
-            let session = try await apiClient.createSession(title: nil)
+            let session = try await apiClient.createSession(title: nil, directory: effectiveProjectDirectory)
             guard sessionLoadingID == loadingID else { return }
 
             Self.logger.debug("createSession: created id=\(session.id, privacy: .public) directory=\(session.directory, privacy: .public) effectiveProjectDir=\(self.effectiveProjectDirectory ?? "nil", privacy: .public)")

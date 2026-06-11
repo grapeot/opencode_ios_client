@@ -30,15 +30,19 @@ struct ReadToolCardIntegrationTests {
 
         var createdSessionID: String?
         do {
-            let session = try await client.createSession(title: "ios-tier3-read-card")
+            let directory = env.nonEmpty("OPENCODE_DIRECTORY")
+            let session = try await client.createSession(title: "ios-tier3-read-card", directory: directory)
             let sessionID = await session.id
             createdSessionID = sessionID
 
             try await client.promptAsync(
                 sessionID: sessionID,
+                messageID: AppState.makeServerID(prefix: "msg"),
+                partID: AppState.makeServerID(prefix: "part"),
                 text: "Read the file AGENTS.md and reply with only its first line. Do not create, edit, or write any file.",
                 agent: agent,
-                model: model
+                model: model,
+                directory: directory
             )
 
             let messages = try await pollForReadToolPart(client: client, sessionID: sessionID)

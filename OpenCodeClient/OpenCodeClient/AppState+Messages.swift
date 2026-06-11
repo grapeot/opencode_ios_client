@@ -177,11 +177,21 @@ extension AppState {
             return false
         }
 
-        let tempMessageID = appendOptimisticUserMessage(text)
+        let messageID = Self.makeServerID(prefix: "msg")
+        let partID = Self.makeServerID(prefix: "part")
+        let tempMessageID = appendOptimisticUserMessage(text, messageID: messageID, partID: partID)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
         let agentName = selectedAgent?.name ?? "build"
         do {
-            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
+            try await apiClient.promptAsync(
+                sessionID: sessionID,
+                messageID: messageID,
+                partID: partID,
+                text: text,
+                agent: agentName,
+                model: model,
+                directory: currentSession?.directory ?? effectiveProjectDirectory
+            )
             return true
         } catch {
             let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
@@ -191,12 +201,16 @@ extension AppState {
         }
     }
 
+    nonisolated static func makeServerID(prefix: String) -> String {
+        "\(prefix)_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+    }
+
     @discardableResult
-    func appendOptimisticUserMessage(_ text: String) -> String {
+    func appendOptimisticUserMessage(_ text: String, messageID: String? = nil, partID: String? = nil) -> String {
         guard let sessionID = currentSessionID else { return "" }
         let now = Int(Date().timeIntervalSince1970 * 1000)
-        let messageID = "temp-user-\(UUID().uuidString)"
-        let partID = "temp-part-\(messageID)"
+        let messageID = messageID ?? "temp-user-\(UUID().uuidString)"
+        let partID = partID ?? "temp-part-\(messageID)"
         let message = Message(
             id: messageID,
             sessionID: sessionID,

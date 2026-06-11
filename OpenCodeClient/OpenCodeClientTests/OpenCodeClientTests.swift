@@ -2438,7 +2438,7 @@ actor MockAPIClient: APIClientProtocol {
         sessionLimitRequests.append(limit)
         return sessionsByLimit[limit] ?? sessionsResult
     }
-    func createSession(title: String?) async throws -> Session { createSessionResult }
+    func createSession(title: String?, directory: String?) async throws -> Session { createSessionResult }
 
     func updateSession(sessionID: String, title: String) async throws -> Session {
         updateSessionCalls.append((sessionID, title))
@@ -2483,7 +2483,15 @@ actor MockAPIClient: APIClientProtocol {
         return messagesResult
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws {
+    func promptAsync(
+        sessionID: String,
+        messageID: String,
+        partID: String,
+        text: String,
+        agent: String,
+        model: Message.ModelInfo?,
+        directory: String?
+    ) async throws {
         promptAsyncCalls.append((sessionID, text))
         if let promptError { throw promptError }
     }
