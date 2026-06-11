@@ -13,7 +13,6 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
-    @State private var filePreviewRefreshTrigger = 0
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -374,11 +373,7 @@ struct ContentView: View {
         }
         .sheet(item: filePreviewSheetItem) { wrapper in
             NavigationStack {
-                FileContentView(
-                    state: state,
-                    filePath: wrapper.path,
-                    refreshTrigger: filePreviewRefreshTrigger
-                )
+                FileContentView(state: state, filePath: wrapper.path)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button {
@@ -388,14 +383,6 @@ struct ContentView: View {
                                 Image(systemName: "xmark")
                             }
                             .accessibilityLabel(L10n.t(.appClose))
-                        }
-                        ToolbarItem(placement: .primaryAction) {
-                            Button {
-                                filePreviewRefreshTrigger += 1
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .accessibilityLabel(L10n.t(.contentRefreshHelp))
                         }
                     }
             }
@@ -474,14 +461,12 @@ private struct FilePathWrapper: Identifiable {
 
 private struct TabletFilesColumn: View {
     @Bindable var state: AppState
-    @State private var reloadToken = UUID()
 
     var body: some View {
         NavigationStack {
             Group {
                 if let path = state.previewFilePath, !path.isEmpty {
                     FileContentView(state: state, filePath: path)
-                        .id("\(path)|\(reloadToken.uuidString)")
                 } else {
                     FileTreeView(state: state, forceSplitPreview: true)
                         .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
@@ -506,22 +491,13 @@ private struct TabletFilesColumn: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     if let path = state.previewFilePath, !path.isEmpty {
-                        HStack(spacing: 12) {
-                            Button {
-                                reloadToken = UUID()
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .help(L10n.t(.contentRefreshHelp))
-
-                            Button {
-                                state.previewFilePath = nil
-                                state.fileToOpenInFilesTab = nil
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                            .help(L10n.t(.appClose))
+                        Button {
+                            state.previewFilePath = nil
+                            state.fileToOpenInFilesTab = nil
+                        } label: {
+                            Image(systemName: "xmark")
                         }
+                        .help(L10n.t(.appClose))
                     }
                 }
             }
