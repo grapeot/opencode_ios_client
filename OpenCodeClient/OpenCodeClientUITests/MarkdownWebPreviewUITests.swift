@@ -94,4 +94,49 @@ final class MarkdownWebPreviewUITests: XCTestCase {
         // enough to surface the sentinel; reaching here means script was stripped.
         try capture(app, named: "web_preview_malicious_script")
     }
+
+    /// Drive the 3-mode menu (web -> source -> native) and confirm each mode's
+    /// view appears and content survives the switch. Uses the mode fixture host.
+    @MainActor
+    func testPreviewModeSwitchingAndSourceFallback() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_WEB_PREVIEW_MODE_FIXTURE"]
+        app.launchEnvironment["WEB_PREVIEW_FIXTURE_NAME"] = "plain_markdown"
+        app.launch()
+
+        // Starts in Web mode.
+        XCTAssertTrue(
+            app.webViews.firstMatch.waitForExistence(timeout: 12),
+            "Web Preview WKWebView 应为初始模式"
+        )
+
+        let menu = app.buttons["markdown-preview-mode-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 8), "Preview mode 菜单应存在")
+
+        // Switch to Markdown Source.
+        menu.tap()
+        app.buttons["Markdown Source"].tap()
+        XCTAssertTrue(
+            app.otherElements["fixture-source-view"].waitForExistence(timeout: 8)
+                || app.scrollViews["fixture-source-view"].waitForExistence(timeout: 8),
+            "切到 Source 后源码视图应出现"
+        )
+
+        // Switch to Native Preview.
+        menu.tap()
+        app.buttons["Native Preview"].tap()
+        XCTAssertTrue(
+            app.otherElements["fixture-native-preview"].waitForExistence(timeout: 8)
+                || app.scrollViews["fixture-native-preview"].waitForExistence(timeout: 8),
+            "切到 Native 后原生预览应出现"
+        )
+
+        // Back to Web.
+        menu.tap()
+        app.buttons["Web Preview"].tap()
+        XCTAssertTrue(
+            app.webViews.firstMatch.waitForExistence(timeout: 8),
+            "切回 Web 后 WKWebView 应再次出现"
+        )
+    }
 }

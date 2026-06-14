@@ -330,7 +330,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture {
             return
         }
 
@@ -377,13 +377,33 @@ struct ContentView: View {
         .ignoresSafeArea()
     }
 
+    private static var hasUITestWebPreviewModeFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_WEB_PREVIEW_MODE_FIXTURE")
+    }
+
     var body: some View {
+        #if DEBUG
+        if Self.hasUITestWebPreviewModeFixture {
+            NavigationStack {
+                WebPreviewModeFixtureHost(
+                    markdown: Self.loadFixtureMarkdown(Self.webPreviewFixtureName)
+                )
+            }
+            .preferredColorScheme(Self.webPreviewFixtureColorScheme)
+        } else if Self.hasUITestWebPreviewFixture {
+            webPreviewFixtureView
+                .preferredColorScheme(Self.webPreviewFixtureColorScheme)
+        } else {
+            mainBody
+        }
+        #else
         if Self.hasUITestWebPreviewFixture {
             webPreviewFixtureView
                 .preferredColorScheme(Self.webPreviewFixtureColorScheme)
         } else {
             mainBody
         }
+        #endif
     }
 
     private var mainBody: some View {

@@ -13,6 +13,7 @@
 
 import SwiftUI
 import WebKit
+import MarkdownUI
 
 /// Input payload for the web preview. `markdown` is expected to already have its
 /// relative image references resolved to data URIs by the caller (Phase 1 reuses
@@ -53,8 +54,8 @@ struct MarkdownWebPreviewContainer: View {
                 MarkdownWebPreviewView(
                     input: MarkdownWebPreviewInput(markdown: resolved, colorScheme: colorScheme),
                     onOpenExternalURL: { url in openURL(url) },
-                    onOpenRelativePath: { _ in /* Phase 2: route into app Files */ },
-                    onOpenImage: { _ in /* Phase 2: open image preview */ },
+                    onOpenRelativePath: { href in openWorkspacePath(href) },
+                    onOpenImage: { _ in /* Phase 3: dedicated image preview */ },
                     onError: { message in renderError = message }
                 )
             } else {
@@ -80,6 +81,23 @@ struct MarkdownWebPreviewContainer: View {
 
     private var resolveTaskID: String {
         "\(markdownFilePath ?? ""):\(proceedDespiteSize):\(text.hashValue)"
+    }
+
+    /// Resolve a workspace-relative link tapped in the preview and route it into
+    /// the app's Files preview (same target the Chat→file jump uses). Fragment-only
+    /// hrefs are ignored (the WebView scrolls in place).
+    private func openWorkspacePath(_ href: String) {
+        let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return }
+        // Drop any fragment so `doc.md#section` opens `doc.md`.
+        let pathPart = trimmed.split(separator: "#", maxSplits: 1).first.map(String.init) ?? trimmed
+        let resolved = MarkdownImageResolver.resolveRelativeReference(
+            pathPart,
+            markdownFilePath: markdownFilePath,
+            workspaceDirectory: workspaceDirectory
+        )
+        guard !resolved.isEmpty else { return }
+        state.fileToOpenInFilesTab = resolved
     }
 
     private var oversizeGate: some View {
@@ -308,3 +326,54 @@ struct MarkdownWebPreviewView: UIViewRepresentable {
         }
     }
 }
+
+#if DEBUG
+/// Test-only host that exercises the 3-mode preview switch (native / web / source)
+/// over a self-contained markdown string, mirroring FileContentView's menu and
+/// dispatch without needing a live server. Gated by UITEST_WEB_PREVIEW_MODE_FIXTURE.
+struct WebPreviewModeFixtureHost: View {
+    let markdown: String
+    @State private var mode: MarkdownPreviewMode = .web
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Group {
+            switch mode {
+            case .native:
+                ScrollView { Markdown(markdown).padding() }
+                    .accessibilityIdentifier("fixture-native-preview")
+            case .web:
+                MarkdownWebPreviewView(
+                    input: MarkdownWebPreviewInput(markdown: markdown, colorScheme: colorScheme)
+                )
+                .accessibilityIdentifier("markdown-web-preview-webview")
+            case .source:
+                ScrollView {
+                    Text(markdown)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .accessibilityIdentifier("fixture-source-view")
+            }
+        }
+        .navigationTitle("Fixture.md")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("Preview Mode", selection: $mode) {
+                        ForEach(MarkdownPreviewMode.allCases, id: \.self) { m in
+                            Label(m.label, systemImage: m.menuSystemImage).tag(m)
+                        }
+                    }
+                } label: {
+                    Image(systemName: mode.menuSystemImage)
+                }
+                .accessibilityIdentifier("markdown-preview-mode-menu")
+            }
+        }
+    }
+}
+#endif
