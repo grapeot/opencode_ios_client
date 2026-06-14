@@ -213,7 +213,7 @@ Preview Mode
 
 ### 8.2 默认模式
 
-MVP 默认仍使用 Native Preview。用户手动切换 Web Preview。后续可以检测 Markdown 是否包含 `<style>`、`<div class=...>`、`<svg>`，提示“此文档包含 HTML visual，建议 Web Preview”。
+~~MVP 默认仍使用 Native Preview。~~ **更新（2026-06-14）：Web Preview 真机验证通过后，默认改为 Web Preview**，用户可手动切回 Native / Source。大文件由 oversize gate 兜底。后续可以检测 Markdown 是否包含 `<style>`、`<div class=...>`、`<svg>`，对纯普通 Markdown 决定是否回退更轻量的 Native。
 
 ### 8.3 错误显示
 

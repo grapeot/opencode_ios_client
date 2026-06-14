@@ -49,7 +49,7 @@ struct FileContentView: View {
     @State private var imageData: Data?
     @State private var isLoading = false
     @State private var loadError: String?
-    @State private var previewMode: MarkdownPreviewMode = .native
+    @State private var previewMode: MarkdownPreviewMode = .web
 
     private var isImage: Bool {
         ImageFileUtils.isImage(filePath)

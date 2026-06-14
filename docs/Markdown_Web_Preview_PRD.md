@@ -64,7 +64,7 @@ Markdown 文件预览至少提供两种模式：
 1. **Native Preview**：现有 MarkdownUI 渲染，稳定、原生、适合普通 Markdown。
 2. **Web Preview**：新 WebView 渲染，适合 HTML-in-MD、卡片、内联 SVG、复杂视觉布局。
 
-默认策略可以分阶段：第一版保留 Native Preview 默认，用户手动切换 Web Preview；稳定后再考虑对包含 `<style>`、`<div>`、`<svg>` 的 Markdown 自动建议 Web Preview。
+默认策略：~~第一版保留 Native Preview 默认~~ **更新（2026-06-14）：Web Preview 通过真机验证后，默认模式改为 Web Preview**，用户可手动切回 Native / Source。大文件仍由 oversize gate 保护（超阈值先确认，避免直接塞超大 payload）。
 
 ### 5.2 本地 JS 渲染 shell
 
