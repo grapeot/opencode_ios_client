@@ -488,23 +488,35 @@ struct ContentView: View {
     }
 
     /// iPad / Vision Pro：Android-aligned three-pane layout.
+    @State private var sessionsCollapsed: Bool = false
+
     private var splitLayout: some View {
         GeometryReader { geo in
             let total = geo.size.width
-            let sessionsWidth = total * 0.25
-            let paneWidth = total * 0.375
+            // 折叠时 Sessions 宽度收为 0，Files / Chat 平分总宽度。
+            let sessionsWidth: CGFloat = sessionsCollapsed ? 0 : total * 0.25
+            let remaining = total - sessionsWidth
+            let paneWidth = sessionsCollapsed ? remaining / 2 : total * 0.375
 
             HStack(spacing: 0) {
-                TabletSessionsColumn(
+                if !sessionsCollapsed {
+                    TabletSessionsColumn(
+                        state: state,
+                        showSettings: $showTabletSettings,
+                        onCollapse: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = true } }
+                    )
+                    .frame(width: sessionsWidth)
+                    .transition(.move(edge: .leading))
+
+                    Divider()
+                }
+
+                TabletFilesColumn(
                     state: state,
-                    showSettings: $showTabletSettings
+                    sessionsCollapsed: sessionsCollapsed,
+                    onExpandSessions: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = false } }
                 )
-                .frame(width: sessionsWidth)
-
-                Divider()
-
-                TabletFilesColumn(state: state)
-                    .frame(width: paneWidth)
+                .frame(width: paneWidth)
 
                 Divider()
 
@@ -515,6 +527,24 @@ struct ContentView: View {
                     showCreateSessionInToolbar: false
                 )
                 .frame(width: paneWidth)
+            }
+            // 折叠时支持从屏幕左边缘右滑展开 Sessions
+            .overlay(alignment: .leading) {
+                if sessionsCollapsed {
+                    Color.clear
+                        .frame(width: 16)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onEnded { value in
+                                    if value.translation.width > 40 && abs(value.translation.height) < 80 {
+                                        withAnimation(DesignAnimation.spring) {
+                                            sessionsCollapsed = false
+                                        }
+                                    }
+                                }
+                        )
+                }
             }
         }
     }
@@ -527,6 +557,8 @@ private struct FilePathWrapper: Identifiable {
 
 private struct TabletFilesColumn: View {
     @Bindable var state: AppState
+    var sessionsCollapsed: Bool = false
+    var onExpandSessions: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -555,6 +587,16 @@ private struct TabletFilesColumn: View {
                 }
             }
             .toolbar {
+                // 折叠 Sessions 时, Files 工具栏左上显示"展开 Sessions"按钮
+                if sessionsCollapsed, let onExpandSessions {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(action: onExpandSessions) {
+                            Image(systemName: "sidebar.left")
+                        }
+                        .help(L10n.t(.sidebarShowSessions))
+                        .accessibilityIdentifier("ipad-show-sessions-button")
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     if let path = state.previewFilePath, !path.isEmpty {
                         Button {
@@ -574,6 +616,7 @@ private struct TabletFilesColumn: View {
 private struct TabletSessionsColumn: View {
     @Bindable var state: AppState
     @Binding var showSettings: Bool
+    var onCollapse: (() -> Void)? = nil
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
     @State private var mutatingSessionID: String?
@@ -635,6 +678,16 @@ private struct TabletSessionsColumn: View {
             .navigationTitle(showSettings ? L10n.t(.navSettings) : L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Sessions 列左上"折叠"按钮 (除 settings sheet 外都显示)
+                if !showSettings, let onCollapse {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(action: onCollapse) {
+                            Image(systemName: "sidebar.left")
+                        }
+                        .help(L10n.t(.sidebarHideSessions))
+                        .accessibilityIdentifier("ipad-hide-sessions-button")
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     if showSettings {
                         Button(L10n.t(.appDone)) {
