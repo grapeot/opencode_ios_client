@@ -56,6 +56,7 @@ struct FileTreeView: View {
         .listStyle(.plain)
         .navigationDestination(for: String.self) { path in
             FileContentView(state: state, filePath: path)
+                .id(path)
         }
         .onAppear {
             if state.fileTreeRoot.isEmpty {
