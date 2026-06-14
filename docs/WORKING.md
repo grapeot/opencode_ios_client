@@ -92,6 +92,44 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 
 ## 进行中
 
+### Markdown Web Preview（2026-06-14 启动）
+
+> 设计见 `docs/Markdown_Web_Preview_PRD.md` / `docs/Markdown_Web_Preview_RFC.md`。本轮交付 Phase 0/1/2。
+> 决策：图片走 data URI 复用 `MarkdownImageResolver`；Web 非默认模式；编排见 RFC §12.5。
+> 编译/测试约束：`xcodebuild build` 与 `xcodebuild test` 必须串行（共享 `build.db`）。
+> 关键文件：`OpenCodeClient/OpenCodeClient/Views/FileContentView.swift`（mode 切换）、`Utils/MarkdownImageResolver.swift`（data URI 复用）。
+
+**并行预备（sub-agent，主 agent 验收后并入）**
+- [ ] 依赖调研：markdown-it + DOMPurify 版本选型 + CDN-free bundling 方式
+- [ ] 前端 shell 起草：`preview.html` / `preview.css` / `preview.js` + DOMPurify 配置，桌面浏览器先验证
+- [ ] fixture 生成：§9.1 九个 `.md` + `images/chart.png` + `images/diagram.svg`
+
+**Phase 0 — Spike（串行，主 agent）**
+- [ ] 新增 `MarkdownWebPreviewView.swift`（`UIViewRepresentable` 包 `WKWebView`）
+- [ ] bundle `preview.html/css/js` + `vendor/markdown-it.min.js` + `vendor/purify.min.js`，确认 bundle path 可加载
+- [ ] `window.renderMarkdown(payload)` 入口，Swift 用 JSON encoder 经 `evaluateJavaScript` 注入（不拼字符串）
+- [ ] WebView 内完成 渲染 + DOMPurify + 基础 CSS + 深浅色
+- [ ] 用 `html_cards.md` / `dark_theme_cards.md` 手工验收卡片 + 暗色
+- [ ] `xcodebuild build` 通过
+
+**Phase 1 — Files MVP（串行，主 agent）**
+- [ ] `FileContentView` 的 `showPreview: Bool` 改 `previewMode` enum（`native` / `web` / `source`）
+- [ ] toolbar 二态按钮改 Menu：`Native Preview` / `Web Preview` / `Markdown Source`
+- [ ] `contentView(text:)` 按 mode 分派；保留现有大文件 `markdownMaxTotalLength` 保护（Web 超阈值先显示确认/警告）
+- [ ] 复用 `MarkdownImageResolver.resolveImages(...)` 生成 data-URI markdown 再传 WebView（相对图片语义与 Native 一致）
+- [ ] 加载中 / 渲染失败 / 回退按钮三态，失败一键回 Native 或 Source
+- [ ] WebView 根节点 + mode menu 加 accessibility identifier
+- [ ] 手工验收：HTML card / 相对图片 / 暗色 / 安全过滤四类 fixture 通过
+- [ ] `xcodebuild build` 通过
+
+**Phase 2 — 安全与 polish（串行，主 agent）**
+- [ ] 收紧 DOMPurify allowlist：禁 `script`/`iframe`/`form`/`object`/`embed`/`on*`/`javascript:` URL
+- [ ] `WKNavigationDelegate` 拦截所有非 fragment navigation；外链交系统打开；workspace 相对链接解析后走 app 内 Files
+- [ ] WebView 用 non-persistent data store；主题变化重发 theme payload 不重建 WebView
+- [ ] UI tests：mode 切换 / WebView 出现 / 外链拦截 / 安全 fixture / source fallback
+- [ ] unit tests：图片路径预处理（同目录 / 子目录 / `../` / workspace absolute）
+- [ ] `xcodebuild build` + `xcodebuild test` 串行通过
+
 - [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
 
