@@ -129,6 +129,16 @@ struct FileContentView: View {
         .onAppear {
             loadContent()
         }
+        // SwiftUI 复用同一 FileContentView 实例时,.onAppear 只触发一次,
+        // 后续 filePath 变化 (iPad 中间预览栏切文件、navigationDestination 切 path)
+        // 不会重新加载内容 — 老 content 留在屏上,需要手动点刷新。
+        // 在 path 变化时主动 reset + reload 避免这个状态泄漏。
+        .onChange(of: filePath) { _, _ in
+            content = nil
+            imageData = nil
+            loadError = nil
+            loadContent()
+        }
         .refreshable {
             loadContent()
         }
