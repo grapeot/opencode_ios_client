@@ -10,6 +10,20 @@
 - **测试**：✅ F3 deterministic composer UI tests 通过
 - **Phase**：F3 voice rail composer ready to merge
 
+### 2026-06-14 — Markdown Web Preview 真机验收与收口
+
+- **Phase 0/1/2 全部完成并上线**（详见前面的 Markdown Web Preview 段落）；`xcodebuild test` 全量串行通过（291 + 11 新增 = 302 passed，无回归）。
+- **默认预览模式改为 Web**（PRD §5.1 / RFC §8.2 同步更新）。
+- **真机 dark 模式验收暴露的 chip 对比度问题**：`<style>` 卡片用硬编码浅色背景在 dark 下糊掉；shell 给 dark 语义变量改用饱和主色（`--ok-bg=#10b981` 等，像 GitHub 暗色 issue label）；chip 用复合选择器 `.vx-chip.ok` 而非裸 `.ok` 避免被卡片 `color:var(--fg)` 覆盖。
+- **切文件 WebView 残留旧内容**：根因 SwiftUI 复用同一 `FileContentView` 实例时 `.onAppear` 只触发一次；修法是 `.onChange(of: filePath)` 主动 reset content + reload（试过 `.id(filePath)` 但代价是整个 view 重建，不优雅，已 revert）。
+- **新增回归测试**：`semantic_chips.md` fixture + `testSemanticChipsDarkVisible / Light` UI 测试，sentinel 文本断言守护"dark chip 糊掉"和"裸 `.ok` 被覆盖"两个真实 bug。
+- **internal-writing skill 大幅升级**：
+  - "CSS 颜色用主题变量 + fallback"（替代之前模糊的"主题安全"）
+  - "语义类必须用复合选择器"（dogfood 抓到的特异性坑）
+  - "**真正指标是新概念引入速率而非字数**"（low cognitive burden 的根本框架）
+  - "状态卡当百科条目写"被列为反模式，明确卡片/表格/`<details>` 的边界
+- **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md。
+
 ### 2026-06-10 — Ollama Cloud Kimi model preset
 
 - 模型列表中将 `MiniMax M3`（`ollama-cloud/minimax-m3`）替换为 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6`）。OpenCode server 的 `ollama-cloud` provider registry 暴露的 model key 是 `kimi-k2.6`；直接传 Ollama library tag `kimi-k2.6:cloud` 会让 `prompt_async` 返回 204 但后台不生成 assistant message。
@@ -91,6 +105,52 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 - 如果仍然需要运行时验证，应使用单独的临时进程/临时端口完成，并且只管理自己新启动的那条验证进程，不触碰用户现有的 `4096` 进程
 
 ## 进行中
+
+### Markdown Web Preview（2026-06-14 启动）
+
+> 设计见 `docs/Markdown_Web_Preview_PRD.md` / `docs/Markdown_Web_Preview_RFC.md`。本轮交付 Phase 0/1/2。
+> 决策：图片走 data URI 复用 `MarkdownImageResolver`；Web 非默认模式；编排见 RFC §12.5。
+> 编译/测试约束：`xcodebuild build` 与 `xcodebuild test` 必须串行（共享 `build.db`）。
+> 关键文件：`OpenCodeClient/OpenCodeClient/Views/FileContentView.swift`（mode 切换）、`Utils/MarkdownImageResolver.swift`（data URI 复用）。
+
+**并行预备（sub-agent，主 agent 验收后并入）** ✅
+- [x] 依赖调研 + 前端 shell：markdown-it 14.2.0 + DOMPurify 3.4.10（CDN-free，npm 取 dist 后拷出），shell 在 jsdom 里 5 项检查全过
+- [x] fixture 生成：§9.1 九个 `.md` + `images/chart.png`(6.8KB 真 PNG) + `images/diagram.svg`，large_markdown 70KB > 60KB 阈值，安全 fixture 含 4 个 payload + sentinel
+
+**Phase 0 — Spike（串行，主 agent）** ✅
+- [x] 新增 `MarkdownWebPreviewView.swift`（`UIViewRepresentable` 包 `WKWebView`）
+- [x] bundle `preview.html/css/js` + markdown-it + purify；**坑：同步文件夹会拍平子目录**，vendor 与 html 同级、src 去 `vendor/` 前缀；`loadFileURL(allowingReadAccessTo: bundleDir)`
+- [x] `window.renderMarkdown(payload)` 入口，Swift 用 JSONSerialization 经 `evaluateJavaScript` 注入（不拼字符串）
+- [x] WebView 内完成 渲染 + DOMPurify + 基础 CSS + 深浅色
+- [x] 用 `html_cards.md` / `dark_theme_cards.md` 模拟器手工验收：卡片成形、暗色无深底深字
+- [x] `xcodebuild build` 通过
+
+**Phase 1 — Files MVP（串行，主 agent）** ✅
+- [x] `FileContentView` 的 `showPreview: Bool` 改 `MarkdownPreviewMode` enum（`native` / `web` / `source`）
+- [x] toolbar 二态按钮改 Picker Menu：`Native Preview` / `Web Preview` / `Markdown Source`
+- [x] `contentView(text:)` 按 mode 分派；保留大文件保护（native 超阈值回 source；web 超阈值 oversize gate 先确认）
+- [x] `MarkdownWebPreviewContainer` 复用 `MarkdownImageResolver.resolveImages(...)` 生成 data-URI markdown 再传 WebView
+- [x] 加载中 / 渲染失败 / oversize 三态 + 一键回 Native/Source 按钮
+- [x] WebView 根节点(`markdown-web-preview-webview`) + mode menu(`markdown-preview-mode-menu`) 加 accessibility identifier
+- [x] 手工验收（模拟器截图存 outputs/web_preview_screenshots/）：HTML card / 暗色 / inline SVG / wide table / 安全过滤 通过
+- [x] `xcodebuild build` 通过
+- [x] UITEST_WEB_PREVIEW_FIXTURE + MarkdownWebPreviewUITests（5 test 全过，含安全 sentinel 断言）
+
+**Phase 2 — 安全与 polish（串行，主 agent）** ✅
+- [x] DOMPurify allowlist 禁 `script`/`iframe`/`form`/`object`/`embed`/`on*`/`javascript:`（shell 配置 + malicious_script fixture UI 断言 sentinel 渲染、script 不执行）
+- [x] `WKNavigationDelegate` 拦截非 file/fragment navigation + 外链 onOpenExternalURL；workspace 相对链接经 resolveRelativeReference 解析后落 fileToOpenInFilesTab
+- [x] WebView 用 non-persistent data store
+- [x] 主题：input 含 colorScheme，updateUIView 按 input diff 重渲染，不重建 WebView（容器读 @Environment(\.colorScheme)）
+- [x] UI tests：mode 切换 web↔source↔native 往返（UITEST_WEB_PREVIEW_MODE_FIXTURE）
+- [x] unit tests：8 个图片/链接路径预处理（同目录 / 子目录 / ./ / `../` / 深层 / workspace absolute / 外部 / nil mdPath）
+- [x] `xcodebuild build` + `xcodebuild test` 串行通过（291 passed，无回归）
+
+**本轮交付完成（Phase 0/1/2）**：Web Preview 可在 Files 手动切换使用，HTML 卡片/暗色/
+inline SVG/wide table/安全过滤/相对链接全部验证。截图存 `outputs/web_preview_screenshots/`。
+未做（留后续）：Phase 3 `.html` artifact / Mermaid / 代码高亮 / 图片点击预览；
+真机（非 simulator）验收；自定义 URL scheme 大图优化（开放问题 1 的后续路线）。
+已知 fixture 细节：html_cards 的 per-status 颜色未完全还原（卡片成形但配色偏中性），
+非阻塞，后续可调 fixture CSS 选择器或 DOMPurify style 处理。
 
 - [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`

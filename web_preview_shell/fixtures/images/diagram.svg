@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 180" width="300" height="180" role="img" aria-label="Simple pipeline diagram">
+  <rect x="0" y="0" width="300" height="180" fill="#fafafa"/>
+  <rect x="20" y="60" width="70" height="50" rx="8" fill="#1565c0" stroke="#0d47a1" stroke-width="2"/>
+  <text x="55" y="90" font-size="14" fill="#ffffff" text-anchor="middle" font-family="sans-serif">Source</text>
+
+  <line x1="90" y1="85" x2="120" y2="85" stroke="#666666" stroke-width="2"/>
+  <polygon points="120,80 130,85 120,90" fill="#666666"/>
+
+  <rect x="130" y="60" width="70" height="50" rx="8" fill="#2e7d32" stroke="#1b5e20" stroke-width="2"/>
+  <text x="165" y="90" font-size="14" fill="#ffffff" text-anchor="middle" font-family="sans-serif">Transform</text>
+
+  <line x1="200" y1="85" x2="230" y2="85" stroke="#666666" stroke-width="2"/>
+  <polygon points="230,80 240,85 230,90" fill="#666666"/>
+
+  <rect x="240" y="60" width="50" height="50" rx="8" fill="#ef6c00" stroke="#e65100" stroke-width="2"/>
+  <text x="265" y="90" font-size="13" fill="#ffffff" text-anchor="middle" font-family="sans-serif">Sink</text>
+
+  <text x="150" y="30" font-size="15" fill="#212121" text-anchor="middle" font-family="sans-serif" font-weight="bold">Data Pipeline</text>
+</svg>

@@ -1,0 +1,232 @@
+/* preview.css
+ * Theme is driven by [data-theme="dark"|"light"] on <html> (set by renderMarkdown).
+ * Designed for a narrow iPhone WKWebView viewport.
+ */
+
+/* ---- Theme variables ---- */
+:root,
+[data-theme="dark"] {
+  --bg: #1e1e1e;
+  --fg: #e6e6e6;            /* normal body text — never dark-on-dark */
+  --fg-muted: #a0a0a0;
+  --link: #5aa9ff;
+  --border: #3a3a3a;
+  --code-bg: #2a2a2a;
+  --code-fg: #f0f0f0;
+  --blockquote-fg: #c0c0c0;
+  --blockquote-border: #4a4a4a;
+  --table-header-bg: #2c2c2c;
+  --table-stripe: #262626;
+  --card-bg: #2a2a2a;       /* fallback card bg so card text always has a backdrop */
+  --hr: #3a3a3a;
+
+  /* Semantic accents for status cards/chips. Authors reference these via
+     var(--ok, #10b981) etc. so the SAME markdown adapts to light/dark here,
+     while non-shell renderers (GitHub/Cursor) fall back to the literal hue.
+     *-border = strong hue for borders/left bars.
+     Dark *-bg uses the saturated hue itself (high "chip pops out of dark card"
+     contrast), paired with a dark *-fg for legibility — like GitHub's dark-mode
+     issue labels. A previous version used a deep tinted bg + light fg, which
+     read as washed-out against the dark card background. */
+  --ok: #34d399;       --ok-border: #10b981;   --ok-bg: #10b981;   --ok-fg: #052e1b;
+  --bad: #f87171;      --bad-border: #ef4444;  --bad-bg: #ef4444;  --bad-fg: #450a0a;
+  --warn: #fbbf24;     --warn-border: #f59e0b; --warn-bg: #f59e0b; --warn-fg: #451a03;
+  --block: #9ca3af;    --block-border: #6b7280;--block-bg: #9ca3af;--block-fg: #111827;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #1a1a1a;            /* normal body text — never light-on-light */
+  --fg-muted: #555555;
+  --link: #0b66c3;
+  --border: #d8d8d8;
+  --code-bg: #f4f4f4;
+  --code-fg: #1a1a1a;
+  --blockquote-fg: #444444;
+  --blockquote-border: #cccccc;
+  --table-header-bg: #f0f0f0;
+  --table-stripe: #f7f7f7;
+  --card-bg: #f6f6f6;
+  --hr: #e0e0e0;
+
+  /* Semantic accents — light variants (see dark block above for rationale). */
+  --ok: #059669;       --ok-border: #10b981;   --ok-bg: #d1fae5;   --ok-fg: #065f46;
+  --bad: #dc2626;      --bad-border: #ef4444;  --bad-bg: #fee2e2;  --bad-fg: #991b1b;
+  --warn: #d97706;     --warn-border: #f59e0b; --warn-bg: #fef3c7; --warn-fg: #92400e;
+  --block: #4b5563;    --block-border: #6b7280;--block-bg: #e5e7eb;--block-fg: #374151;
+}
+
+/* ---- Base layout ---- */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+#content {
+  padding: 16px;
+  /* respect iPhone safe areas (notch / home indicator) */
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  max-width: 100%;
+}
+
+/* Default text color is inherited from --fg everywhere. */
+#content,
+#content p,
+#content li,
+#content td,
+#content th,
+#content span,
+#content div {
+  color: var(--fg);
+}
+
+/* ---- Headings ---- */
+#content h1, #content h2, #content h3,
+#content h4, #content h5, #content h6 {
+  color: var(--fg);
+  line-height: 1.25;
+  margin: 1.2em 0 0.5em;
+  font-weight: 600;
+}
+#content h1 { font-size: 1.7em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+#content h2 { font-size: 1.4em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+#content h3 { font-size: 1.2em; }
+#content h4 { font-size: 1.05em; }
+#content h5, #content h6 { font-size: 1em; color: var(--fg-muted); }
+
+#content p { margin: 0.6em 0; }
+
+/* ---- Links ---- */
+#content a { color: var(--link); text-decoration: none; }
+#content a:active { text-decoration: underline; }
+
+/* ---- Lists ---- */
+#content ul, #content ol { padding-left: 1.5em; margin: 0.6em 0; }
+#content li { margin: 0.25em 0; }
+
+/* ---- Blockquote ---- */
+#content blockquote {
+  margin: 0.8em 0;
+  padding: 0.2em 1em;
+  color: var(--blockquote-fg);
+  border-left: 4px solid var(--blockquote-border);
+}
+
+/* ---- Horizontal rule ---- */
+#content hr {
+  border: 0;
+  border-top: 1px solid var(--hr);
+  margin: 1.5em 0;
+}
+
+/* ---- Code ---- */
+#content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+#content pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 12px 14px;
+  border-radius: 6px;
+  overflow-x: auto;            /* long code lines scroll, don't blow out layout */
+  -webkit-overflow-scrolling: touch;
+}
+#content pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  white-space: pre;
+}
+
+/* ---- Tables: scroll horizontally on narrow screens ---- */
+/* renderMarkdown wraps each <table> in <div class="md-table-wrap"> */
+#content .md-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0.8em 0;
+  max-width: 100%;
+}
+#content table {
+  border-collapse: collapse;
+  width: auto;
+  min-width: 100%;
+}
+#content th, #content td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+#content thead th { background: var(--table-header-bg); }
+#content tbody tr:nth-child(even) { background: var(--table-stripe); }
+
+/* ---- Images: never overflow container ---- */
+#content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* ---- Inline SVG ---- */
+#content svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---- details / summary ---- */
+#content details {
+  margin: 0.6em 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4em 0.8em;
+}
+#content summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* ---- HTML/CSS cards ----
+ * A card that sets its own text color must also have a background so text
+ * stays readable. We give .card a sensible default bg from the theme; an
+ * author-supplied <style> block can override colors but the default prevents
+ * dark-on-dark / light-on-light accidents.
+ */
+#content .card {
+  background: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0.8em 0;
+}
+
+/* ---- Error box (rendering failures) ---- */
+#content .preview-error {
+  background: #5a1f1f;
+  color: #ffd7d7;
+  border: 1px solid #8a3030;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}

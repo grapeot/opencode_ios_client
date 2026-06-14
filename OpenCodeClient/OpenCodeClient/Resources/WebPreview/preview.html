@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <!-- Mobile/narrow defaults: this renders inside an iPhone WKWebView. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Markdown Web Preview</title>
+  <!-- All assets are local & relative. No CDN, no network at render time. -->
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <div id="content"></div>
+
+  <!-- Vendor libs (pinned, bundled). markdown-it -> window.markdownit, DOMPurify -> window.DOMPurify.
+       NOTE: flat layout — the Xcode synchronized-folder build flattens subdirectories,
+       so vendor files are siblings here (the staging shell under web_preview_shell/ keeps vendor/). -->
+  <script src="markdown-it.min.js"></script>
+  <script src="purify.min.js"></script>
+  <!-- App entry: defines window.renderMarkdown(payload) -->
+  <script src="preview.js"></script>
+</body>
+</html>

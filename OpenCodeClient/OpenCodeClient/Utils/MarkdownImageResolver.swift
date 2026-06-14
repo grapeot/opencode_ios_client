@@ -51,19 +51,13 @@ enum MarkdownImageResolver {
             let ext = (rawUrl as NSString).pathExtension.lowercased()
             guard !ext.isEmpty, imageExtensions.contains(ext) else { continue }
             
-            // Resolve relative path
-            var resolvedPath = rawUrl
-            if let mdPath = markdownFilePath, !rawUrl.hasPrefix("/") {
-                let mdDir = (mdPath as NSString).deletingLastPathComponent
-                resolvedPath = (mdDir as NSString).appendingPathComponent(rawUrl)
-            }
-            
-            // Make workspace-relative
-            resolvedPath = PathNormalizer.resolveWorkspaceRelativePath(resolvedPath, workspaceDirectory: workspaceDirectory)
-            
-            // Strip leading ./ from the resolved path
-            if resolvedPath.hasPrefix("./") { resolvedPath = String(resolvedPath.dropFirst(2)) }
-            
+            // Resolve relative path (same rule reused for link routing; see below).
+            let resolvedPath = resolveRelativeReference(
+                rawUrl,
+                markdownFilePath: markdownFilePath,
+                workspaceDirectory: workspaceDirectory
+            )
+
             do {
                 let content = try await fetchContent(resolvedPath)
                 guard let base64Data = content.content, !base64Data.isEmpty else { continue }
@@ -92,6 +86,31 @@ enum MarkdownImageResolver {
         }
         
         return result
+    }
+
+    /// Resolve a relative reference (image src or link href) against the markdown
+    /// file's own directory, then make it workspace-relative. Mirrors the path
+    /// semantics of Native Preview so Web Preview links/images resolve identically.
+    /// - A path starting with `/` is treated as absolute (only workspace-normalized).
+    /// - Otherwise it is resolved against the markdown file's directory, including
+    ///   `../` parent traversal, then workspace-normalized and `./`-stripped.
+    static func resolveRelativeReference(
+        _ rawReference: String,
+        markdownFilePath: String?,
+        workspaceDirectory: String?
+    ) -> String {
+        var resolvedPath = rawReference
+        if let mdPath = markdownFilePath, !rawReference.hasPrefix("/") {
+            let mdDir = (mdPath as NSString).deletingLastPathComponent
+            resolvedPath = (mdDir as NSString).appendingPathComponent(rawReference)
+        }
+
+        // PathNormalizer.normalize (called inside) collapses `.` / `..` segments
+        // purely by string, so `../images/x.png` resolves without touching disk.
+        resolvedPath = PathNormalizer.resolveWorkspaceRelativePath(resolvedPath, workspaceDirectory: workspaceDirectory)
+
+        if resolvedPath.hasPrefix("./") { resolvedPath = String(resolvedPath.dropFirst(2)) }
+        return resolvedPath
     }
 
     private static func mimeType(for fileExtension: String) -> String {

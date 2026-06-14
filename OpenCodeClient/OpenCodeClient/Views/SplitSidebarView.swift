@@ -16,27 +16,18 @@ struct SplitSidebarView: View {
     // sessions, so sessions own the column and Files is a disclosure the user
     // expands only when they need to browse the workspace.
     @State private var filesExpanded = false
+    @State private var sessionsExpanded = true
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Button {
+                disclosureHeader(
+                    title: L10n.t(.navFiles),
+                    isExpanded: filesExpanded,
+                    identifier: "sidebar-files-disclosure"
+                ) {
                     withAnimation(DesignAnimation.spring) { filesExpanded.toggle() }
-                } label: {
-                    HStack(spacing: DesignSpacing.sm) {
-                        Image(systemName: filesExpanded ? "chevron.down" : "chevron.right")
-                            .font(DesignTypography.micro)
-                            .foregroundStyle(DesignColors.Neutral.textSecondary)
-                        Text(L10n.t(.navFiles))
-                            .font(DesignTypography.headline)
-                            .foregroundStyle(DesignColors.Neutral.text)
-                        Spacer()
-                    }
-                    .padding(.horizontal, DesignSpacing.lg)
-                    .padding(.vertical, DesignSpacing.md)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
 
                 if filesExpanded {
                     FileTreeView(state: state, forceSplitPreview: true)
@@ -65,12 +56,49 @@ struct SplitSidebarView: View {
                         .frame(height: dividerHeight)
                 }
 
-                SessionsSidebarList(state: state)
-                    .frame(maxHeight: .infinity)
+                disclosureHeader(
+                    title: L10n.t(.navSessions),
+                    isExpanded: sessionsExpanded,
+                    identifier: "sidebar-sessions-disclosure"
+                ) {
+                    withAnimation(DesignAnimation.spring) { sessionsExpanded.toggle() }
+                }
+
+                if sessionsExpanded {
+                    SessionsSidebarList(state: state)
+                        .frame(maxHeight: .infinity)
+                }
             }
             .navigationTitle(L10n.t(.navWorkspace))
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    /// Files / Sessions 两个分区共用的折叠头：chevron + 标题，点击切换展开。
+    /// 抽出避免两个按钮 padding/font/样式漂移。
+    @ViewBuilder
+    private func disclosureHeader(
+        title: String,
+        isExpanded: Bool,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: DesignSpacing.sm) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(DesignTypography.micro)
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+                Text(title)
+                    .font(DesignTypography.headline)
+                    .foregroundStyle(DesignColors.Neutral.text)
+                Spacer()
+            }
+            .padding(.horizontal, DesignSpacing.lg)
+            .padding(.vertical, DesignSpacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 }
 

@@ -17,6 +17,31 @@ enum ImageFileUtils {
     }
 }
 
+/// Markdown file preview modes. `native` is the default MarkdownUI renderer;
+/// `web` is the WKWebView renderer for HTML-in-MD / cards / inline SVG; `source`
+/// is the raw markdown text.
+enum MarkdownPreviewMode: String, CaseIterable {
+    case native
+    case web
+    case source
+
+    var label: String {
+        switch self {
+        case .native: return "Native Preview"
+        case .web: return "Web Preview"
+        case .source: return "Markdown Source"
+        }
+    }
+
+    var menuSystemImage: String {
+        switch self {
+        case .native: return "doc.richtext"
+        case .web: return "globe"
+        case .source: return "chevron.left.forwardslash.chevron.right"
+        }
+    }
+}
+
 struct FileContentView: View {
     @Bindable var state: AppState
     let filePath: String
@@ -24,7 +49,7 @@ struct FileContentView: View {
     @State private var imageData: Data?
     @State private var isLoading = false
     @State private var loadError: String?
-    @State private var showPreview = true
+    @State private var previewMode: MarkdownPreviewMode = .web
 
     private var isImage: Bool {
         ImageFileUtils.isImage(filePath)
@@ -69,9 +94,16 @@ struct FileContentView: View {
         }
         if isMarkdown {
             ToolbarItem(placement: .primaryAction) {
-                Button(showPreview ? "Markdown" : "Preview") {
-                    showPreview.toggle()
+                Menu {
+                    Picker("Preview Mode", selection: $previewMode) {
+                        ForEach(MarkdownPreviewMode.allCases, id: \.self) { mode in
+                            Label(mode.label, systemImage: mode.menuSystemImage).tag(mode)
+                        }
+                    }
+                } label: {
+                    Image(systemName: previewMode.menuSystemImage)
                 }
+                .accessibilityIdentifier("markdown-preview-mode-menu")
             }
         }
     }
@@ -97,6 +129,16 @@ struct FileContentView: View {
         .onAppear {
             loadContent()
         }
+        // SwiftUI 复用同一 FileContentView 实例时,.onAppear 只触发一次,
+        // 后续 filePath 变化 (iPad 中间预览栏切文件、navigationDestination 切 path)
+        // 不会重新加载内容 — 老 content 留在屏上,需要手动点刷新。
+        // 在 path 变化时主动 reset + reload 避免这个状态泄漏。
+        .onChange(of: filePath) { _, _ in
+            content = nil
+            imageData = nil
+            loadError = nil
+            loadContent()
+        }
         .refreshable {
             loadContent()
         }
@@ -112,17 +154,33 @@ struct FileContentView: View {
 
     @ViewBuilder
     private func contentView(text: String) -> some View {
-        let useRaw = isMarkdown ? useRawTextForMarkdown(text) : false
         if isMarkdown {
-            if showPreview && !useRaw {
-                MarkdownPreviewView(
+            let useRaw = useRawTextForMarkdown(text)
+            switch previewMode {
+            case .native:
+                if useRaw {
+                    // MarkdownUI can freeze on long lines / large content: degrade to source.
+                    RawTextView(text: text, monospaced: false)
+                } else {
+                    MarkdownPreviewView(
+                        text: text,
+                        state: state,
+                        markdownFilePath: filePath,
+                        workspaceDirectory: state.currentSession?.directory
+                    )
+                }
+            case .web:
+                MarkdownWebPreviewContainer(
                     text: text,
                     state: state,
                     markdownFilePath: filePath,
-                    workspaceDirectory: state.currentSession?.directory
+                    workspaceDirectory: state.currentSession?.directory,
+                    isOversized: useRaw,
+                    onSwitchToNative: { previewMode = .native },
+                    onSwitchToSource: { previewMode = .source }
                 )
-            } else {
-                RawTextView(text: text, monospaced: !showPreview)
+            case .source:
+                RawTextView(text: text, monospaced: true)
             }
         } else {
             CodeView(text: text, path: filePath)
