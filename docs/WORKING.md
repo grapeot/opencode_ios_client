@@ -10,6 +10,20 @@
 - **测试**：✅ F3 deterministic composer UI tests 通过
 - **Phase**：F3 voice rail composer ready to merge
 
+### 2026-06-14 — Markdown Web Preview 真机验收与收口
+
+- **Phase 0/1/2 全部完成并上线**（详见前面的 Markdown Web Preview 段落）；`xcodebuild test` 全量串行通过（291 + 11 新增 = 302 passed，无回归）。
+- **默认预览模式改为 Web**（PRD §5.1 / RFC §8.2 同步更新）。
+- **真机 dark 模式验收暴露的 chip 对比度问题**：`<style>` 卡片用硬编码浅色背景在 dark 下糊掉；shell 给 dark 语义变量改用饱和主色（`--ok-bg=#10b981` 等，像 GitHub 暗色 issue label）；chip 用复合选择器 `.vx-chip.ok` 而非裸 `.ok` 避免被卡片 `color:var(--fg)` 覆盖。
+- **切文件 WebView 残留旧内容**：根因 SwiftUI 复用同一 `FileContentView` 实例时 `.onAppear` 只触发一次；修法是 `.onChange(of: filePath)` 主动 reset content + reload（试过 `.id(filePath)` 但代价是整个 view 重建，不优雅，已 revert）。
+- **新增回归测试**：`semantic_chips.md` fixture + `testSemanticChipsDarkVisible / Light` UI 测试，sentinel 文本断言守护"dark chip 糊掉"和"裸 `.ok` 被覆盖"两个真实 bug。
+- **internal-writing skill 大幅升级**：
+  - "CSS 颜色用主题变量 + fallback"（替代之前模糊的"主题安全"）
+  - "语义类必须用复合选择器"（dogfood 抓到的特异性坑）
+  - "**真正指标是新概念引入速率而非字数**"（low cognitive burden 的根本框架）
+  - "状态卡当百科条目写"被列为反模式，明确卡片/表格/`<details>` 的边界
+- **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md。
+
 ### 2026-06-10 — Ollama Cloud Kimi model preset
 
 - 模型列表中将 `MiniMax M3`（`ollama-cloud/minimax-m3`）替换为 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6`）。OpenCode server 的 `ollama-cloud` provider registry 暴露的 model key 是 `kimi-k2.6`；直接传 Ollama library tag `kimi-k2.6:cloud` 会让 `prompt_async` 返回 204 但后台不生成 assistant message。

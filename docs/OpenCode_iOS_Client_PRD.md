@@ -357,6 +357,27 @@ Markdown 文件：支持 Preview / Markdown source 切换。Preview 使用 Markd
 
 Diff 渲染采用 unified diff 格式（类似 GitHub），绿色背景表示新增行，红色背景表示删除行。服务端返回完整的 `before` 和 `after` 内容，客户端做 diff 计算和渲染。考虑到手机屏幕宽度，默认只提供 unified 模式，不做 side-by-side。
 
+#### 4.3.5 Markdown Web Preview（HTML 卡片 / SVG 增强阅读）
+
+打开 `.md` 文件时默认看到带视觉结构的预览：状态卡、SVG 图、暗色阅读都正常，工具栏可切回纯文字 Native 或源码。技术细节见 RFC §7.5。
+
+<style>
+.wp-stat{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.78rem;font-weight:650}
+.wp-stat.ok{background:var(--ok-bg,#d1fae5);color:var(--ok-fg,#065f46)}
+.wp-stat.block{background:var(--block-bg,#e5e7eb);color:var(--block-fg,#374151)}
+</style>
+
+| 用户能体验到的 | 状态 |
+|---|---|
+| 工具栏一键切 Web / Native / 源码，Web 是默认 | <span class="wp-stat ok">上线</span> |
+| HTML 状态卡 / 内联 SVG 正常显示 | <span class="wp-stat ok">上线</span> |
+| 文档里的相对图片能加载 | <span class="wp-stat ok">上线</span> |
+| 同一份文档 light / dark 模式都好读 | <span class="wp-stat ok">上线</span> |
+| 切文件立刻刷新内容，大文件先弹确认 | <span class="wp-stat ok">上线</span> |
+| `.html` 浏览 / Mermaid / 代码高亮 / 点图放大 | <span class="wp-stat block">下一轮</span> |
+
+详情与来源 — 决策过程见 [`WORKING.md`](WORKING.md)；完整子项目 PRD / RFC 保留在磁盘 `docs/Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md`，已从 git 跟踪移除。
+
 ### 4.4 Settings Tab
 
 #### 4.4.1 Server Connection

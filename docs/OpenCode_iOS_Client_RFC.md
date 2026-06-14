@@ -421,6 +421,41 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **内容**：`GET /file/content?path=`；文本文件显示等宽代码视图与行号；Markdown 使用 Preview / source 切换；图像文件支持交互式预览与系统分享
 - **Session Diff**：暂不在 iOS 客户端展示（server 端 diff API 在部分情况下返回空数组）
 
+### 7.5 Markdown Web Preview 架构决策
+
+打开 `.md` 文件能看到卡片、SVG、暗色适配，不只是纯文字。所有渲染发生在 iOS 本地，不联网、不跑作者代码。
+
+<style>
+.rfcw-stat{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.78rem;font-weight:650}
+.rfcw-stat.ok{background:var(--ok-bg,#d1fae5);color:var(--ok-fg,#065f46)}
+.rfcw-stat.block{background:var(--block-bg,#e5e7eb);color:var(--block-fg,#374151)}
+</style>
+
+| 用户能体验到的 | 状态 |
+|---|---|
+| 打开 markdown 文件默认看到 Web Preview，工具栏可切回 Native / 源码 | <span class="rfcw-stat ok">上线</span> |
+| `<style>` / `<div class="card">` / 内联 SVG 正常渲染 | <span class="rfcw-stat ok">上线</span> |
+| 相对路径的图片能加载 | <span class="rfcw-stat ok">上线</span> |
+| 同一个文件在 light / dark 模式都好读，不出现糊掉的卡片 | <span class="rfcw-stat ok">上线</span> |
+| 危险 HTML（脚本、表单、外站 iframe）被剥掉不执行 | <span class="rfcw-stat ok">上线</span> |
+| 切换文件时内容立刻刷新，不需要手动下拉 | <span class="rfcw-stat ok">上线</span> |
+| 超大文件先弹确认，避免卡死 | <span class="rfcw-stat ok">上线</span> |
+| 打开独立 `.html` artifact、Mermaid、代码高亮、点图放大 | <span class="rfcw-stat block">下一轮</span> |
+
+<details>
+<summary>实现要点（工程读者展开）</summary>
+
+- **渲染路径**：`MarkdownWebPreviewView`（`UIViewRepresentable` 包 `WKWebView`）加载 app bundle 内的 `preview.html`；Swift 通过 `evaluateJavaScript` 调用 `window.renderMarkdown({markdown, theme})`，payload 经 `JSONSerialization`，不字符串拼接 markdown。
+- **JS 依赖**：`markdown-it@14.2.0` + `DOMPurify@3.4.10` 固定打进 bundle，零 CDN 调用。Xcode 同步文件夹会拍平子目录，所以 vendor 文件与 `preview.html` 同级，src 不带 `vendor/` 前缀。
+- **图片解析**：复用 `MarkdownImageResolver.resolveImages` 把相对图片转 `data:` URI，再交给 WebView — 与 §3.6 Native Preview 语义完全一致。
+- **安全模型**：DOMPurify allowlist 禁 `script` / `iframe` / `form` / `object` / `embed` / `on*` 事件属性 / `javascript:` URL；`WKNavigationDelegate` 拦截除 file / fragment 外的所有 navigation；外链交系统 Safari，workspace 相对链接走 `state.fileToOpenInFilesTab`；`WKWebsiteDataStore` 用 non-persistent，无持久 cookie / localStorage。
+- **主题适配**：shell 暴露 `--fg` / `--bg` / `--card-bg` / `--border` / `--link` / `--ok-*` / `--bad-*` / `--warn-*` / `--block-*` 等 CSS 变量，light / dark 两套定义。作者样式必须用 `var(--x, fallback)` 形式，不支持主题变量的渲染器（Cursor、GitHub）退回 fallback。Dark 模式 chip 用饱和主色（`--ok-bg=#10b981` 等），避免深底沉进卡片。chip 必须用复合选择器 `.vx-chip.ok`，裸 `.ok` 会被卡片 `color:var(--fg)` 覆盖。
+- **切换刷新**：`FileContentView` 在 `.onChange(of: filePath)` 主动 reset content + reload，避免 SwiftUI 复用 view 实例时旧文件残留。
+
+</details>
+
+完整子项目 PRD / RFC 保留在磁盘 `docs/Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md`，已从 git 跟踪移除；决策过程见 [`WORKING.md`](WORKING.md)。
+
 ### 8. iPad / Vision Pro 布局（Phase 3）
 
 - **条件**：`horizontalSizeClass == .regular` 或 `userInterfaceIdiom == .pad` 时启用
