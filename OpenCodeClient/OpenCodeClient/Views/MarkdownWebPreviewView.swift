@@ -22,6 +22,94 @@ struct MarkdownWebPreviewInput: Equatable {
     let colorScheme: ColorScheme
 }
 
+/// SwiftUI host for the web preview. Resolves relative image paths to data URIs
+/// (reusing `MarkdownImageResolver`, so semantics match Native Preview), manages
+/// loading / error / oversize states, and surfaces fallbacks to Native or Source.
+struct MarkdownWebPreviewContainer: View {
+    let text: String
+    let state: AppState
+    let markdownFilePath: String?
+    let workspaceDirectory: String?
+    /// Whether the content exceeds the size the native renderer trusts; the web
+    /// renderer can still attempt it, but we warn first to avoid a huge payload.
+    var isOversized: Bool = false
+    var onSwitchToNative: (() -> Void)?
+    var onSwitchToSource: (() -> Void)?
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
+
+    @State private var resolvedMarkdown: String?
+    @State private var renderError: String?
+    @State private var proceedDespiteSize = false
+
+    var body: some View {
+        Group {
+            if isOversized && !proceedDespiteSize {
+                oversizeGate
+            } else if let error = renderError {
+                errorState(error)
+            } else if let resolved = resolvedMarkdown {
+                MarkdownWebPreviewView(
+                    input: MarkdownWebPreviewInput(markdown: resolved, colorScheme: colorScheme),
+                    onOpenExternalURL: { url in openURL(url) },
+                    onOpenRelativePath: { _ in /* Phase 2: route into app Files */ },
+                    onOpenImage: { _ in /* Phase 2: open image preview */ },
+                    onError: { message in renderError = message }
+                )
+            } else {
+                ProgressView("Loading web preview...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: resolveTaskID) {
+            guard !isOversized || proceedDespiteSize else { return }
+            renderError = nil
+            resolvedMarkdown = nil
+            let source = text
+            let resolved = await MarkdownImageResolver.resolveImages(
+                in: source,
+                markdownFilePath: markdownFilePath,
+                workspaceDirectory: workspaceDirectory,
+                fetchContent: { path in try await state.loadFileContent(path: path) }
+            )
+            guard !Task.isCancelled, source == text else { return }
+            resolvedMarkdown = resolved
+        }
+    }
+
+    private var resolveTaskID: String {
+        "\(markdownFilePath ?? ""):\(proceedDespiteSize):\(text.hashValue)"
+    }
+
+    private var oversizeGate: some View {
+        ContentUnavailableView {
+            Label("Large document", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text("This file is large. Web Preview may be slow or memory-heavy.")
+        } actions: {
+            Button("Render anyway") { proceedDespiteSize = true }
+            Button("Open Native Preview") { onSwitchToNative?() }
+            Button("Open Markdown Source") { onSwitchToSource?() }
+        }
+    }
+
+    private func errorState(_ message: String) -> some View {
+        ContentUnavailableView {
+            Label("Web Preview failed", systemImage: "xmark.octagon")
+        } description: {
+            Text(message)
+        } actions: {
+            Button("Open Native Preview") { onSwitchToNative?() }
+            Button("Open Markdown Source") { onSwitchToSource?() }
+            Button("Retry") {
+                renderError = nil
+                resolvedMarkdown = nil
+            }
+        }
+    }
+}
+
 /// Bridge message names exposed to the JS shell.
 private enum PreviewBridge {
     static let name = "previewBridge"

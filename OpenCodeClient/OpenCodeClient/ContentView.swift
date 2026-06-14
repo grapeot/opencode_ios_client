@@ -31,6 +31,27 @@ struct ContentView: View {
             || ProcessInfo.processInfo.arguments.contains("UITEST_F3_RETRY_FIXTURE")
     }
 
+    private static var hasUITestWebPreviewFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_WEB_PREVIEW_FIXTURE")
+    }
+
+    /// Which bundled fixture markdown to render in the web preview. Defaults to
+    /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
+    private static var webPreviewFixtureName: String {
+        let env = ProcessInfo.processInfo.environment["WEB_PREVIEW_FIXTURE_NAME"]
+        return (env?.isEmpty == false ? env! : "html_cards")
+    }
+
+    private static func loadFixtureMarkdown(_ name: String) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "md", subdirectory: "WebPreviewFixtures")
+            ?? Bundle.main.url(forResource: name, withExtension: "md"),
+            let text = try? String(contentsOf: url, encoding: .utf8)
+        else {
+            return "# Fixture not found: \(name)"
+        }
+        return text
+    }
+
     private static func makeInitialState() -> AppState {
         let state = AppState()
 
@@ -309,7 +330,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture {
             return
         }
 
@@ -340,7 +361,32 @@ struct ContentView: View {
         }
     }
 
+    private static var webPreviewFixtureColorScheme: ColorScheme {
+        ProcessInfo.processInfo.environment["UITEST_FORCE_THEME"] == "dark" ? .dark : .light
+    }
+
+    @ViewBuilder
+    private var webPreviewFixtureView: some View {
+        MarkdownWebPreviewView(
+            input: MarkdownWebPreviewInput(
+                markdown: Self.loadFixtureMarkdown(Self.webPreviewFixtureName),
+                colorScheme: Self.webPreviewFixtureColorScheme
+            )
+        )
+        .accessibilityIdentifier("web-preview-fixture-root")
+        .ignoresSafeArea()
+    }
+
     var body: some View {
+        if Self.hasUITestWebPreviewFixture {
+            webPreviewFixtureView
+                .preferredColorScheme(Self.webPreviewFixtureColorScheme)
+        } else {
+            mainBody
+        }
+    }
+
+    private var mainBody: some View {
         rootLayout
         .task {
             await restoreConnectionFlow()
