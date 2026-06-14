@@ -95,6 +95,41 @@ final class MarkdownWebPreviewUITests: XCTestCase {
         try capture(app, named: "web_preview_malicious_script")
     }
 
+    /// Regression: dark-mode semantic chips (ok/bad/warn/block) must render as
+    /// visible pills, not wash out into the card background. Catches two bugs
+    /// from dogfood: deep tinted dark `--ok-bg` was too close to card bg, and
+    /// bare `.ok` single-class selector got overridden by card's text color.
+    @MainActor
+    func testSemanticChipsDarkVisible() throws {
+        let app = launchWebPreview(fixture: "semantic_chips", dark: true)
+        assertWebViewVisible(app)
+        let webView = app.webViews.firstMatch
+        for sentinel in ["CHIP_OK_SENTINEL", "CHIP_BAD_SENTINEL", "CHIP_WARN_SENTINEL", "CHIP_BLOCK_SENTINEL"] {
+            XCTAssertTrue(
+                webView.staticTexts[sentinel].waitForExistence(timeout: 12),
+                "Dark 模式下 \(sentinel) 应可见 — 若失败说明 chip 文字被卡片 --fg 覆盖或 --*-bg 与卡片底太接近"
+            )
+        }
+        try capture(app, named: "web_preview_semantic_chips_dark")
+    }
+
+    /// Same chips in light mode — baseline that should always pass; if dark
+    /// breaks but light passes the regression is theme-specific (the typical
+    /// pattern of the bugs this fixture guards).
+    @MainActor
+    func testSemanticChipsLightVisible() throws {
+        let app = launchWebPreview(fixture: "semantic_chips", dark: false)
+        assertWebViewVisible(app)
+        let webView = app.webViews.firstMatch
+        for sentinel in ["CHIP_OK_SENTINEL", "CHIP_BAD_SENTINEL", "CHIP_WARN_SENTINEL", "CHIP_BLOCK_SENTINEL"] {
+            XCTAssertTrue(
+                webView.staticTexts[sentinel].waitForExistence(timeout: 12),
+                "Light 模式下 \(sentinel) 应可见"
+            )
+        }
+        try capture(app, named: "web_preview_semantic_chips_light")
+    }
+
     /// Drive the 3-mode menu (web -> source -> native) and confirm each mode's
     /// view appears and content survives the switch. Uses the mode fixture host.
     @MainActor
