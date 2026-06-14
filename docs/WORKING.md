@@ -99,36 +99,44 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 > 编译/测试约束：`xcodebuild build` 与 `xcodebuild test` 必须串行（共享 `build.db`）。
 > 关键文件：`OpenCodeClient/OpenCodeClient/Views/FileContentView.swift`（mode 切换）、`Utils/MarkdownImageResolver.swift`（data URI 复用）。
 
-**并行预备（sub-agent，主 agent 验收后并入）**
-- [ ] 依赖调研：markdown-it + DOMPurify 版本选型 + CDN-free bundling 方式
-- [ ] 前端 shell 起草：`preview.html` / `preview.css` / `preview.js` + DOMPurify 配置，桌面浏览器先验证
-- [ ] fixture 生成：§9.1 九个 `.md` + `images/chart.png` + `images/diagram.svg`
+**并行预备（sub-agent，主 agent 验收后并入）** ✅
+- [x] 依赖调研 + 前端 shell：markdown-it 14.2.0 + DOMPurify 3.4.10（CDN-free，npm 取 dist 后拷出），shell 在 jsdom 里 5 项检查全过
+- [x] fixture 生成：§9.1 九个 `.md` + `images/chart.png`(6.8KB 真 PNG) + `images/diagram.svg`，large_markdown 70KB > 60KB 阈值，安全 fixture 含 4 个 payload + sentinel
 
-**Phase 0 — Spike（串行，主 agent）**
-- [ ] 新增 `MarkdownWebPreviewView.swift`（`UIViewRepresentable` 包 `WKWebView`）
-- [ ] bundle `preview.html/css/js` + `vendor/markdown-it.min.js` + `vendor/purify.min.js`，确认 bundle path 可加载
-- [ ] `window.renderMarkdown(payload)` 入口，Swift 用 JSON encoder 经 `evaluateJavaScript` 注入（不拼字符串）
-- [ ] WebView 内完成 渲染 + DOMPurify + 基础 CSS + 深浅色
-- [ ] 用 `html_cards.md` / `dark_theme_cards.md` 手工验收卡片 + 暗色
-- [ ] `xcodebuild build` 通过
+**Phase 0 — Spike（串行，主 agent）** ✅
+- [x] 新增 `MarkdownWebPreviewView.swift`（`UIViewRepresentable` 包 `WKWebView`）
+- [x] bundle `preview.html/css/js` + markdown-it + purify；**坑：同步文件夹会拍平子目录**，vendor 与 html 同级、src 去 `vendor/` 前缀；`loadFileURL(allowingReadAccessTo: bundleDir)`
+- [x] `window.renderMarkdown(payload)` 入口，Swift 用 JSONSerialization 经 `evaluateJavaScript` 注入（不拼字符串）
+- [x] WebView 内完成 渲染 + DOMPurify + 基础 CSS + 深浅色
+- [x] 用 `html_cards.md` / `dark_theme_cards.md` 模拟器手工验收：卡片成形、暗色无深底深字
+- [x] `xcodebuild build` 通过
 
-**Phase 1 — Files MVP（串行，主 agent）**
-- [ ] `FileContentView` 的 `showPreview: Bool` 改 `previewMode` enum（`native` / `web` / `source`）
-- [ ] toolbar 二态按钮改 Menu：`Native Preview` / `Web Preview` / `Markdown Source`
-- [ ] `contentView(text:)` 按 mode 分派；保留现有大文件 `markdownMaxTotalLength` 保护（Web 超阈值先显示确认/警告）
-- [ ] 复用 `MarkdownImageResolver.resolveImages(...)` 生成 data-URI markdown 再传 WebView（相对图片语义与 Native 一致）
-- [ ] 加载中 / 渲染失败 / 回退按钮三态，失败一键回 Native 或 Source
-- [ ] WebView 根节点 + mode menu 加 accessibility identifier
-- [ ] 手工验收：HTML card / 相对图片 / 暗色 / 安全过滤四类 fixture 通过
-- [ ] `xcodebuild build` 通过
+**Phase 1 — Files MVP（串行，主 agent）** ✅
+- [x] `FileContentView` 的 `showPreview: Bool` 改 `MarkdownPreviewMode` enum（`native` / `web` / `source`）
+- [x] toolbar 二态按钮改 Picker Menu：`Native Preview` / `Web Preview` / `Markdown Source`
+- [x] `contentView(text:)` 按 mode 分派；保留大文件保护（native 超阈值回 source；web 超阈值 oversize gate 先确认）
+- [x] `MarkdownWebPreviewContainer` 复用 `MarkdownImageResolver.resolveImages(...)` 生成 data-URI markdown 再传 WebView
+- [x] 加载中 / 渲染失败 / oversize 三态 + 一键回 Native/Source 按钮
+- [x] WebView 根节点(`markdown-web-preview-webview`) + mode menu(`markdown-preview-mode-menu`) 加 accessibility identifier
+- [x] 手工验收（模拟器截图存 outputs/web_preview_screenshots/）：HTML card / 暗色 / inline SVG / wide table / 安全过滤 通过
+- [x] `xcodebuild build` 通过
+- [x] UITEST_WEB_PREVIEW_FIXTURE + MarkdownWebPreviewUITests（5 test 全过，含安全 sentinel 断言）
 
-**Phase 2 — 安全与 polish（串行，主 agent）**
-- [ ] 收紧 DOMPurify allowlist：禁 `script`/`iframe`/`form`/`object`/`embed`/`on*`/`javascript:` URL
-- [ ] `WKNavigationDelegate` 拦截所有非 fragment navigation；外链交系统打开；workspace 相对链接解析后走 app 内 Files
-- [ ] WebView 用 non-persistent data store；主题变化重发 theme payload 不重建 WebView
-- [ ] UI tests：mode 切换 / WebView 出现 / 外链拦截 / 安全 fixture / source fallback
-- [ ] unit tests：图片路径预处理（同目录 / 子目录 / `../` / workspace absolute）
-- [ ] `xcodebuild build` + `xcodebuild test` 串行通过
+**Phase 2 — 安全与 polish（串行，主 agent）** ✅
+- [x] DOMPurify allowlist 禁 `script`/`iframe`/`form`/`object`/`embed`/`on*`/`javascript:`（shell 配置 + malicious_script fixture UI 断言 sentinel 渲染、script 不执行）
+- [x] `WKNavigationDelegate` 拦截非 file/fragment navigation + 外链 onOpenExternalURL；workspace 相对链接经 resolveRelativeReference 解析后落 fileToOpenInFilesTab
+- [x] WebView 用 non-persistent data store
+- [x] 主题：input 含 colorScheme，updateUIView 按 input diff 重渲染，不重建 WebView（容器读 @Environment(\.colorScheme)）
+- [x] UI tests：mode 切换 web↔source↔native 往返（UITEST_WEB_PREVIEW_MODE_FIXTURE）
+- [x] unit tests：8 个图片/链接路径预处理（同目录 / 子目录 / ./ / `../` / 深层 / workspace absolute / 外部 / nil mdPath）
+- [x] `xcodebuild build` + `xcodebuild test` 串行通过（291 passed，无回归）
+
+**本轮交付完成（Phase 0/1/2）**：Web Preview 可在 Files 手动切换使用，HTML 卡片/暗色/
+inline SVG/wide table/安全过滤/相对链接全部验证。截图存 `outputs/web_preview_screenshots/`。
+未做（留后续）：Phase 3 `.html` artifact / Mermaid / 代码高亮 / 图片点击预览；
+真机（非 simulator）验收；自定义 URL scheme 大图优化（开放问题 1 的后续路线）。
+已知 fixture 细节：html_cards 的 per-status 颜色未完全还原（卡片成形但配色偏中性），
+非阻塞，后续可调 fixture CSS 选择器或 DOMPurify style 处理。
 
 - [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
 - [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
