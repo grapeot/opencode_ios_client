@@ -696,13 +696,17 @@ private struct TabletSessionsColumn: View {
                         }
                     } else {
                         HStack(spacing: 8) {
+                            // 用 plus 图标替代 "New" 文字, 给 iPad 上 Sessions 标题留空间
+                            // (Session 也是窄列, 文字按钮会把标题挤成省略号)
                             Button {
                                 Task { await state.createSession() }
                             } label: {
-                                Text(L10n.t(.sessionsNew))
+                                Image(systemName: "plus")
                             }
                             .disabled(!state.canCreateSession)
                             .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+                            .help(L10n.t(.sessionsNew))
+                            .accessibilityLabel(L10n.t(.sessionsNew))
 
                             if !state.canCreateSession {
                                 Button {
