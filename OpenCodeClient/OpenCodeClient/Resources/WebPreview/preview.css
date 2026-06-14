@@ -19,6 +19,16 @@
   --table-stripe: #262626;
   --card-bg: #2a2a2a;       /* fallback card bg so card text always has a backdrop */
   --hr: #3a3a3a;
+
+  /* Semantic accents for status cards/chips. Authors reference these via
+     var(--ok, #10b981) etc. so the SAME markdown adapts to light/dark here,
+     while non-shell renderers (GitHub/Cursor) fall back to the literal hue.
+     *-border = strong hue for borders/left bars; *-bg / *-fg = a tinted
+     chip/card surface that stays legible in dark mode. */
+  --ok: #34d399;       --ok-border: #10b981;   --ok-bg: #11271f;   --ok-fg: #6ee7b7;
+  --bad: #f87171;      --bad-border: #ef4444;  --bad-bg: #2a1416;  --bad-fg: #fca5a5;
+  --warn: #fbbf24;     --warn-border: #f59e0b; --warn-bg: #2a2010; --warn-fg: #fcd34d;
+  --block: #9ca3af;    --block-border: #6b7280;--block-bg: #1f2226;--block-fg: #cbd1d9;
 }
 
 [data-theme="light"] {
@@ -35,6 +45,12 @@
   --table-stripe: #f7f7f7;
   --card-bg: #f6f6f6;
   --hr: #e0e0e0;
+
+  /* Semantic accents — light variants (see dark block above for rationale). */
+  --ok: #059669;       --ok-border: #10b981;   --ok-bg: #d1fae5;   --ok-fg: #065f46;
+  --bad: #dc2626;      --bad-border: #ef4444;  --bad-bg: #fee2e2;  --bad-fg: #991b1b;
+  --warn: #d97706;     --warn-border: #f59e0b; --warn-bg: #fef3c7; --warn-fg: #92400e;
+  --block: #4b5563;    --block-border: #6b7280;--block-bg: #e5e7eb;--block-fg: #374151;
 }
 
 /* ---- Base layout ---- */
