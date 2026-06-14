@@ -440,7 +440,6 @@ struct ContentView: View {
         .sheet(item: filePreviewSheetItem) { wrapper in
             NavigationStack {
                 FileContentView(state: state, filePath: wrapper.path)
-                    .id(wrapper.path)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button {
@@ -533,11 +532,7 @@ private struct TabletFilesColumn: View {
         NavigationStack {
             Group {
                 if let path = state.previewFilePath, !path.isEmpty {
-                    // .id(path) 强制 SwiftUI 在 path 变化时重建 FileContentView,
-                    // 避免旧文件的 @State(content/previewMode/isLoading) 泄漏到新文件
-                    // (导致 WebView 显示旧文件、或退回 native 渲染要刷新才正常)。
                     FileContentView(state: state, filePath: path)
-                        .id(path)
                 } else {
                     FileTreeView(state: state, forceSplitPreview: true)
                         .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
