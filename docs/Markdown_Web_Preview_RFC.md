@@ -12,6 +12,30 @@
 | 目标项目 | OpenCode iOS Client |
 | 范围 | Files Markdown 预览 |
 
+## 开放问题决策速览
+
+<style>
+.rv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0 18px}
+.rv-card{border:1px solid var(--border,#d7dee8);border-radius:12px;padding:12px;background:var(--card-bg,#fff);color:var(--fg,#1a1a1a)}
+.rv-card h3{margin:0 0 6px;font-size:.95rem;color:var(--fg,#1a1a1a)}
+.rv-card p{margin:5px 0;font-size:.88rem;color:var(--fg,#1a1a1a)}
+.rv-ok{border-left:5px solid var(--ok-border,#10b981)}
+.rv-block{border-left:5px solid var(--block-border,#6b7280)}
+.rv-chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:.76rem;font-weight:650;margin-bottom:6px}
+.rv-chip.ok{background:var(--ok-bg,#d1fae5);color:var(--ok-fg,#065f46)}
+.rv-chip.block{background:var(--block-bg,#e5e7eb);color:var(--block-fg,#374151)}
+</style>
+
+<div class="rv-grid">
+  <div class="rv-card rv-ok"><span class="rv-chip ok">已决策</span><h3>图片路径：data URI</h3><p>复用 MarkdownImageResolver，相对图片转 data URI，与 Native Preview 语义一致。</p></div>
+  <div class="rv-card rv-ok"><span class="rv-chip ok">已决策</span><h3>默认模式：Web Preview</h3><p>真机验证后默认 Web，可回 Native / Source。大文件由 oversize gate 兜底。</p></div>
+  <div class="rv-card rv-ok"><span class="rv-chip ok">已决策</span><h3>颜色：变量 + fallback</h3><p>shell 暴露 --fg/--card-bg/--ok-* 等；作者用 var(--x, fallback) 写，双模式自适应。</p></div>
+  <div class="rv-card rv-block"><span class="rv-chip block">下一轮</span><h3>大图：自定义 URL scheme</h3><p>data URI 撑大 payload；后续可加 opencode-file:// 优化大图。</p></div>
+  <div class="rv-card rv-block"><span class="rv-chip block">下一轮</span><h3>Server-side render</h3><p>跨客户端一致的 HTML artifact 路线，Phase 4 另开 RFC。</p></div>
+</div>
+
+> 纯 Markdown fallback：图片走 data URI、默认 Web、颜色用变量 + fallback；大图自定义 scheme 和 server-side render 留作下一轮。
+
 ## 1. 摘要
 
 本 RFC 提出在 OpenCode iOS Client 中新增 WebView-based Markdown preview。核心方案是：iOS 端 bundle 一个本地 HTML/JS/CSS 渲染 shell，用 `WKWebView` 加载；Swift 将 Markdown 原文、base path、主题和配置通过安全消息传入；WebView 内的 JavaScript 使用 Markdown renderer 转 HTML，经过 sanitizer 后注入页面。

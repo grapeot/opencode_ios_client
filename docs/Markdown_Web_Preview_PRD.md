@@ -2,6 +2,34 @@
 
 > 工作草案 · 2026-06 · OpenCode iOS Client
 
+## 实施进度速览
+
+<style>
+.pv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0 18px}
+.pv-card{border:1px solid var(--border,#d7dee8);border-radius:12px;padding:12px;background:var(--card-bg,#fff);color:var(--fg,#1a1a1a)}
+.pv-card h3{margin:0 0 6px;font-size:1rem;color:var(--fg,#1a1a1a)}
+.pv-card p{margin:5px 0;font-size:.9rem;color:var(--fg,#1a1a1a)}
+.pv-ok{border-left:5px solid var(--ok-border,#10b981)}
+.pv-bad{border-left:5px solid var(--bad-border,#ef4444)}
+.pv-warn{border-left:5px solid var(--warn-border,#f59e0b)}
+.pv-block{border-left:5px solid var(--block-border,#6b7280)}
+.pv-chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:.78rem;font-weight:650;margin-bottom:6px}
+.pv-chip.ok{background:var(--ok-bg,#d1fae5);color:var(--ok-fg,#065f46)}
+.pv-chip.warn{background:var(--warn-bg,#fef3c7);color:var(--warn-fg,#92400e)}
+.pv-chip.block{background:var(--block-bg,#e5e7eb);color:var(--block-fg,#374151)}
+</style>
+
+<div class="pv-grid">
+  <div class="pv-card pv-ok"><span class="pv-chip ok">完成</span><h3>Phase 0 — Spike</h3><p>WKWebView + bundled renderer 闭环跑通；HTML 卡片 / 暗色 / 安全过滤 fixture 通过。</p></div>
+  <div class="pv-card pv-ok"><span class="pv-chip ok">完成</span><h3>Phase 1 — Files MVP</h3><p>FileContentView 三态 (native/web/source)；data-URI 图片解析；oversize gate；可一键回退。</p></div>
+  <div class="pv-card pv-ok"><span class="pv-chip ok">完成</span><h3>Phase 2 — 安全与 polish</h3><p>DOMPurify allowlist 收紧；外链拦截走系统 Safari；workspace 相对链接回 app；non-persistent store。</p></div>
+  <div class="pv-card pv-warn"><span class="pv-chip warn">部分</span><h3>主题：明暗双适配</h3><p>shell 暴露 --fg / --card-bg / --ok-* 等变量 + fallback；作者用 var() 即可双模式自适应；chip dark 用饱和主色避免糊掉。</p></div>
+  <div class="pv-card pv-block"><span class="pv-chip block">下一轮</span><h3>Phase 3 — Visual 增强</h3><p>.html artifact 浏览、Mermaid、代码高亮、图片点击放大 — 留作下一 PR。</p></div>
+</div>
+
+> 纯 Markdown fallback（若 `<style>` 被剥离 / 不支持 CSS 变量）：
+> Phase 0/1/2 = 完成；明暗双适配 = shell 提供变量 + fallback，作者用变量写即可；Phase 3 = 下一轮做。
+
 ## 1. 背景
 
 OpenCode iOS Client 的核心使用场景已经从“远程看 AI 状态”演化成“在手机上审阅 AI 生成的 Markdown 报告，并及时做方向判断”。现有原生 MarkdownUI 渲染能覆盖标题、列表、表格、代码块和图片，但无法渲染 HTML-in-Markdown、内联 SVG、CSS 卡片、复杂布局和未来可能的 Mermaid/Graphviz 等视觉结构。
