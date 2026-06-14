@@ -19,6 +19,8 @@ enum L10n {
         case navPreview
         case navWorkspace
         case navSessions
+        case sidebarHideSessions
+        case sidebarShowSessions
 
         case contentPreviewUnavailableTitle
         case contentPreviewUnavailableDescription
@@ -256,6 +258,8 @@ enum L10n {
         Key.navPreview.rawValue: "Preview",
         Key.navWorkspace.rawValue: "Workspace",
         Key.navSessions.rawValue: "Sessions",
+        Key.sidebarHideSessions.rawValue: "Hide sessions",
+        Key.sidebarShowSessions.rawValue: "Show sessions",
         Key.contentPreviewUnavailableTitle.rawValue: "Select file to preview",
         Key.contentPreviewUnavailableDescription.rawValue: "Choose file from Workspace, or use Open File in the Chat tool/patch cards.",
         Key.contentRefreshHelp.rawValue: "Refresh preview",
@@ -492,6 +496,8 @@ enum L10n {
         Key.navPreview.rawValue: "预览",
         Key.navWorkspace.rawValue: "Workspace",
         Key.navSessions.rawValue: "会话",
+        Key.sidebarHideSessions.rawValue: "隐藏会话栏",
+        Key.sidebarShowSessions.rawValue: "显示会话栏",
         Key.contentPreviewUnavailableTitle.rawValue: "选择文件预览",
         Key.contentPreviewUnavailableDescription.rawValue: "在左侧 Workspace 选择文件，或在 Chat 的 tool/patch 卡片中点“打开文件”。",
         Key.contentRefreshHelp.rawValue: "刷新预览",
