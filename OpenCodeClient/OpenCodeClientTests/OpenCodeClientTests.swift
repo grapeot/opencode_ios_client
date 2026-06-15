@@ -1123,6 +1123,13 @@ struct MessageRenderingHeuristicTests {
     @Test func markdownHeuristicDetectsCodeFence() {
         #expect(MessageRowView.hasMarkdownSyntax("```swift\nprint(1)\n```") == true)
     }
+
+    @Test func largeMessageDetectionSkipsExpensiveMarkdownRendering() {
+        let text = String(repeating: "- Wells Fargo agreement\n", count: 3_000)
+
+        #expect(MessageRowView.isLargeMessage(text) == true)
+        #expect(MessageRowView.largeMessagePreview(text).count == 12_000)
+    }
 }
 
 struct ChatScrollBehaviorTests {
