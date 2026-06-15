@@ -1673,7 +1673,7 @@ struct ModelSelectionPersistenceTests {
         body()
     }
 
-    @Test @MainActor func legacyGLM51SelectionMapsToCurrentTurboPreset() {
+    @Test @MainActor func legacyGLM51SelectionMapsToCurrentGLM52Preset() {
         withIsolatedModelSelectionDefaults {
             let sessionID = "session-glm"
             let legacySelection = [sessionID: "zai-coding-plan/glm-5.1"]
@@ -1697,7 +1697,7 @@ struct ModelSelectionPersistenceTests {
             state.selectSession(session)
 
             #expect(state.selectedModelIndex == 0)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.1")
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.2")
         }
     }
 
