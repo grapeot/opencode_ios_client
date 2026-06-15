@@ -383,7 +383,7 @@ final class AppState {
     var streamingReasoningPart: Part? { get { messageStore.streamingReasoningPart } set { messageStore.streamingReasoningPart = newValue } }
 
     var modelPresets: [ModelPreset] = [
-        ModelPreset(displayName: "GLM-5.1", providerID: "zai-coding-plan", modelID: "glm-5.1"),
+        ModelPreset(displayName: "GLM-5.2", providerID: "zai-coding-plan", modelID: "glm-5.2"),
         ModelPreset(displayName: "GPT-5.5", providerID: "openai", modelID: "gpt-5.5"),
         ModelPreset(displayName: "DeepSeek V4 Flash", providerID: "deepseek", modelID: "deepseek-v4-flash"),
         ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash"),
