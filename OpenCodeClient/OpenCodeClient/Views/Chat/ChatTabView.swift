@@ -787,7 +787,9 @@ struct ChatTabView: View {
                 Text(speechError ?? "")
             }
             .onAppear {
-                syncDraftFromState(sessionID: state.currentSessionID)
+                Task { @MainActor in
+                    syncDraftFromState(sessionID: state.currentSessionID)
+                }
             }
             .onChange(of: state.currentSessionID) { oldID, newID in
                 let draftText = inputText

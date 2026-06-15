@@ -7,6 +7,9 @@ import SwiftUI
 import MarkdownUI
 
 struct MessageRowView: View {
+    private static let markdownRenderCharacterLimit = 50_000
+    private static let largeMessagePreviewCharacterLimit = 12_000
+
     @Bindable var state: AppState
     let message: MessageWithParts
     let sessionTodos: [TodoItem]
@@ -81,7 +84,11 @@ struct MessageRowView: View {
     @ViewBuilder
     private func markdownText(_ text: String, isUser: Bool) -> some View {
         let font = isUser ? DesignTypography.bodyProminent : DesignTypography.body
-        if shouldRenderMarkdown(text) {
+        if Self.isLargeMessage(text) {
+            LargeMessagePreview(text: text, preview: Self.largeMessagePreview(text))
+                .font(font)
+                .textSelection(.enabled)
+        } else if shouldRenderMarkdown(text) {
             ResolvedMarkdownView(text: text, state: state, workspaceDirectory: workspaceDirectory)
                 .font(font)
                 .textSelection(.enabled)
@@ -124,6 +131,15 @@ struct MessageRowView: View {
         Self.hasMarkdownSyntax(text)
     }
 
+    static func isLargeMessage(_ text: String) -> Bool {
+        text.count > markdownRenderCharacterLimit
+    }
+
+    static func largeMessagePreview(_ text: String) -> String {
+        guard isLargeMessage(text) else { return text }
+        return String(text.prefix(largeMessagePreviewCharacterLimit))
+    }
+
     static func hasMarkdownSyntax(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
@@ -137,6 +153,21 @@ struct MessageRowView: View {
         }
 
         return trimmed.contains("\n\n")
+    }
+
+    private struct LargeMessagePreview: View {
+        let text: String
+        let preview: String
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+                Text(preview)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Large message: showing first \(preview.count.formatted()) of \(text.count.formatted()) characters. Markdown rendering is skipped to keep the app responsive.")
+                    .font(DesignTypography.micro)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     var body: some View {
