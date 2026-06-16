@@ -384,13 +384,21 @@ actor APIClient {
         return try JSONDecoder().decode([TodoItem].self, from: data)
     }
 
-    func fileList(path: String = "") async throws -> [FileNode] {
-        let (data, _) = try await makeRequest(path: "/file", queryItems: [URLQueryItem(name: "path", value: path)])
+    func fileList(path: String = "", directory: String? = nil) async throws -> [FileNode] {
+        var queryItems = [URLQueryItem(name: "path", value: path)]
+        if let directory, !directory.isEmpty {
+            queryItems.append(URLQueryItem(name: "directory", value: directory))
+        }
+        let (data, _) = try await makeRequest(path: "/file", queryItems: queryItems)
         return try JSONDecoder().decode([FileNode].self, from: data)
     }
 
-    func fileContent(path: String) async throws -> FileContent {
-        let (data, _) = try await makeRequest(path: "/file/content", queryItems: [URLQueryItem(name: "path", value: path)])
+    func fileContent(path: String, directory: String? = nil) async throws -> FileContent {
+        var queryItems = [URLQueryItem(name: "path", value: path)]
+        if let directory, !directory.isEmpty {
+            queryItems.append(URLQueryItem(name: "directory", value: directory))
+        }
+        let (data, _) = try await makeRequest(path: "/file/content", queryItems: queryItems)
         return try JSONDecoder().decode(FileContent.self, from: data)
     }
 
@@ -654,8 +662,8 @@ protocol APIClientProtocol: Actor {
     func agents() async throws -> [AgentInfo]
     func sessionDiff(sessionID: String) async throws -> [FileDiff]
     func sessionTodos(sessionID: String) async throws -> [TodoItem]
-    func fileList(path: String) async throws -> [FileNode]
-    func fileContent(path: String) async throws -> FileContent
+    func fileList(path: String, directory: String?) async throws -> [FileNode]
+    func fileContent(path: String, directory: String?) async throws -> FileContent
     func findFile(query: String, limit: Int) async throws -> [String]
     func fileStatus() async throws -> [FileStatusEntry]
     func forkSession(sessionID: String, messageID: String?) async throws -> Session

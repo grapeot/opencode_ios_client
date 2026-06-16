@@ -10,7 +10,7 @@ extension AppState {
         let previousChildrenCache = fileChildrenCache
         let previouslyExpandedPaths = expandedPaths
         do {
-            fileTreeRoot = try await apiClient.fileList(path: "")
+            fileTreeRoot = try await apiClient.fileList(path: "", directory: nil)
             fileChildrenCache = previousChildrenCache.filter { previouslyExpandedPaths.contains($0.key) }
         } catch {
             fileTreeRoot = []
@@ -33,7 +33,7 @@ extension AppState {
 
     func loadFileChildren(path: String) async -> [FileNode] {
         do {
-            let children = try await apiClient.fileList(path: path)
+            let children = try await apiClient.fileList(path: path, directory: nil)
             fileChildrenCache[path] = children
             return children
         } catch {
@@ -57,7 +57,11 @@ extension AppState {
 
     func loadFileContent(path: String) async throws -> FileContent {
         let resolved = PathNormalizer.resolveWorkspaceRelativePath(path, workspaceDirectory: currentSession?.directory)
-        return try await apiClient.fileContent(path: resolved)
+        if resolved.hasPrefix("/") {
+            let url = URL(fileURLWithPath: resolved)
+            return try await apiClient.fileContent(path: url.lastPathComponent, directory: url.deletingLastPathComponent().path)
+        }
+        return try await apiClient.fileContent(path: resolved, directory: nil)
     }
 
     func loadFileContent(pathBytes: [UInt8]) async throws -> FileContent {

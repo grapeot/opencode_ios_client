@@ -101,9 +101,10 @@ nonisolated enum PathNormalizer {
     /// Tool payloads sometimes carry absolute paths (e.g. "/Users/.../repo/file.swift").
     /// OpenCode server APIs generally expect workspace-relative paths.
     static func resolveWorkspaceRelativePath(_ path: String, workspaceDirectory: String?) -> String {
+        let absoluteInput = absoluteHostPath(path)
         let p = normalize(path)
         guard let workspaceDirectory, !workspaceDirectory.isEmpty else {
-            return p
+            return absoluteInput ?? p
         }
         let dir = normalize(workspaceDirectory)
         if p == dir {
@@ -113,6 +114,16 @@ nonisolated enum PathNormalizer {
             let resolved = String(p.dropFirst(dir.count + 1))
             return resolved
         }
+        if let absoluteInput {
+            return absoluteInput
+        }
         return p
+    }
+
+    private static func absoluteHostPath(_ path: String) -> String? {
+        let trimmed = trimPathWhitespace(path)
+        if trimmed.hasPrefix("/") { return trimmed }
+        if trimmed.hasPrefix("Users/") { return "/" + trimmed }
+        return nil
     }
 }

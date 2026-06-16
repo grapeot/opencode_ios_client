@@ -690,6 +690,15 @@ struct PathNormalizerTests {
         let abs = "/Users/test/workspace/src%2Fapp.swift"
         #expect(PathNormalizer.resolveWorkspaceRelativePath(abs, workspaceDirectory: dir) == "src/app.swift")
     }
+
+    @Test func resolvesWorkspaceRelativePreservesExternalHostPath() {
+        let dir = "/Users/grapeot/co/knowledge_working"
+        let absWithoutSlash = "Users/grapeot/co/vatic/agentic_trading/docs/slides_260617/outline.md"
+        #expect(
+            PathNormalizer.resolveWorkspaceRelativePath(absWithoutSlash, workspaceDirectory: dir)
+                == "/Users/grapeot/co/vatic/agentic_trading/docs/slides_260617/outline.md"
+        )
+    }
 }
 
 struct WorkspaceMarkdownImageProviderTests {
@@ -2382,7 +2391,8 @@ actor MockAPIClient: APIClientProtocol {
     var sessionDiffResult: [FileDiff] = []
     var sessionDiffCallCount = 0
     var fileListResults: [String: [FileNode]] = [:]
-    var fileListRequests: [String] = []
+    var fileListRequests: [(path: String, directory: String?)] = []
+    var fileContentRequests: [(path: String, directory: String?)] = []
 
     func setHealthError(_ error: Error?) {
         healthError = error
@@ -2511,11 +2521,14 @@ actor MockAPIClient: APIClientProtocol {
         return sessionDiffResult
     }
     func sessionTodos(sessionID: String) async throws -> [TodoItem] { [] }
-    func fileList(path: String) async throws -> [FileNode] {
-        fileListRequests.append(path)
+    func fileList(path: String, directory: String?) async throws -> [FileNode] {
+        fileListRequests.append((path, directory))
         return fileListResults[path] ?? []
     }
-    func fileContent(path: String) async throws -> FileContent { FileContent(type: "text", content: "") }
+    func fileContent(path: String, directory: String?) async throws -> FileContent {
+        fileContentRequests.append((path, directory))
+        return FileContent(type: "text", content: "")
+    }
     func findFile(query: String, limit: Int) async throws -> [String] { [] }
     func fileStatus() async throws -> [FileStatusEntry] { [] }
     func forkSession(sessionID: String, messageID: String?) async throws -> Session {
@@ -2577,6 +2590,24 @@ struct AppStateFlowTests {
 
         #expect(state.isConnected == false)
         #expect(state.connectionError?.isEmpty == false)
+    }
+
+    @Test @MainActor func loadFileContentUsesDirectoryQueryForExternalHostPath() async throws {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.sessions = [
+            Self.makeSession(id: "s1", updated: 1, directory: "/Users/grapeot/co/knowledge_working")
+        ]
+        state.currentSessionID = "s1"
+
+        _ = try await state.loadFileContent(
+            path: "Users/grapeot/co/vatic/agentic_trading/docs/slides_260617/outline.md"
+        )
+
+        #expect(await apiClient.fileContentRequests.map { $0.path } == ["outline.md"])
+        #expect(await apiClient.fileContentRequests.map { $0.directory } == [
+            "/Users/grapeot/co/vatic/agentic_trading/docs/slides_260617"
+        ])
     }
 
     @Test @MainActor func loadSessionsSelectsFirstSessionWhenNeeded() async {

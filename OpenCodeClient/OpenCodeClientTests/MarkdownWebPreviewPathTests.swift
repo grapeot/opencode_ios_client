@@ -64,12 +64,12 @@ struct MarkdownWebPreviewPathTests {
     }
 
     @Test func absoluteOutsideWorkspaceIsNormalizedButNotRelativized() {
-        // Outside the workspace: normalize() strips the leading slash but cannot
-        // make it workspace-relative (no shared prefix).
+        // Outside the workspace: preserve the host absolute path so the file API
+        // can read it via the explicit `directory` query parameter.
         let resolved = MarkdownImageResolver.resolveRelativeReference(
             "/etc/hosts", markdownFilePath: mdPath, workspaceDirectory: workspace
         )
-        #expect(resolved == "etc/hosts")
+        #expect(resolved == "/etc/hosts")
     }
 
     @Test func nilMarkdownPathKeepsReferenceWorkspaceRelative() {
