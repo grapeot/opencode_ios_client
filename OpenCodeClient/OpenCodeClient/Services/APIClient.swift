@@ -257,22 +257,39 @@ actor APIClient {
         return try? decoder.decode(type, from: data)
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String = "build", model: Message.ModelInfo?) async throws {
+    func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment] = [], agent: String = "build", model: Message.ModelInfo?) async throws {
         struct PromptBody: Encodable {
             let parts: [PartInput]
             let agent: String
             let model: ModelInput?
             struct PartInput: Encodable {
-                let type = "text"
-                let text: String
+                let type: String
+                let text: String?
+                let mime: String?
+                let filename: String?
+                let url: String?
+
+                static func text(_ text: String) -> PartInput {
+                    PartInput(type: "text", text: text, mime: nil, filename: nil, url: nil)
+                }
+
+                static func file(_ attachment: ComposerImageAttachment) -> PartInput {
+                    PartInput(type: "file", text: nil, mime: attachment.mime, filename: attachment.filename, url: attachment.dataURL)
+                }
             }
             struct ModelInput: Encodable {
                 let providerID: String
                 let modelID: String
             }
         }
+        var parts: [PromptBody.PartInput] = []
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            parts.append(.text(text))
+        }
+        parts.append(contentsOf: attachments.map { .file($0) })
         let body = PromptBody(
-            parts: [.init(text: text)],
+            parts: parts,
             agent: agent,
             model: model.map { .init(providerID: $0.providerID, modelID: $0.modelID) }
         )
@@ -665,7 +682,7 @@ protocol APIClientProtocol: Actor {
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
-    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws
+    func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?) async throws
     func abort(sessionID: String) async throws
     func sessionStatus() async throws -> [String: SessionStatus]
     func pendingPermissions() async throws -> [APIClient.PermissionRequest]

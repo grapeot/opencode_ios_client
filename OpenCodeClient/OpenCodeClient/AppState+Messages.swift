@@ -169,7 +169,7 @@ extension AppState {
         }
     }
 
-    func sendMessage(_ text: String) async -> Bool {
+    func sendMessage(_ text: String, attachments: [ComposerImageAttachment] = []) async -> Bool {
         sendError = nil
         guard let sessionID = currentSessionID else {
             sendError = L10n.t(.chatSelectSessionFirst)
@@ -184,11 +184,11 @@ extension AppState {
             return false
         }
 
-        let tempMessageID = appendOptimisticUserMessage(text)
+        let tempMessageID = appendOptimisticUserMessage(text, attachments: attachments)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
         let agentName = selectedAgent?.name ?? "build"
         do {
-            try await apiClient.promptAsync(sessionID: sessionID, text: text, agent: agentName, model: model)
+            try await apiClient.promptAsync(sessionID: sessionID, text: text, attachments: attachments, agent: agentName, model: model)
             return true
         } catch {
             let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
@@ -230,11 +230,10 @@ extension AppState {
     }
 
     @discardableResult
-    func appendOptimisticUserMessage(_ text: String) -> String {
+    func appendOptimisticUserMessage(_ text: String, attachments: [ComposerImageAttachment] = []) -> String {
         guard let sessionID = currentSessionID else { return "" }
         let now = Int(Date().timeIntervalSince1970 * 1000)
         let messageID = "temp-user-\(UUID().uuidString)"
-        let partID = "temp-part-\(messageID)"
         let message = Message(
             id: messageID,
             sessionID: sessionID,
@@ -249,21 +248,41 @@ extension AppState {
             tokens: nil,
             cost: nil
         )
-        let part = Part(
-            id: partID,
-            messageID: messageID,
-            sessionID: sessionID,
-            type: "text",
-            text: text,
-            tool: nil,
-            callID: nil,
-            state: nil,
-            metadata: nil,
-            files: nil
-        )
-        let row = MessageWithParts(info: message, parts: [part])
+        var parts: [Part] = []
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(Part(
+                id: "temp-part-\(messageID)",
+                messageID: messageID,
+                sessionID: sessionID,
+                type: "text",
+                text: text,
+                tool: nil,
+                callID: nil,
+                state: nil,
+                metadata: nil,
+                files: nil
+            ))
+        }
+        for attachment in attachments {
+            parts.append(Part(
+                id: "temp-file-\(attachment.id.uuidString)",
+                messageID: messageID,
+                sessionID: sessionID,
+                type: "file",
+                text: nil,
+                tool: nil,
+                callID: nil,
+                state: nil,
+                metadata: nil,
+                files: nil,
+                mime: attachment.mime,
+                filename: attachment.filename,
+                url: attachment.dataURL
+            ))
+        }
+        let row = MessageWithParts(info: message, parts: parts)
         messages.append(row)
-        partsByMessage[messageID] = [part]
+        partsByMessage[messageID] = parts
         return messageID
     }
 

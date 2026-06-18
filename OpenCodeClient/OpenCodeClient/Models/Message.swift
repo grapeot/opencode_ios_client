@@ -92,6 +92,15 @@ nonisolated struct MessageWithParts: Codable {
     let parts: [Part]
 }
 
+struct ComposerImageAttachment: Identifiable, Equatable {
+    let id: UUID
+    let filename: String
+    let mime: String
+    let dataURL: String
+    let thumbnailData: Data
+    let byteSize: Int
+}
+
 /// Part.state can be String (simple) or object (ToolState with status/title/input/output)
 struct PartStateBridge: Codable {
     let displayString: String
@@ -234,6 +243,10 @@ nonisolated struct Part: Codable, Identifiable {
     let state: PartStateBridge?
     let metadata: PartMetadata?
     let files: [FileChange]?
+    var mime: String? = nil
+    var filename: String? = nil
+    var url: String? = nil
+    var source: String? = nil
 
     /// For UI display; handles both string and object state
     var stateDisplay: String? { state?.displayString }
@@ -347,6 +360,8 @@ nonisolated struct Part: Codable, Identifiable {
     var isReasoning: Bool { type == "reasoning" }
     var isTool: Bool { type == "tool" }
     var isPatch: Bool { type == "patch" }
+    var isFile: Bool { type == "file" }
+    var isImageAttachment: Bool { isFile && (mime?.hasPrefix("image/") ?? false) }
 
     /// 可跳转的文件路径列表：来自 files 数组、metadata.path、或 state.input 中的 path/patchText 解析
     var filePathsForNavigation: [String] {

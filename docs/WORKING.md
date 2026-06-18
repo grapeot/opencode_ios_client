@@ -5,9 +5,19 @@
 ## 当前状态
 
 - **最后更新**：2026-06-18
-- **分支**：`feature/revert-message-edit`
+- **分支**：`feature/image-attachments`
 - **编译/测试**：✅ `xcodebuild test` on iPhone 16 Simulator OS 18.4 通过
-- **Phase**：Message revert MVP ready to merge
+- **Phase**：Image attachments Phase 1/2 ready to merge
+
+### 2026-06-18 — Image attachments Phase 1/2
+
+- 范围按本轮决策收敛为前两阶段：发送相册图片 + 渲染历史 image/file part；不做 Files app、PDF/text 附件或 server-side upload。
+- 协议：`Part` 增加 `mime` / `filename` / `url` / `source`；`APIClient.promptAsync` 支持 mixed text/file parts，图片使用 Web 同构的 `data:image/jpeg;base64,...`。
+- Composer：新增 `PhotosPicker` 附件按钮和横向缩略图 strip；选择图片后本地转 JPEG，最长边 2048、quality 0.82、单图压缩后 5MB 上限；发送失败会恢复文本和附件。
+- Optimistic UI：`appendOptimisticUserMessage` 可生成 text + file parts，用户发送后立即看到图片附件。
+- 渲染：`MessageRowView` 对 user/assistant 的 `type == "file"` 都有显示路径；image part 显示缩略图并可点开 `ImageView` zoom/pan，非图片显示 fallback file card。
+- 测试：新增 `filePartDecoding`、`appendOptimisticUserMessageIncludesImageAttachmentPart`、`sendMessagePassesImageAttachmentsToAPI`。
+- 验证：`xcodebuild test -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'` 通过。
 
 ### 2026-06-18 — Message revert / Edit from here MVP
 

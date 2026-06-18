@@ -145,7 +145,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 | GET | `/session/:id/message` | 列出会话消息 | `{ info, parts }[]` |
 | POST | `/session/:id/message` | 发送消息并等待响应 | `{ info, parts }` |
 | GET | `/session/:id/message/:messageID` | 单条消息详情 | `{ info, parts }` |
-| POST | `/session/:id/prompt_async` | 异步发送消息（不等待） | `204 No Content` |
+| POST | `/session/:id/prompt_async` | 异步发送消息（不等待）；body `parts` 可包含 `text` / `file`（图片使用 `data:` URL） | `204 No Content` |
 | POST | `/session/:id/command` | 执行 slash 命令 | `{ info, parts }` |
 | POST | `/session/:id/shell` | 执行 shell 命令 | `{ info, parts }` |
 

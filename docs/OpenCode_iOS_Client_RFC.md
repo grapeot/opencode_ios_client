@@ -151,6 +151,17 @@ iOS 客户端支持 Web 端同源的 message revert MVP，用于从某条 user m
 - 消息可见性：`AppState.visibleMessages(_:revertMessageID:)` 按 OpenCode Web 语义隐藏 `message.id >= revert.messageID` 的已回滚消息；临时 optimistic message 保留
 - 非目标：MVP 不提供 `unrevert` / restore dock / part-level revert；这些行为留给后续需要时再补
 
+#### 3.1.3 Image attachments（已实现 Phase 1/2）
+
+iOS 图片支持与 OpenCode Web 保持同构：图片作为 prompt 的 `file` part 发送，`url` 使用 `data:<mime>;base64,...`，不新增独立 upload endpoint。
+
+- 发送模型：`APIClient.promptAsync` 支持 mixed parts；文本生成 `type: "text"`，图片生成 `type: "file"`、`mime`、`filename`、`url`
+- Composer：`ChatTabView` 使用 `PhotosPicker` 选择图片，最多 4 张；本地转 JPEG data URL，最长边 2048，JPEG quality 0.82，压缩后单图上限 5MB
+- 失败恢复：发送失败时恢复文本和附件状态；optimistic user message 同时包含 text part 与 file part
+- 渲染模型：`Part` 解码 `mime`、`filename`、`url`、`source`；`MessageRowView` 对 `type == "file"` 渲染图片缩略图或 fallback file card
+- 图片预览：历史 image attachment 点击后复用现有 `ImageView` zoom/pan 预览
+- 非目标：本轮不做 Files app 文件选择、PDF/text 附件、跨重启附件草稿持久化、server-side upload 或大 payload 分片
+
 #### 3.2 SSE 连接
 
 - 连接 `GET /global/event`
