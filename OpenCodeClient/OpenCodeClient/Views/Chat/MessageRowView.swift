@@ -17,6 +17,7 @@ struct MessageRowView: View {
     let onOpenResolvedPath: (String) -> Void
     let onOpenFilesTab: () -> Void
     let onForkFromMessage: ((String) -> Void)?
+    let onEditFromMessage: ((String) -> Void)?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var colorScheme
 
@@ -205,6 +206,15 @@ struct MessageRowView: View {
                 Spacer()
                 if onForkFromMessage != nil {
                     Menu {
+                        if onEditFromMessage != nil {
+                            Button {
+                                onEditFromMessage?(message.info.id)
+                            } label: {
+                                Label("Edit from here", systemImage: "pencil")
+                            }
+                            .disabled(state.isBusy)
+                        }
+
                         Button {
                             onForkFromMessage?(message.info.id)
                         } label: {

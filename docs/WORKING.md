@@ -4,11 +4,20 @@
 
 ## 当前状态
 
-- **最后更新**：2026-06-08
-- **分支**：`design/f3-voice-steer`（PR #84）
-- **编译**：✅ iPhone 16 Simulator build 通过
-- **测试**：✅ F3 deterministic composer UI tests 通过
-- **Phase**：F3 voice rail composer ready to merge
+- **最后更新**：2026-06-18
+- **分支**：`feature/revert-message-edit`
+- **编译/测试**：✅ `xcodebuild test` on iPhone 16 Simulator OS 18.4 通过
+- **Phase**：Message revert MVP ready to merge
+
+### 2026-06-18 — Message revert / Edit from here MVP
+
+- 目标收敛为最小可用版：只做 user message 的 `Edit from here`，不做 restore dock、`unrevert` UI 或 part-level revert。
+- 数据协议：`Session` 增加 `revert` 解码；`APIClient` 新增 `POST /session/:id/revert`，按当前 server 返回 `Session` 处理。
+- UI：user message 的 `⋯` 菜单新增 `Edit from here`；busy session 下禁用，避免 server busy 状态下 revert 失败。
+- 状态流：点击后调用 `AppState.editFromMessage`，成功后把原 user text parts 写回 composer draft，upsert returned session，并刷新 messages / diff / file status。
+- 渲染语义：`ChatTabView` 使用 `AppState.visibleMessages`，当 `currentSession.revert.messageID` 存在时隐藏 `message.id >= revert.messageID` 的历史行，与 Web 的 rewind 视图保持一致。
+- 测试：新增 `sessionDecodingWithRevert`、`visibleMessagesHidesRowsAtAndAfterRevertMessageID`、`editFromMessageCallsRevertAndStoresDraft`、`editFromMessageKeepsDraftUnchangedOnFailure`。
+- 验证：`xcodebuild test -project "OpenCodeClient.xcodeproj" -scheme "OpenCodeClient" -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.4'` 通过。
 
 ### 2026-06-14 — Markdown Web Preview 真机验收与收口
 
