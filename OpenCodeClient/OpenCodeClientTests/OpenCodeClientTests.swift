@@ -83,6 +83,18 @@ struct OpenCodeClientTests {
         #expect(message.isUser == true)
     }
 
+    @Test func filePartDecoding() throws {
+        let json = """
+        {"id":"p-file","messageID":"m1","sessionID":"s1","type":"file","text":null,"tool":null,"callID":null,"state":null,"metadata":null,"files":null,"mime":"image/jpeg","filename":"photo.jpg","url":"data:image/jpeg;base64,AAA","source":null}
+        """
+        let part = try JSONDecoder().decode(Part.self, from: Data(json.utf8))
+        #expect(part.isFile)
+        #expect(part.isImageAttachment)
+        #expect(part.mime == "image/jpeg")
+        #expect(part.filename == "photo.jpg")
+        #expect(part.url == "data:image/jpeg;base64,AAA")
+    }
+
     @Test func messageDecodingWithoutTokenTotal() throws {
         let json = """
         {"id":"m2","sessionID":"s1","role":"assistant","parentID":"m1","providerID":"openai","modelID":"gpt-5.2","time":{"created":0,"completed":1},"finish":"stop","tokens":{"input":10,"output":2,"reasoning":3,"cache":{"read":0,"write":0}}}
@@ -2409,7 +2421,7 @@ actor MockAPIClient: APIClientProtocol {
     var messageLimitRequests: [Int?] = []
     var messagesCallCount = 0
     var promptError: Error?
-    var promptAsyncCalls: [(String, String)] = []
+    var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
     var deletedSessionIDs: [String] = []
     var updateSessionCalls: [(String, String)] = []
     var updateSessionArchivedCalls: [(String, Int)] = []
@@ -2533,8 +2545,8 @@ actor MockAPIClient: APIClientProtocol {
         return messagesResult
     }
 
-    func promptAsync(sessionID: String, text: String, agent: String, model: Message.ModelInfo?) async throws {
-        promptAsyncCalls.append((sessionID, text))
+    func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?) async throws {
+        promptAsyncCalls.append((sessionID, text, attachments))
         if let promptError { throw promptError }
     }
 
@@ -2798,6 +2810,36 @@ struct AppStateFlowTests {
         #expect(state.messages.count == 1)
         #expect(state.partsByMessage["m1"]?.count == 1)
         #expect(state.partsByMessage["m1"]?.first?.text == "hi")
+    }
+
+    @Test @MainActor func appendOptimisticUserMessageIncludesImageAttachmentPart() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        let attachment = Self.makeAttachment(filename: "photo.jpg")
+
+        let tempMessageID = state.appendOptimisticUserMessage("look", attachments: [attachment])
+
+        let parts = state.partsByMessage[tempMessageID] ?? []
+        #expect(parts.map(\.type) == ["text", "file"])
+        #expect(parts.last?.mime == "image/jpeg")
+        #expect(parts.last?.filename == "photo.jpg")
+        #expect(parts.last?.url == attachment.dataURL)
+    }
+
+    @Test @MainActor func sendMessagePassesImageAttachmentsToAPI() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        let attachment = Self.makeAttachment(filename: "photo.jpg")
+
+        let success = await state.sendMessage("look", attachments: [attachment])
+
+        #expect(success)
+        let calls = await apiClient.promptAsyncCalls
+        #expect(calls.count == 1)
+        #expect(calls[0].0 == "s1")
+        #expect(calls[0].1 == "look")
+        #expect(calls[0].2 == [attachment])
     }
 
     @Test func visibleMessagesHidesRowsAtAndAfterRevertMessageID() {
@@ -3255,6 +3297,17 @@ struct AppStateFlowTests {
             files: nil
         )
         return MessageWithParts(info: message, parts: [part])
+    }
+
+    private static func makeAttachment(filename: String) -> ComposerImageAttachment {
+        ComposerImageAttachment(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            filename: filename,
+            mime: "image/jpeg",
+            dataURL: "data:image/jpeg;base64,AAA",
+            thumbnailData: Data([0x01, 0x02]),
+            byteSize: 3
+        )
     }
 }
 

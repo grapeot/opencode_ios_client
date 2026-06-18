@@ -6,6 +6,7 @@
 import SwiftUI
 import os
 import os.lock
+import PhotosUI
 import VoiceFlowKit
 #if canImport(UIKit)
 import UIKit
@@ -75,6 +76,10 @@ struct ChatTabView: View {
     @State var speechRecoveryActive = false
     @State var speechAudioLevel: Float = 0
     @State var speechAudioLevelTask: Task<Void, Never>?
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var imageAttachments: [ComposerImageAttachment] = []
+    @State private var attachmentError: String?
+    @State private var isLoadingAttachment = false
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
@@ -108,7 +113,7 @@ struct ChatTabView: View {
     }
 
     private var canSendNow: Bool {
-        ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText)
+        (ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) || (!imageAttachments.isEmpty && !isSending && !hasMarkedText))
             && !isRecording && !isShowingTranscribingUI && !isRetryingSpeech
     }
 
@@ -707,7 +712,33 @@ struct ChatTabView: View {
 
                     voiceRail
 
+                    if !imageAttachments.isEmpty || isLoadingAttachment || attachmentError != nil {
+                        attachmentStrip
+                    }
+
                     HStack(alignment: .bottom, spacing: DesignSpacing.sm) {
+                        PhotosPicker(
+                            selection: $selectedPhotoItems,
+                            maxSelectionCount: 4,
+                            matching: .images
+                        ) {
+                            ZStack {
+                                if isLoadingAttachment {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "photo")
+                                        .font(DesignControls.composerActionIconFont)
+                                }
+                            }
+                            .frame(width: DesignControls.composerPrimaryActionButtonSize, height: DesignControls.composerPrimaryActionButtonSize)
+                            .foregroundStyle(DesignColors.Brand.primary)
+                            .background(DesignColors.Brand.primary.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                        }
+                        .disabled(isLoadingAttachment || isSending)
+                        .accessibilityIdentifier("chat-attach-image")
+
                         ZStack(alignment: .topLeading) {
                             ChatComposerTextView(
                                 text: $inputText,
@@ -821,6 +852,9 @@ struct ChatTabView: View {
                 guard !isSyncingDraft else { return }
                 state.setDraftText(newValue, for: state.currentSessionID)
             }
+            .onChange(of: selectedPhotoItems) { _, newItems in
+                Task { await loadSelectedPhotos(newItems) }
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 guard newPhase == .background else { return }
                 Task { await stopSpeechForBackground() }
@@ -865,17 +899,65 @@ struct ChatTabView: View {
     }
 
     private func sendCurrentInput() {
-        guard ChatComposerSendGate.canSend(text: inputText, isSending: isSending, hasMarkedText: hasMarkedText) else { return }
+        guard canSendNow else { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachments = imageAttachments
 
         inputText = ""
+        imageAttachments = []
+        selectedPhotoItems = []
         hasMarkedText = false
         isSending = true
         Task {
-            let success = await state.sendMessage(text)
+            let success = await state.sendMessage(text, attachments: attachments)
             isSending = false
             if !success {
                 inputText = text
+                imageAttachments = attachments
+            }
+        }
+    }
+
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSpacing.sm) {
+                ForEach(imageAttachments) { attachment in
+                    ComposerAttachmentThumbnail(attachment: attachment) {
+                        imageAttachments.removeAll { $0.id == attachment.id }
+                    }
+                }
+                if isLoadingAttachment {
+                    ProgressView()
+                        .frame(width: 54, height: 54)
+                }
+                if let attachmentError {
+                    Text(attachmentError)
+                        .font(DesignTypography.micro)
+                        .foregroundStyle(DesignColors.Semantic.error)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .accessibilityIdentifier("chat-attachment-strip")
+    }
+
+    private func loadSelectedPhotos(_ items: [PhotosPickerItem]) async {
+        guard !items.isEmpty else { return }
+        attachmentError = nil
+        isLoadingAttachment = true
+        defer {
+            isLoadingAttachment = false
+            selectedPhotoItems = []
+        }
+
+        for item in items {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                let attachment = try ComposerImageTranscoder.makeAttachment(from: data)
+                imageAttachments.append(attachment)
+            } catch {
+                attachmentError = error.localizedDescription
             }
         }
     }
@@ -986,6 +1068,88 @@ struct ChatTabView: View {
                 ) else { return }
                 showSessionList = true
             }
+    }
+}
+
+private struct ComposerAttachmentThumbnail: View {
+    let attachment: ComposerImageAttachment
+    let onRemove: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            if let image = UIImage(data: attachment.thumbnailData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+            } else {
+                RoundedRectangle(cornerRadius: DesignCorners.medium)
+                    .fill(DesignColors.Neutral.text.opacity(0.08))
+                    .frame(width: 54, height: 54)
+                    .overlay(Image(systemName: "photo"))
+            }
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, DesignColors.Neutral.textSecondary)
+            }
+            .offset(x: 6, y: -6)
+            .accessibilityLabel("Remove image")
+        }
+        .accessibilityIdentifier("chat-attachment-thumbnail")
+    }
+}
+
+private enum ComposerImageTranscoder {
+    static let maxDimension: CGFloat = 2048
+    static let jpegQuality: CGFloat = 0.82
+    static let maxByteSize = 5 * 1024 * 1024
+
+    enum TranscodeError: LocalizedError {
+        case invalidImage
+        case tooLarge(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidImage:
+                return "Could not read the selected image."
+            case .tooLarge(let bytes):
+                return "Image is too large after compression (\(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)))."
+            }
+        }
+    }
+
+    static func makeAttachment(from data: Data) throws -> ComposerImageAttachment {
+        guard let image = UIImage(data: data) else { throw TranscodeError.invalidImage }
+        let resized = resize(image, maxDimension: maxDimension)
+        guard let jpeg = resized.jpegData(compressionQuality: jpegQuality) else { throw TranscodeError.invalidImage }
+        guard jpeg.count <= maxByteSize else { throw TranscodeError.tooLarge(jpeg.count) }
+        let thumb = resize(resized, maxDimension: 240).jpegData(compressionQuality: 0.75) ?? jpeg
+        let base64 = jpeg.base64EncodedString()
+        let id = UUID()
+        return ComposerImageAttachment(
+            id: id,
+            filename: "image-\(id.uuidString.prefix(8)).jpg",
+            mime: "image/jpeg",
+            dataURL: "data:image/jpeg;base64,\(base64)",
+            thumbnailData: thumb,
+            byteSize: jpeg.count
+        )
+    }
+
+    private static func resize(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let size = image.size
+        let longest = max(size.width, size.height)
+        guard longest > maxDimension, longest > 0 else { return image }
+        let scale = maxDimension / longest
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }
 

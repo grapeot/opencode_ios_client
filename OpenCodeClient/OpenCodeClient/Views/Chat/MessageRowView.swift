@@ -31,6 +31,7 @@ struct MessageRowView: View {
     private enum AssistantBlock: Identifiable {
         case text(Part)
         case cards([Part])
+        case attachment(Part)
 
         var id: String {
             switch self {
@@ -40,6 +41,8 @@ struct MessageRowView: View {
                 let first = parts.first?.id ?? "nil"
                 let last = parts.last?.id ?? "nil"
                 return "cards-\(first)-\(last)"
+            case .attachment(let part):
+                return "attachment-\(part.id)"
             }
         }
     }
@@ -73,6 +76,9 @@ struct MessageRowView: View {
             if part.isText {
                 flushBuffer()
                 blocks.append(.text(part))
+            } else if part.isFile {
+                flushBuffer()
+                blocks.append(.attachment(part))
             } else {
                 flushBuffer()
             }
@@ -194,6 +200,12 @@ struct MessageRowView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                     }
+                    let attachments = message.parts.filter { $0.isFile }
+                    if !attachments.isEmpty {
+                        MessageAttachmentsGrid(parts: attachments)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 10)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -246,6 +258,8 @@ struct MessageRowView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .cards(let parts):
                     cardsBlock(parts)
+                case .attachment(let part):
+                    MessageAttachmentView(part: part)
                 }
             }
 
@@ -328,5 +342,102 @@ struct MessageRowView: View {
         .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("toolcard.toolcalls")
+    }
+}
+
+private struct MessageAttachmentsGrid: View {
+    let parts: [Part]
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: 120, maximum: 180), spacing: DesignSpacing.sm)]
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: DesignSpacing.sm) {
+            ForEach(parts, id: \.id) { part in
+                MessageAttachmentView(part: part)
+            }
+        }
+    }
+}
+
+private struct MessageAttachmentView: View {
+    let part: Part
+    @State private var showImage = false
+
+    private var imageData: Data? {
+        guard part.isImageAttachment, let url = part.url else { return nil }
+        return Self.decodeDataURL(url)
+    }
+
+    var body: some View {
+        Group {
+            if let imageData, let image = UIImage(data: imageData) {
+                Button {
+                    showImage = true
+                } label: {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 140, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                        .overlay(alignment: .bottomLeading) {
+                            Text(part.filename ?? "Image")
+                                .font(DesignTypography.micro)
+                                .lineLimit(1)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.black.opacity(0.45))
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("message-attachment-image")
+                .sheet(isPresented: $showImage) {
+                    NavigationStack {
+                        ImageView(uiImage: image)
+                            .navigationTitle(part.filename ?? "Image")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") { showImage = false }
+                                }
+                            }
+                    }
+                }
+            } else {
+                HStack(spacing: DesignSpacing.sm) {
+                    Image(systemName: "paperclip")
+                        .foregroundStyle(DesignColors.Brand.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(part.filename ?? "Attachment")
+                            .font(DesignTypography.meta)
+                            .lineLimit(1)
+                        if let mime = part.mime {
+                            Text(mime)
+                                .font(DesignTypography.micro)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(DesignSpacing.cardPadding)
+                .background(DesignColors.Neutral.text.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                .accessibilityIdentifier("message-attachment-file")
+            }
+        }
+    }
+
+    private static func decodeDataURL(_ url: String) -> Data? {
+        guard let comma = url.firstIndex(of: ",") else { return nil }
+        let metadata = url[..<comma]
+        guard metadata.contains(";base64") else { return nil }
+        let raw = url[url.index(after: comma)...]
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: " ", with: "")
+        return Data(base64Encoded: raw)
     }
 }
