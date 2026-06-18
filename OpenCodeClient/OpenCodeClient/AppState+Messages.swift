@@ -8,6 +8,13 @@ import os
 ///
 /// State lives on `MessageStore`; this extension only orchestrates.
 extension AppState {
+    nonisolated static func visibleMessages(_ messages: [MessageWithParts], revertMessageID: String?) -> [MessageWithParts] {
+        guard let revertMessageID else { return messages }
+        return messages.filter { message in
+            message.info.id.hasPrefix("temp-") || message.info.id < revertMessageID
+        }
+    }
+
     func loadMessages() async {
         guard let sessionID = currentSessionID else { return }
         do {
@@ -189,6 +196,37 @@ extension AppState {
             removeMessage(id: tempMessageID)
             return false
         }
+    }
+
+    func editFromMessage(messageID: String) async -> String? {
+        guard isConnected else { return nil }
+        guard let sessionID = currentSessionID else { return nil }
+        guard let message = messages.first(where: { $0.info.id == messageID && $0.info.isUser }) else { return nil }
+
+        let draft = Self.editDraftText(for: message)
+        guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+
+        do {
+            let updatedSession = try await apiClient.revertSession(sessionID: sessionID, messageID: messageID, partID: nil)
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return nil }
+            upsertSession(updatedSession)
+            setDraftText(draft, for: sessionID)
+            await loadMessages()
+            await loadSessionDiff()
+            await loadFileStatus()
+            return draft
+        } catch {
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return nil }
+            sendError = error.localizedDescription
+            return nil
+        }
+    }
+
+    nonisolated static func editDraftText(for message: MessageWithParts) -> String {
+        message.parts
+            .filter { $0.isText }
+            .compactMap { $0.text }
+            .joined(separator: "\n\n")
     }
 
     @discardableResult

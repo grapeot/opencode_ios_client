@@ -62,6 +62,17 @@ struct OpenCodeClientTests {
         #expect(session.title == "Test")
     }
 
+    @Test func sessionDecodingWithRevert() throws {
+        let json = """
+        {"id":"s1","slug":"s1","projectID":"p1","directory":"/tmp","parentID":null,"title":"Test","version":"1","time":{"created":0,"updated":0},"share":null,"summary":null,"revert":{"messageID":"msg-2","partID":null,"snapshot":"abc","diff":"def"}}
+        """
+        let data = json.data(using: .utf8)!
+        let session = try JSONDecoder().decode(Session.self, from: data)
+        #expect(session.revert?.messageID == "msg-2")
+        #expect(session.revert?.snapshot == "abc")
+        #expect(session.revert?.diff == "def")
+    }
+
     @Test func messageDecoding() throws {
         let json = """
         {"id":"m1","sessionID":"s1","role":"user","parentID":null,"model":{"providerID":"anthropic","modelID":"claude-3"},"time":{"created":0,"completed":null},"finish":null}
@@ -2379,6 +2390,20 @@ actor MockAPIClient: APIClientProtocol {
     )
     var forkSessionError: Error?
     var forkSessionCalls: [(String, String?)] = []
+    var revertSessionResult = Session(
+        id: "s1",
+        slug: "s1",
+        projectID: "p1",
+        directory: "/tmp",
+        parentID: nil,
+        title: "Session",
+        version: "1",
+        time: .init(created: 2, updated: 3, archived: nil),
+        share: nil,
+        summary: nil
+    )
+    var revertSessionError: Error?
+    var revertSessionCalls: [(String, String, String?)] = []
     var messagesResult: [MessageWithParts] = []
     var messagesByLimit: [Int: [MessageWithParts]] = [:]
     var messageLimitRequests: [Int?] = []
@@ -2436,6 +2461,14 @@ actor MockAPIClient: APIClientProtocol {
 
     func setForkSessionError(_ error: Error?) {
         forkSessionError = error
+    }
+
+    func setRevertSessionResult(_ session: Session) {
+        revertSessionResult = session
+    }
+
+    func setRevertSessionError(_ error: Error?) {
+        revertSessionError = error
     }
 
     func configure(baseURL: String, username: String?, password: String?) {
@@ -2535,6 +2568,12 @@ actor MockAPIClient: APIClientProtocol {
         forkSessionCalls.append((sessionID, messageID))
         if let forkSessionError { throw forkSessionError }
         return forkSessionResult
+    }
+
+    func revertSession(sessionID: String, messageID: String, partID: String?) async throws -> Session {
+        revertSessionCalls.append((sessionID, messageID, partID))
+        if let revertSessionError { throw revertSessionError }
+        return revertSessionResult
     }
 }
 
@@ -2759,6 +2798,70 @@ struct AppStateFlowTests {
         #expect(state.messages.count == 1)
         #expect(state.partsByMessage["m1"]?.count == 1)
         #expect(state.partsByMessage["m1"]?.first?.text == "hi")
+    }
+
+    @Test func visibleMessagesHidesRowsAtAndAfterRevertMessageID() {
+        let rows = [
+            Self.makeMessageRow(messageID: "msg-1", sessionID: "s1", role: "user", text: "first"),
+            Self.makeMessageRow(messageID: "msg-2", sessionID: "s1", role: "assistant", text: "reply"),
+            Self.makeMessageRow(messageID: "msg-3", sessionID: "s1", role: "user", text: "edit me"),
+            Self.makeMessageRow(messageID: "msg-4", sessionID: "s1", role: "assistant", text: "old reply"),
+        ]
+
+        let visible = AppState.visibleMessages(rows, revertMessageID: "msg-3")
+
+        #expect(visible.map(\.info.id) == ["msg-1", "msg-2"])
+    }
+
+    @Test @MainActor func editFromMessageCallsRevertAndStoresDraft() async {
+        let apiClient = MockAPIClient()
+        var reverted = Self.makeSession(id: "s1", updated: 20)
+        reverted.revert = .init(messageID: "msg-3", partID: nil, snapshot: nil, diff: nil)
+        await apiClient.setRevertSessionResult(reverted)
+        await apiClient.setMessagesResult([
+            Self.makeMessageRow(messageID: "msg-1", sessionID: "s1", role: "user", text: "first"),
+            Self.makeMessageRow(messageID: "msg-2", sessionID: "s1", role: "assistant", text: "reply"),
+        ])
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [Self.makeSession(id: "s1", updated: 10)]
+        state.currentSessionID = "s1"
+        state.messages = [
+            Self.makeMessageRow(messageID: "msg-1", sessionID: "s1", role: "user", text: "first"),
+            Self.makeMessageRow(messageID: "msg-2", sessionID: "s1", role: "assistant", text: "reply"),
+            Self.makeMessageRow(messageID: "msg-3", sessionID: "s1", role: "user", text: "edit me"),
+        ]
+
+        let draft = await state.editFromMessage(messageID: "msg-3")
+
+        #expect(draft == "edit me")
+        #expect(state.draftText(for: "s1") == "edit me")
+        #expect(state.currentSession?.revert?.messageID == "msg-3")
+        #expect(state.messages.map(\.info.id) == ["msg-1", "msg-2"])
+        #expect(await apiClient.revertSessionCalls.count == 1)
+        #expect(await apiClient.revertSessionCalls.first?.0 == "s1")
+        #expect(await apiClient.revertSessionCalls.first?.1 == "msg-3")
+        #expect(await apiClient.messagesCallCount == 1)
+    }
+
+    @Test @MainActor func editFromMessageKeepsDraftUnchangedOnFailure() async {
+        let apiClient = MockAPIClient()
+        await apiClient.setRevertSessionError(APIError.invalidURL)
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.sessions = [Self.makeSession(id: "s1", updated: 10)]
+        state.currentSessionID = "s1"
+        state.setDraftText("existing draft", for: "s1")
+        state.messages = [
+            Self.makeMessageRow(messageID: "msg-3", sessionID: "s1", role: "user", text: "edit me"),
+        ]
+
+        let draft = await state.editFromMessage(messageID: "msg-3")
+
+        #expect(draft == nil)
+        #expect(state.draftText(for: "s1") == "existing draft")
+        #expect(state.currentSession?.revert == nil)
+        #expect(state.sendError != nil)
     }
 
     @Test @MainActor func loadOlderMessagesIncreasesLimitAndAppliesLargerWindow() async {

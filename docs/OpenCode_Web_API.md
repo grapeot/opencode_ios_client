@@ -134,8 +134,8 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 | DELETE | `/session/:id/share` | 取消分享 | `Session` |
 | GET | `/session/:id/diff` | 会话 diff | `FileDiff[]` |
 | POST | `/session/:id/summarize` | 会话摘要 | `boolean` |
-| POST | `/session/:id/revert` | 回滚某条消息 | `boolean` |
-| POST | `/session/:id/unrevert` | 恢复所有回滚 | `boolean` |
+| POST | `/session/:id/revert` | 回滚某条消息（body: `{ messageID, partID? }`） | `Session` |
+| POST | `/session/:id/unrevert` | 恢复所有回滚 | `Session` |
 | POST | `/session/:id/permissions/:permissionID` | 响应权限请求 | `boolean` |
 
 ### 4.8 Messages（消息与 AI 交互）

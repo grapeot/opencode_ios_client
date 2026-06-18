@@ -16,6 +16,7 @@ struct Session: Identifiable, Equatable {
     let time: TimeInfo
     let share: ShareInfo?
     let summary: SummaryInfo?
+    var revert: RevertInfo? = nil
 
     var isArchived: Bool {
         guard let archived = time.archived else { return false }
@@ -36,6 +37,13 @@ struct Session: Identifiable, Equatable {
         let additions: Int
         let deletions: Int
         let files: Int
+    }
+
+    struct RevertInfo: Codable, Equatable {
+        let messageID: String
+        let partID: String?
+        let snapshot: String?
+        let diff: String?
     }
 }
 

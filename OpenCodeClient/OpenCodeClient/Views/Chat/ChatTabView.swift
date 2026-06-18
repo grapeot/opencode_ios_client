@@ -297,18 +297,22 @@ struct ChatTabView: View {
 
     /// 合并同一 assistant turn 的连续 step-only 消息，使 tool 卡片在一个 grid 内连续显示
     private var messageGroups: [MessageGroupItem] {
+        let visibleMessages = AppState.visibleMessages(
+            state.messages,
+            revertMessageID: state.currentSession?.revert?.messageID
+        )
         var result: [MessageGroupItem] = []
         var i = 0
-        while i < state.messages.count {
-            let msg = state.messages[i]
+        while i < visibleMessages.count {
+            let msg = visibleMessages[i]
             if msg.info.isUser {
                 result.append(.user(msg))
                 i += 1
                 continue
             }
             var assistantBatch: [MessageWithParts] = []
-            while i < state.messages.count {
-                let m = state.messages[i]
+            while i < visibleMessages.count {
+                let m = visibleMessages[i]
                 if m.info.isUser { break }
                 assistantBatch.append(m)
                 i += 1
@@ -558,13 +562,19 @@ struct ChatTabView: View {
                                                         state: state,
                                                         message: msg,
                                                         sessionTodos: state.sessionTodos[msg.info.sessionID] ?? [],
-                                                        workspaceDirectory: state.currentSession?.directory,
-                                                        onOpenResolvedPath: openFileInChat,
-                                                        onOpenFilesTab: openFilesTab,
-                                                        onForkFromMessage: { messageID in
-                                                            Task { await state.forkSession(messageID: messageID) }
-                                                        }
-                                                    )
+                                                         workspaceDirectory: state.currentSession?.directory,
+                                                         onOpenResolvedPath: openFileInChat,
+                                                         onOpenFilesTab: openFilesTab,
+                                                         onForkFromMessage: { messageID in
+                                                             Task { await state.forkSession(messageID: messageID) }
+                                                         },
+                                                         onEditFromMessage: { messageID in
+                                                             Task {
+                                                                 guard let draft = await state.editFromMessage(messageID: messageID) else { return }
+                                                                 inputText = draft
+                                                             }
+                                                         }
+                                                     )
                                                 case .assistantMerged(let msgs):
                                                     if let first = msgs.first {
                                                         let merged = MessageWithParts(info: first.info, parts: msgs.flatMap(\.parts))
@@ -572,13 +582,19 @@ struct ChatTabView: View {
                                                             state: state,
                                                             message: merged,
                                                             sessionTodos: state.sessionTodos[merged.info.sessionID] ?? [],
-                                                            workspaceDirectory: state.currentSession?.directory,
-                                                            onOpenResolvedPath: openFileInChat,
-                                                            onOpenFilesTab: openFilesTab,
-                                                            onForkFromMessage: { messageID in
-                                                                Task { await state.forkSession(messageID: messageID) }
-                                                            }
-                                                        )
+                                                             workspaceDirectory: state.currentSession?.directory,
+                                                             onOpenResolvedPath: openFileInChat,
+                                                             onOpenFilesTab: openFilesTab,
+                                                             onForkFromMessage: { messageID in
+                                                                 Task { await state.forkSession(messageID: messageID) }
+                                                             },
+                                                             onEditFromMessage: { messageID in
+                                                                 Task {
+                                                                     guard let draft = await state.editFromMessage(messageID: messageID) else { return }
+                                                                     inputText = draft
+                                                                 }
+                                                             }
+                                                         )
                                                     }
                                                 }
                                             case .activity(let a):

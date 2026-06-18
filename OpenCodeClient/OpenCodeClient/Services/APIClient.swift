@@ -431,6 +431,21 @@ actor APIClient {
         )
         return try JSONDecoder().decode(Session.self, from: responseData)
     }
+
+    func revertSession(sessionID: String, messageID: String, partID: String? = nil) async throws -> Session {
+        struct RevertBody: Encodable {
+            let messageID: String
+            let partID: String?
+        }
+
+        let data = try JSONEncoder().encode(RevertBody(messageID: messageID, partID: partID))
+        let (responseData, _) = try await makeRequest(
+            path: "/session/\(sessionID)/revert",
+            method: "POST",
+            body: data
+        )
+        return try JSONDecoder().decode(Session.self, from: responseData)
+    }
 }
 
 struct FileNode: Codable, Identifiable {
@@ -667,6 +682,7 @@ protocol APIClientProtocol: Actor {
     func findFile(query: String, limit: Int) async throws -> [String]
     func fileStatus() async throws -> [FileStatusEntry]
     func forkSession(sessionID: String, messageID: String?) async throws -> Session
+    func revertSession(sessionID: String, messageID: String, partID: String?) async throws -> Session
 }
 
 extension APIClient: APIClientProtocol {}

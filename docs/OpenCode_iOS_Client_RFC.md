@@ -140,6 +140,17 @@ let channel = try await client.createDirectTCPIPChannel(
 - 目标是把弱网首屏时延从“全量历史”收敛到“最近可操作上下文”
 - 注意：`limit` 统计单位是 **message**，不是 tool 调用次数。一个 assistant message 可包含多个 tool/text/reasoning parts
 
+#### 3.1.2 Edit from here / message revert（已实现 MVP）
+
+iOS 客户端支持 Web 端同源的 message revert MVP，用于从某条 user message 回到历史位置、把原消息放回 composer，并让用户修改后重新发送。
+
+- 数据模型：`Session` 解码 server 返回的 `revert` 字段，最小字段为 `messageID`、`partID`、`snapshot`、`diff`
+- API：`APIClient.revertSession(sessionID:messageID:partID:)` 调用 `POST /session/:id/revert`，body 为 `{ messageID, partID? }`，返回更新后的 `Session`
+- UI 入口：`MessageRowView` 的 user message 菜单新增 `Edit from here`；busy session 下禁用，避免和 server 的 `assertNotBusy` 冲突
+- 状态编排：`AppState.editFromMessage(messageID:)` 只接受 user message，拼接 text parts 写回 per-session draft，upsert 返回的 session，并刷新 messages / diff / file status
+- 消息可见性：`AppState.visibleMessages(_:revertMessageID:)` 按 OpenCode Web 语义隐藏 `message.id >= revert.messageID` 的已回滚消息；临时 optimistic message 保留
+- 非目标：MVP 不提供 `unrevert` / restore dock / part-level revert；这些行为留给后续需要时再补
+
 #### 3.2 SSE 连接
 
 - 连接 `GET /global/event`
