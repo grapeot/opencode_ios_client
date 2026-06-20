@@ -1667,6 +1667,11 @@ struct ModelPresetShortNameTests {
         let preset = ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash")
         #expect(preset.shortName == "DS-L")
     }
+
+    @Test func ollamaGLMShortName() {
+        let preset = ModelPreset(displayName: "Ollama GLM 5.2", providerID: "ollama-cloud", modelID: "glm-5.2")
+        #expect(preset.shortName == "GLM")
+    }
     
     @Test func geminiShortName() {
         let preset = ModelPreset(displayName: "Gemini 3.1 Pro", providerID: "google", modelID: "gemini-3.1-pro")
@@ -1766,6 +1771,34 @@ struct ModelSelectionPersistenceTests {
             #expect(state.selectedModelIndex == 1)
             #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
             #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
+        }
+    }
+
+    @Test @MainActor func legacyKimiSelectionMapsToCurrentOllamaGLMPreset() {
+        withIsolatedModelSelectionDefaults {
+            let sessionID = "session-glm-ollama"
+            let legacySelection = [sessionID: "ollama-cloud/kimi-k2.6"]
+            let encoded = try! JSONEncoder().encode(legacySelection)
+            UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
+
+            let state = AppState()
+            let session = Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: sessionID,
+                version: "1",
+                time: .init(created: 0, updated: 100, archived: nil),
+                share: nil,
+                summary: nil
+            )
+
+            state.selectSession(session)
+
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Ollama GLM 5.2")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "ollama-cloud/glm-5.2")
         }
     }
 

@@ -21,6 +21,8 @@ extension AppState {
             return "zai-coding-plan/glm-5.2"
         case "openai/gpt-5.4":
             return "openai/gpt-5.5"
+        case "ollama-cloud/kimi-k2.6":
+            return "ollama-cloud/glm-5.2"
         default:
             return savedID
         }
