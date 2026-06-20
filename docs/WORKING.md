@@ -43,6 +43,12 @@
   - "状态卡当百科条目写"被列为反模式，明确卡片/表格/`<details>` 的边界
 - **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md。
 
+### 2026-06-20 — Ollama Cloud GLM 5.2 model preset
+
+- 模型列表中将 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6`）替换为 `Ollama GLM 5.2`（`ollama-cloud/glm-5.2`）。OpenCode server 的 `ollama-cloud` provider registry 已通过 `scripts/regen_models_local.py` 的 `INJECTIONS` 注入 `glm-5.2` 条目（见 `opencode-official/skills/update_models.md`），model key 是 `glm-5.2`。
+- `ModelPreset.shortName` 从 `Ollama Kimi K2.6 -> Kimi` 改为 `Ollama GLM 5.2 -> GLM`，保持窄屏 model chip 简短。
+- `canonicalModelPresetID` 新增 `ollama-cloud/kimi-k2.6 -> ollama-cloud/glm-5.2`，让之前选中 Kimi 的 session 平滑迁移到新 preset 而非掉回默认。
+
 ### 2026-06-10 — Ollama Cloud Kimi model preset
 
 - 模型列表中将 `MiniMax M3`（`ollama-cloud/minimax-m3`）替换为 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6`）。OpenCode server 的 `ollama-cloud` provider registry 暴露的 model key 是 `kimi-k2.6`；直接传 Ollama library tag `kimi-k2.6:cloud` 会让 `prompt_async` 返回 204 但后台不生成 assistant message。
