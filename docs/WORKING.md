@@ -46,7 +46,7 @@
 ### 2026-06-20 — Ollama Cloud GLM 5.2 model preset
 
 - 模型列表中将 `Ollama Kimi K2.6`（`ollama-cloud/kimi-k2.6`）替换为 `Ollama GLM 5.2`（`ollama-cloud/glm-5.2`）。OpenCode server 的 `ollama-cloud` provider registry 已通过 `scripts/regen_models_local.py` 的 `INJECTIONS` 注入 `glm-5.2` 条目（见 `opencode-official/skills/update_models.md`），model key 是 `glm-5.2`。
-- `ModelPreset.shortName` 从 `Ollama Kimi K2.6 -> Kimi` 改为 `Ollama GLM 5.2 -> GLM`，保持窄屏 model chip 简短。
+- `ModelPreset.shortName` 从 `Ollama Kimi K2.6 -> Kimi` 改为 `Ollama GLM 5.2 -> OGLM-5.2`（加 O 前缀和版本号，与顶部 `GLM-5.2` preset 的 shortName 区分），保持窄屏 model chip 简短。
 - `canonicalModelPresetID` 新增 `ollama-cloud/kimi-k2.6 -> ollama-cloud/glm-5.2`，让之前选中 Kimi 的 session 平滑迁移到新 preset 而非掉回默认。
 
 ### 2026-06-10 — Ollama Cloud Kimi model preset

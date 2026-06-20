@@ -1670,7 +1670,7 @@ struct ModelPresetShortNameTests {
 
     @Test func ollamaGLMShortName() {
         let preset = ModelPreset(displayName: "Ollama GLM 5.2", providerID: "ollama-cloud", modelID: "glm-5.2")
-        #expect(preset.shortName == "GLM")
+        #expect(preset.shortName == "OGLM-5.2")
     }
     
     @Test func geminiShortName() {
