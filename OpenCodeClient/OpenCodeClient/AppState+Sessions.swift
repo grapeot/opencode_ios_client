@@ -55,6 +55,19 @@ extension AppState {
     func testConnection() async {
         connectionError = nil
 
+        #if !os(visionOS)
+        if currentHostProfile?.transport == .sshTunnel || sshTunnelManager.config.isEnabled {
+            if sshTunnelManager.status != .connected {
+                await sshTunnelManager.connect()
+            }
+            if case .error(let message) = sshTunnelManager.status {
+                isConnected = false
+                connectionError = "SSH tunnel failed: \(message)"
+                return
+            }
+        }
+        #endif
+
         let info = Self.serverURLInfo(serverURL)
         guard info.isAllowed, let baseURL = info.normalized else {
             isConnected = false

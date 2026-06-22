@@ -315,10 +315,10 @@ final class SSHTunnelManager: ObservableObject {
         print("[SSH] Connected successfully")
         #endif
         
-        try startLocalListener(sshClient: client)
+        try await startLocalListener(sshClient: client)
     }
 
-    private func startLocalListener(sshClient: SSHClient) throws {
+    private func startLocalListener(sshClient: SSHClient) async throws {
         if let listener {
             listener.cancel()
             self.listener = nil
@@ -332,19 +332,6 @@ final class SSHTunnelManager: ObservableObject {
         self.listener = listener
 
         let queue = DispatchQueue(label: "com.opencode.ssh.tunnel.listener")
-        listener.stateUpdateHandler = { [weak self] newState in
-            guard let self else { return }
-            switch newState {
-            case .failed(let err):
-                Task { @MainActor in
-                    self.status = .error("Local listener failed: \(err.localizedDescription)")
-                    self.disconnect(updateStatus: false)
-                }
-            default:
-                break
-            }
-        }
-
         listener.newConnectionHandler = { [weak self] conn in
             guard let self else { return }
             Task { @MainActor in
@@ -352,7 +339,32 @@ final class SSHTunnelManager: ObservableObject {
             }
         }
 
-        listener.start(queue: queue)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var didResume = false
+            listener.stateUpdateHandler = { [weak self] newState in
+                guard let self else { return }
+                switch newState {
+                case .ready:
+                    if !didResume {
+                        didResume = true
+                        continuation.resume()
+                    }
+                case .failed(let err):
+                    if !didResume {
+                        didResume = true
+                        continuation.resume(throwing: SSHError.tunnelFailed("Local listener failed: \(err.localizedDescription)"))
+                    } else {
+                        Task { @MainActor in
+                            self.status = .error("Local listener failed: \(err.localizedDescription)")
+                            self.disconnect(updateStatus: false)
+                        }
+                    }
+                default:
+                    break
+                }
+            }
+            listener.start(queue: queue)
+        }
     }
 
     nonisolated private func handleLocalConnection(_ conn: NWConnection, sshClient: SSHClient) {

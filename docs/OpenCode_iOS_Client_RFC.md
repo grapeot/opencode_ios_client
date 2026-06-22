@@ -329,7 +329,8 @@ enum SSHKeyManager {
 **SSH UX 补充**：
 - 在 Settings 内显示 setup guide：复制设备公钥给管理员，并填写管理员返回的 assigned remote port
 - 公钥复制入口常驻，不依赖 tunnel enable 状态
-- 在 SSH 配置区增加灰字提示：启用 SSH 后仍需到上方 `Server Connection` 点击 `Test Connection`
+- SSH Host Profile 的 `Test Connection` 先建立 SSH tunnel，并等本地 `127.0.0.1:4096` listener ready；只有 tunnel ready 后才请求 `/global/health`
+- tunnel 建立失败时把 SSH 错误写入 connection error，避免只显示 disconnected
 
 ### 3.7 Markdown 图片解析契约
 
