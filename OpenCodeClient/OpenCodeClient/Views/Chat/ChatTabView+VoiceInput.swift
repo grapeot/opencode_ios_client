@@ -2,6 +2,9 @@ import SwiftUI
 import os
 import os.lock
 import VoiceFlowKit
+#if os(iOS) || os(visionOS)
+@preconcurrency import AVFoundation
+#endif
 
 /// Mic-button voice input for the chat composer. Holds the speech
 /// session, microphone, heartbeat task, and event consumer task; calls
@@ -44,6 +47,30 @@ extension ChatTabView {
 
     static func speechFailureInput(prefix: String, lastPartialTranscript: String) -> String {
         mergedSpeechInput(prefix: prefix, transcript: lastPartialTranscript)
+    }
+
+    static func requestMicrophonePermissionForRecording() async -> Bool {
+        #if os(iOS) || os(visionOS)
+        let session = AVAudioSession.sharedInstance()
+        switch session.recordPermission {
+        case .granted:
+            return true
+        case .denied:
+            return false
+        case .undetermined:
+            return await withCheckedContinuation { continuation in
+                DispatchQueue.main.async {
+                    session.requestRecordPermission { granted in
+                        continuation.resume(returning: granted)
+                    }
+                }
+            }
+        @unknown default:
+            return false
+        }
+        #else
+        return true
+        #endif
     }
 
     func startSpeechHeartbeat(for session: VoiceFlowSession) {
@@ -217,7 +244,7 @@ extension ChatTabView {
             }
 
             let permissionStart = ProcessInfo.processInfo.systemUptime
-            let allowed = await microphone.requestPermission()
+            let allowed = await Self.requestMicrophonePermissionForRecording()
             Self.logger.notice("[SpeechProfile] microphone permission allowed=\(allowed, privacy: .public) ms=\(max(0, Int((ProcessInfo.processInfo.systemUptime - permissionStart) * 1000)), privacy: .public)")
             guard allowed else {
                 speechError = L10n.t(.chatMicrophoneDenied)
