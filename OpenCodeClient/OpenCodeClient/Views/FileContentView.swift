@@ -27,9 +27,9 @@ enum MarkdownPreviewMode: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .native: return "Native Preview"
-        case .web: return "Web Preview"
-        case .source: return "Markdown Source"
+        case .native: return L10n.t(.fileNativePreview)
+        case .web: return L10n.t(.fileWebPreview)
+        case .source: return L10n.t(.fileMarkdownSource)
         }
     }
 
@@ -95,7 +95,7 @@ struct FileContentView: View {
         if isMarkdown {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Picker("Preview Mode", selection: $previewMode) {
+                    Picker(L10n.t(.filePreviewMode), selection: $previewMode) {
                         ForEach(MarkdownPreviewMode.allCases, id: \.self) { mode in
                             Label(mode.label, systemImage: mode.menuSystemImage).tag(mode)
                         }
@@ -111,16 +111,16 @@ struct FileContentView: View {
     var body: some View {
         Group {
             if isLoading {
-                ProgressView("Loading...")
+                ProgressView(L10n.t(.appLoading))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let err = loadError {
-                ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(err))
+                ContentUnavailableView(L10n.t(.appError), systemImage: "exclamationmark.triangle", description: Text(err))
             } else if let data = imageData, let uiImage = UIImage(data: data) {
                 ImageView(uiImage: uiImage)
             } else if let text = content {
                 contentView(text: text)
             } else {
-                ContentUnavailableView("No content", systemImage: "doc.text")
+                ContentUnavailableView(L10n.t(.appNoContent), systemImage: "doc.text")
             }
         }
         .navigationTitle(fileName)
@@ -208,16 +208,16 @@ struct FileContentView: View {
                                 if let data = Data(base64Encoded: cleaned), UIImage(data: data) != nil {
                                     imageData = data
                                 } else {
-                                    loadError = "Failed to decode image"
+                                    loadError = L10n.t(.contentImageDecodeFailed)
                                 }
                             }
                         } else {
-                            loadError = "No image data"
+                            loadError = L10n.t(.contentNoImageData)
                         }
                     } else if let text = fc.text {
                         content = text
                     } else if fc.content != nil, fc.type == "binary" {
-                        loadError = "Binary file"
+                        loadError = L10n.t(.fileBinary)
                     }
                     isLoading = false
                 }
@@ -327,7 +327,7 @@ struct MarkdownPreviewView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if resolvedPreviewText == nil {
-                    ProgressView("Loading preview...")
+                    ProgressView(L10n.t(.markdownPreviewLoading))
                         .frame(maxWidth: .infinity, alignment: .center)
                 } else {
                     Markdown(

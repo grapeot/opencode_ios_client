@@ -457,6 +457,7 @@ struct ContentView: View {
             #endif
         }
         .preferredColorScheme(themeColorScheme)
+        .environment(\.locale, L10n.currentLocale)
         .onChange(of: sizeClass) { _, newValue in
             // iPhone → iPad 或 split layout 切换时，将 sheet 预览迁移到中间栏预览。
             if newValue == .regular, let p = state.fileToOpenInFilesTab {

@@ -30,7 +30,7 @@ struct ToolPartView: View {
     }
 
     private var toolDisplayName: String {
-        let raw = part.tool ?? "tool"
+        let raw = part.tool ?? L10n.t(.toolOpenFile)
         if raw == "apply_patch" { return "patch" }
         return raw
     }
@@ -70,7 +70,7 @@ struct ToolPartView: View {
     }
 
     private var imageDisplayName: String {
-        let raw = imageCandidatePaths.first(where: { ImageFileUtils.isImage($0) }) ?? "Image"
+        let raw = imageCandidatePaths.first(where: { ImageFileUtils.isImage($0) }) ?? L10n.t(.attachmentImageTitle)
         return raw.split(separator: "/").last.map(String.init) ?? raw
     }
 
@@ -131,7 +131,7 @@ struct ToolPartView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "photo")
                                         .foregroundStyle(.secondary)
-                                    Text("Image file")
+                                    Text(L10n.t(.toolImageFile))
                                         .font(DesignTypography.micro)
                                         .foregroundStyle(.secondary)
                                 }
@@ -265,7 +265,7 @@ struct ToolPartView: View {
                                 }
                             }
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Close") {
+                                Button(L10n.t(.appClose)) {
                                     showImageSheet = false
                                 }
                             }

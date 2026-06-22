@@ -54,31 +54,31 @@ extension AppState {
 
     func testConnection() async {
         connectionError = nil
-        updateConnectionDiagnostic(phase: .health, message: "Checking OpenCode health...")
+        updateConnectionDiagnostic(phase: .health, message: L10n.t(.hostDiagnosticCheckingHealth))
 
         #if !os(visionOS)
         if currentHostProfile?.transport == .sshTunnel || sshTunnelManager.config.isEnabled {
             updateConnectionDiagnostic(
                 phase: .sshGateway,
-                message: "Connecting to SSH gateway...",
-                recoveryHint: "Confirm the gateway host, SSH port, device public key, and network reachability."
+                message: L10n.t(.hostDiagnosticConnectingSSHGateway),
+                recoveryHint: L10n.t(.hostDiagnosticHintConfirmGateway)
             )
             if sshTunnelManager.status != .connected {
                 await sshTunnelManager.connect()
             }
             if case .error(let message) = sshTunnelManager.status {
                 isConnected = false
-                connectionError = "SSH tunnel failed: \(message)"
+                connectionError = L10n.t(.hostDiagnosticSSHTunnelFailed, message)
                 updateConnectionDiagnostic(
                     phase: .failed,
                     message: connectionError ?? message,
-                    recoveryHint: "Copy this device public key again if the server has not authorized it."
+                    recoveryHint: L10n.t(.hostDiagnosticHintCopyDeviceKeyAgain)
                 )
                 return
             }
             updateConnectionDiagnostic(
                 phase: .localTunnel,
-                message: "SSH tunnel is ready; checking OpenCode health..."
+                message: L10n.t(.hostDiagnosticTunnelReadyCheckingHealth)
             )
         }
         #endif
@@ -90,29 +90,29 @@ extension AppState {
             updateConnectionDiagnostic(
                 phase: .failed,
                 message: connectionError ?? L10n.t(.errorInvalidBaseURL),
-                recoveryHint: "Use host:port, http://host:port, or https://host:port."
+                recoveryHint: L10n.t(.hostDiagnosticHintURLFormat)
             )
             return
         }
 
         await apiClient.configure(baseURL: baseURL, username: username.isEmpty ? nil : username, password: password.isEmpty ? nil : password)
         do {
-            updateConnectionDiagnostic(phase: .health, message: "Checking \(baseURL)/global/health...")
+            updateConnectionDiagnostic(phase: .health, message: L10n.t(.hostDiagnosticCheckingHealthURL, baseURL))
             let health = try await apiClient.health()
             isConnected = health.healthy
             serverVersion = health.version
             if isConnected {
                 updateConnectionDiagnostic(
                     phase: .connected,
-                    message: "Connected to OpenCode\(health.version.map { " \($0)" } ?? "")."
+                    message: L10n.t(.hostDiagnosticConnectedToOpenCode, health.version.map { " \($0)" } ?? "")
                 )
                 connectSSE()
             } else {
-                connectionError = "OpenCode health check returned unhealthy."
+                connectionError = L10n.t(.hostDiagnosticHealthUnhealthy)
                 updateConnectionDiagnostic(
                     phase: .failed,
-                    message: connectionError ?? "OpenCode health check returned unhealthy.",
-                    recoveryHint: "Check the OpenCode server process and logs."
+                    message: connectionError ?? L10n.t(.hostDiagnosticHealthUnhealthy),
+                    recoveryHint: L10n.t(.hostDiagnosticHintCheckServerLogs)
                 )
             }
         } catch {
@@ -122,7 +122,7 @@ extension AppState {
             updateConnectionDiagnostic(
                 phase: .failed,
                 message: message,
-                recoveryHint: "For SSH tunnel hosts, first verify the gateway values and device key. For direct hosts, verify the URL from this device."
+                recoveryHint: L10n.t(.hostDiagnosticHintVerifyHostConfig)
             )
         }
     }

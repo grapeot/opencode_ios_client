@@ -33,7 +33,7 @@ struct FileCardView: View {
     }
 
     private var basename: String {
-        guard let path = displayPath, !path.isEmpty else { return "file" }
+        guard let path = displayPath, !path.isEmpty else { return L10n.t(.fileNoContent) }
         return path.split(separator: "/").last.map(String.init) ?? path
     }
 
@@ -56,7 +56,7 @@ struct FileCardView: View {
     }
 
     private var fileAccessibilityLabel: String {
-        isReadOnlyFileTool ? "Read file \(basename)" : "Write file \(basename)"
+        isReadOnlyFileTool ? L10n.t(.toolReadFileAccessibilityLabel, basename) : L10n.t(.toolWriteFileAccessibilityLabel, basename)
     }
 
     private var fileAccent: Color {
@@ -111,7 +111,7 @@ struct FileCardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("toolcard.folder.\(basename)")
-        .accessibilityLabel("Read directory \(basename)")
+        .accessibilityLabel(L10n.t(.toolReadDirectoryAccessibilityLabel, basename))
         .sheet(isPresented: $showFolderSheet) {
             FolderContentsSheet(
                 folderName: basename,
@@ -171,9 +171,9 @@ private struct FolderContentsSheet: View {
             Group {
                 if sortedEntries.isEmpty {
                     ContentUnavailableView(
-                        "Empty folder",
+                        L10n.t(.folderEmptyTitle),
                         systemImage: "folder",
-                        description: Text("This directory has no entries.")
+                        description: Text(L10n.t(.folderEmptyDescription))
                     )
                 } else {
                     List(sortedEntries) { entry in

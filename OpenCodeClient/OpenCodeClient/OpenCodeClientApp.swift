@@ -25,7 +25,7 @@ struct OpenCodeClientApp: App {
             if let item = item.wrappedValue {
                 MarkdownImagePreviewWindow(item: item)
             } else {
-                Text("No image selected")
+                Text(L10n.t(.contentNoImageData))
             }
         }
         .defaultSize(width: 1200, height: 900)

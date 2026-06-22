@@ -35,7 +35,7 @@ struct TodoListPanel: View {
                     .padding(.top, DesignSpacing.md)
                     .padding(.bottom, 2)
                 HStack {
-                    Text("\(completedCount)/\(totalCount) completed")
+                    Text(L10n.t(.todoPanelCompleted, Int32(completedCount), Int32(totalCount)))
                         .font(DesignTypography.meta)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -76,7 +76,7 @@ struct TodoListPanel: View {
             Image(systemName: "checklist")
                 .font(.title)
                 .foregroundStyle(.secondary)
-            Text("No todos yet")
+            Text(L10n.t(.todoPanelEmpty))
                 .font(DesignTypography.meta)
                 .foregroundStyle(.secondary)
         }

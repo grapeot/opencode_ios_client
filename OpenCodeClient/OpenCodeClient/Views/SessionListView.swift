@@ -364,7 +364,7 @@ struct SessionRowView: View {
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        formatter.locale = Locale.current
+        formatter.locale = L10n.currentLocale
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 

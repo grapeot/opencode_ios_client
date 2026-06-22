@@ -170,7 +170,7 @@ struct MessageRowView: View {
             VStack(alignment: .leading, spacing: DesignSpacing.sm) {
                 Text(preview)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("Large message: showing first \(preview.count.formatted()) of \(text.count.formatted()) characters. Markdown rendering is skipped to keep the app responsive.")
+                Text(L10n.t(.chatLargeMessagePreviewNotice, preview.count.formatted(), text.count.formatted()))
                     .font(DesignTypography.micro)
                     .foregroundStyle(.secondary)
             }
@@ -222,7 +222,7 @@ struct MessageRowView: View {
                             Button {
                                 onEditFromMessage?(message.info.id)
                             } label: {
-                                Label("Edit from here", systemImage: "pencil")
+                                Label(L10n.t(.chatEditFromHere), systemImage: "pencil")
                             }
                             .disabled(state.isBusy)
                         }
@@ -230,7 +230,7 @@ struct MessageRowView: View {
                         Button {
                             onForkFromMessage?(message.info.id)
                         } label: {
-                            Label("Fork from here", systemImage: "arrow.triangle.branch")
+                            Label(L10n.t(.chatForkFromHere), systemImage: "arrow.triangle.branch")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -331,7 +331,7 @@ struct MessageRowView: View {
             }
             .padding(.top, DesignSpacing.sm)
         } label: {
-            Text("\(parts.count) tool calls")
+            Text(L10n.toolCallsCount(parts.count))
                 .font(DesignTypography.micro)
                 .fontWeight(.medium)
                 .foregroundStyle(DesignColors.Brand.primary)
@@ -382,7 +382,7 @@ private struct MessageAttachmentView: View {
                         .frame(width: 140, height: 100)
                         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
                         .overlay(alignment: .bottomLeading) {
-                            Text(part.filename ?? "Image")
+                            Text(part.filename ?? L10n.t(.attachmentImageTitle))
                                 .font(DesignTypography.micro)
                                 .lineLimit(1)
                                 .foregroundStyle(.white)
@@ -397,11 +397,11 @@ private struct MessageAttachmentView: View {
                 .sheet(isPresented: $showImage) {
                     NavigationStack {
                         ImageView(uiImage: image)
-                            .navigationTitle(part.filename ?? "Image")
+                            .navigationTitle(part.filename ?? L10n.t(.attachmentImageTitle))
                             .navigationBarTitleDisplayMode(.inline)
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
-                                    Button("Done") { showImage = false }
+                                    Button(L10n.t(.appDone)) { showImage = false }
                                 }
                             }
                     }
@@ -411,7 +411,7 @@ private struct MessageAttachmentView: View {
                     Image(systemName: "paperclip")
                         .foregroundStyle(DesignColors.Brand.primary)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(part.filename ?? "Attachment")
+                        Text(part.filename ?? L10n.t(.attachmentFileTitle))
                             .font(DesignTypography.meta)
                             .lineLimit(1)
                         if let mime = part.mime {

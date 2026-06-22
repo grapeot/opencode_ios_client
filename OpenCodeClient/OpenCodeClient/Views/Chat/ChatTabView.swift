@@ -1097,7 +1097,7 @@ private struct ComposerAttachmentThumbnail: View {
                     .foregroundStyle(.white, DesignColors.Neutral.textSecondary)
             }
             .offset(x: 6, y: -6)
-            .accessibilityLabel("Remove image")
+            .accessibilityLabel(L10n.t(.attachmentRemoveImageAccessibilityLabel))
         }
         .accessibilityIdentifier("chat-attachment-thumbnail")
     }
@@ -1115,9 +1115,9 @@ private enum ComposerImageTranscoder {
         var errorDescription: String? {
             switch self {
             case .invalidImage:
-                return "Could not read the selected image."
+                return L10n.t(.attachmentImageReadFailed)
             case .tooLarge(let bytes):
-                return "Image is too large after compression (\(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)))."
+                return L10n.t(.attachmentImageTooLargeAfterCompression, ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
             }
         }
     }
