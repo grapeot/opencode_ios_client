@@ -42,6 +42,7 @@ enum L10n {
         case settingsVpsHost
         case settingsSshPort
         case settingsVpsPort
+        case settingsAssignedRemotePort
         case settingsSetServerAddress
         case settingsKnownHost
         case settingsResetTrustedHost
@@ -51,6 +52,9 @@ enum L10n {
         case settingsNoTunnelCommand
         case settingsSshTunnel
         case settingsSshTunnelHelp
+        case settingsSshSetupGuide
+        case settingsSshSetupGuideTitle
+        case settingsSshSetupGuideBody
         case settingsAutoTheme
         case settingsLightTheme
         case settingsDarkTheme
@@ -279,17 +283,21 @@ enum L10n {
         Key.settingsAfterEnableSshTip.rawValue: "After enabling SSH Tunnel, tap Test Connection in Server Connection above.",
         Key.settingsVpsHost.rawValue: "VPS Host",
         Key.settingsSshPort.rawValue: "SSH Port",
-        Key.settingsVpsPort.rawValue: "VPS Port",
+        Key.settingsVpsPort.rawValue: "Remote Port",
+        Key.settingsAssignedRemotePort.rawValue: "Assigned Remote Port",
         Key.settingsSetServerAddress.rawValue: "Set Server Address to 127.0.0.1:4096",
         Key.settingsKnownHost.rawValue: "Known Host",
         Key.settingsResetTrustedHost.rawValue: "Reset Trusted Host",
         Key.settingsCopyPublicKey.rawValue: "Copy Public Key",
         Key.settingsPublicKeyCopied.rawValue: "Public Key Copied",
         Key.settingsViewPublicKey.rawValue: "View Public Key",
-        Key.settingsReverseTunnelCommand.rawValue: "Reverse Tunnel Command",
-        Key.settingsNoTunnelCommand.rawValue: "Fill VPS Host, SSH Port, Username, and VPS Port to generate the reverse tunnel command.",
+        Key.settingsReverseTunnelCommand.rawValue: "SSH Tunnel Command",
+        Key.settingsNoTunnelCommand.rawValue: "Fill Host, SSH Port, Username, and Assigned Remote Port.",
         Key.settingsSshTunnel.rawValue: "SSH Tunnel",
-        Key.settingsSshTunnelHelp.rawValue: "Forwards iOS 127.0.0.1:4096 to VPS 127.0.0.1:<VPS Port>. 1) Copy the public key and add it to VPS ~/.ssh/authorized_keys. 2) Run the generated reverse tunnel command on your computer. 3) First connect uses TOFU to trust host key; later connections must match. 4) Set Server Address to 127.0.0.1:4096 and tap Test Connection above.",
+        Key.settingsSshTunnelHelp.rawValue: "Connects local 127.0.0.1:4096 through SSH to the assigned OpenCode remote port. Copy this device's public key to the server admin before connecting.",
+        Key.settingsSshSetupGuide.rawValue: "Setup Guide",
+        Key.settingsSshSetupGuideTitle.rawValue: "SSH Gateway Setup",
+        Key.settingsSshSetupGuideBody.rawValue: "1. Tap Copy Public Key and send it to the server admin.\n\n2. The admin adds this device key to your user and gives you Host, SSH Port, Username, and Assigned Remote Port. For opencode-private-host, Username is usually opencode, SSH Port is usually 8006, and the first user's Remote Port is usually 19001.\n\n3. Fill those values here, enable SSH Tunnel, then tap Set Server Address to 127.0.0.1:4096.\n\n4. Tap Test Connection. The app will connect to local 127.0.0.1:4096; the SSH tunnel forwards it to your private OpenCode container.\n\n5. If provider auth is not configured yet, ask the admin to complete the first provider login in the OpenCode Web UI.",
         Key.settingsAutoTheme.rawValue: "Auto",
         Key.settingsLightTheme.rawValue: "Light",
         Key.settingsDarkTheme.rawValue: "Dark",
@@ -307,7 +315,7 @@ enum L10n {
         Key.settingsRotateKeyTitle.rawValue: "Rotate SSH Key?",
         Key.settingsRotateKeyPrompt.rawValue: "This will generate a new key pair. You will need to update the public key on your VPS.",
         Key.settingsPublicKeyTitle.rawValue: "Your Public Key",
-        Key.settingsPublicKeyFooter.rawValue: "Add this key to your VPS: ~/.ssh/authorized_keys",
+        Key.settingsPublicKeyFooter.rawValue: "Send this public key to the server admin. Do not share your private key.",
         Key.settingsCopyToClipboard.rawValue: "Copy to Clipboard",
         Key.settingsPublicKeyCopyFailed.rawValue: "Unable to load SSH public key.",
         Key.settingsPublicKeyRotate.rawValue: "Rotate Key",
@@ -517,17 +525,21 @@ enum L10n {
         Key.settingsAfterEnableSshTip.rawValue: "开启 SSH 隧道后，请在上方 Server Connection 点击 Test Connection。",
         Key.settingsVpsHost.rawValue: "VPS 地址",
         Key.settingsSshPort.rawValue: "SSH 端口",
-        Key.settingsVpsPort.rawValue: "VPS 端口",
+        Key.settingsVpsPort.rawValue: "远端端口",
+        Key.settingsAssignedRemotePort.rawValue: "分配的远端端口",
         Key.settingsSetServerAddress.rawValue: "将服务器地址设置为 127.0.0.1:4096",
         Key.settingsKnownHost.rawValue: "Known Host",
         Key.settingsResetTrustedHost.rawValue: "重置已信任主机",
         Key.settingsCopyPublicKey.rawValue: "复制公钥",
         Key.settingsPublicKeyCopied.rawValue: "公钥已复制",
         Key.settingsViewPublicKey.rawValue: "查看公钥",
-        Key.settingsReverseTunnelCommand.rawValue: "反向隧道命令",
-        Key.settingsNoTunnelCommand.rawValue: "请先填写 VPS Host、SSH Port、Username、VPS Port 来生成反向隧道命令。",
+        Key.settingsReverseTunnelCommand.rawValue: "SSH 隧道命令",
+        Key.settingsNoTunnelCommand.rawValue: "请先填写 Host、SSH Port、Username 和分配的远端端口。",
         Key.settingsSshTunnel.rawValue: "SSH 隧道",
-        Key.settingsSshTunnelHelp.rawValue: "将 iOS 127.0.0.1:4096 转发到 VPS 127.0.0.1:<VPS Port>。1）将公钥加到 VPS ~/.ssh/authorized_keys。2）在本机运行生成的反向隧道命令。3）首次连接使用 TOFU 方式信任主机指纹，后续连接需匹配该主机。4）将 Server Address 设置为 127.0.0.1:4096 并点击上方 Test Connection。",
+        Key.settingsSshTunnelHelp.rawValue: "通过 SSH 把本机 127.0.0.1:4096 连到服务器分配的 OpenCode 远端端口。连接前先把本设备公钥发给管理员添加。",
+        Key.settingsSshSetupGuide.rawValue: "设置说明",
+        Key.settingsSshSetupGuideTitle.rawValue: "SSH 网关设置",
+        Key.settingsSshSetupGuideBody.rawValue: "1. 点击复制公钥，把它发给服务器管理员。\n\n2. 管理员把这台设备的 key 加到你的用户下面，并给你 Host、SSH Port、Username 和分配的 Remote Port。opencode-private-host 默认 Username 通常是 opencode，SSH Port 通常是 8006，第一个用户的 Remote Port 通常是 19001。\n\n3. 在这里填入这些值，开启 SSH Tunnel，然后点击“将服务器地址设置为 127.0.0.1:4096”。\n\n4. 点击测试连接。App 会访问本机 127.0.0.1:4096，SSH 隧道会把它转发到你的私有 OpenCode 容器。\n\n5. 如果 provider auth 还没配置，请让管理员先在 OpenCode Web UI 里完成第一次 provider 登录。",
         Key.settingsAutoTheme.rawValue: "自动",
         Key.settingsLightTheme.rawValue: "亮色",
         Key.settingsDarkTheme.rawValue: "暗色",
@@ -545,7 +557,7 @@ enum L10n {
         Key.settingsRotateKeyTitle.rawValue: "要更换 SSH Key 吗？",
         Key.settingsRotateKeyPrompt.rawValue: "这将生成新的一对密钥。请同步更新 VPS 上的公钥。",
         Key.settingsPublicKeyTitle.rawValue: "你的公钥",
-        Key.settingsPublicKeyFooter.rawValue: "请将公钥添加到 VPS 的 ~/.ssh/authorized_keys",
+        Key.settingsPublicKeyFooter.rawValue: "把这个公钥发给服务器管理员。不要分享私钥。",
         Key.settingsCopyToClipboard.rawValue: "复制到剪贴板",
         Key.settingsPublicKeyCopyFailed.rawValue: "无法加载 SSH 公钥。",
         Key.settingsPublicKeyRotate.rawValue: "旋转密钥",

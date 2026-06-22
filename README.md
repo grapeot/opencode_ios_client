@@ -50,7 +50,7 @@ The app is designed for LAN use by default. Two options for remote access:
 
 **HTTPS + public server (recommended)**: deploy OpenCode on a public server with TLS. Point the iOS app to `https://your-server.com:4096` and configure Basic Auth credentials.
 
-**SSH Tunnel**: the app has a built-in SSH tunnel (powered by Citadel). Set up a reverse tunnel from your home machine to a VPS, then configure the tunnel in Settings > SSH Tunnel. See `docs/` for detailed steps.
+**SSH Tunnel**: the app has a built-in SSH tunnel (powered by Citadel). Ask your OpenCode host admin to add the device public key shown in Settings and give you the assigned remote port, then configure Settings > SSH Tunnel. The iOS app connects to `127.0.0.1:4096` through that SSH gateway.
 
 ## Repository layout
 

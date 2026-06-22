@@ -113,9 +113,9 @@ private final class SSHTOFUHostKeyValidator: NIOSSHClientServerAuthenticationDel
 struct SSHTunnelConfig: Codable, Equatable {
     var isEnabled: Bool = false
     var host: String = ""
-    var port: Int = 22
-    var username: String = ""
-    var remotePort: Int = 18080
+    var port: Int = 8006
+    var username: String = "opencode"
+    var remotePort: Int = 19001
     
     var isValid: Bool {
         !host.isEmpty && !username.isEmpty && port > 0 && remotePort > 0
@@ -132,7 +132,7 @@ struct SSHTunnelConfig: Codable, Equatable {
             return "SSH Port must be > 0"
         }
         if remotePort <= 0 {
-            return "VPS Port must be > 0"
+            return "Assigned Remote Port must be > 0"
         }
         return nil
     }
@@ -343,7 +343,7 @@ final class SSHTunnelManager: ObservableObject {
         conn.start(queue: queue)
 
         Task { [weak self] in
-            let snapshot = await self?.connectionSnapshot() ?? (localPort: 4096, remotePort: 18080)
+            let snapshot = await self?.connectionSnapshot() ?? (localPort: 4096, remotePort: 19001)
 
             do {
                 let originator = try SocketAddress(ipAddress: "127.0.0.1", port: snapshot.localPort)

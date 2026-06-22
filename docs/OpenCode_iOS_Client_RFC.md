@@ -98,7 +98,7 @@
 1. **无需升级 Swift 6.0**：支持 Swift 5.10+，避免 Swift 6 的并发安全 breaking changes
 2. **高级 API**：基于 Apple 的 SwiftNIO SSH 封装，比直接用 SwiftNIO SSH 简单
 3. **功能完整**：支持 Ed25519 密钥认证、DirectTCPIP 端口转发、SFTP
-4. **活跃维护**：44 个 release，最近刚加入反向隧道支持
+4. **活跃维护**：44 个 release，支持 SSH direct-tcpip 端口转发
 5. **文档齐全**：有 README 示例 + [官方文档](https://swiftpackageindex.com/orlandos-nl/Citadel/0.12.0/documentation/citadel)
 
 **使用示例**：
@@ -114,11 +114,11 @@ let settings = SSHClientSettings(
 )
 let client = try await SSHClient.connect(to: settings)
 
-// 本地端口转发：iOS:4096 -> VPS:18080 -> 家里 OpenCode
+// 本地端口转发：iOS:4096 -> SSH gateway assigned port -> OpenCode
 let channel = try await client.createDirectTCPIPChannel(
     using: .init(
         targetHost: "127.0.0.1",
-        targetPort: 18080,
+        targetPort: 19001,
         originatorAddress: try SocketAddress(ipAddress: "127.0.0.1", port: 4096)
     )
 )
@@ -188,15 +188,15 @@ iOS 图片支持与 OpenCode Web 保持同构：图片作为 prompt 的 `file` p
 
 ### 3.5 SSH 隧道架构
 
-用于远程访问场景，通过公网 VPS 中转到家里网络。
+用于远程访问场景，通过 SSH gateway 中转到用户独立的 OpenCode 服务。
 
 **网络拓扑**：
 
 ```
-┌─────────────┐      SSH Tunnel       ┌─────────────┐      反向隧道      ┌─────────────┐
-│  iOS App    │ ───────────────────▶  │    VPS      │ ─────────────────▶ │  家里 Mac   │
+┌─────────────┐      SSH Tunnel       ┌─────────────┐      internal      ┌─────────────┐
+│  iOS App    │ ───────────────────▶  │  Gateway    │ ─────────────────▶ │  OpenCode   │
 │ 127.0.0.1   │   DirectTCPIP         │ 127.0.0.1   │    (预先建立)       │ OpenCode    │
-│   :4096     │   :4096 → :18080      │   :18080    │                    │   :4096     │
+│   :4096     │   :4096 → :19001      │   :19001    │                    │   :4096     │
 └─────────────┘                       └─────────────┘                    └─────────────┘
 ```
 
@@ -205,10 +205,10 @@ iOS 图片支持与 OpenCode Web 保持同构：图片作为 prompt 的 `file` p
 ```swift
 struct SSHTunnelConfig: Codable {
     var isEnabled: Bool = false
-    var host: String = ""           // VPS 地址
-    var port: Int = 22              // SSH 端口
-    var username: String = ""       // SSH 用户名
-    var remotePort: Int = 18080     // VPS 上转发的端口
+    var host: String = ""           // SSH gateway 地址
+    var port: Int = 8006            // SSH 端口
+    var username: String = "opencode" // SSH 用户名
+    var remotePort: Int = 19001     // 管理员分配的 remote port
 }
 
 enum SSHConnectionStatus {
@@ -254,7 +254,7 @@ enum SSHKeyManager {
 | 认证失败 | 私钥不匹配 | "认证失败，请确认公钥已正确添加" |
 
 **SSH UX 补充**：
-- 在 Settings 内生成可复制的 reverse tunnel command（用户可直接在电脑端执行）
+- 在 Settings 内显示 setup guide：复制设备公钥给管理员，并填写管理员返回的 assigned remote port
 - 公钥复制入口常驻，不依赖 tunnel enable 状态
 - 在 SSH 配置区增加灰字提示：启用 SSH 后仍需到上方 `Server Connection` 点击 `Test Connection`
 
