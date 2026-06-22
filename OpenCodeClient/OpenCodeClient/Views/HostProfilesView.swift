@@ -57,7 +57,13 @@ struct HostProfilesView: View {
 
             Section("Hosts") {
                 ForEach(state.hostProfiles) { profile in
-                    HostProfileRow(state: state, profile: profile)
+                    NavigationLink {
+                        HostProfileDetailView(state: state, profileID: profile.id) { selected in
+                            editorMode = .edit(selected)
+                        }
+                    } label: {
+                        HostProfileRow(state: state, profile: profile)
+                    }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
                                 do {
@@ -168,8 +174,36 @@ private struct CurrentHostCard: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            if let diagnostic = state.connectionDiagnostic, diagnostic.hostProfileID == profile.id {
+                DiagnosticSummaryView(diagnostic: diagnostic)
+            } else if let error = state.connectionError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
         .padding(.vertical, 4)
+    }
+}
+
+struct DiagnosticSummaryView: View {
+    let diagnostic: ConnectionDiagnostic
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(diagnostic.phase.label, systemImage: diagnostic.phase == .connected ? "checkmark.circle" : "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(diagnostic.phase == .connected ? DesignColors.Semantic.success : .orange)
+            Text(diagnostic.message)
+                .font(.caption)
+                .foregroundStyle(diagnostic.phase == .connected ? Color.secondary : Color.red)
+            if let recoveryHint = diagnostic.recoveryHint {
+                Text(recoveryHint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("host-connection-diagnostic")
     }
 }
 
@@ -180,38 +214,182 @@ private struct HostProfileRow: View {
     private var isCurrent: Bool { profile.id == state.currentHostProfileID }
 
     var body: some View {
-        Button {
-            Task { await state.switchHostProfile(to: profile.id) }
-        } label: {
-            HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(isCurrent ? DesignColors.Brand.primary : Color.clear)
-                    .frame(width: 3, height: 42)
-                Image(systemName: profile.transport == .sshTunnel ? "terminal" : "network")
-                    .frame(width: 24)
-                    .foregroundStyle(isCurrent ? DesignColors.Brand.primary : .secondary)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profile.displayName)
-                        .foregroundStyle(.primary)
-                    Text(profile.connectionSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    if let lastUsedAt = profile.lastUsedAt {
-                        Text(lastUsedAt, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                Spacer()
-                if isCurrent {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(DesignColors.Brand.primary)
-                }
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(isCurrent ? DesignColors.Brand.primary : Color.clear)
+                .frame(width: 3, height: 42)
+            Image(systemName: profile.transport == .sshTunnel ? "terminal" : "network")
+                .frame(width: 24)
+                .foregroundStyle(isCurrent ? DesignColors.Brand.primary : .secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(profile.displayName)
+                    .foregroundStyle(.primary)
+                Text(profile.connectionSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(lastUsedText)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-            .padding(.vertical, 4)
+            Spacer()
+            if isCurrent {
+                Image(systemName: "checkmark")
+                    .foregroundStyle(DesignColors.Brand.primary)
+            }
         }
+        .padding(.vertical, 4)
         .accessibilityIdentifier("host-profile-\(profile.id.uuidString)")
+    }
+
+    private var lastUsedText: String {
+        guard let lastUsedAt = profile.lastUsedAt,
+              lastUsedAt.timeIntervalSince1970 > 60 * 60 * 24 * 365 else {
+            return "Never connected"
+        }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Last used " + formatter.localizedString(for: lastUsedAt, relativeTo: Date())
+    }
+}
+
+private struct HostProfileDetailView: View {
+    @Bindable var state: AppState
+    let profileID: UUID
+    let onEdit: (HostProfile) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var copiedHostConfig = false
+    @State private var copiedPublicKey = false
+    @State private var errorMessage: String?
+
+    private var profile: HostProfile? {
+        state.hostProfiles.first { $0.id == profileID }
+    }
+
+    private var isCurrent: Bool {
+        profileID == state.currentHostProfileID
+    }
+
+    var body: some View {
+        Form {
+            if let profile {
+                Section("Overview") {
+                    LabeledContent("Name", value: profile.displayName)
+                    LabeledContent("Transport", value: profile.transport.label)
+                    LabeledContent("OpenCode URL", value: profile.transport == .sshTunnel ? "Managed by SSH tunnel" : profile.serverURL)
+                    LabeledContent("Status", value: isCurrent ? "Current Host" : "Saved Host")
+                }
+                .accessibilityIdentifier("host-detail-overview")
+
+                if profile.transport == .sshTunnel, let ssh = profile.ssh {
+                    Section("SSH Gateway") {
+                        HostDetailField(title: "Gateway Host", value: ssh.host, accessibilityID: "host-detail-ssh-host")
+                        HostDetailField(title: "SSH Port", value: String(ssh.port), accessibilityID: "host-detail-ssh-port")
+                        HostDetailField(title: "SSH Username", value: ssh.username, accessibilityID: "host-detail-ssh-username")
+                        HostDetailField(title: "Assigned Remote Port", value: String(ssh.remotePort), accessibilityID: "host-detail-ssh-remote-port")
+                    }
+                    .accessibilityIdentifier("host-detail-ssh-gateway")
+                }
+
+                if let diagnostic = state.connectionDiagnostic, diagnostic.hostProfileID == profile.id {
+                    Section("Connection Diagnostics") {
+                        DiagnosticSummaryView(diagnostic: diagnostic)
+                    }
+                    .accessibilityIdentifier("host-detail-diagnostics")
+                }
+
+                Section {
+                    if !isCurrent {
+                        Button("Use This Host") {
+                            Task {
+                                await state.switchHostProfile(to: profile.id)
+                                dismiss()
+                            }
+                        }
+                        .accessibilityIdentifier("host-detail-use-this-host")
+                    }
+                    Button(L10n.t(.settingsTestConnection)) {
+                        if !isCurrent {
+                            Task {
+                                await state.switchHostProfile(to: profile.id)
+                                await state.refresh()
+                            }
+                        } else {
+                            Task { await state.refresh() }
+                        }
+                    }
+                    Button("Edit") { onEdit(profile) }
+                        .accessibilityIdentifier("host-detail-edit")
+                    Button(copiedHostConfig ? "Host Config Copied" : "Copy Host Config JSON") {
+                        copyHostConfig(profile)
+                    }
+                    .accessibilityIdentifier("host-detail-copy-config")
+                    #if !os(visionOS)
+                    if profile.transport == .sshTunnel {
+                        Button(copiedPublicKey ? L10n.t(.settingsPublicKeyCopied) : "Copy This Device Public Key") {
+                            copyPublicKey()
+                        }
+                        .accessibilityIdentifier("host-detail-copy-device-public-key")
+                    }
+                    #endif
+                }
+            } else {
+                Text("Host not found")
+            }
+        }
+        .navigationTitle(profile?.displayName ?? "Host")
+        .alert("Host Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button(L10n.t(.commonOk), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private func copyHostConfig(_ profile: HostProfile) {
+        do {
+            let json = try state.hostConfigJSON(for: profile)
+            #if !os(visionOS)
+            UIPasteboard.general.string = json
+            #endif
+            copiedHostConfig = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedHostConfig = false }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func copyPublicKey() {
+        #if !os(visionOS)
+        do {
+            UIPasteboard.general.string = try state.sshTunnelManager.generateOrGetPublicKey()
+            copiedPublicKey = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedPublicKey = false }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        #endif
+    }
+}
+
+private struct HostDetailField: View {
+    let title: String
+    let value: String
+    let accessibilityID: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(accessibilityID)
     }
 }
 

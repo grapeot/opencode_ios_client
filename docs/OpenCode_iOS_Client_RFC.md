@@ -259,6 +259,39 @@ Direct 示例：
 
 Import 不包含 private key、provider token、Basic Auth password。SSH import 后仍要求用户复制本设备 public key 给管理员。
 
+**Host Config 导出格式**：
+
+Host Config JSON 从已保存的 `HostProfile` 生成，`HostProfile` 仍是持久化 source of truth。客户端不把原始 import JSON 作为第二份状态保存。导出的 JSON 用于用户和管理员对照配置，但必须排除 secret 和 runtime-only 字段：Basic Auth password、Keychain password ID、SSH private key、`SSHTunnelConfig.isEnabled` 都不能进入导出结果。
+
+**Runtime 连接诊断**：
+
+```swift
+struct ConnectionDiagnostic: Codable, Equatable {
+    var hostProfileID: UUID?
+    var phase: ConnectionPhase
+    var message: String
+    var recoveryHint: String?
+    var timestamp: Date
+}
+
+enum ConnectionPhase: String, Codable {
+    case idle
+    case sshGateway
+    case sshAuth
+    case localTunnel
+    case health
+    case bootstrap
+    case connected
+    case failed
+}
+```
+
+`ConnectionDiagnostic` 属于 app runtime 状态，不需要长期持久化。切换 host 时重置；`testConnection()` 和 refresh/bootstrap 流程负责更新 phase、message 和 recovery hint。UI 只展示用户可执行文案，不能直接暴露 `APIError error 0`、`NSURLErrorDomain -1004` 这类底层错误字符串。常见映射包括：Basic Auth 401/403 → 检查用户名密码；connection refused / cannot connect → 检查服务器地址、网络或本地 tunnel；SSH tunnel error → 检查 gateway、设备 public key 和 assigned remote port。
+
+**Host Detail 交互契约**：
+
+Hosts list row 的主点击行为是打开 Host Detail，不是直接切换 host。切换 host 必须通过详情页里的 `Use This Host` 显式动作完成。Host Detail 读取当前 `HostProfile` 字段展示 Direct / SSH Tunnel 的完整关键配置，并提供 `Copy Host Config JSON`。SSH Tunnel profile 额外提供 `Copy This Device Public Key`。
+
 ### 3.6 SSH 隧道架构
 
 用于远程访问场景，通过 SSH gateway 中转到用户独立的 OpenCode 服务。

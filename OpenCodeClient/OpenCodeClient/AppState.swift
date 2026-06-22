@@ -315,6 +315,7 @@ final class AppState {
     var isConnected: Bool = false
     var serverVersion: String?
     var connectionError: String?
+    var connectionDiagnostic: ConnectionDiagnostic?
     var sendError: String?
 
     // Session activity (rendered in transcript; session-scoped)

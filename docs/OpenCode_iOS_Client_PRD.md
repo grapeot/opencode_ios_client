@@ -389,10 +389,20 @@ Settings 顶部不再把 Server Address / SSH Tunnel 当成全局配置，而是
 **Host 列表**：
 
 - Settings 顶部显示 Current Host 卡片：名称、transport、地址摘要、连接状态、Test 按钮。
+- Current Host 卡片显示轻量连接诊断。连接中显示当前阶段；失败时显示用户能执行的错误文案，而不是 raw Swift error。
 - 点击进入 Hosts 管理页，列表展示所有 profiles；当前 profile 使用左侧 accent bar + checkmark 标识。
-- 每个 row 显示名称、transport 摘要、最近状态：例如 `example.com:8006 -> :19001`、`Direct HTTPS + Basic Auth`、`Last used yesterday`。
-- 支持 Add Host、Edit、Duplicate、Delete。删除当前 host 前必须先切到其他 host 或显示确认。
+- 每个 row 显示名称、transport 摘要、最近状态：例如 `example.com:8006 -> :19001`、`Direct HTTPS + Basic Auth`、`Last used yesterday`。没有有效连接历史时显示 `Never connected`，不能把 epoch 渲染成超长相对时间。
+- 点 row 打开 Host Detail。切换 host 是详情页里的显式 `Use This Host` 动作，避免用户为了查看配置而误切换。
+- 支持 Add Host、Host Detail、Edit、Duplicate、Delete。删除当前 host 前必须先切到其他 host 或显示确认。
 - Device Public Key 作为设备级设置显示在 Hosts 页底部；它只用于 SSH Tunnel hosts，Direct hosts 不需要。
+
+**Host Detail**：
+
+- 展示 profile 名称、transport、连接摘要、当前连接诊断和最近一次连接尝试时间。
+- Direct profile 展示 OpenCode URL，以及是否配置了 Basic Auth username。
+- SSH Tunnel profile 展示 Gateway Host、SSH Port、SSH Username、Assigned Remote Port、本地 OpenCode URL `127.0.0.1:4096` 和 trusted host fingerprint（如果有）。
+- 如果不是当前 host，提供 `Use This Host` 主操作；详情页也提供 `Test Connection`、`Edit` 和 `Copy Host Config JSON`。
+- SSH Tunnel profile 在详情页提供 `Copy This Device Public Key`。私钥仍只保存在设备 Keychain，不提供导出。
 
 **Add Host 流程**：
 
@@ -402,6 +412,7 @@ Settings 顶部不再把 Server Address / SSH Tunnel 当成全局配置，而是
 4. SSH Tunnel 表单要求 Name、SSH Gateway Host、SSH Port、SSH Username、Assigned Remote Port。OpenCode URL 不让用户编辑，保存后由 app 使用本地 `127.0.0.1:4096` 连接 tunnel。
 5. SSH Tunnel 表单必须提供 `Copy This Device Public Key`，并说明“发给 server admin，永远不要分享 private key”。
 6. Test Connection 验证当前 transport：Direct 直接请求 `/global/health`；SSH 先建立 tunnel，再请求本地 OpenCode health。
+7. `Save` 只表示 profile 已保存；`Test Connection` 才表示连接验证。保存成功和连接成功必须在 UI 上分开表达。
 
 **切换行为**：
 
@@ -465,8 +476,9 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
 
 **连接状态**：
 
-- 显示 Connected / Connecting / Disconnected / Error
-- 错误时显示具体原因（如"公钥未授权"）
+- 显示 Connected / Connecting / Disconnected / Error。
+- SSH Tunnel 的连接诊断至少能区分 SSH gateway、SSH auth、本地 tunnel 和 OpenCode health check。
+- 错误时显示具体原因和下一步动作，例如公钥未授权时提示复制本设备 public key 给管理员；Basic Auth 被拒绝时提示检查用户名和密码。
 
 **安全要求**：
 

@@ -21,18 +21,18 @@ struct OpenCodeClientTests {
 
     @Test func correctMalformedServerURL() {
         // Malformed "host://host:port" from iOS .textContentType(.URL) autocorrect
-        #expect(AppState.correctMalformedServerURL("quantum.tail63c3c5.ts.net://quantum.tail63c3c5.ts.net:4096") == "quantum.tail63c3c5.ts.net:4096")
+        #expect(AppState.correctMalformedServerURL("host.example.ts.net://host.example.ts.net:4096") == "host.example.ts.net:4096")
         #expect(AppState.correctMalformedServerURL("host.example.com://host.example.com:8080") == "host.example.com:8080")
         // Legitimate URLs unchanged
-        #expect(AppState.correctMalformedServerURL("http://quantum.tail63c3c5.ts.net:4096") == nil)
-        #expect(AppState.correctMalformedServerURL("quantum.tail63c3c5.ts.net:4096") == nil)
+        #expect(AppState.correctMalformedServerURL("http://host.example.ts.net:4096") == nil)
+        #expect(AppState.correctMalformedServerURL("host.example.ts.net:4096") == nil)
         #expect(AppState.correctMalformedServerURL("127.0.0.1:4096") == nil)
     }
 
     @Test func ensureServerURLHasScheme() {
-        #expect(AppState.ensureServerURLHasScheme("quantum.tail63c3c5.ts.net:4096") == "http://quantum.tail63c3c5.ts.net:4096")
+        #expect(AppState.ensureServerURLHasScheme("host.example.ts.net:4096") == "http://host.example.ts.net:4096")
         #expect(AppState.ensureServerURLHasScheme("127.0.0.1:4096") == "http://127.0.0.1:4096")
-        #expect(AppState.ensureServerURLHasScheme("http://quantum.tail63c3c5.ts.net:4096") == nil)
+        #expect(AppState.ensureServerURLHasScheme("http://host.example.ts.net:4096") == nil)
         #expect(AppState.ensureServerURLHasScheme("https://example.com:443") == nil)
     }
 
@@ -402,6 +402,39 @@ struct HostProfileTests {
             #expect(state.sshTunnelManager.config.isEnabled == true)
             #expect(state.sshTunnelManager.config.host == "gateway.example.invalid")
             #expect(state.sshTunnelManager.config.remotePort == 19001)
+        }
+    }
+
+    @Test @MainActor func exportSSHTunnelHostConfigOmitsSecretsAndRuntimeState() throws {
+        withIsolatedHostProfileDefaults {
+            let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+            let profile = HostProfile(
+                name: "SSH Lab",
+                transport: .sshTunnel,
+                serverURL: APIClient.defaultServer,
+                basicAuth: BasicAuthConfig(username: "admin", keychainPasswordID: "secret-password-id"),
+                ssh: SSHTunnelConfig(isEnabled: true, host: "gateway.example.invalid", port: 8006, username: "opencode", remotePort: 19001)
+            )
+
+            let json = try! state.hostConfigJSON(for: profile)
+
+            #expect(json.contains("\"transport\" : \"sshTunnel\""))
+            #expect(json.contains("\"host\" : \"gateway.example.invalid\""))
+            #expect(json.contains("\"remotePort\" : 19001"))
+            #expect(!json.contains("secret-password-id"))
+            #expect(!json.contains("basicAuth"))
+            #expect(!json.contains("isEnabled"))
+        }
+    }
+
+    @Test @MainActor func friendlyConnectionErrorMapsRawAPIError() {
+        withIsolatedHostProfileDefaults {
+            let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+
+            let message = state.friendlyConnectionError(APIError.invalidURL, phase: .health)
+
+            #expect(message == "Invalid OpenCode URL. Check the host address and port.")
+            #expect(!message.contains("APIError"))
         }
     }
 
