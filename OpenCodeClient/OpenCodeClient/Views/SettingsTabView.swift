@@ -31,7 +31,9 @@ struct SettingsTabView: View {
                     }
                     .accessibilityIdentifier("settings-test-connection")
 
-                    if let error = state.connectionError {
+                    if let diagnostic = state.connectionDiagnostic {
+                        DiagnosticSummaryView(diagnostic: diagnostic)
+                    } else if let error = state.connectionError {
                         Text(error)
                             .font(.caption)
                             .foregroundStyle(.red)

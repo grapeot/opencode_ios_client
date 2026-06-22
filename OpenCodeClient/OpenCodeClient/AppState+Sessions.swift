@@ -54,17 +54,32 @@ extension AppState {
 
     func testConnection() async {
         connectionError = nil
+        updateConnectionDiagnostic(phase: .health, message: "Checking OpenCode health...")
 
         #if !os(visionOS)
         if currentHostProfile?.transport == .sshTunnel || sshTunnelManager.config.isEnabled {
+            updateConnectionDiagnostic(
+                phase: .sshGateway,
+                message: "Connecting to SSH gateway...",
+                recoveryHint: "Confirm the gateway host, SSH port, device public key, and network reachability."
+            )
             if sshTunnelManager.status != .connected {
                 await sshTunnelManager.connect()
             }
             if case .error(let message) = sshTunnelManager.status {
                 isConnected = false
                 connectionError = "SSH tunnel failed: \(message)"
+                updateConnectionDiagnostic(
+                    phase: .failed,
+                    message: connectionError ?? message,
+                    recoveryHint: "Copy this device public key again if the server has not authorized it."
+                )
                 return
             }
+            updateConnectionDiagnostic(
+                phase: .localTunnel,
+                message: "SSH tunnel is ready; checking OpenCode health..."
+            )
         }
         #endif
 
@@ -72,20 +87,43 @@ extension AppState {
         guard info.isAllowed, let baseURL = info.normalized else {
             isConnected = false
             connectionError = info.warning ?? L10n.t(.errorInvalidBaseURL)
+            updateConnectionDiagnostic(
+                phase: .failed,
+                message: connectionError ?? L10n.t(.errorInvalidBaseURL),
+                recoveryHint: "Use host:port, http://host:port, or https://host:port."
+            )
             return
         }
 
         await apiClient.configure(baseURL: baseURL, username: username.isEmpty ? nil : username, password: password.isEmpty ? nil : password)
         do {
+            updateConnectionDiagnostic(phase: .health, message: "Checking \(baseURL)/global/health...")
             let health = try await apiClient.health()
             isConnected = health.healthy
             serverVersion = health.version
             if isConnected {
+                updateConnectionDiagnostic(
+                    phase: .connected,
+                    message: "Connected to OpenCode\(health.version.map { " \($0)" } ?? "")."
+                )
                 connectSSE()
+            } else {
+                connectionError = "OpenCode health check returned unhealthy."
+                updateConnectionDiagnostic(
+                    phase: .failed,
+                    message: connectionError ?? "OpenCode health check returned unhealthy.",
+                    recoveryHint: "Check the OpenCode server process and logs."
+                )
             }
         } catch {
             isConnected = false
-            connectionError = error.localizedDescription
+            let message = friendlyConnectionError(error, phase: .health)
+            connectionError = message
+            updateConnectionDiagnostic(
+                phase: .failed,
+                message: message,
+                recoveryHint: "For SSH tunnel hosts, first verify the gateway values and device key. For direct hosts, verify the URL from this device."
+            )
         }
     }
 

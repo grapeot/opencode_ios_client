@@ -14,6 +14,38 @@ enum HostTransport: String, Codable, Equatable, CaseIterable, Identifiable {
     }
 }
 
+enum ConnectionPhase: String, Codable, Equatable {
+    case idle
+    case sshGateway
+    case sshAuth
+    case localTunnel
+    case health
+    case bootstrap
+    case connected
+    case failed
+
+    var label: String {
+        switch self {
+        case .idle: return "Idle"
+        case .sshGateway: return "Connecting to SSH gateway"
+        case .sshAuth: return "Authenticating with device key"
+        case .localTunnel: return "Starting local tunnel"
+        case .health: return "Checking OpenCode health"
+        case .bootstrap: return "Loading projects and sessions"
+        case .connected: return "Connected"
+        case .failed: return "Connection failed"
+        }
+    }
+}
+
+struct ConnectionDiagnostic: Codable, Equatable {
+    var hostProfileID: UUID?
+    var phase: ConnectionPhase
+    var message: String
+    var recoveryHint: String?
+    var timestamp: Date
+}
+
 struct BasicAuthConfig: Codable, Equatable {
     var username: String
     var keychainPasswordID: String
@@ -87,6 +119,21 @@ struct HostProfileImportPayload: Codable {
             )
         }
     }
+}
+
+struct HostProfileExportPayload: Codable, Equatable {
+    var version = 1
+    var name: String
+    var transport: HostTransport
+    var serverURL: String?
+    var ssh: HostProfileExportSSH?
+}
+
+struct HostProfileExportSSH: Codable, Equatable {
+    var host: String
+    var port: Int
+    var username: String
+    var remotePort: Int
 }
 
 enum HostProfileError: LocalizedError, Equatable {

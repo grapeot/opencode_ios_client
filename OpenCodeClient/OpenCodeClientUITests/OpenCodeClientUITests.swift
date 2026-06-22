@@ -121,6 +121,47 @@ final class OpenCodeClientUITests: XCTestCase {
     }
 
     @MainActor
+    func testHostProfileDetailShowsSSHTunnelFields() throws {
+        let app = launchHostProfilesFixture()
+
+        try openSettingsInHostProfilesFixture(app)
+        app.buttons["settings-current-host"].tap()
+        XCTAssertTrue(app.navigationBars["Hosts"].waitForExistence(timeout: 8), "Hosts 页面应打开")
+        app.staticTexts["SSH Lab"].tap()
+
+        XCTAssertTrue(app.navigationBars["SSH Lab"].waitForExistence(timeout: 8), "SSH Host 详情应打开")
+        XCTAssertTrue(app.buttons["host-detail-use-this-host"].exists, "非当前 host 应显示显式切换按钮")
+        XCTAssertTrue(app.buttons["host-detail-copy-config"].exists, "详情应支持复制 Host Config JSON")
+    }
+
+    @MainActor
+    func testCaptureHostProfilesFixtureScreenshots() throws {
+        let dir = ProcessInfo.processInfo.environment["HOST_PROFILES_SCREENSHOT_DIR"] ?? "/tmp/opencode-host-profiles-screenshots"
+
+        let app = launchHostProfilesFixture(extraArguments: ["UITEST_HOST_IMPORT_JSON_PREFILL"])
+        try openSettingsInHostProfilesFixture(app)
+        try writeScreenshot(named: "host_profiles_settings_current_host", directory: dir)
+
+        app.buttons["settings-current-host"].tap()
+        XCTAssertTrue(app.navigationBars["Hosts"].waitForExistence(timeout: 8))
+        try writeScreenshot(named: "host_profiles_list", directory: dir)
+
+        app.staticTexts["SSH Lab"].tap()
+        XCTAssertTrue(app.navigationBars["SSH Lab"].waitForExistence(timeout: 8))
+        try writeScreenshot(named: "host_profiles_detail_ssh", directory: dir)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Hosts"].waitForExistence(timeout: 8))
+
+        app.staticTexts["Add Host"].tap()
+        XCTAssertTrue(app.navigationBars["Add Host"].waitForExistence(timeout: 8))
+        try writeScreenshot(named: "host_profiles_add_import_prefill", directory: dir)
+
+        app.buttons["host-import-config"].tap()
+        XCTAssertFalse(app.textFields["host-server-url"].exists, "SSH mode should hide editable direct URL field")
+        try writeScreenshot(named: "host_profiles_add_ssh_after_import", directory: dir)
+    }
+
+    @MainActor
     func testAddDirectHostProfileFlow() throws {
         let app = launchHostProfilesFixture()
         try openSettingsInHostProfilesFixture(app)
@@ -202,6 +243,18 @@ final class OpenCodeClientUITests: XCTestCase {
             return nil
         }
         return object["screenshot_path"] as? String
+    }
+
+    private func writeScreenshot(named name: String, directory dir: String) throws {
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        let directory = URL(fileURLWithPath: dir, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try screenshot.pngRepresentation.write(to: directory.appendingPathComponent("\(name).png"))
     }
 
     @MainActor

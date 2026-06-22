@@ -109,6 +109,7 @@ extension AppState {
         #endif
 
         hostProfiles[index] = profile
+        saveHostProfiles()
     }
 
     func saveHostProfile(_ profile: HostProfile, password: String? = nil, makeCurrent: Bool = true) {
@@ -139,6 +140,7 @@ extension AppState {
         } else {
             hostProfiles.append(saved)
         }
+        saveHostProfiles()
 
         if makeCurrent {
             currentHostProfileID = saved.id
@@ -172,6 +174,7 @@ extension AppState {
             applyCurrentHostProfileToRuntime()
             resetConnectionRuntimeForHostSwitch()
         }
+        saveHostProfiles()
     }
 
     func duplicateHostProfile(_ profile: HostProfile) {
@@ -203,9 +206,85 @@ extension AppState {
         }
     }
 
+    func hostConfigJSON(for profile: HostProfile) throws -> String {
+        let payload: HostProfileExportPayload
+        switch profile.transport {
+        case .direct:
+            payload = HostProfileExportPayload(
+                name: profile.displayName,
+                transport: .direct,
+                serverURL: profile.serverURL,
+                ssh: nil
+            )
+        case .sshTunnel:
+            let ssh = profile.ssh.map {
+                HostProfileExportSSH(host: $0.host, port: $0.port, username: $0.username, remotePort: $0.remotePort)
+            }
+            payload = HostProfileExportPayload(
+                name: profile.displayName,
+                transport: .sshTunnel,
+                serverURL: nil,
+                ssh: ssh
+            )
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw HostProfileError.invalidImport("Could not encode Host Config JSON.")
+        }
+        return json
+    }
+
+    func updateConnectionDiagnostic(phase: ConnectionPhase, message: String, recoveryHint: String? = nil) {
+        connectionDiagnostic = ConnectionDiagnostic(
+            hostProfileID: currentHostProfileID,
+            phase: phase,
+            message: message,
+            recoveryHint: recoveryHint,
+            timestamp: Date()
+        )
+    }
+
+    func friendlyConnectionError(_ error: Error, phase: ConnectionPhase = .failed) -> String {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .invalidURL:
+                return "Invalid OpenCode URL. Check the host address and port."
+            case .httpError(let statusCode, _):
+                if statusCode == 401 { return "OpenCode rejected Basic Auth. Check username and password." }
+                return "OpenCode returned HTTP \(statusCode). Check the server logs or provider setup."
+            }
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorCannotConnectToHost, NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
+                return "Could not connect to OpenCode. Check network reachability and that the server is running."
+            case NSURLErrorTimedOut:
+                return "Connection timed out. Check the host, port, VPN/Tailscale, and firewall."
+            case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
+                return "Host name could not be resolved. Check the gateway or server host spelling."
+            default:
+                return "Network error: \(nsError.localizedDescription)"
+            }
+        }
+
+        let message = error.localizedDescription
+        if message.contains("APIError error") {
+            return phase == .health
+                ? "OpenCode health check failed. Check that the server is running and reachable."
+                : "Connection failed. Check the host configuration and try again."
+        }
+        return message
+    }
+
     func resetConnectionRuntimeForHostSwitch() {
         isConnected = false
         connectionError = nil
+        connectionDiagnostic = nil
         serverVersion = nil
         projects = []
         serverCurrentProjectWorktree = nil
