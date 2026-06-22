@@ -172,6 +172,7 @@ final class AppState {
     static let customProjectPathKey = "customProjectPath"
     static let hostProfilesKey = "hostProfiles.v1"
     static let currentHostProfileIDKey = "currentHostProfileID.v1"
+    static let languagePreferenceKey = L10n.languagePreferenceUserDefaultsKey
 
     init(
         apiClient: APIClientProtocol = APIClient(),
@@ -203,6 +204,7 @@ final class AppState {
         _showArchivedSessions = UserDefaults.standard.bool(forKey: Self.showArchivedSessionsKey)
         _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
+        _languagePreference = L10n.languagePreference
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
         let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
@@ -501,6 +503,14 @@ final class AppState {
     var pendingQuestions: [QuestionRequest] = []
 
     var themePreference: String = "auto"  // "auto" | "light" | "dark"
+    var _languagePreference: L10n.LanguagePreference = .system
+    var languagePreference: L10n.LanguagePreference {
+        get { _languagePreference }
+        set {
+            _languagePreference = newValue
+            L10n.languagePreference = newValue
+        }
+    }
 
     var sessionDiffs: [FileDiff] { get { fileStore.sessionDiffs } set { fileStore.sessionDiffs = newValue } }
     var selectedDiffFile: String? { get { fileStore.selectedDiffFile } set { fileStore.selectedDiffFile = newValue } }

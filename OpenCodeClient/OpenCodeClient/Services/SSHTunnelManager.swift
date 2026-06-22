@@ -148,16 +148,16 @@ struct SSHTunnelConfig: Codable, Equatable {
 
     var validationError: String? {
         if host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "VPS Host is required"
+            return L10n.t(.hostValidationVPSHostRequired)
         }
         if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "SSH Username is required"
+            return L10n.t(.hostValidationSSHUsernameRequired)
         }
         if port <= 0 {
-            return "SSH Port must be > 0"
+            return L10n.t(.hostValidationSSHPortPositive)
         }
         if remotePort <= 0 {
-            return "Assigned Remote Port must be > 0"
+            return L10n.t(.hostValidationAssignedRemotePortPositive)
         }
         return nil
     }
@@ -198,7 +198,7 @@ final class SSHTunnelManager: ObservableObject {
     }
 
     func connect() async {
-        status = .error("SSH tunnels are not available in the visionOS build yet. Connect directly to an OpenCode server instead.")
+        status = .error(L10n.t(.hostSSHTunnelUnavailableVisionOS))
     }
 
     func disconnect(updateStatus: Bool = true) {
@@ -274,7 +274,7 @@ final class SSHTunnelManager: ObservableObject {
         _ = try? SSHKeyManager.ensureKeyPair()
 
         guard let privateKeyData = SSHKeyManager.loadPrivateKey() else {
-            status = .error("No SSH key found. Please generate a key pair first.")
+            status = .error(L10n.t(.sshErrorKeyNotFound))
             return
         }
         
@@ -352,10 +352,10 @@ final class SSHTunnelManager: ObservableObject {
                 case .failed(let err):
                     if !didResume {
                         didResume = true
-                        continuation.resume(throwing: SSHError.tunnelFailed("Local listener failed: \(err.localizedDescription)"))
+                        continuation.resume(throwing: SSHError.tunnelFailed(L10n.t(.hostDiagnosticLocalListenerFailed, err.localizedDescription)))
                     } else {
                         Task { @MainActor in
-                            self.status = .error("Local listener failed: \(err.localizedDescription)")
+                            self.status = .error(L10n.t(.sshErrorTunnelFailed, L10n.t(.hostDiagnosticLocalListenerFailed, err.localizedDescription)))
                             self.disconnect(updateStatus: false)
                         }
                     }
@@ -525,17 +525,17 @@ enum SSHError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .connectionFailed(let reason):
-            return "Connection failed: \(reason)"
+            return L10n.t(.sshErrorConnectionFailed, reason)
         case .authenticationFailed:
-            return "Authentication failed. Please check your public key is added to the server."
+            return L10n.t(.sshErrorAuthenticationFailed)
         case .keyNotFound:
-            return "SSH key not found. Please generate a key pair first."
+            return L10n.t(.sshErrorKeyNotFound)
         case .invalidKeyFormat:
-            return "Invalid SSH key format."
+            return L10n.t(.sshErrorInvalidKeyFormat)
         case .tunnelFailed(let reason):
-            return "Tunnel failed: \(reason)"
+            return L10n.t(.sshErrorTunnelFailed, reason)
         case .hostKeyMismatch(let expected, let got):
-            return "Host key mismatch. Expected \(expected), got \(got). This may be a MITM attack or a reinstalled server. Reset trusted host and verify fingerprint before reconnecting."
+            return L10n.t(.sshErrorHostKeyMismatch, expected, got)
         }
     }
 }

@@ -1,6 +1,24 @@
 import Foundation
 
 enum L10n {
+    enum LanguagePreference: String, CaseIterable, Identifiable {
+        case system
+        case en
+        case zh
+
+        var id: String { rawValue }
+
+        var localeIdentifier: String? {
+            switch self {
+            case .system: return nil
+            case .en: return "en"
+            case .zh: return "zh-Hans"
+            }
+        }
+    }
+
+    static let languagePreferenceUserDefaultsKey = "languagePreference"
+
     enum Key: String, CaseIterable {
         case appChat
         case appClose
@@ -13,6 +31,7 @@ enum L10n {
 
         case commonOk
         case commonCancel
+        case commonRetry
 
         case navFiles
         case navSettings
@@ -90,7 +109,109 @@ enum L10n {
         case settingsProjectCustomPath
         case settingsProjectCustomPathPlaceholder
         case settingsProjectMismatchWarning
+        case settingsLanguage
+        case settingsLanguageSystem
+        case settingsLanguageEnglish
+        case settingsLanguageChinese
         case chatCreateDisabledHint
+
+        case hostCurrent
+        case hostCurrentFooter
+        case hostNoHost
+        case hostAddToConnect
+        case hostHosts
+        case hostDelete
+        case hostDuplicate
+        case hostEdit
+        case hostAdd
+        case hostDeviceKey
+        case hostCopyDevicePublicKey
+        case hostDeviceKeyFooter
+        case hostErrorTitle
+        case hostNeverConnected
+        case hostLastUsed
+        case hostOverview
+        case hostName
+        case hostTransport
+        case hostOpenCodeURL
+        case hostStatus
+        case hostManagedBySSHTunnel
+        case hostSavedHost
+        case hostSSHTunnel
+        case hostSSHGateway
+        case hostGatewayHost
+        case hostSSHPort
+        case hostSSHUsername
+        case hostAssignedRemotePort
+        case hostConnectionDiagnostics
+        case hostUseThisHost
+        case hostConfigCopied
+        case hostCopyConfigJSON
+        case hostNotFound
+        case hostImportConfig
+        case hostImportFooter
+        case hostConnectionType
+        case hostTransportFooter
+        case hostSSHGatewayFooter
+        case hostDeviceKeySendFooter
+        case hostBasicAuth
+        case hostSaveHelp
+        case hostSave
+        case hostEditTitle
+        case hostAddTitle
+        case hostTitle
+        case hostTransportDirect
+        case hostUntitled
+        case hostDefaultLocalName
+        case hostDefaultSSHName
+        case hostDuplicateName
+        case hostImportErrorDirectRequiresServerURL
+        case hostImportErrorSSHTunnelRequiresSSHSettings
+        case hostDeleteOnlyHostError
+        case hostImportErrorInvalidUTF8
+        case hostExportErrorEncodeConfigJSON
+        case hostConnectionErrorInvalidURL
+        case hostConnectionErrorBasicAuthRejected
+        case hostConnectionErrorHTTPStatus
+        case hostConnectionErrorCannotConnect
+        case hostConnectionErrorTimedOut
+        case hostConnectionErrorDNS
+        case hostConnectionErrorNetwork
+        case hostConnectionErrorHealthCheckFailed
+        case hostConnectionErrorGeneric
+        case hostDiagnosticCheckingHealth
+        case hostDiagnosticCheckingHealthURL
+        case hostDiagnosticConnectingSSHGateway
+        case hostDiagnosticHintConfirmGateway
+        case hostDiagnosticSSHTunnelFailed
+        case hostDiagnosticHintCopyDeviceKeyAgain
+        case hostDiagnosticTunnelReadyCheckingHealth
+        case hostDiagnosticHintURLFormat
+        case hostDiagnosticConnectedToOpenCode
+        case hostDiagnosticHealthUnhealthy
+        case hostDiagnosticHintCheckServerLogs
+        case hostDiagnosticHintVerifyHostConfig
+        case hostDiagnosticLocalListenerFailed
+        case hostValidationVPSHostRequired
+        case hostValidationSSHUsernameRequired
+        case hostValidationSSHPortPositive
+        case hostValidationAssignedRemotePortPositive
+        case hostSSHTunnelUnavailableVisionOS
+        case sshErrorConnectionFailed
+        case sshErrorAuthenticationFailed
+        case sshErrorKeyNotFound
+        case sshErrorInvalidKeyFormat
+        case sshErrorTunnelFailed
+        case sshErrorHostKeyMismatch
+
+        case connectionPhaseIdle
+        case connectionPhaseSSHGateway
+        case connectionPhaseSSHAuth
+        case connectionPhaseLocalTunnel
+        case connectionPhaseHealth
+        case connectionPhaseBootstrap
+        case connectionPhaseConnected
+        case connectionPhaseFailed
 
         case chatInputPlaceholder
         case chatSendFailed
@@ -127,6 +248,14 @@ enum L10n {
         case chatSessionStatusIdle
         case chatPullToLoadMore
         case chatLoadingMoreHistory
+        case chatLargeMessagePreviewNotice
+        case chatEditFromHere
+        case chatForkFromHere
+        case attachmentImageTitle
+        case attachmentFileTitle
+        case attachmentRemoveImageAccessibilityLabel
+        case attachmentImageReadFailed
+        case attachmentImageTooLargeAfterCompression
 
         case permissionRequired
         case permissionAllowOnce
@@ -150,6 +279,14 @@ enum L10n {
         case toolOpenInFileTree
         case toolOpenFile
         case toolSelectFile
+        case toolCallsCountOne
+        case toolCallsCountMany
+        case toolImageFile
+        case toolReadFileAccessibilityLabel
+        case toolWriteFileAccessibilityLabel
+        case toolReadDirectoryAccessibilityLabel
+        case folderEmptyTitle
+        case folderEmptyDescription
 
         case patchFilesChangedOne
         case patchFilesChangedMany
@@ -206,6 +343,26 @@ enum L10n {
         case fileNoContent
         case fileMarkdown
         case filePreview
+        case filePreviewMode
+        case fileNativePreview
+        case fileWebPreview
+        case fileMarkdownSource
+        case contentImageDecodeFailed
+        case contentNoImageData
+        case markdownPreviewLoading
+        case markdownWebPreviewLoading
+        case markdownWebPreviewLargeDocumentTitle
+        case markdownWebPreviewLargeDocumentDescription
+        case markdownWebPreviewRenderAnyway
+        case markdownWebPreviewOpenNative
+        case markdownWebPreviewOpenSource
+        case markdownWebPreviewFailedTitle
+        case markdownWebPreviewAssetsMissing
+        case markdownWebPreviewPayloadEncodeFailed
+        case markdownWebPreviewRenderCallFailed
+        case markdownWebPreviewWebViewLoadFailed
+        case markdownWebPreviewWebViewProvisionalLoadFailed
+        case markdownWebPreviewUnknownRenderError
 
         case errorConnectionFailed
         case errorServerError
@@ -257,6 +414,7 @@ enum L10n {
         Key.appSearchFilesTitle.rawValue: "Search files",
         Key.commonOk.rawValue: "OK",
         Key.commonCancel.rawValue: "Cancel",
+        Key.commonRetry.rawValue: "Retry",
         Key.navFiles.rawValue: "Files",
         Key.navSettings.rawValue: "Settings",
         Key.navPreview.rawValue: "Preview",
@@ -331,7 +489,109 @@ enum L10n {
         Key.settingsProjectCustomPath.rawValue: "Custom path",
         Key.settingsProjectCustomPathPlaceholder.rawValue: "/path/to/project",
         Key.settingsProjectMismatchWarning.rawValue: "Server default project is {server}. New sessions will be created there, not in {effective}. To create sessions in {effective}, start OpenCode from the command line with that project as working directory.",
+        Key.settingsLanguage.rawValue: "Language",
+        Key.settingsLanguageSystem.rawValue: "System",
+        Key.settingsLanguageEnglish.rawValue: "English",
+        Key.settingsLanguageChinese.rawValue: "Chinese",
         Key.chatCreateDisabledHint.rawValue: "New sessions can only be created when using Server default project. To create sessions in another project, start OpenCode from the command line with a different working directory, then select Server default here.",
+
+        Key.hostCurrent.rawValue: "Current Host",
+        Key.hostCurrentFooter.rawValue: "A host is one OpenCode environment. It can be reached directly over LAN, Tailscale, VPN, HTTPS, or through an SSH tunnel.",
+        Key.hostNoHost.rawValue: "No Host",
+        Key.hostAddToConnect.rawValue: "Add a host to connect",
+        Key.hostHosts.rawValue: "Hosts",
+        Key.hostDelete.rawValue: "Delete",
+        Key.hostDuplicate.rawValue: "Duplicate",
+        Key.hostEdit.rawValue: "Edit",
+        Key.hostAdd.rawValue: "Add Host",
+        Key.hostDeviceKey.rawValue: "Device Key",
+        Key.hostCopyDevicePublicKey.rawValue: "Copy This Device Public Key",
+        Key.hostDeviceKeyFooter.rawValue: "Use this same device key for SSH tunnel hosts. Direct hosts do not need it.",
+        Key.hostErrorTitle.rawValue: "Host Error",
+        Key.hostNeverConnected.rawValue: "Never connected",
+        Key.hostLastUsed.rawValue: "Last used %@",
+        Key.hostOverview.rawValue: "Overview",
+        Key.hostName.rawValue: "Name",
+        Key.hostTransport.rawValue: "Transport",
+        Key.hostOpenCodeURL.rawValue: "OpenCode URL",
+        Key.hostStatus.rawValue: "Status",
+        Key.hostManagedBySSHTunnel.rawValue: "Managed by SSH tunnel",
+        Key.hostSavedHost.rawValue: "Saved Host",
+        Key.hostSSHTunnel.rawValue: "SSH Tunnel",
+        Key.hostSSHGateway.rawValue: "SSH Gateway",
+        Key.hostGatewayHost.rawValue: "Gateway Host",
+        Key.hostSSHPort.rawValue: "SSH Port",
+        Key.hostSSHUsername.rawValue: "SSH Username",
+        Key.hostAssignedRemotePort.rawValue: "Assigned Remote Port",
+        Key.hostConnectionDiagnostics.rawValue: "Connection Diagnostics",
+        Key.hostUseThisHost.rawValue: "Use This Host",
+        Key.hostConfigCopied.rawValue: "Host Config Copied",
+        Key.hostCopyConfigJSON.rawValue: "Copy Host Config JSON",
+        Key.hostNotFound.rawValue: "Host not found",
+        Key.hostImportConfig.rawValue: "Import Host Config",
+        Key.hostImportFooter.rawValue: "Paste a setup JSON from your server admin, or continue with manual setup below.",
+        Key.hostConnectionType.rawValue: "Connection Type",
+        Key.hostTransportFooter.rawValue: "Direct is for LAN, VPN, Tailscale, or HTTPS. SSH Tunnel is for an OpenCode server behind an SSH gateway.",
+        Key.hostSSHGatewayFooter.rawValue: "These values come from your OpenCode host admin. The app connects locally through the tunnel after this is saved.",
+        Key.hostDeviceKeySendFooter.rawValue: "Send this public key to the server admin before testing. Never share the private key.",
+        Key.hostBasicAuth.rawValue: "Basic Auth",
+        Key.hostSaveHelp.rawValue: "Save is enabled after required fields are present. Test verifies the selected transport and OpenCode health endpoint.",
+        Key.hostSave.rawValue: "Save",
+        Key.hostEditTitle.rawValue: "Edit Host",
+        Key.hostAddTitle.rawValue: "Add Host",
+        Key.hostTitle.rawValue: "Host",
+        Key.hostTransportDirect.rawValue: "Direct",
+        Key.hostUntitled.rawValue: "Untitled Host",
+        Key.hostDefaultLocalName.rawValue: "Local OpenCode",
+        Key.hostDefaultSSHName.rawValue: "SSH OpenCode",
+        Key.hostDuplicateName.rawValue: "%@ Copy",
+        Key.hostImportErrorDirectRequiresServerURL.rawValue: "Direct host config requires serverURL.",
+        Key.hostImportErrorSSHTunnelRequiresSSHSettings.rawValue: "SSH Tunnel host config requires ssh settings.",
+        Key.hostDeleteOnlyHostError.rawValue: "Add another host before deleting this one.",
+        Key.hostImportErrorInvalidUTF8.rawValue: "Host config is not valid UTF-8.",
+        Key.hostExportErrorEncodeConfigJSON.rawValue: "Could not encode Host Config JSON.",
+        Key.hostConnectionErrorInvalidURL.rawValue: "Invalid OpenCode URL. Check the host address and port.",
+        Key.hostConnectionErrorBasicAuthRejected.rawValue: "OpenCode rejected Basic Auth. Check username and password.",
+        Key.hostConnectionErrorHTTPStatus.rawValue: "OpenCode returned HTTP %d. Check the server logs or provider setup.",
+        Key.hostConnectionErrorCannotConnect.rawValue: "Could not connect to OpenCode. Check network reachability and that the server is running.",
+        Key.hostConnectionErrorTimedOut.rawValue: "Connection timed out. Check the host, port, VPN/Tailscale, and firewall.",
+        Key.hostConnectionErrorDNS.rawValue: "Host name could not be resolved. Check the gateway or server host spelling.",
+        Key.hostConnectionErrorNetwork.rawValue: "Network error: %@",
+        Key.hostConnectionErrorHealthCheckFailed.rawValue: "OpenCode health check failed. Check that the server is running and reachable.",
+        Key.hostConnectionErrorGeneric.rawValue: "Connection failed. Check the host configuration and try again.",
+        Key.hostDiagnosticCheckingHealth.rawValue: "Checking OpenCode health...",
+        Key.hostDiagnosticCheckingHealthURL.rawValue: "Checking %@/global/health...",
+        Key.hostDiagnosticConnectingSSHGateway.rawValue: "Connecting to SSH gateway...",
+        Key.hostDiagnosticHintConfirmGateway.rawValue: "Confirm the gateway host, SSH port, device public key, and network reachability.",
+        Key.hostDiagnosticSSHTunnelFailed.rawValue: "SSH tunnel failed: %@",
+        Key.hostDiagnosticHintCopyDeviceKeyAgain.rawValue: "Copy this device public key again if the server has not authorized it.",
+        Key.hostDiagnosticTunnelReadyCheckingHealth.rawValue: "SSH tunnel is ready; checking OpenCode health...",
+        Key.hostDiagnosticHintURLFormat.rawValue: "Use host:port, http://host:port, or https://host:port.",
+        Key.hostDiagnosticConnectedToOpenCode.rawValue: "Connected to OpenCode%@.",
+        Key.hostDiagnosticHealthUnhealthy.rawValue: "OpenCode health check returned unhealthy.",
+        Key.hostDiagnosticHintCheckServerLogs.rawValue: "Check the OpenCode server process and logs.",
+        Key.hostDiagnosticHintVerifyHostConfig.rawValue: "For SSH tunnel hosts, first verify the gateway values and device key. For direct hosts, verify the URL from this device.",
+        Key.hostDiagnosticLocalListenerFailed.rawValue: "Local listener failed: %@",
+        Key.hostValidationVPSHostRequired.rawValue: "VPS Host is required",
+        Key.hostValidationSSHUsernameRequired.rawValue: "SSH Username is required",
+        Key.hostValidationSSHPortPositive.rawValue: "SSH Port must be > 0",
+        Key.hostValidationAssignedRemotePortPositive.rawValue: "Assigned Remote Port must be > 0",
+        Key.hostSSHTunnelUnavailableVisionOS.rawValue: "SSH tunnels are not available in the visionOS build yet. Connect directly to an OpenCode server instead.",
+        Key.sshErrorConnectionFailed.rawValue: "Connection failed: %@",
+        Key.sshErrorAuthenticationFailed.rawValue: "Authentication failed. Please check your public key is added to the server.",
+        Key.sshErrorKeyNotFound.rawValue: "SSH key not found. Please generate a key pair first.",
+        Key.sshErrorInvalidKeyFormat.rawValue: "Invalid SSH key format.",
+        Key.sshErrorTunnelFailed.rawValue: "Tunnel failed: %@",
+        Key.sshErrorHostKeyMismatch.rawValue: "Host key mismatch. Expected %@, got %@. This may be a MITM attack or a reinstalled server. Reset trusted host and verify fingerprint before reconnecting.",
+
+        Key.connectionPhaseIdle.rawValue: "Idle",
+        Key.connectionPhaseSSHGateway.rawValue: "Connecting to SSH gateway",
+        Key.connectionPhaseSSHAuth.rawValue: "Authenticating with device key",
+        Key.connectionPhaseLocalTunnel.rawValue: "Starting local tunnel",
+        Key.connectionPhaseHealth.rawValue: "Checking OpenCode health",
+        Key.connectionPhaseBootstrap.rawValue: "Loading projects and sessions",
+        Key.connectionPhaseConnected.rawValue: "Connected",
+        Key.connectionPhaseFailed.rawValue: "Connection failed",
 
         Key.chatInputPlaceholder.rawValue: "Ask anything...",
         Key.chatSendFailed.rawValue: "Send failed",
@@ -368,6 +628,14 @@ enum L10n {
         Key.chatSessionStatusIdle.rawValue: "Idle",
         Key.chatPullToLoadMore.rawValue: "Pull down to load more history",
         Key.chatLoadingMoreHistory.rawValue: "Loading more history...",
+        Key.chatLargeMessagePreviewNotice.rawValue: "Large message: showing first %@ of %@ characters. Markdown rendering is skipped to keep the app responsive.",
+        Key.chatEditFromHere.rawValue: "Edit from here",
+        Key.chatForkFromHere.rawValue: "Fork from here",
+        Key.attachmentImageTitle.rawValue: "Image",
+        Key.attachmentFileTitle.rawValue: "Attachment",
+        Key.attachmentRemoveImageAccessibilityLabel.rawValue: "Remove image",
+        Key.attachmentImageReadFailed.rawValue: "Could not read the selected image.",
+        Key.attachmentImageTooLargeAfterCompression.rawValue: "Image is too large after compression (%@ MB). Please choose a smaller image.",
 
         Key.permissionRequired.rawValue: "Permission Required",
         Key.permissionAllowOnce.rawValue: "Allow Once",
@@ -391,6 +659,14 @@ enum L10n {
         Key.toolOpenInFileTree.rawValue: "Open \"%@\" in File Tree",
         Key.toolOpenFile.rawValue: "Open File",
         Key.toolSelectFile.rawValue: "Select file to open",
+        Key.toolCallsCountOne.rawValue: "%d tool call",
+        Key.toolCallsCountMany.rawValue: "%d tool calls",
+        Key.toolImageFile.rawValue: "Image file",
+        Key.toolReadFileAccessibilityLabel.rawValue: "Read file %@",
+        Key.toolWriteFileAccessibilityLabel.rawValue: "Write file %@",
+        Key.toolReadDirectoryAccessibilityLabel.rawValue: "Read directory %@",
+        Key.folderEmptyTitle.rawValue: "Empty folder",
+        Key.folderEmptyDescription.rawValue: "This directory has no entries.",
 
         Key.patchFilesChangedOne.rawValue: "%d file changed",
         Key.patchFilesChangedMany.rawValue: "%d files changed",
@@ -447,6 +723,26 @@ enum L10n {
         Key.fileNoContent.rawValue: "No content",
         Key.fileMarkdown.rawValue: "Markdown",
         Key.filePreview.rawValue: "Preview",
+        Key.filePreviewMode.rawValue: "Preview Mode",
+        Key.fileNativePreview.rawValue: "Native Preview",
+        Key.fileWebPreview.rawValue: "Web Preview",
+        Key.fileMarkdownSource.rawValue: "Markdown Source",
+        Key.contentImageDecodeFailed.rawValue: "Failed to decode image",
+        Key.contentNoImageData.rawValue: "No image data",
+        Key.markdownPreviewLoading.rawValue: "Loading preview...",
+        Key.markdownWebPreviewLoading.rawValue: "Loading web preview...",
+        Key.markdownWebPreviewLargeDocumentTitle.rawValue: "Large document",
+        Key.markdownWebPreviewLargeDocumentDescription.rawValue: "This file is large. Web Preview may be slow or memory-heavy.",
+        Key.markdownWebPreviewRenderAnyway.rawValue: "Render anyway",
+        Key.markdownWebPreviewOpenNative.rawValue: "Open Native Preview",
+        Key.markdownWebPreviewOpenSource.rawValue: "Open Markdown Source",
+        Key.markdownWebPreviewFailedTitle.rawValue: "Web Preview failed",
+        Key.markdownWebPreviewAssetsMissing.rawValue: "Web Preview assets missing from app bundle.",
+        Key.markdownWebPreviewPayloadEncodeFailed.rawValue: "Failed to encode preview payload.",
+        Key.markdownWebPreviewRenderCallFailed.rawValue: "Render call failed: %@",
+        Key.markdownWebPreviewWebViewLoadFailed.rawValue: "WebView load failed: %@",
+        Key.markdownWebPreviewWebViewProvisionalLoadFailed.rawValue: "WebView provisional load failed: %@",
+        Key.markdownWebPreviewUnknownRenderError.rawValue: "Unknown render error",
 
         Key.errorConnectionFailed.rawValue: "Connection failed: %@",
         Key.errorServerError.rawValue: "Server error: %@",
@@ -489,7 +785,7 @@ enum L10n {
     ]
 
     nonisolated private static let zh: [String: String] = [
-        Key.appChat.rawValue: "Chat",
+        Key.appChat.rawValue: "聊天",
         Key.appClose.rawValue: "关闭",
         Key.appDone.rawValue: "完成",
         Key.appLoading.rawValue: "加载中...",
@@ -499,15 +795,16 @@ enum L10n {
         Key.appSearchFilesTitle.rawValue: "搜索文件",
         Key.commonOk.rawValue: "确定",
         Key.commonCancel.rawValue: "取消",
+        Key.commonRetry.rawValue: "重试",
         Key.navFiles.rawValue: "文件",
         Key.navSettings.rawValue: "设置",
         Key.navPreview.rawValue: "预览",
-        Key.navWorkspace.rawValue: "Workspace",
+        Key.navWorkspace.rawValue: "工作区",
         Key.navSessions.rawValue: "会话",
         Key.sidebarHideSessions.rawValue: "隐藏会话栏",
         Key.sidebarShowSessions.rawValue: "显示会话栏",
         Key.contentPreviewUnavailableTitle.rawValue: "选择文件预览",
-        Key.contentPreviewUnavailableDescription.rawValue: "在左侧 Workspace 选择文件，或在 Chat 的 tool/patch 卡片中点“打开文件”。",
+        Key.contentPreviewUnavailableDescription.rawValue: "在左侧工作区选择文件，或在聊天里的工具/补丁卡片中点“打开文件”。",
         Key.contentRefreshHelp.rawValue: "刷新预览",
 
         Key.settingsTitle.rawValue: "设置",
@@ -520,21 +817,21 @@ enum L10n {
         Key.settingsConnected.rawValue: "已连接",
         Key.settingsDisconnected.rawValue: "未连接",
         Key.settingsTestConnection.rawValue: "测试连接",
-        Key.settingsConnectionTip.rawValue: "AI Builder Base URL",
+        Key.settingsConnectionTip.rawValue: "AI Builder 服务地址",
         Key.settingsEnableSshTunnel.rawValue: "启用 SSH 隧道",
-        Key.settingsAfterEnableSshTip.rawValue: "开启 SSH 隧道后，请在上方 Server Connection 点击 Test Connection。",
+        Key.settingsAfterEnableSshTip.rawValue: "开启 SSH 隧道后，请在上方服务器连接中点击“测试连接”。",
         Key.settingsVpsHost.rawValue: "VPS 地址",
         Key.settingsSshPort.rawValue: "SSH 端口",
         Key.settingsVpsPort.rawValue: "远端端口",
         Key.settingsAssignedRemotePort.rawValue: "分配的远端端口",
         Key.settingsSetServerAddress.rawValue: "将服务器地址设置为 127.0.0.1:4096",
-        Key.settingsKnownHost.rawValue: "Known Host",
+        Key.settingsKnownHost.rawValue: "已知主机",
         Key.settingsResetTrustedHost.rawValue: "重置已信任主机",
         Key.settingsCopyPublicKey.rawValue: "复制公钥",
         Key.settingsPublicKeyCopied.rawValue: "公钥已复制",
         Key.settingsViewPublicKey.rawValue: "查看公钥",
         Key.settingsReverseTunnelCommand.rawValue: "SSH 隧道命令",
-        Key.settingsNoTunnelCommand.rawValue: "请先填写 Host、SSH Port、Username 和分配的远端端口。",
+        Key.settingsNoTunnelCommand.rawValue: "请先填写主机地址、SSH 端口、用户名和分配的远端端口。",
         Key.settingsSshTunnel.rawValue: "SSH 隧道",
         Key.settingsSshTunnelHelp.rawValue: "通过 SSH 把本机 127.0.0.1:4096 连到服务器分配的 OpenCode 远端端口。连接前先把本设备公钥发给管理员添加。",
         Key.settingsSshSetupGuide.rawValue: "设置说明",
@@ -546,52 +843,154 @@ enum L10n {
         Key.settingsAppearance.rawValue: "外观",
         Key.settingsTheme.rawValue: "主题",
         Key.settingsSpeechRecognition.rawValue: "语音识别",
-        Key.settingsAiBuilderBaseURL.rawValue: "AI Builder Base URL",
-        Key.settingsAiBuilderToken.rawValue: "AI Builder Token",
+        Key.settingsAiBuilderBaseURL.rawValue: "AI Builder 服务地址",
+        Key.settingsAiBuilderToken.rawValue: "AI Builder 访问令牌",
         Key.settingsCustomPrompt.rawValue: "自定义提示词",
         Key.settingsTerminology.rawValue: "术语（逗号分隔）",
         Key.settingsTesting.rawValue: "测试中...",
         Key.settingsTested.rawValue: "可用",
         Key.settingsAbout.rawValue: "关于",
-        Key.settingsServerVersion.rawValue: "Server Version",
-        Key.settingsRotateKeyTitle.rawValue: "要更换 SSH Key 吗？",
+        Key.settingsServerVersion.rawValue: "服务器版本",
+        Key.settingsRotateKeyTitle.rawValue: "要更换 SSH 密钥吗？",
         Key.settingsRotateKeyPrompt.rawValue: "这将生成新的一对密钥。请同步更新 VPS 上的公钥。",
         Key.settingsPublicKeyTitle.rawValue: "你的公钥",
         Key.settingsPublicKeyFooter.rawValue: "把这个公钥发给服务器管理员。不要分享私钥。",
         Key.settingsCopyToClipboard.rawValue: "复制到剪贴板",
         Key.settingsPublicKeyCopyFailed.rawValue: "无法加载 SSH 公钥。",
-        Key.settingsPublicKeyRotate.rawValue: "旋转密钥",
+        Key.settingsPublicKeyRotate.rawValue: "更换密钥",
         Key.settingsPublicKeyErrorTitle.rawValue: "公钥错误",
         Key.settingsCopyCommand.rawValue: "复制命令",
         Key.settingsCommandCopied.rawValue: "命令已复制",
         Key.settingsUntrusted.rawValue: "未信任",
-        Key.settingsRotate.rawValue: "旋转",
+        Key.settingsRotate.rawValue: "更换",
         Key.errorServerAddressEmpty.rawValue: "服务器地址不能为空",
         Key.errorWanRequiresHttps.rawValue: "WAN 地址必须使用 HTTPS",
         Key.errorUsingLanHttp.rawValue: "正在使用 LAN HTTP",
         Key.settingsShowArchivedSessions.rawValue: "显示已归档会话",
         Key.settingsConnecting.rawValue: "连接中...",
-        Key.settingsProject.rawValue: "项目 (Workspace)",
+        Key.settingsProject.rawValue: "项目（工作区）",
         Key.settingsProjectServerDefault.rawValue: "服务器默认",
         Key.settingsProjectCustomPath.rawValue: "自定义路径",
         Key.settingsProjectCustomPathPlaceholder.rawValue: "/path/to/project",
-        Key.settingsProjectMismatchWarning.rawValue: "Server 默认 project 为 {server}。新建 session 会落在 {server}，而非 {effective}。要在 {effective} 下创建，请用命令行启动 OpenCode 并以该 project 为工作目录。",
-        Key.chatCreateDisabledHint.rawValue: "新建 session 仅在选择 Server default 时可用。要在其他 project 下创建，请用命令行启动 OpenCode 并指定不同的工作目录，然后在此选择 Server default。",
+        Key.settingsProjectMismatchWarning.rawValue: "服务器默认项目是 {server}。新会话会创建在 {server}，而不是 {effective}。如需在 {effective} 创建会话，请从命令行在该项目目录启动 OpenCode。",
+        Key.settingsLanguage.rawValue: "语言",
+        Key.settingsLanguageSystem.rawValue: "跟随系统",
+        Key.settingsLanguageEnglish.rawValue: "英文",
+        Key.settingsLanguageChinese.rawValue: "中文",
+        Key.chatCreateDisabledHint.rawValue: "只有选择“服务器默认项目”时才能新建会话。如需在其他项目中创建会话，请从命令行在对应目录启动 OpenCode，然后在这里选择“服务器默认”。",
+
+        Key.hostCurrent.rawValue: "当前主机",
+        Key.hostCurrentFooter.rawValue: "Host 表示一个 OpenCode 环境，可以直连 LAN、Tailscale、VPN、HTTPS，也可以通过 SSH 隧道访问。",
+        Key.hostNoHost.rawValue: "未配置 Host",
+        Key.hostAddToConnect.rawValue: "添加 Host 后连接",
+        Key.hostHosts.rawValue: "主机",
+        Key.hostDelete.rawValue: "删除",
+        Key.hostDuplicate.rawValue: "复制",
+        Key.hostEdit.rawValue: "编辑",
+        Key.hostAdd.rawValue: "添加 Host",
+        Key.hostDeviceKey.rawValue: "设备密钥",
+        Key.hostCopyDevicePublicKey.rawValue: "复制本设备公钥",
+        Key.hostDeviceKeyFooter.rawValue: "SSH Tunnel hosts 复用同一把设备公钥。Direct hosts 不需要。",
+        Key.hostErrorTitle.rawValue: "Host 错误",
+        Key.hostNeverConnected.rawValue: "从未连接",
+        Key.hostLastUsed.rawValue: "上次使用 %@",
+        Key.hostOverview.rawValue: "概览",
+        Key.hostName.rawValue: "名称",
+        Key.hostTransport.rawValue: "连接方式",
+        Key.hostOpenCodeURL.rawValue: "OpenCode 地址",
+        Key.hostStatus.rawValue: "状态",
+        Key.hostManagedBySSHTunnel.rawValue: "由 SSH 隧道管理",
+        Key.hostSavedHost.rawValue: "已保存 Host",
+        Key.hostSSHTunnel.rawValue: "SSH 隧道",
+        Key.hostSSHGateway.rawValue: "SSH 网关",
+        Key.hostGatewayHost.rawValue: "网关地址",
+        Key.hostSSHPort.rawValue: "SSH 端口",
+        Key.hostSSHUsername.rawValue: "SSH 用户名",
+        Key.hostAssignedRemotePort.rawValue: "分配的远端端口",
+        Key.hostConnectionDiagnostics.rawValue: "连接诊断",
+        Key.hostUseThisHost.rawValue: "使用此主机",
+        Key.hostConfigCopied.rawValue: "主机配置已复制",
+        Key.hostCopyConfigJSON.rawValue: "复制 Host Config JSON",
+        Key.hostNotFound.rawValue: "找不到 Host",
+        Key.hostImportConfig.rawValue: "导入 Host Config",
+        Key.hostImportFooter.rawValue: "粘贴管理员提供的配置 JSON，或继续手动配置。",
+        Key.hostConnectionType.rawValue: "连接类型",
+        Key.hostTransportFooter.rawValue: "直连适用于局域网、VPN、Tailscale 或 HTTPS。SSH 隧道适用于放在 SSH 网关后的 OpenCode 服务器。",
+        Key.hostSSHGatewayFooter.rawValue: "这些值由 OpenCode host 管理员提供。保存后 app 会通过本地隧道连接。",
+        Key.hostDeviceKeySendFooter.rawValue: "测试前把这个公钥发给服务器管理员。不要分享私钥。",
+        Key.hostBasicAuth.rawValue: "Basic Auth",
+        Key.hostSaveHelp.rawValue: "必填项完整后即可保存。测试连接会检查连接方式和 OpenCode 服务状态。",
+        Key.hostSave.rawValue: "保存",
+        Key.hostEditTitle.rawValue: "编辑 Host",
+        Key.hostAddTitle.rawValue: "添加 Host",
+        Key.hostTitle.rawValue: "主机",
+        Key.hostTransportDirect.rawValue: "直连",
+        Key.hostUntitled.rawValue: "未命名主机",
+        Key.hostDefaultLocalName.rawValue: "本地 OpenCode",
+        Key.hostDefaultSSHName.rawValue: "SSH OpenCode",
+        Key.hostDuplicateName.rawValue: "%@ 副本",
+        Key.hostImportErrorDirectRequiresServerURL.rawValue: "直连配置需要 serverURL。",
+        Key.hostImportErrorSSHTunnelRequiresSSHSettings.rawValue: "SSH 隧道配置需要 ssh 设置。",
+        Key.hostDeleteOnlyHostError.rawValue: "请先添加另一个主机，再删除这个主机。",
+        Key.hostImportErrorInvalidUTF8.rawValue: "Host config 不是有效的 UTF-8。",
+        Key.hostExportErrorEncodeConfigJSON.rawValue: "无法生成 Host Config JSON。",
+        Key.hostConnectionErrorInvalidURL.rawValue: "OpenCode 地址无效，请检查主机地址和端口。",
+        Key.hostConnectionErrorBasicAuthRejected.rawValue: "OpenCode 拒绝了 Basic Auth，请检查用户名和密码。",
+        Key.hostConnectionErrorHTTPStatus.rawValue: "OpenCode 返回 HTTP %d。请检查服务器日志或服务商配置。",
+        Key.hostConnectionErrorCannotConnect.rawValue: "无法连接到 OpenCode。请检查网络是否可达，以及服务器是否正在运行。",
+        Key.hostConnectionErrorTimedOut.rawValue: "连接超时。请检查主机、端口、VPN/Tailscale 和防火墙。",
+        Key.hostConnectionErrorDNS.rawValue: "无法解析主机名。请检查网关或服务器地址拼写。",
+        Key.hostConnectionErrorNetwork.rawValue: "网络错误：%@",
+        Key.hostConnectionErrorHealthCheckFailed.rawValue: "OpenCode 服务状态检查失败。请确认服务器正在运行且可以访问。",
+        Key.hostConnectionErrorGeneric.rawValue: "连接失败。请检查主机配置后重试。",
+        Key.hostDiagnosticCheckingHealth.rawValue: "正在检查 OpenCode 服务状态...",
+        Key.hostDiagnosticCheckingHealthURL.rawValue: "正在检查 %@/global/health...",
+        Key.hostDiagnosticConnectingSSHGateway.rawValue: "正在连接 SSH 网关...",
+        Key.hostDiagnosticHintConfirmGateway.rawValue: "请确认网关地址、SSH 端口、设备公钥和网络可达性。",
+        Key.hostDiagnosticSSHTunnelFailed.rawValue: "SSH 隧道失败：%@",
+        Key.hostDiagnosticHintCopyDeviceKeyAgain.rawValue: "如果服务器还没有授权这台设备，请重新复制本设备公钥给管理员。",
+        Key.hostDiagnosticTunnelReadyCheckingHealth.rawValue: "SSH 隧道已就绪，正在检查 OpenCode 服务状态...",
+        Key.hostDiagnosticHintURLFormat.rawValue: "请使用 host:port、http://host:port 或 https://host:port。",
+        Key.hostDiagnosticConnectedToOpenCode.rawValue: "已连接到 OpenCode%@。",
+        Key.hostDiagnosticHealthUnhealthy.rawValue: "OpenCode 服务状态检查返回异常。",
+        Key.hostDiagnosticHintCheckServerLogs.rawValue: "请检查 OpenCode 服务进程和日志。",
+        Key.hostDiagnosticHintVerifyHostConfig.rawValue: "SSH 隧道主机请先检查网关参数和设备密钥；直连主机请确认这台设备能访问该地址。",
+        Key.hostDiagnosticLocalListenerFailed.rawValue: "本地监听器失败：%@",
+        Key.hostValidationVPSHostRequired.rawValue: "VPS 地址不能为空",
+        Key.hostValidationSSHUsernameRequired.rawValue: "SSH 用户名不能为空",
+        Key.hostValidationSSHPortPositive.rawValue: "SSH 端口必须大于 0",
+        Key.hostValidationAssignedRemotePortPositive.rawValue: "分配的远端端口必须大于 0",
+        Key.hostSSHTunnelUnavailableVisionOS.rawValue: "visionOS 版本暂不支持 SSH 隧道。请改用直连 OpenCode 服务器。",
+        Key.sshErrorConnectionFailed.rawValue: "连接失败：%@",
+        Key.sshErrorAuthenticationFailed.rawValue: "认证失败。请确认服务器已添加你的公钥。",
+        Key.sshErrorKeyNotFound.rawValue: "找不到 SSH 密钥。请先生成密钥对。",
+        Key.sshErrorInvalidKeyFormat.rawValue: "SSH 密钥格式无效。",
+        Key.sshErrorTunnelFailed.rawValue: "隧道失败：%@",
+        Key.sshErrorHostKeyMismatch.rawValue: "Host key 不匹配。预期 %@，实际 %@。这可能是中间人攻击，也可能是服务器重装。请重置信任主机，并核对 fingerprint 后再连接。",
+
+        Key.connectionPhaseIdle.rawValue: "空闲",
+        Key.connectionPhaseSSHGateway.rawValue: "正在连接 SSH 网关",
+        Key.connectionPhaseSSHAuth.rawValue: "正在用设备密钥认证",
+        Key.connectionPhaseLocalTunnel.rawValue: "正在启动本地隧道",
+        Key.connectionPhaseHealth.rawValue: "正在检查 OpenCode 服务状态",
+        Key.connectionPhaseBootstrap.rawValue: "正在加载项目和会话",
+        Key.connectionPhaseConnected.rawValue: "已连接",
+        Key.connectionPhaseFailed.rawValue: "连接失败",
 
         Key.chatInputPlaceholder.rawValue: "输入你的问题...",
         Key.chatSendFailed.rawValue: "发送失败",
-        Key.chatRenameSession.rawValue: "重命名 Session",
+        Key.chatRenameSession.rawValue: "重命名会话",
         Key.chatRenameSessionPlaceholder.rawValue: "输入新标题",
         Key.chatTitleField.rawValue: "标题",
         Key.chatSpeechTitle.rawValue: "语音识别",
-        Key.chatSelectSessionFirst.rawValue: "请选择一个 Session",
-        Key.chatSessionBusyMessage.rawValue: "Session 正在运行中，消息尚未可见，正在刷新中…",
+        Key.chatSelectSessionFirst.rawValue: "请选择一个会话",
+        Key.chatSessionBusyMessage.rawValue: "会话正在运行中，消息尚未可见，正在刷新中…",
         Key.chatNoMessages.rawValue: "暂无消息",
         Key.chatSessionBusy.rawValue: "忙碌",
         Key.chatSessionRetrying.rawValue: "重试中",
         Key.chatSessionIdle.rawValue: "空闲",
         Key.chatTurnCompleted.rawValue: "已完成",
-        Key.chatSpeechTokenMissing.rawValue: "语音识别未配置：请先到 Settings -> Speech Recognition 设置 AI Builder Token，并点击 Test Connection。",
+        Key.chatSpeechTokenMissing.rawValue: "语音识别未配置：请先到“设置 > 语音识别”填写 AI Builder 访问令牌，并点击“测试连接”。",
         Key.chatSpeechTesting.rawValue: "AI Builder 正在测试连接，请稍候。",
         Key.chatSpeechNotPassed.rawValue: "AI Builder 连接未通过测试：请先到 Settings -> Speech Recognition 点击 Test Connection，确认 OK 后再录音。",
         Key.chatSpeechStreamDisconnected.rawValue: "语音连接断开且无法恢复，请按停止后重试。",
@@ -605,14 +1004,22 @@ enum L10n {
         Key.chatSpeechStopWaiting.rawValue: "停止转写等待",
         Key.chatSpeechRetrySegment.rawValue: "重试这段",
         Key.chatSpeechDiscardAudio.rawValue: "丢弃音频",
-        Key.chatAbortAgent.rawValue: "中断 agent",
-        Key.chatAgentRunning.rawValue: "Agent 正在运行",
+        Key.chatAbortAgent.rawValue: "中断智能体",
+        Key.chatAgentRunning.rawValue: "智能体正在运行",
         Key.chatMicrophoneDenied.rawValue: "未授权麦克风权限",
         Key.chatSessionStatusBusy.rawValue: "运行中",
         Key.chatSessionStatusRetrying.rawValue: "重试中",
         Key.chatSessionStatusIdle.rawValue: "空闲",
         Key.chatPullToLoadMore.rawValue: "下拉加载更多历史消息",
         Key.chatLoadingMoreHistory.rawValue: "正在加载更多历史消息...",
+        Key.chatLargeMessagePreviewNotice.rawValue: "消息较长：当前只显示前 %@ / %@ 个字符。为保持流畅，已跳过 Markdown 渲染。",
+        Key.chatEditFromHere.rawValue: "从这里编辑",
+        Key.chatForkFromHere.rawValue: "从这里分叉",
+        Key.attachmentImageTitle.rawValue: "图片",
+        Key.attachmentFileTitle.rawValue: "附件",
+        Key.attachmentRemoveImageAccessibilityLabel.rawValue: "移除图片",
+        Key.attachmentImageReadFailed.rawValue: "无法读取所选图片。",
+        Key.attachmentImageTooLargeAfterCompression.rawValue: "图片压缩后仍过大（%@ MB）。请选择更小的图片。",
 
         Key.permissionRequired.rawValue: "需要授权",
         Key.permissionAllowOnce.rawValue: "允许一次",
@@ -633,9 +1040,17 @@ enum L10n {
         Key.toolCommandInput.rawValue: "命令 / 输入",
         Key.toolPath.rawValue: "路径",
         Key.toolOutput.rawValue: "输出",
-        Key.toolOpenInFileTree.rawValue: "在 File Tree 中打开 %@",
+        Key.toolOpenInFileTree.rawValue: "在文件树中打开“%@”",
         Key.toolOpenFile.rawValue: "打开文件",
         Key.toolSelectFile.rawValue: "选择要打开的文件",
+        Key.toolCallsCountOne.rawValue: "%d 个工具调用",
+        Key.toolCallsCountMany.rawValue: "%d 个工具调用",
+        Key.toolImageFile.rawValue: "图片文件",
+        Key.toolReadFileAccessibilityLabel.rawValue: "读取文件 %@",
+        Key.toolWriteFileAccessibilityLabel.rawValue: "写入文件 %@",
+        Key.toolReadDirectoryAccessibilityLabel.rawValue: "读取目录 %@",
+        Key.folderEmptyTitle.rawValue: "文件夹为空",
+        Key.folderEmptyDescription.rawValue: "此目录没有条目。",
 
         Key.patchFilesChangedOne.rawValue: "%d 文件已变更",
         Key.patchFilesChangedMany.rawValue: "%d 个文件已变更",
@@ -645,7 +1060,7 @@ enum L10n {
         Key.contextUsageTitle.rawValue: "上下文",
         Key.contextUsageSectionSession.rawValue: "会话",
         Key.contextUsageSectionModel.rawValue: "模型",
-        Key.contextUsageSectionTokens.rawValue: "Token",
+        Key.contextUsageSectionTokens.rawValue: "令牌",
         Key.contextUsageSectionCost.rawValue: "成本",
         Key.contextUsageTitleLabel.rawValue: "标题",
         Key.contextUsageIdLabel.rawValue: "ID",
@@ -659,13 +1074,13 @@ enum L10n {
         Key.contextUsageCachedReadLabel.rawValue: "缓存读",
         Key.contextUsageCachedWriteLabel.rawValue: "缓存写",
         Key.contextUsageNoCostData.rawValue: "无成本数据",
-        Key.contextUsageLoadingConfig.rawValue: "正在加载 provider 配置...",
+        Key.contextUsageLoadingConfig.rawValue: "正在加载服务商配置...",
         Key.contextUsageNoUsageData.rawValue: "无使用数据",
-        Key.contextUsageConfigNotLoaded.rawValue: "未加载 Provider 配置",
+        Key.contextUsageConfigNotLoaded.rawValue: "未加载服务商配置",
 
         Key.sessionTitle.rawValue: "会话",
         Key.sessionsTitle.rawValue: "会话",
-        Key.sessionsEmptyTitle.rawValue: "暂无 Session",
+        Key.sessionsEmptyTitle.rawValue: "暂无会话",
         Key.sessionsEmptyDescription.rawValue: "点击右上角新建，或下拉刷新获取已有 Session",
         Key.sessionsClose.rawValue: "关闭",
         Key.sessionsNew.rawValue: "新建",
@@ -692,20 +1107,40 @@ enum L10n {
         Key.fileNoContent.rawValue: "无内容",
         Key.fileMarkdown.rawValue: "Markdown",
         Key.filePreview.rawValue: "预览",
+        Key.filePreviewMode.rawValue: "预览方式",
+        Key.fileNativePreview.rawValue: "原生预览",
+        Key.fileWebPreview.rawValue: "Web 预览",
+        Key.fileMarkdownSource.rawValue: "Markdown 源码",
+        Key.contentImageDecodeFailed.rawValue: "图片解码失败",
+        Key.contentNoImageData.rawValue: "没有图片数据",
+        Key.markdownPreviewLoading.rawValue: "正在加载预览...",
+        Key.markdownWebPreviewLoading.rawValue: "正在加载 Web 预览...",
+        Key.markdownWebPreviewLargeDocumentTitle.rawValue: "文档较大",
+        Key.markdownWebPreviewLargeDocumentDescription.rawValue: "这个文件较大，Web 预览可能较慢或占用较多内存。",
+        Key.markdownWebPreviewRenderAnyway.rawValue: "仍然渲染",
+        Key.markdownWebPreviewOpenNative.rawValue: "打开原生预览",
+        Key.markdownWebPreviewOpenSource.rawValue: "打开 Markdown 源码",
+        Key.markdownWebPreviewFailedTitle.rawValue: "Web 预览失败",
+        Key.markdownWebPreviewAssetsMissing.rawValue: "App bundle 中缺少 Web 预览资源。",
+        Key.markdownWebPreviewPayloadEncodeFailed.rawValue: "无法编码预览 payload。",
+        Key.markdownWebPreviewRenderCallFailed.rawValue: "渲染调用失败：%@",
+        Key.markdownWebPreviewWebViewLoadFailed.rawValue: "WebView 加载失败：%@",
+        Key.markdownWebPreviewWebViewProvisionalLoadFailed.rawValue: "WebView 预加载失败：%@",
+        Key.markdownWebPreviewUnknownRenderError.rawValue: "未知渲染错误",
 
         Key.errorConnectionFailed.rawValue: "连接失败：%@",
         Key.errorServerError.rawValue: "服务器错误：%@",
         Key.errorInvalidResponse.rawValue: "服务器返回了无效的响应",
         Key.errorUnauthorized.rawValue: "未授权，请检查认证信息",
-        Key.errorSessionNotFound.rawValue: "Session 不存在",
+        Key.errorSessionNotFound.rawValue: "会话不存在",
         Key.errorFileNotFound.rawValue: "文件不存在：%@",
         Key.errorOperationFailed.rawValue: "操作失败：%@",
         Key.errorUnknown.rawValue: "未知错误：%@",
-        Key.errorAiBuilderTokenEmpty.rawValue: "Token 为空",
+        Key.errorAiBuilderTokenEmpty.rawValue: "访问令牌为空",
         Key.errorInvalidBaseURL.rawValue: "无效的 URL",
         Key.helpLanHttp.rawValue: "LAN: HTTP 允许，但建议仅在可信局域网内使用。HTTP 不安全。",
         Key.helpWanHttp.rawValue: "WAN: 需要 HTTPS（HTTP 会被阻止）。HTTP 不安全。",
-        Key.helpTailscaleHttp.rawValue: "对于 Tailscale 来说不要求 HTTPS，但是对于其他广域网还是要求 HTTPS。",
+        Key.helpTailscaleHttp.rawValue: "Tailscale 不要求 HTTPS；其他广域网地址仍需使用 HTTPS。",
 
         Key.activityRetrying.rawValue: "重试中",
         Key.activityThinking.rawValue: "思考中",
@@ -720,8 +1155,8 @@ enum L10n {
 
         Key.configureTitle.rawValue: "配置",
         Key.configureModel.rawValue: "模型",
-        Key.configureAgent.rawValue: "Agent",
-        Key.configureNoAgents.rawValue: "暂无可用 Agent",
+        Key.configureAgent.rawValue: "智能体",
+        Key.configureNoAgents.rawValue: "暂无可用智能体",
 
         Key.todoButtonLabel.rawValue: "任务",
         Key.todoPanelTitle.rawValue: "任务",
@@ -730,25 +1165,53 @@ enum L10n {
         Key.todoUpdatedBadge.rawValue: "任务更新 · %d/%d",
     ]
 
+    static var languagePreference: LanguagePreference {
+        get {
+            let raw = UserDefaults.standard.string(forKey: languagePreferenceUserDefaultsKey)
+            return raw.flatMap(LanguagePreference.init(rawValue:)) ?? .system
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: languagePreferenceUserDefaultsKey)
+        }
+    }
+
+    static var currentLocale: Locale {
+        if let identifier = languagePreference.localeIdentifier {
+            return Locale(identifier: identifier)
+        }
+        return Locale.current
+    }
+
     private static var languageIsChinese: Bool {
-        let preferred = Locale.preferredLanguages.first ?? "en"
-        return preferred.lowercased().hasPrefix("zh")
+        switch languagePreference {
+        case .system:
+            let preferred = Locale.preferredLanguages.first ?? "en"
+            return preferred.lowercased().hasPrefix("zh")
+        case .en:
+            return false
+        case .zh:
+            return true
+        }
     }
 
     static var dictionaries: ([String: String], [String: String]) {
         return (en, languageIsChinese ? zh : en)
     }
 
-    nonisolated static func t(_ key: Key) -> String {
-        let preferred = Locale.preferredLanguages.first ?? "en"
-        let translations = preferred.lowercased().hasPrefix("zh") ? zh : en
+    static func t(_ key: Key) -> String {
+        let translations = languageIsChinese ? zh : en
         return translations[key.rawValue] ?? en[key.rawValue] ?? key.rawValue
     }
 
     static func t(_ key: Key, _ arguments: CVarArg...) -> String {
         let template = t(key)
         guard !arguments.isEmpty else { return template }
-        return String(format: template, locale: Locale.current, arguments)
+        return String(format: template, locale: currentLocale, arguments)
+    }
+
+    static func toolCallsCount(_ count: Int) -> String {
+        let key: Key = count == 1 ? .toolCallsCountOne : .toolCallsCountMany
+        return t(key, Int32(clamping: count))
     }
 
     static func sessionsFiles(_ count: Int) -> String {

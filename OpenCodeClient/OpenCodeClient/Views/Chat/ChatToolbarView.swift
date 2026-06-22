@@ -113,7 +113,7 @@ struct ChatToolbarView: View {
             showConfigSheet = true
         } label: {
             HStack(spacing: 4) {
-                Text(state.selectedModel?.shortName ?? "Model")
+                Text(state.selectedModel?.shortName ?? L10n.t(.configureModel))
                     .font(.caption.weight(.semibold))
                 Image(systemName: "chevron.down")
                     .font(.caption2)

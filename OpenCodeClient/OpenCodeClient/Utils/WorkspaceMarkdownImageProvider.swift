@@ -105,7 +105,7 @@ struct MarkdownImagePreviewWindow: View {
                 if let uiImage {
                     ImageView(uiImage: uiImage)
                 } else {
-                    ContentUnavailableView("Unable to load image", systemImage: "photo")
+                    ContentUnavailableView(L10n.t(.contentImageDecodeFailed), systemImage: "photo")
                 }
             }
             .navigationTitle(item.title)
@@ -160,9 +160,9 @@ private struct WorkspaceMarkdownImageView: View {
             return URL(fileURLWithPath: path).lastPathComponent
         }
         if let url {
-            return url.lastPathComponent.isEmpty ? "Image" : url.lastPathComponent
+            return url.lastPathComponent.isEmpty ? L10n.t(.attachmentImageTitle) : url.lastPathComponent
         }
-        return "Image"
+        return L10n.t(.attachmentImageTitle)
     }
 
     var body: some View {
@@ -210,7 +210,7 @@ private struct WorkspaceMarkdownImageView: View {
                                 }
                             }
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Close") {
+                                Button(L10n.t(.appClose)) {
                                     showImageSheet = false
                                 }
                             }

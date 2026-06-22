@@ -7,14 +7,14 @@ struct CurrentHostSummaryView: View {
         let profile = state.currentHostProfile
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(profile?.displayName ?? "No Host")
+                Text(profile?.displayName ?? L10n.t(.hostNoHost))
                     .font(.headline)
                 Spacer()
                 Text(profile?.transport.label ?? "")
                     .font(.caption)
                     .foregroundStyle(DesignColors.Brand.primary)
             }
-            Text(profile?.connectionSummary ?? "Add a host to connect")
+            Text(profile?.connectionSummary ?? L10n.t(.hostAddToConnect))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -50,12 +50,12 @@ struct HostProfilesView: View {
                         .accessibilityIdentifier("hosts-current-card")
                 }
             } header: {
-                Text("Current Host")
+                Text(L10n.t(.hostCurrent))
             } footer: {
-                Text("A host is one OpenCode environment. It can be reached directly over LAN, Tailscale, VPN, HTTPS, or through an SSH tunnel.")
+                Text(L10n.t(.hostCurrentFooter))
             }
 
-            Section("Hosts") {
+            Section(L10n.t(.hostHosts)) {
                 ForEach(state.hostProfiles) { profile in
                     NavigationLink {
                         HostProfileDetailView(state: state, profileID: profile.id) { selected in
@@ -72,21 +72,21 @@ struct HostProfilesView: View {
                                     errorMessage = error.localizedDescription
                                 }
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(L10n.t(.hostDelete), systemImage: "trash")
                             }
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             Button {
                                 state.duplicateHostProfile(profile)
                             } label: {
-                                Label("Duplicate", systemImage: "plus.square.on.square")
+                                Label(L10n.t(.hostDuplicate), systemImage: "plus.square.on.square")
                             }
                             .tint(.gray)
                         }
                         .contextMenu {
-                            Button("Edit") { editorMode = .edit(profile) }
-                            Button("Duplicate") { state.duplicateHostProfile(profile) }
-                            Button("Delete", role: .destructive) {
+                            Button(L10n.t(.hostEdit)) { editorMode = .edit(profile) }
+                            Button(L10n.t(.hostDuplicate)) { state.duplicateHostProfile(profile) }
+                            Button(L10n.t(.hostDelete), role: .destructive) {
                                 do { try state.deleteHostProfile(profile) } catch { errorMessage = error.localizedDescription }
                             }
                         }
@@ -95,31 +95,31 @@ struct HostProfilesView: View {
                 Button {
                     editorMode = .add
                 } label: {
-                    Label("Add Host", systemImage: "plus.circle")
+                    Label(L10n.t(.hostAdd), systemImage: "plus.circle")
                 }
                 .accessibilityIdentifier("hosts-add-host")
             }
             .accessibilityIdentifier("hosts-list-section")
 
             #if !os(visionOS)
-            Section("Device Key") {
+            Section(L10n.t(.hostDeviceKey)) {
                 Button {
                     copyPublicKey()
                 } label: {
-                    Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : "Copy This Device Public Key", systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
+                    Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : L10n.t(.hostCopyDevicePublicKey), systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
                 }
                 .accessibilityIdentifier("hosts-copy-device-public-key")
-                Text("Use this same device key for SSH tunnel hosts. Direct hosts do not need it.")
+                Text(L10n.t(.hostDeviceKeyFooter))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             #endif
         }
-        .navigationTitle("Hosts")
+        .navigationTitle(L10n.t(.hostHosts))
         .sheet(item: $editorMode) { mode in
             HostProfileEditorView(state: state, mode: mode)
         }
-        .alert("Host Error", isPresented: Binding(
+        .alert(L10n.t(.hostErrorTitle), isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
@@ -245,11 +245,12 @@ private struct HostProfileRow: View {
     private var lastUsedText: String {
         guard let lastUsedAt = profile.lastUsedAt,
               lastUsedAt.timeIntervalSince1970 > 60 * 60 * 24 * 365 else {
-            return "Never connected"
+            return L10n.t(.hostNeverConnected)
         }
         let formatter = RelativeDateTimeFormatter()
+        formatter.locale = L10n.currentLocale
         formatter.unitsStyle = .abbreviated
-        return "Last used " + formatter.localizedString(for: lastUsedAt, relativeTo: Date())
+        return L10n.t(.hostLastUsed, formatter.localizedString(for: lastUsedAt, relativeTo: Date()))
     }
 }
 
@@ -274,26 +275,26 @@ private struct HostProfileDetailView: View {
     var body: some View {
         Form {
             if let profile {
-                Section("Overview") {
-                    LabeledContent("Name", value: profile.displayName)
-                    LabeledContent("Transport", value: profile.transport.label)
-                    LabeledContent("OpenCode URL", value: profile.transport == .sshTunnel ? "Managed by SSH tunnel" : profile.serverURL)
-                    LabeledContent("Status", value: isCurrent ? "Current Host" : "Saved Host")
+                Section(L10n.t(.hostOverview)) {
+                    LabeledContent(L10n.t(.hostName), value: profile.displayName)
+                    LabeledContent(L10n.t(.hostTransport), value: profile.transport.label)
+                    LabeledContent(L10n.t(.hostOpenCodeURL), value: profile.transport == .sshTunnel ? L10n.t(.hostManagedBySSHTunnel) : profile.serverURL)
+                    LabeledContent(L10n.t(.hostStatus), value: isCurrent ? L10n.t(.hostCurrent) : L10n.t(.hostSavedHost))
                 }
                 .accessibilityIdentifier("host-detail-overview")
 
                 if profile.transport == .sshTunnel, let ssh = profile.ssh {
-                    Section("SSH Gateway") {
-                        HostDetailField(title: "Gateway Host", value: ssh.host, accessibilityID: "host-detail-ssh-host")
-                        HostDetailField(title: "SSH Port", value: String(ssh.port), accessibilityID: "host-detail-ssh-port")
-                        HostDetailField(title: "SSH Username", value: ssh.username, accessibilityID: "host-detail-ssh-username")
-                        HostDetailField(title: "Assigned Remote Port", value: String(ssh.remotePort), accessibilityID: "host-detail-ssh-remote-port")
+                    Section(L10n.t(.hostSSHGateway)) {
+                        HostDetailField(title: L10n.t(.hostGatewayHost), value: ssh.host, accessibilityID: "host-detail-ssh-host")
+                        HostDetailField(title: L10n.t(.hostSSHPort), value: String(ssh.port), accessibilityID: "host-detail-ssh-port")
+                        HostDetailField(title: L10n.t(.hostSSHUsername), value: ssh.username, accessibilityID: "host-detail-ssh-username")
+                        HostDetailField(title: L10n.t(.hostAssignedRemotePort), value: String(ssh.remotePort), accessibilityID: "host-detail-ssh-remote-port")
                     }
                     .accessibilityIdentifier("host-detail-ssh-gateway")
                 }
 
                 if let diagnostic = state.connectionDiagnostic, diagnostic.hostProfileID == profile.id {
-                    Section("Connection Diagnostics") {
+                    Section(L10n.t(.hostConnectionDiagnostics)) {
                         DiagnosticSummaryView(diagnostic: diagnostic)
                     }
                     .accessibilityIdentifier("host-detail-diagnostics")
@@ -301,7 +302,7 @@ private struct HostProfileDetailView: View {
 
                 Section {
                     if !isCurrent {
-                        Button("Use This Host") {
+                        Button(L10n.t(.hostUseThisHost)) {
                             Task {
                                 await state.switchHostProfile(to: profile.id)
                                 dismiss()
@@ -319,15 +320,15 @@ private struct HostProfileDetailView: View {
                             Task { await state.refresh() }
                         }
                     }
-                    Button("Edit") { onEdit(profile) }
+                    Button(L10n.t(.hostEdit)) { onEdit(profile) }
                         .accessibilityIdentifier("host-detail-edit")
-                    Button(copiedHostConfig ? "Host Config Copied" : "Copy Host Config JSON") {
+                    Button(copiedHostConfig ? L10n.t(.hostConfigCopied) : L10n.t(.hostCopyConfigJSON)) {
                         copyHostConfig(profile)
                     }
                     .accessibilityIdentifier("host-detail-copy-config")
                     #if !os(visionOS)
                     if profile.transport == .sshTunnel {
-                        Button(copiedPublicKey ? L10n.t(.settingsPublicKeyCopied) : "Copy This Device Public Key") {
+                        Button(copiedPublicKey ? L10n.t(.settingsPublicKeyCopied) : L10n.t(.hostCopyDevicePublicKey)) {
                             copyPublicKey()
                         }
                         .accessibilityIdentifier("host-detail-copy-device-public-key")
@@ -335,11 +336,11 @@ private struct HostProfileDetailView: View {
                     #endif
                 }
             } else {
-                Text("Host not found")
+                Text(L10n.t(.hostNotFound))
             }
         }
-        .navigationTitle(profile?.displayName ?? "Host")
-        .alert("Host Error", isPresented: Binding(
+        .navigationTitle(profile?.displayName ?? L10n.t(.hostTitle))
+        .alert(L10n.t(.hostErrorTitle), isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
@@ -448,17 +449,17 @@ struct HostProfileEditorView: View {
                                 errorMessage = error.localizedDescription
                             }
                         } label: {
-                            Label("Import Host Config", systemImage: "square.and.arrow.down")
+                            Label(L10n.t(.hostImportConfig), systemImage: "square.and.arrow.down")
                         }
                         .accessibilityIdentifier("host-import-config")
                         .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } footer: {
-                        Text("Paste a setup JSON from your server admin, or continue with manual setup below.")
+                        Text(L10n.t(.hostImportFooter))
                     }
                 }
 
                 Section {
-                    Picker("Connection Type", selection: $profile.transport) {
+                    Picker(L10n.t(.hostConnectionType), selection: $profile.transport) {
                         ForEach(HostTransport.allCases) { transport in
                             Text(transport.label).tag(transport)
                         }
@@ -474,20 +475,20 @@ struct HostProfileEditorView: View {
                         }
                     }
                 } footer: {
-                    Text("Direct is for LAN, VPN, Tailscale, or HTTPS. SSH Tunnel is for an OpenCode server behind an SSH gateway.")
+                    Text(L10n.t(.hostTransportFooter))
                 }
 
-                Section("Host") {
-                    TextField("Name", text: $profile.name)
+                Section(L10n.t(.hostTitle)) {
+                    TextField(L10n.t(.hostName), text: $profile.name)
                         .accessibilityIdentifier("host-name")
                     if profile.transport == .direct {
-                        TextField("OpenCode URL", text: $profile.serverURL)
+                        TextField(L10n.t(.hostOpenCodeURL), text: $profile.serverURL)
                             .textContentType(.URL)
                             .textInputAutocapitalization(.never)
                             .accessibilityIdentifier("host-server-url")
                     } else {
-                        LabeledContent("OpenCode URL") {
-                            Text("Managed by SSH tunnel")
+                        LabeledContent(L10n.t(.hostOpenCodeURL)) {
+                            Text(L10n.t(.hostManagedBySSHTunnel))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -495,42 +496,42 @@ struct HostProfileEditorView: View {
 
                 if profile.transport == .sshTunnel {
                     Section {
-                        TextField("Gateway Host", text: sshHostBinding)
+                        TextField(L10n.t(.hostGatewayHost), text: sshHostBinding)
                             .textContentType(.URL)
                             .textInputAutocapitalization(.never)
                             .accessibilityIdentifier("host-ssh-gateway")
-                        LabeledNumberField(title: "SSH Port", value: sshPortBinding, accessibilityID: "host-ssh-port")
-                        TextField("SSH Username", text: sshUsernameBinding)
+                        LabeledNumberField(title: L10n.t(.hostSSHPort), value: sshPortBinding, accessibilityID: "host-ssh-port")
+                        TextField(L10n.t(.hostSSHUsername), text: sshUsernameBinding)
                             .textInputAutocapitalization(.never)
                             .accessibilityIdentifier("host-ssh-username")
-                        LabeledNumberField(title: "Assigned Remote Port", value: sshRemotePortBinding, accessibilityID: "host-ssh-remote-port")
+                        LabeledNumberField(title: L10n.t(.hostAssignedRemotePort), value: sshRemotePortBinding, accessibilityID: "host-ssh-remote-port")
                     } header: {
-                        Text("SSH Gateway")
+                        Text(L10n.t(.hostSSHGateway))
                     } footer: {
-                        Text("These values come from your OpenCode host admin. The app connects locally through the tunnel after this is saved.")
+                        Text(L10n.t(.hostSSHGatewayFooter))
                     }
                     .accessibilityIdentifier("host-ssh-gateway-section")
 
                     #if !os(visionOS)
-                    Section("Device Key") {
+                    Section(L10n.t(.hostDeviceKey)) {
                         Button {
                             copyPublicKey()
                         } label: {
-                            Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : "Copy This Device Public Key", systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
+                            Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : L10n.t(.hostCopyDevicePublicKey), systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
                         }
                         .accessibilityIdentifier("host-editor-copy-device-public-key")
-                        Text("Send this public key to the server admin before testing. Never share the private key.")
+                        Text(L10n.t(.hostDeviceKeySendFooter))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     #endif
                 }
 
-                Section("Basic Auth") {
-                    TextField("Username", text: basicAuthUsernameBinding)
+                Section(L10n.t(.hostBasicAuth)) {
+                    TextField(L10n.t(.settingsUsername), text: basicAuthUsernameBinding)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)
-                    SecureField("Password", text: $password)
+                    SecureField(L10n.t(.settingsPassword), text: $password)
                         .textContentType(.password)
                 }
 
@@ -540,19 +541,19 @@ struct HostProfileEditorView: View {
                         Task { await state.refresh() }
                     }
                     .disabled(!canSave)
-                    Text("Save is enabled after required fields are present. Test verifies the selected transport and OpenCode health endpoint.")
+                    Text(L10n.t(.hostSaveHelp))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle(isEditing ? "Edit Host" : "Add Host")
+            .navigationTitle(isEditing ? L10n.t(.hostEditTitle) : L10n.t(.hostAddTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.t(.commonCancel)) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(L10n.t(.hostSave)) {
                         save(makeCurrent: true)
                         dismiss()
                     }
@@ -560,7 +561,7 @@ struct HostProfileEditorView: View {
                     .accessibilityIdentifier("host-save")
                 }
             }
-            .alert("Host Error", isPresented: Binding(
+            .alert(L10n.t(.hostErrorTitle), isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {

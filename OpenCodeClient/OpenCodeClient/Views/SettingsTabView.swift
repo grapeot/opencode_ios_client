@@ -39,9 +39,9 @@ struct SettingsTabView: View {
                             .foregroundStyle(.red)
                     }
                 } header: {
-                    Text("Current Host")
+                    Text(L10n.t(.hostCurrent))
                 } footer: {
-                    Text("A host is one OpenCode environment. It can be direct or use an SSH tunnel.")
+                    Text(L10n.t(.hostCurrentFooter))
                 }
 
                 Section(L10n.t(.settingsProject)) {
@@ -92,6 +92,17 @@ struct SettingsTabView: View {
 
                     Toggle(L10n.t(.settingsShowArchivedSessions), isOn: $state.showArchivedSessions)
                         .tint(DesignColors.Brand.primary)
+
+                    VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+                        Text(L10n.t(.settingsLanguage))
+                        Picker(L10n.t(.settingsLanguage), selection: $state.languagePreference) {
+                            Text(L10n.t(.settingsLanguageSystem)).tag(L10n.LanguagePreference.system)
+                            Text(L10n.t(.settingsLanguageEnglish)).tag(L10n.LanguagePreference.en)
+                            Text(L10n.t(.settingsLanguageChinese)).tag(L10n.LanguagePreference.zh)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
                 }
 
                 Section(L10n.t(.settingsSpeechRecognition)) {

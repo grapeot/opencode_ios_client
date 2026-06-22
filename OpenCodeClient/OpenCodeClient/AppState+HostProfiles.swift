@@ -27,7 +27,7 @@ extension AppState {
 
         #if !os(visionOS)
         if sshTunnelManager.config.isEnabled {
-            profile.name = "SSH OpenCode"
+            profile.name = L10n.t(.hostDefaultSSHName)
             profile.transport = .sshTunnel
             profile.serverURL = APIClient.defaultServer
             profile.ssh = sshTunnelManager.config
@@ -180,7 +180,7 @@ extension AppState {
     func duplicateHostProfile(_ profile: HostProfile) {
         var copy = profile
         copy.id = UUID()
-        copy.name = "\(profile.displayName) Copy"
+        copy.name = L10n.t(.hostDuplicateName, profile.displayName)
         copy.lastUsedAt = nil
         if let auth = profile.basicAuth {
             let newPasswordID = Self.passwordKeychainID(for: copy.id)
@@ -194,7 +194,7 @@ extension AppState {
 
     func importHostProfile(from json: String) throws -> HostProfile {
         guard let data = json.data(using: .utf8) else {
-            throw HostProfileError.invalidImport("Host config is not valid UTF-8.")
+            throw HostProfileError.invalidImport(L10n.t(.hostImportErrorInvalidUTF8))
         }
         do {
             let payload = try JSONDecoder().decode(HostProfileImportPayload.self, from: data)
@@ -232,7 +232,7 @@ extension AppState {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(payload)
         guard let json = String(data: data, encoding: .utf8) else {
-            throw HostProfileError.invalidImport("Could not encode Host Config JSON.")
+            throw HostProfileError.invalidImport(L10n.t(.hostExportErrorEncodeConfigJSON))
         }
         return json
     }
@@ -251,10 +251,10 @@ extension AppState {
         if let apiError = error as? APIError {
             switch apiError {
             case .invalidURL:
-                return "Invalid OpenCode URL. Check the host address and port."
+                return L10n.t(.hostConnectionErrorInvalidURL)
             case .httpError(let statusCode, _):
-                if statusCode == 401 { return "OpenCode rejected Basic Auth. Check username and password." }
-                return "OpenCode returned HTTP \(statusCode). Check the server logs or provider setup."
+                if statusCode == 401 { return L10n.t(.hostConnectionErrorBasicAuthRejected) }
+                return L10n.t(.hostConnectionErrorHTTPStatus, Int32(statusCode))
             }
         }
 
@@ -262,21 +262,21 @@ extension AppState {
         if nsError.domain == NSURLErrorDomain {
             switch nsError.code {
             case NSURLErrorCannotConnectToHost, NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
-                return "Could not connect to OpenCode. Check network reachability and that the server is running."
+                return L10n.t(.hostConnectionErrorCannotConnect)
             case NSURLErrorTimedOut:
-                return "Connection timed out. Check the host, port, VPN/Tailscale, and firewall."
+                return L10n.t(.hostConnectionErrorTimedOut)
             case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
-                return "Host name could not be resolved. Check the gateway or server host spelling."
+                return L10n.t(.hostConnectionErrorDNS)
             default:
-                return "Network error: \(nsError.localizedDescription)"
+                return L10n.t(.hostConnectionErrorNetwork, nsError.localizedDescription)
             }
         }
 
         let message = error.localizedDescription
         if message.contains("APIError error") {
             return phase == .health
-                ? "OpenCode health check failed. Check that the server is running and reachable."
-                : "Connection failed. Check the host configuration and try again."
+                ? L10n.t(.hostConnectionErrorHealthCheckFailed)
+                : L10n.t(.hostConnectionErrorGeneric)
         }
         return message
     }

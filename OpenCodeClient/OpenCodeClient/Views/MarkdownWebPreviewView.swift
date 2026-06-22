@@ -59,7 +59,7 @@ struct MarkdownWebPreviewContainer: View {
                     onError: { message in renderError = message }
                 )
             } else {
-                ProgressView("Loading web preview...")
+                ProgressView(L10n.t(.markdownWebPreviewLoading))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -102,25 +102,25 @@ struct MarkdownWebPreviewContainer: View {
 
     private var oversizeGate: some View {
         ContentUnavailableView {
-            Label("Large document", systemImage: "exclamationmark.triangle")
+            Label(L10n.t(.markdownWebPreviewLargeDocumentTitle), systemImage: "exclamationmark.triangle")
         } description: {
-            Text("This file is large. Web Preview may be slow or memory-heavy.")
+            Text(L10n.t(.markdownWebPreviewLargeDocumentDescription))
         } actions: {
-            Button("Render anyway") { proceedDespiteSize = true }
-            Button("Open Native Preview") { onSwitchToNative?() }
-            Button("Open Markdown Source") { onSwitchToSource?() }
+            Button(L10n.t(.markdownWebPreviewRenderAnyway)) { proceedDespiteSize = true }
+            Button(L10n.t(.markdownWebPreviewOpenNative)) { onSwitchToNative?() }
+            Button(L10n.t(.markdownWebPreviewOpenSource)) { onSwitchToSource?() }
         }
     }
 
     private func errorState(_ message: String) -> some View {
         ContentUnavailableView {
-            Label("Web Preview failed", systemImage: "xmark.octagon")
+            Label(L10n.t(.markdownWebPreviewFailedTitle), systemImage: "xmark.octagon")
         } description: {
             Text(message)
         } actions: {
-            Button("Open Native Preview") { onSwitchToNative?() }
-            Button("Open Markdown Source") { onSwitchToSource?() }
-            Button("Retry") {
+            Button(L10n.t(.markdownWebPreviewOpenNative)) { onSwitchToNative?() }
+            Button(L10n.t(.markdownWebPreviewOpenSource)) { onSwitchToSource?() }
+            Button(L10n.t(.commonRetry)) {
                 renderError = nil
                 resolvedMarkdown = nil
             }
@@ -203,7 +203,7 @@ struct MarkdownWebPreviewView: UIViewRepresentable {
         func loadShell() {
             guard let webView else { return }
             guard let html = shellURL() else {
-                parent.onError?("Web Preview assets missing from app bundle.")
+                parent.onError?(L10n.t(.markdownWebPreviewAssetsMissing))
                 return
             }
             // Grant read access to the shell's directory so relative vendor/css/js
@@ -234,14 +234,14 @@ struct MarkdownWebPreviewView: UIViewRepresentable {
                 let data = try? JSONSerialization.data(withJSONObject: payload),
                 let json = String(data: data, encoding: .utf8)
             else {
-                parent.onError?("Failed to encode preview payload.")
+                parent.onError?(L10n.t(.markdownWebPreviewPayloadEncodeFailed))
                 return
             }
             // JSON-encode the payload; never string-concatenate raw markdown.
             let js = "window.renderMarkdown(\(json));"
             webView.evaluateJavaScript(js) { [weak self] _, error in
                 if let error {
-                    self?.parent.onError?("Render call failed: \(error.localizedDescription)")
+                    self?.parent.onError?(L10n.t(.markdownWebPreviewRenderCallFailed, error.localizedDescription))
                 }
             }
         }
@@ -258,11 +258,11 @@ struct MarkdownWebPreviewView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            parent.onError?("WebView load failed: \(error.localizedDescription)")
+            parent.onError?(L10n.t(.markdownWebPreviewWebViewLoadFailed, error.localizedDescription))
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            parent.onError?("WebView provisional load failed: \(error.localizedDescription)")
+            parent.onError?(L10n.t(.markdownWebPreviewWebViewProvisionalLoadFailed, error.localizedDescription))
         }
 
         /// Block all navigation except the initial local shell load and in-page
@@ -318,7 +318,7 @@ struct MarkdownWebPreviewView: UIViewRepresentable {
                 guard let src = body["src"] as? String, !src.isEmpty else { return }
                 parent.onOpenImage?(src)
             case "error":
-                let detail = (body["message"] as? String) ?? "Unknown render error"
+                let detail = (body["message"] as? String) ?? L10n.t(.markdownWebPreviewUnknownRenderError)
                 parent.onError?(detail)
             default:
                 break

@@ -8,8 +8,8 @@ enum HostTransport: String, Codable, Equatable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .direct: return "Direct"
-        case .sshTunnel: return "SSH Tunnel"
+        case .direct: return L10n.t(.hostTransportDirect)
+        case .sshTunnel: return L10n.t(.hostSSHTunnel)
         }
     }
 }
@@ -26,14 +26,14 @@ enum ConnectionPhase: String, Codable, Equatable {
 
     var label: String {
         switch self {
-        case .idle: return "Idle"
-        case .sshGateway: return "Connecting to SSH gateway"
-        case .sshAuth: return "Authenticating with device key"
-        case .localTunnel: return "Starting local tunnel"
-        case .health: return "Checking OpenCode health"
-        case .bootstrap: return "Loading projects and sessions"
-        case .connected: return "Connected"
-        case .failed: return "Connection failed"
+        case .idle: return L10n.t(.connectionPhaseIdle)
+        case .sshGateway: return L10n.t(.connectionPhaseSSHGateway)
+        case .sshAuth: return L10n.t(.connectionPhaseSSHAuth)
+        case .localTunnel: return L10n.t(.connectionPhaseLocalTunnel)
+        case .health: return L10n.t(.connectionPhaseHealth)
+        case .bootstrap: return L10n.t(.connectionPhaseBootstrap)
+        case .connected: return L10n.t(.connectionPhaseConnected)
+        case .failed: return L10n.t(.connectionPhaseFailed)
         }
     }
 }
@@ -62,7 +62,7 @@ struct HostProfile: Codable, Equatable, Identifiable {
 
     var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Untitled Host" : trimmed
+        return trimmed.isEmpty ? L10n.t(.hostUntitled) : trimmed
     }
 
     var connectionSummary: String {
@@ -70,7 +70,7 @@ struct HostProfile: Codable, Equatable, Identifiable {
         case .direct:
             return serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         case .sshTunnel:
-            guard let ssh else { return "SSH Tunnel" }
+            guard let ssh else { return L10n.t(.hostSSHTunnel) }
             let host = ssh.host.trimmingCharacters(in: .whitespacesAndNewlines)
             return "\(host):\(ssh.port) -> :\(ssh.remotePort)"
         }
@@ -78,7 +78,7 @@ struct HostProfile: Codable, Equatable, Identifiable {
 
     static func defaultProfile(serverURL: String = APIClient.defaultServer) -> HostProfile {
         HostProfile(
-            name: "Local OpenCode",
+            name: L10n.t(.hostDefaultLocalName),
             transport: .direct,
             serverURL: serverURL,
             basicAuth: nil,
@@ -99,12 +99,12 @@ struct HostProfileImportPayload: Codable {
         switch transport {
         case .direct:
             guard let serverURL, !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw HostProfileError.invalidImport("Direct host config requires serverURL.")
+                throw HostProfileError.invalidImport(L10n.t(.hostImportErrorDirectRequiresServerURL))
             }
             return HostProfile(name: name, transport: .direct, serverURL: serverURL, basicAuth: nil, ssh: nil)
         case .sshTunnel:
             guard var ssh else {
-                throw HostProfileError.invalidImport("SSH Tunnel host config requires ssh settings.")
+                throw HostProfileError.invalidImport(L10n.t(.hostImportErrorSSHTunnelRequiresSSHSettings))
             }
             ssh.isEnabled = true
             if let error = ssh.validationError {
@@ -143,7 +143,7 @@ enum HostProfileError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidImport(let message): return message
-        case .cannotDeleteOnlyHost: return "Add another host before deleting this one."
+        case .cannotDeleteOnlyHost: return L10n.t(.hostDeleteOnlyHostError)
         }
     }
 }

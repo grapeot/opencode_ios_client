@@ -1164,6 +1164,24 @@ struct LocalizationTests {
         #expect(L10n.missingEnglishKeys.isEmpty)
         #expect(L10n.missingChineseKeys.isEmpty)
     }
+
+    @Test func languagePreferenceOverridesSystemLanguage() {
+        let key = L10n.languagePreferenceUserDefaultsKey
+        let previous = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        L10n.languagePreference = .zh
+        #expect(L10n.t(.appChat) == "聊天")
+
+        L10n.languagePreference = .en
+        #expect(L10n.t(.appChat) == "Chat")
+    }
 }
 
 // MARK: - LayoutConstants Tests
