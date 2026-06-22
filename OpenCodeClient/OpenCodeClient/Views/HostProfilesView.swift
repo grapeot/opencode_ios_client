@@ -41,6 +41,7 @@ struct HostProfilesView: View {
     @State private var editorMode: HostProfileEditorMode?
     @State private var publicKeyCopied = false
     @State private var errorMessage: String?
+    @State private var showRotateKeyAlert = false
 
     var body: some View {
         Form {
@@ -109,6 +110,12 @@ struct HostProfilesView: View {
                     Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : L10n.t(.hostCopyDevicePublicKey), systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
                 }
                 .accessibilityIdentifier("hosts-copy-device-public-key")
+                Button(role: .destructive) {
+                    showRotateKeyAlert = true
+                } label: {
+                    Label(L10n.t(.settingsPublicKeyRotate), systemImage: "arrow.triangle.2.circlepath")
+                }
+                .accessibilityIdentifier("hosts-rotate-device-public-key")
                 Text(L10n.t(.hostDeviceKeyFooter))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -127,12 +134,33 @@ struct HostProfilesView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .alert(L10n.t(.settingsRotateKeyTitle), isPresented: $showRotateKeyAlert) {
+            Button(L10n.t(.commonCancel), role: .cancel) {}
+            Button(L10n.t(.settingsRotate), role: .destructive) {
+                rotatePublicKey()
+            }
+        } message: {
+            Text(L10n.t(.settingsRotateKeyPrompt))
+        }
     }
 
     private func copyPublicKey() {
         #if !os(visionOS)
         do {
             let key = try state.sshTunnelManager.generateOrGetPublicKey()
+            UIPasteboard.general.string = key
+            publicKeyCopied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { publicKeyCopied = false }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        #endif
+    }
+
+    private func rotatePublicKey() {
+        #if !os(visionOS)
+        do {
+            let key = try state.sshTunnelManager.rotateKey()
             UIPasteboard.general.string = key
             publicKeyCopied = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { publicKeyCopied = false }
