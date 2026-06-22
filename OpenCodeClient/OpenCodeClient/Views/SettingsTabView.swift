@@ -11,8 +11,8 @@ struct SettingsTabView: View {
 
     @State private var showPublicKeySheet = false
     @State private var showRotateKeyAlert = false
+    @State private var showSSHSetupGuide = false
     @State private var copiedPublicKey = false
-    @State private var copiedTunnelCommand = false
     @State private var publicKeyForSheet = ""
     @State private var sshConfig: SSHTunnelConfig = .default
     @State private var publicKeyLoadError: String?
@@ -173,7 +173,7 @@ struct SettingsTabView: View {
                             }
                         
                         HStack {
-                            Text(L10n.t(.settingsVpsPort))
+                            Text(L10n.t(.settingsAssignedRemotePort))
                             Spacer()
                             TextField("", value: $sshConfig.remotePort, formatter: NumberFormatter())
                                 .keyboardType(.numberPad)
@@ -260,30 +260,12 @@ struct SettingsTabView: View {
                         Spacer(minLength: 0)
                     }
 
-                    if let command = state.sshTunnelManager.reverseTunnelCommand {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(L10n.t(.settingsReverseTunnelCommand))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(command)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-                            Button {
-                                UIPasteboard.general.string = command
-                                copiedTunnelCommand = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    copiedTunnelCommand = false
-                                }
-                            } label: {
-                                Label(copiedTunnelCommand ? L10n.t(.settingsCommandCopied) : L10n.t(.settingsCopyCommand), systemImage: copiedTunnelCommand ? "checkmark" : "terminal")
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    } else {
-                        Text(L10n.t(.settingsNoTunnelCommand))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    Button {
+                        showSSHSetupGuide = true
+                    } label: {
+                        Label(L10n.t(.settingsSshSetupGuide), systemImage: "questionmark.circle")
                     }
+                    .buttonStyle(.plain)
                 } header: {
                     Text(L10n.t(.settingsSshTunnel))
                 } footer: {
@@ -373,6 +355,9 @@ struct SettingsTabView: View {
                     }
                 )
             }
+            .sheet(isPresented: $showSSHSetupGuide) {
+                SSHTunnelSetupGuideView()
+            }
             .alert(L10n.t(.settingsRotateKeyTitle), isPresented: $showRotateKeyAlert) {
                 Button(L10n.t(.commonCancel), role: .cancel) {}
                 Button(L10n.t(.settingsRotate), role: .destructive) {
@@ -444,6 +429,28 @@ struct SettingsTabView: View {
         }
         if current != state.serverURL {
             state.serverURL = current
+        }
+    }
+}
+
+struct SSHTunnelSetupGuideView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(L10n.t(.settingsSshSetupGuideBody))
+                        .textSelection(.enabled)
+                }
+            }
+            .navigationTitle(L10n.t(.settingsSshSetupGuideTitle))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t(.appDone)) { dismiss() }
+                }
+            }
         }
     }
 }

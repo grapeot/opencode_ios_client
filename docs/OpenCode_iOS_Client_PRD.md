@@ -391,25 +391,25 @@ Diff 渲染采用 unified diff 格式（类似 GitHub），绿色背景表示新
 
 #### 4.4.2 SSH Tunnel（远程访问）
 
-用于在非局域网环境下通过 SSH 隧道访问家里的 OpenCode Server。网络拓扑：
+用于在非局域网环境下通过 SSH gateway 访问托管好的 OpenCode Server。网络拓扑：
 
 ```
-iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
+iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (127.0.0.1:4096)
 ```
 
 前提条件：
-- 家里机器需要先建立反向隧道到 VPS：`ssh -R 127.0.0.1:18080:127.0.0.1:4096 user@vps`
-- 用户需要在 VPS 上配置公钥认证
+- 管理员已经为用户创建独立 OpenCode 服务并分配 remote port
+- 用户把 iOS 设备公钥发给管理员；私钥只保存在设备 Keychain 中
 
 **配置项**：
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
 | Enable SSH Tunnel | 开关 | Off |
-| VPS Host | VPS 地址 | - |
-| SSH Port | SSH 端口 | 22 |
-| Username | SSH 用户名 | - |
-| VPS Port | VPS 上转发的端口 | 18080 |
+| Gateway Host | SSH gateway 地址 | - |
+| SSH Port | SSH 端口 | 8006 |
+| Username | SSH 用户名 | opencode |
+| Assigned Remote Port | 管理员分配的 remote port | 19001 |
 
 **密钥管理**：
 
@@ -422,11 +422,10 @@ iOS App → 公网 VPS (SSH) → VPS:18080 → 家里 OpenCode (127.0.0.1:4096)
 
 1. 打开 Settings → SSH Tunnel
 2. App 自动生成密钥对
-3. 复制公钥，SSH 到 VPS 添加到 `~/.ssh/authorized_keys`
-4. 填写 VPS 地址、用户名、SSH 端口、VPS 端口
-5. 复制 app 生成的 reverse tunnel command，在电脑上执行
-6. 开启 SSH Tunnel 开关
-7. Server Address 改为 `127.0.0.1:4096`（通过隧道访问），并在上方点 `Test Connection`
+3. 复制公钥并发给 OpenCode host 管理员
+4. 管理员完成授权后提供 gateway host、SSH 端口、用户名和 assigned remote port
+5. 在 app 中填写这些参数并开启 SSH Tunnel 开关
+6. Server Address 改为 `127.0.0.1:4096`（通过隧道访问），并在上方点 `Test Connection`
 
 **连接状态**：
 

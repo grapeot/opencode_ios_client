@@ -1235,9 +1235,9 @@ struct SSHTunnelTests {
         let config = SSHTunnelConfig()
         #expect(config.isEnabled == false)
         #expect(config.host == "")
-        #expect(config.port == 22)
-        #expect(config.username == "")
-        #expect(config.remotePort == 18080)
+        #expect(config.port == 8006)
+        #expect(config.username == "opencode")
+        #expect(config.remotePort == 19001)
     }
 
     @Test func sshTunnelConfigValidation() {
@@ -1275,9 +1275,9 @@ struct SSHTunnelTests {
     }
 
     @Test func sshTunnelConfigEquatable() {
-        let c1 = SSHTunnelConfig(isEnabled: true, host: "a.com", port: 22, username: "u", remotePort: 18080)
-        let c2 = SSHTunnelConfig(isEnabled: true, host: "a.com", port: 22, username: "u", remotePort: 18080)
-        let c3 = SSHTunnelConfig(isEnabled: false, host: "a.com", port: 22, username: "u", remotePort: 18080)
+        let c1 = SSHTunnelConfig(isEnabled: true, host: "a.com", port: 8006, username: "u", remotePort: 19001)
+        let c2 = SSHTunnelConfig(isEnabled: true, host: "a.com", port: 8006, username: "u", remotePort: 19001)
+        let c3 = SSHTunnelConfig(isEnabled: false, host: "a.com", port: 8006, username: "u", remotePort: 19001)
         
         #expect(c1 == c2)
         #expect(c1 != c3)
