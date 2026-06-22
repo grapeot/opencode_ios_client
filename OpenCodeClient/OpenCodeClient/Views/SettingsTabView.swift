@@ -90,9 +90,6 @@ struct SettingsTabView: View {
                         .labelsHidden()
                     }
 
-                    Toggle(L10n.t(.settingsShowArchivedSessions), isOn: $state.showArchivedSessions)
-                        .tint(DesignColors.Brand.primary)
-
                     VStack(alignment: .leading, spacing: DesignSpacing.sm) {
                         Text(L10n.t(.settingsLanguage))
                         Picker(L10n.t(.settingsLanguage), selection: $state.languagePreference) {

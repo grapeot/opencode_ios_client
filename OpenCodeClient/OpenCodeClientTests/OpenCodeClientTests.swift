@@ -1182,6 +1182,28 @@ struct LocalizationTests {
         L10n.languagePreference = .en
         #expect(L10n.t(.appChat) == "Chat")
     }
+
+    @Test func countHelpersFormatStableLocalizedIntegers() {
+        let key = L10n.languagePreferenceUserDefaultsKey
+        let previous = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        L10n.languagePreference = .en
+        #expect(L10n.toolCallsCount(2) == "2 tool calls")
+        #expect(L10n.sessionsFiles(2) == "2 files")
+        #expect(L10n.patchFilesChanged(2) == "2 files changed")
+
+        L10n.languagePreference = .zh
+        #expect(L10n.toolCallsCount(2) == "2 个工具调用")
+        #expect(L10n.sessionsFiles(2) == "2 个文件")
+        #expect(L10n.patchFilesChanged(2) == "2 个文件已变更")
+    }
 }
 
 // MARK: - LayoutConstants Tests
@@ -2022,27 +2044,14 @@ struct ArchivedSessionTests {
         #expect(session.time.archived == 1500)
     }
 
-    @Test @MainActor func filteredSessionsHidesArchivedByDefault() {
+    @Test @MainActor func sortedSessionsIncludesArchivedSessions() {
         let state = AppState()
-        state.showArchivedSessions = false
-        
-        let s1 = makeSession(id: "s1", archived: nil)
-        let s2 = makeSession(id: "s2", archived: 123)
-        state.sessions = [s1, s2]
-        
-        #expect(state.sortedSessions.count == 1)
-        #expect(state.sortedSessions.first?.id == "s1")
-    }
 
-    @Test @MainActor func filteredSessionsShowsArchivedWhenEnabled() {
-        let state = AppState()
-        state.showArchivedSessions = true
-        
         let s1 = makeSession(id: "s1", archived: nil)
         let s2 = makeSession(id: "s2", archived: 123)
         state.sessions = [s1, s2]
-        
-        #expect(state.sortedSessions.count == 2)
+
+        #expect(state.sortedSessions.map(\.id) == ["s1", "s2"])
     }
 
     @Test @MainActor func activeAndArchivedSessionFiltersUseArchivedTimestampSign() {
@@ -2383,7 +2392,6 @@ struct SessionTreeTests {
 
     @Test @MainActor func sessionTreeRemainsCanonicalListWhenSidebarSessionsHideChildren() {
         let state = AppState()
-        state.showArchivedSessions = false
         state.sessions = [
             makeSession(id: "root", updated: 100),
             makeSession(id: "child", parentID: "root", updated: 90),
@@ -2400,9 +2408,8 @@ struct SessionTreeTests {
         #expect(state.sessionTree[0].children[0].children[0].session.id == "grandchild")
     }
 
-    @Test @MainActor func archivedFilteringMatchesBetweenSidebarSessionsAndSessionTree() {
+    @Test @MainActor func sessionTreeIncludesActiveAndArchivedSessions() {
         let state = AppState()
-        state.showArchivedSessions = false
         state.sessions = [
             makeSession(id: "active-root", updated: 100),
             makeSession(id: "active-child", parentID: "active-root", updated: 90),
@@ -2410,10 +2417,12 @@ struct SessionTreeTests {
             makeSession(id: "archived-child", parentID: "active-root", updated: 70, archived: 2_000),
         ]
 
-        #expect(state.sidebarSessions.map(\.id) == ["active-root"])
-        #expect(state.sessionTree.count == 1)
+        #expect(state.sidebarSessions.map(\.id) == ["active-root", "archived-root"])
+        #expect(state.sessionTree.count == 2)
         #expect(state.sessionTree[0].session.id == "active-root")
-        #expect(state.sessionTree[0].children.map(\.session.id) == ["active-child"])
+        #expect(state.sessionTree[0].children.map(\.session.id) == ["active-child", "archived-child"])
+        #expect(state.filteredSessions(archived: false).map(\.id) == ["active-root", "active-child"])
+        #expect(state.filteredSessions(archived: true).map(\.id) == ["archived-root", "archived-child"])
     }
 
     @Test @MainActor func toggleSessionExpandedAddsAndRemovesSessionID() {
@@ -2953,7 +2962,6 @@ struct AppStateFlowTests {
 
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.isConnected = true
-        state.showArchivedSessions = false
 
         await state.loadSessions()
         #expect(state.sessionTree.map(\.session.id) == ["root-1"])
