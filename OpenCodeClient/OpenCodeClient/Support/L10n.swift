@@ -102,7 +102,6 @@ enum L10n {
         case settingsUntrusted
         case settingsRotate
 
-        case settingsShowArchivedSessions
         case settingsConnecting
         case settingsProject
         case settingsProjectServerDefault
@@ -482,7 +481,6 @@ enum L10n {
         Key.settingsCommandCopied.rawValue: "Command Copied",
         Key.settingsUntrusted.rawValue: "Untrusted",
         Key.settingsRotate.rawValue: "Rotate",
-        Key.settingsShowArchivedSessions.rawValue: "Show Archived Sessions",
         Key.settingsConnecting.rawValue: "Connecting...",
         Key.settingsProject.rawValue: "Project (Workspace)",
         Key.settingsProjectServerDefault.rawValue: "Server default",
@@ -866,7 +864,6 @@ enum L10n {
         Key.errorServerAddressEmpty.rawValue: "服务器地址不能为空",
         Key.errorWanRequiresHttps.rawValue: "WAN 地址必须使用 HTTPS",
         Key.errorUsingLanHttp.rawValue: "正在使用 LAN HTTP",
-        Key.settingsShowArchivedSessions.rawValue: "显示已归档会话",
         Key.settingsConnecting.rawValue: "连接中...",
         Key.settingsProject.rawValue: "项目（工作区）",
         Key.settingsProjectServerDefault.rawValue: "服务器默认",
@@ -1211,17 +1208,21 @@ enum L10n {
 
     static func toolCallsCount(_ count: Int) -> String {
         let key: Key = count == 1 ? .toolCallsCountOne : .toolCallsCountMany
-        return t(key, Int32(clamping: count))
+        return formatCount(key: key, count: count)
     }
 
     static func sessionsFiles(_ count: Int) -> String {
         let key: Key = count == 1 ? .sessionsFilesOne : .sessionsFilesMany
-        return t(key, Int32(clamping: count))
+        return formatCount(key: key, count: count)
     }
 
     static func patchFilesChanged(_ count: Int) -> String {
         let key: Key = count == 1 ? .patchFilesChangedOne : .patchFilesChangedMany
-        return t(key, Int32(clamping: count))
+        return formatCount(key: key, count: count)
+    }
+
+    private static func formatCount(key: Key, count: Int) -> String {
+        t(key).replacingOccurrences(of: "%d", with: count.formatted(.number.locale(currentLocale)))
     }
 
     static func toolOpenFileLabel(path: String) -> String {

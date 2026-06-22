@@ -167,7 +167,6 @@ final class AppState {
     static let aiBuilderLastOKTestedAtKey = "aiBuilderLastOKTestedAt"
     static let draftInputsBySessionKey = "draftInputsBySession"
     static let selectedModelBySessionKey = "selectedModelBySession"
-    static let showArchivedSessionsKey = "showArchivedSessions"
     static let selectedProjectWorktreeKey = "selectedProjectWorktree"
     static let customProjectPathKey = "customProjectPath"
     static let hostProfilesKey = "hostProfiles.v1"
@@ -201,7 +200,6 @@ final class AppState {
         _aiBuilderToken = KeychainHelper.load(forKey: Self.aiBuilderTokenKeychainKey) ?? ""
         _aiBuilderCustomPrompt = UserDefaults.standard.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
         _aiBuilderTerminology = UserDefaults.standard.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
-        _showArchivedSessions = UserDefaults.standard.bool(forKey: Self.showArchivedSessionsKey)
         _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
         _languagePreference = L10n.languagePreference
@@ -380,18 +378,15 @@ final class AppState {
     var sessions: [Session] { get { sessionStore.sessions } set { sessionStore.sessions = newValue } }
     var sortedSessions: [Session] {
         sessions
-            .filter { showArchivedSessions || !$0.isArchived }
             .sorted { $0.time.updated > $1.time.updated }
     }
     var sidebarSessions: [Session] {
         sessions
-            .filter { showArchivedSessions || !$0.isArchived }
             .filter { $0.parentID == nil }
             .sorted { $0.time.updated > $1.time.updated }
     }
     var sessionTree: [SessionNode] {
-        let filtered = sessions.filter { showArchivedSessions || !$0.isArchived }
-        return Self.buildSessionTree(from: filtered)
+        Self.buildSessionTree(from: sessions)
     }
     var currentSessionID: String? { get { sessionStore.currentSessionID } set { sessionStore.currentSessionID = newValue } }
     var sessionStatuses: [String: SessionStatus] { get { sessionStore.sessionStatuses } set { sessionStore.sessionStatuses = newValue } }
@@ -422,14 +417,6 @@ final class AppState {
     var selectedAgentIndex: Int = 0
     var isLoadingAgents: Bool = false
 
-    var showArchivedSessions: Bool {
-        get { _showArchivedSessions }
-        set {
-            _showArchivedSessions = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.showArchivedSessionsKey)
-        }
-    }
-    var _showArchivedSessions: Bool = false
     var expandedSessionIDs: Set<String> = []
 
     func filteredSessions(archived: Bool) -> [Session] {
