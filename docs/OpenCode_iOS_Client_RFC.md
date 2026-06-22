@@ -186,7 +186,80 @@ iOS 图片支持与 OpenCode Web 保持同构：图片作为 prompt 的 `file` p
 - 请求头：建议添加 `Accept: text/event-stream`、`Cache-Control: no-cache`
 - 重连：可选，现有轮询 + 前台恢复已覆盖主要场景
 
-### 3.5 SSH 隧道架构
+### 3.5 Host Profiles 与 Transport 抽象
+
+多 host 支持把“连接哪个 OpenCode 环境”和“如何到达这个环境”分开。Host 指一个 OpenCode 环境；transport 指访问路径。Direct 覆盖 LAN、Tailscale / VPN、HTTPS public server。SSH Tunnel 覆盖通过 SSH gateway 和 assigned remote port 访问私有 OpenCode 容器。
+
+**数据模型（设计稿）**：
+
+```swift
+struct HostProfile: Codable, Identifiable, Equatable {
+    var id: UUID
+    var name: String
+    var transport: HostTransport
+    var serverURL: String
+    var basicAuth: BasicAuthConfig?
+    var ssh: SSHTunnelConfig?
+    var lastUsedAt: Date?
+}
+
+enum HostTransport: String, Codable {
+    case direct
+    case sshTunnel
+}
+
+struct BasicAuthConfig: Codable, Equatable {
+    var username: String
+    var keychainPasswordID: String
+}
+```
+
+**持久化边界**：
+
+- `HostProfile` 列表存 UserDefaults 或轻量 JSON store；密码只保存 Keychain reference，不进入 JSON。
+- SSH private key 默认是 device-level key，由现有 `SSHKeyManager` 管理，多个 SSH profiles 复用同一个 public key。后续如需高安全模式，再增加 per-profile key override。
+- TOFU known host 仍按 SSH gateway `host:port` 绑定，而不是按 profile name 绑定。多个 profiles 指向同一 gateway 时共享同一个 trusted host fingerprint。
+
+**切换流程**：
+
+1. 保存当前 profile 的 `lastUsedAt` 和必要 runtime 状态。
+2. 停止当前 SSE。
+3. 如果当前 profile 使用 SSH，断开当前 SSH tunnel。
+4. 应用新 profile 的 `serverURL`、Basic Auth 和 transport config。
+5. 清空当前 session selection，并按新 host 重新拉取 health / projects / sessions。
+6. 如果新 profile 是 SSH Tunnel，可尝试自动连接 tunnel；失败进入 `.error` 状态但不阻塞 Settings。
+
+**Import Host Config 格式（不含 secret）**：
+
+```json
+{
+  "version": 1,
+  "name": "Yage Private OpenCode",
+  "transport": "sshTunnel",
+  "serverURL": "127.0.0.1:4096",
+  "ssh": {
+    "host": "example.com",
+    "port": 8006,
+    "username": "opencode",
+    "remotePort": 19001
+  }
+}
+```
+
+Direct 示例：
+
+```json
+{
+  "version": 1,
+  "name": "Home Mac via Tailscale",
+  "transport": "direct",
+  "serverURL": "http://macbook.ts.net:4096"
+}
+```
+
+Import 不包含 private key、provider token、Basic Auth password。SSH import 后仍要求用户复制本设备 public key 给管理员。
+
+### 3.6 SSH 隧道架构
 
 用于远程访问场景，通过 SSH gateway 中转到用户独立的 OpenCode 服务。
 
@@ -258,7 +331,7 @@ enum SSHKeyManager {
 - 公钥复制入口常驻，不依赖 tunnel enable 状态
 - 在 SSH 配置区增加灰字提示：启用 SSH 后仍需到上方 `Server Connection` 点击 `Test Connection`
 
-### 3.6 Markdown 图片解析契约
+### 3.7 Markdown 图片解析契约
 
 Markdown 文本里出现的图片分两类：
 
@@ -280,7 +353,9 @@ Markdown 文本里出现的图片分两类：
 ```swift
 @Observable
 final class AppState {
-    var serverURL: String
+    var hostProfiles: [HostProfile]
+    var currentHostProfileID: UUID
+    var serverURL: String          // 当前 profile 展开后的 runtime URL
     var isConnected: Bool
     var sessions: [Session]
     var currentSessionID: String?
@@ -469,7 +544,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 
 - **渲染路径**：`MarkdownWebPreviewView`（`UIViewRepresentable` 包 `WKWebView`）加载 app bundle 内的 `preview.html`；Swift 通过 `evaluateJavaScript` 调用 `window.renderMarkdown({markdown, theme})`，payload 经 `JSONSerialization`，不字符串拼接 markdown。
 - **JS 依赖**：`markdown-it@14.2.0` + `DOMPurify@3.4.10` 固定打进 bundle，零 CDN 调用。Xcode 同步文件夹会拍平子目录，所以 vendor 文件与 `preview.html` 同级，src 不带 `vendor/` 前缀。
-- **图片解析**：复用 `MarkdownImageResolver.resolveImages` 把相对图片转 `data:` URI，再交给 WebView — 与 §3.6 Native Preview 语义完全一致。
+- **图片解析**：复用 `MarkdownImageResolver.resolveImages` 把相对图片转 `data:` URI，再交给 WebView — 与 §3.7 Markdown 图片解析契约语义一致。
 - **安全模型**：DOMPurify allowlist 禁 `script` / `iframe` / `form` / `object` / `embed` / `on*` 事件属性 / `javascript:` URL；`WKNavigationDelegate` 拦截除 file / fragment 外的所有 navigation；外链交系统 Safari，workspace 相对链接走 `state.fileToOpenInFilesTab`；`WKWebsiteDataStore` 用 non-persistent，无持久 cookie / localStorage。
 - **主题适配**：shell 暴露 `--fg` / `--bg` / `--card-bg` / `--border` / `--link` / `--ok-*` / `--bad-*` / `--warn-*` / `--block-*` 等 CSS 变量，light / dark 两套定义。作者样式必须用 `var(--x, fallback)` 形式，不支持主题变量的渲染器（Cursor、GitHub）退回 fallback。Dark 模式 chip 用饱和主色（`--ok-bg=#10b981` 等），避免深底沉进卡片。chip 必须用复合选择器 `.vx-chip.ok`，裸 `.ok` 会被卡片 `color:var(--fg)` 覆盖。
 - **切换刷新**：`FileContentView` 在 `.onChange(of: filePath)` 主动 reset content + reload，避免 SwiftUI 复用 view 实例时旧文件残留。

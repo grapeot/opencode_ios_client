@@ -35,6 +35,10 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_WEB_PREVIEW_FIXTURE")
     }
 
+    private static var hasUITestHostProfilesFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_HOST_PROFILES_FIXTURE")
+    }
+
     /// Which bundled fixture markdown to render in the web preview. Defaults to
     /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
     private static var webPreviewFixtureName: String {
@@ -54,6 +58,11 @@ struct ContentView: View {
 
     private static func makeInitialState() -> AppState {
         let state = AppState()
+
+        if hasUITestHostProfilesFixture {
+            applyHostProfilesFixture(to: state)
+            return state
+        }
 
         if hasUITestF3ComposerFixture {
             applyF3ComposerFixture(to: state)
@@ -121,6 +130,29 @@ struct ContentView: View {
         state.currentSessionID = "root-session"
         state.expandedSessionIDs = ["root-session", "archived-session"]
         return state
+    }
+
+    private static func applyHostProfilesFixture(to state: AppState) {
+        let local = HostProfile(
+            name: "Local OpenCode",
+            transport: .direct,
+            serverURL: "127.0.0.1:4096",
+            basicAuth: nil,
+            ssh: nil,
+            lastUsedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let ssh = HostProfile(
+            name: "SSH Lab",
+            transport: .sshTunnel,
+            serverURL: APIClient.defaultServer,
+            basicAuth: nil,
+            ssh: SSHTunnelConfig(isEnabled: true, host: "gateway.example.invalid", port: 8006, username: "opencode", remotePort: 19001),
+            lastUsedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        state.hostProfiles = [local, ssh]
+        state.currentHostProfileID = local.id
+        state.applyCurrentHostProfileToRuntime(persistLegacy: false)
+        state.selectedTab = 2
     }
 
     /// iPad / Vision Pro：左右分栏，无 Tab Bar

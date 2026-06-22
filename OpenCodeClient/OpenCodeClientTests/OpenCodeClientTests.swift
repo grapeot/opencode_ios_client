@@ -310,6 +310,144 @@ struct OpenCodeClientTests {
     }
 }
 
+// MARK: - Host Profiles
+
+struct HostProfileTests {
+    @Test func importDirectHostProfile() throws {
+        let json = """
+        {
+          "version": 1,
+          "name": "Office Mac",
+          "transport": "direct",
+          "serverURL": "https://opencode.example.invalid"
+        }
+        """
+
+        let profile = try HostProfileImportPayload.makeProfile(from: json)
+
+        #expect(profile.name == "Office Mac")
+        #expect(profile.transport == .direct)
+        #expect(profile.serverURL == "https://opencode.example.invalid")
+        #expect(profile.ssh == nil)
+        #expect(profile.basicAuth == nil)
+    }
+
+    @Test func importSSHTunnelHostProfileUsesTunnelDefaults() throws {
+        let json = """
+        {
+          "version": 1,
+          "name": "SSH Lab",
+          "transport": "sshTunnel",
+          "ssh": {
+            "host": "gateway.example.invalid",
+            "port": 8006,
+            "username": "opencode",
+            "remotePort": 19001
+          }
+        }
+        """
+
+        let profile = try HostProfileImportPayload.makeProfile(from: json)
+
+        #expect(profile.name == "SSH Lab")
+        #expect(profile.transport == .sshTunnel)
+        #expect(profile.serverURL == APIClient.defaultServer)
+        #expect(profile.ssh?.isEnabled == true)
+        #expect(profile.ssh?.host == "gateway.example.invalid")
+        #expect(profile.ssh?.port == 8006)
+        #expect(profile.ssh?.username == "opencode")
+        #expect(profile.ssh?.remotePort == 19001)
+        #expect(profile.basicAuth == nil)
+    }
+
+    @Test func importRejectsDirectProfileWithoutServerURL() throws {
+        let json = """
+        {"name":"Broken","transport":"direct"}
+        """
+
+        #expect(throws: HostProfileError.invalidImport("Direct host config requires serverURL.")) {
+            try HostProfileImportPayload.makeProfile(from: json)
+        }
+    }
+
+    @Test @MainActor func defaultProfileMigratesFromLegacyServerURL() {
+        withIsolatedHostProfileDefaults {
+            UserDefaults.standard.set("https://legacy.example.invalid", forKey: AppState.serverURLKey)
+
+            let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+
+            #expect(state.hostProfiles.count == 1)
+            #expect(state.currentHostProfile?.displayName == "Local OpenCode")
+            #expect(state.currentHostProfile?.transport == .direct)
+            #expect(state.currentHostProfile?.serverURL == "https://legacy.example.invalid")
+            #expect(state.serverURL == "https://legacy.example.invalid")
+        }
+    }
+
+    @Test @MainActor func applySSHTunnelProfileToRuntime() {
+        withIsolatedHostProfileDefaults {
+            let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+            let profile = HostProfile(
+                name: "SSH Lab",
+                transport: .sshTunnel,
+                serverURL: "https://ignored.example.invalid",
+                basicAuth: nil,
+                ssh: SSHTunnelConfig(isEnabled: false, host: "gateway.example.invalid", port: 8006, username: "opencode", remotePort: 19001)
+            )
+
+            state.saveHostProfile(profile, makeCurrent: true)
+
+            #expect(state.currentHostProfileID == profile.id)
+            #expect(state.serverURL == APIClient.defaultServer)
+            #expect(state.sshTunnelManager.config.isEnabled == true)
+            #expect(state.sshTunnelManager.config.host == "gateway.example.invalid")
+            #expect(state.sshTunnelManager.config.remotePort == 19001)
+        }
+    }
+
+    @Test @MainActor func deleteOnlyHostThrows() throws {
+        withIsolatedHostProfileDefaults {
+            let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+            let profile = state.currentHostProfile!
+
+            #expect(throws: HostProfileError.cannotDeleteOnlyHost) {
+                try state.deleteHostProfile(profile)
+            }
+            #expect(state.hostProfiles.count == 1)
+        }
+    }
+}
+
+private extension HostProfileImportPayload {
+    static func makeProfile(from json: String) throws -> HostProfile {
+        let payload = try JSONDecoder().decode(HostProfileImportPayload.self, from: Data(json.utf8))
+        return try payload.makeProfile()
+    }
+}
+
+@MainActor
+private func withIsolatedHostProfileDefaults(_ body: () -> Void) {
+    let keys = [
+        AppState.serverURLKey,
+        AppState.usernameKey,
+        AppState.hostProfilesKey,
+        AppState.currentHostProfileIDKey,
+        "sshTunnelConfig",
+    ]
+    let previous = Dictionary(uniqueKeysWithValues: keys.map { ($0, UserDefaults.standard.object(forKey: $0)) })
+    keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+    defer {
+        keys.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        for (key, value) in previous {
+            if let value {
+                UserDefaults.standard.set(value, forKey: key)
+            }
+        }
+    }
+
+    body()
+}
+
 // MARK: - Session Filtering (Code Review 1.3)
 
 struct SessionFilteringTests {

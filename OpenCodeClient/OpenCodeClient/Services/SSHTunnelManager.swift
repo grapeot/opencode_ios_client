@@ -116,6 +116,31 @@ struct SSHTunnelConfig: Codable, Equatable {
     var port: Int = 8006
     var username: String = "opencode"
     var remotePort: Int = 19001
+
+    enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case host
+        case port
+        case username
+        case remotePort
+    }
+
+    init(isEnabled: Bool = false, host: String = "", port: Int = 8006, username: String = "opencode", remotePort: Int = 19001) {
+        self.isEnabled = isEnabled
+        self.host = host
+        self.port = port
+        self.username = username
+        self.remotePort = remotePort
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
+        host = try container.decodeIfPresent(String.self, forKey: .host) ?? ""
+        port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 8006
+        username = try container.decodeIfPresent(String.self, forKey: .username) ?? "opencode"
+        remotePort = try container.decodeIfPresent(Int.self, forKey: .remotePort) ?? 19001
+    }
     
     var isValid: Bool {
         !host.isEmpty && !username.isEmpty && port > 0 && remotePort > 0

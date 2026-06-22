@@ -170,6 +170,8 @@ final class AppState {
     static let showArchivedSessionsKey = "showArchivedSessions"
     static let selectedProjectWorktreeKey = "selectedProjectWorktree"
     static let customProjectPathKey = "customProjectPath"
+    static let hostProfilesKey = "hostProfiles.v1"
+    static let currentHostProfileIDKey = "currentHostProfileID.v1"
 
     init(
         apiClient: APIClientProtocol = APIClient(),
@@ -191,6 +193,8 @@ final class AppState {
         }
         _username = UserDefaults.standard.string(forKey: Self.usernameKey) ?? ""
         _password = KeychainHelper.load(forKey: Self.passwordKeychainKey) ?? ""
+        loadHostProfilesFromStorageOrLegacy()
+        applyCurrentHostProfileToRuntime(persistLegacy: false)
 
         _aiBuilderBaseURL = UserDefaults.standard.string(forKey: Self.aiBuilderBaseURLKey) ?? "https://space.ai-builders.com/backend"
         _aiBuilderToken = KeychainHelper.load(forKey: Self.aiBuilderTokenKeychainKey) ?? ""
@@ -226,6 +230,18 @@ final class AppState {
 
     // Selected model (providerID/modelID) per session.
     var selectedModelIDBySessionID: [String: String] = [:]
+
+    var hostProfiles: [HostProfile] = [] {
+        didSet { saveHostProfiles() }
+    }
+
+    var currentHostProfileID: UUID = UUID() {
+        didSet { UserDefaults.standard.set(currentHostProfileID.uuidString, forKey: Self.currentHostProfileIDKey) }
+    }
+
+    var currentHostProfile: HostProfile? {
+        hostProfiles.first { $0.id == currentHostProfileID }
+    }
 
     static func aiBuilderSignature(baseURL: String, token: String) -> String {
         let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
