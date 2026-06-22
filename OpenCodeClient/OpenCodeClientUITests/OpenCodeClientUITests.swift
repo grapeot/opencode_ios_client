@@ -107,6 +107,62 @@ final class OpenCodeClientUITests: XCTestCase {
     }
 
     @MainActor
+    func testHostProfilesListFixture() throws {
+        let app = launchHostProfilesFixture()
+
+        try openSettingsInHostProfilesFixture(app)
+        app.buttons["settings-current-host"].tap()
+
+        XCTAssertTrue(app.navigationBars["Hosts"].waitForExistence(timeout: 8), "Hosts 页面应打开")
+        XCTAssertTrue(app.staticTexts["Local OpenCode"].waitForExistence(timeout: 8), "默认 Direct host 应可见")
+        XCTAssertTrue(app.staticTexts["SSH Lab"].exists, "SSH tunnel host 应可见")
+        XCTAssertTrue(app.staticTexts["Add Host"].exists, "Add Host 入口应可见")
+        XCTAssertTrue(app.staticTexts["Copy This Device Public Key"].exists, "设备公钥复制入口应可见")
+    }
+
+    @MainActor
+    func testAddDirectHostProfileFlow() throws {
+        let app = launchHostProfilesFixture()
+        try openSettingsInHostProfilesFixture(app)
+        app.buttons["settings-current-host"].tap()
+        XCTAssertTrue(app.staticTexts["Add Host"].waitForExistence(timeout: 8))
+        app.staticTexts["Add Host"].tap()
+
+        XCTAssertTrue(app.navigationBars["Add Host"].waitForExistence(timeout: 8))
+        app.textFields["host-name"].tap()
+        app.textFields["host-name"].typeText("Tailscale Mac")
+        app.textFields["host-server-url"].tap()
+        app.textFields["host-server-url"].typeText("https://tailnet.example.invalid:4096")
+        app.buttons["host-save"].tap()
+
+        XCTAssertTrue(app.navigationBars["Hosts"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Tailscale Mac"].waitForExistence(timeout: 8), "新 Direct host 应保存并显示")
+        XCTAssertTrue(app.staticTexts["https://tailnet.example.invalid:4096"].exists)
+    }
+
+    @MainActor
+    func testImportSSHTunnelHostProfileFlow() throws {
+        let app = launchHostProfilesFixture(extraArguments: ["UITEST_HOST_IMPORT_JSON_PREFILL"])
+        try openSettingsInHostProfilesFixture(app)
+        app.buttons["settings-current-host"].tap()
+        XCTAssertTrue(app.staticTexts["Add Host"].waitForExistence(timeout: 8))
+        app.staticTexts["Add Host"].tap()
+
+        let importEditor = app.textViews["host-import-json"]
+        XCTAssertTrue(importEditor.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["host-import-config"].waitForExistence(timeout: 8), "Import Host Config button should exist")
+        XCTAssertTrue(app.buttons["host-import-config"].isEnabled, "Import Host Config button should be enabled after JSON paste")
+        app.buttons["host-import-config"].tap()
+
+        XCTAssertFalse(app.textFields["host-server-url"].exists, "SSH mode should hide editable direct URL field")
+        app.buttons["host-save"].tap()
+
+        XCTAssertTrue(app.navigationBars["Hosts"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Imported SSH"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["gateway.example.invalid:8006 -> :19001"].exists)
+    }
+
+    @MainActor
     func testF3TranscribingComposerFixtureScreenshot() throws {
         let app = XCUIApplication()
         app.launchArguments = ["UITEST_F3_TRANSCRIBING_FIXTURE"]
@@ -146,6 +202,27 @@ final class OpenCodeClientUITests: XCTestCase {
             return nil
         }
         return object["screenshot_path"] as? String
+    }
+
+    @MainActor
+    private func launchHostProfilesFixture(extraArguments: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_HOST_PROFILES_FIXTURE"] + extraArguments
+        app.launch()
+        return app
+    }
+
+    @MainActor
+    private func openSettingsInHostProfilesFixture(_ app: XCUIApplication) throws {
+        if app.buttons["settings-current-host"].waitForExistence(timeout: 3) {
+            return
+        }
+        if app.tabBars.buttons["Settings"].exists {
+            app.tabBars.buttons["Settings"].tap()
+        } else if app.buttons["Settings"].exists {
+            app.buttons["Settings"].tap()
+        }
+        XCTAssertTrue(app.buttons["settings-current-host"].waitForExistence(timeout: 8), "Settings 应显示 Current Host")
     }
 
     @MainActor

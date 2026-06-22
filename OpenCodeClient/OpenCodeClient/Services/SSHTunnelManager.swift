@@ -116,6 +116,31 @@ struct SSHTunnelConfig: Codable, Equatable {
     var port: Int = 8006
     var username: String = "opencode"
     var remotePort: Int = 19001
+
+    enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case host
+        case port
+        case username
+        case remotePort
+    }
+
+    init(isEnabled: Bool = false, host: String = "", port: Int = 8006, username: String = "opencode", remotePort: Int = 19001) {
+        self.isEnabled = isEnabled
+        self.host = host
+        self.port = port
+        self.username = username
+        self.remotePort = remotePort
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
+        host = try container.decodeIfPresent(String.self, forKey: .host) ?? ""
+        port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 8006
+        username = try container.decodeIfPresent(String.self, forKey: .username) ?? "opencode"
+        remotePort = try container.decodeIfPresent(Int.self, forKey: .remotePort) ?? 19001
+    }
     
     var isValid: Bool {
         !host.isEmpty && !username.isEmpty && port > 0 && remotePort > 0
@@ -290,10 +315,10 @@ final class SSHTunnelManager: ObservableObject {
         print("[SSH] Connected successfully")
         #endif
         
-        try startLocalListener(sshClient: client)
+        try await startLocalListener(sshClient: client)
     }
 
-    private func startLocalListener(sshClient: SSHClient) throws {
+    private func startLocalListener(sshClient: SSHClient) async throws {
         if let listener {
             listener.cancel()
             self.listener = nil
@@ -307,19 +332,6 @@ final class SSHTunnelManager: ObservableObject {
         self.listener = listener
 
         let queue = DispatchQueue(label: "com.opencode.ssh.tunnel.listener")
-        listener.stateUpdateHandler = { [weak self] newState in
-            guard let self else { return }
-            switch newState {
-            case .failed(let err):
-                Task { @MainActor in
-                    self.status = .error("Local listener failed: \(err.localizedDescription)")
-                    self.disconnect(updateStatus: false)
-                }
-            default:
-                break
-            }
-        }
-
         listener.newConnectionHandler = { [weak self] conn in
             guard let self else { return }
             Task { @MainActor in
@@ -327,7 +339,32 @@ final class SSHTunnelManager: ObservableObject {
             }
         }
 
-        listener.start(queue: queue)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var didResume = false
+            listener.stateUpdateHandler = { [weak self] newState in
+                guard let self else { return }
+                switch newState {
+                case .ready:
+                    if !didResume {
+                        didResume = true
+                        continuation.resume()
+                    }
+                case .failed(let err):
+                    if !didResume {
+                        didResume = true
+                        continuation.resume(throwing: SSHError.tunnelFailed("Local listener failed: \(err.localizedDescription)"))
+                    } else {
+                        Task { @MainActor in
+                            self.status = .error("Local listener failed: \(err.localizedDescription)")
+                            self.disconnect(updateStatus: false)
+                        }
+                    }
+                default:
+                    break
+                }
+            }
+            listener.start(queue: queue)
+        }
     }
 
     nonisolated private func handleLocalConnection(_ conn: NWConnection, sshClient: SSHClient) {

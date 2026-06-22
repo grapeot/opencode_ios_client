@@ -380,18 +380,54 @@ Diff 渲染采用 unified diff 格式（类似 GitHub），绿色背景表示新
 
 ### 4.4 Settings Tab
 
-#### 4.4.1 Server Connection
+#### 4.4.1 Host Profiles（多 OpenCode 环境）
 
-- Server Address：文本输入框，格式 `ip:port` 或 `http(s)://host:port`，默认 `127.0.0.1:4096`
-- Username：可选，默认 `opencode`
-- Password：可选，存入 Keychain
-- 连接状态指示：显示 Connected / Disconnected / Connecting
-- 协议 (Scheme) 展示：当使用 HTTP 且未启用 SSH tunnel 时，显示协议（HTTP/HTTPS）与 info 图标。Tailscale MagicDNS（`*.ts.net`）允许 HTTP，协议与图标显示灰色；其他 WAN 要求 HTTPS，协议与图标显示红色。info 悬停说明中英双语：Tailscale 不要求 HTTPS，其他广域网仍要求 HTTPS。
-- "Test Connection" 按钮：调用 `GET /global/health` 验证连接
+Settings 顶部不再把 Server Address / SSH Tunnel 当成全局配置，而是展示当前 `Host`。这里的 Host 指一个 OpenCode 环境，可以是直连的 LAN / Tailscale / HTTPS server，也可以是通过 SSH gateway 访问的私有 OpenCode 容器。Tailscale、VPN、LAN 对 app 透明，都属于 Direct transport。
 
-#### 4.4.2 SSH Tunnel（远程访问）
+**目标**：用户在 5 秒内能知道当前连接的是哪个 OpenCode 环境、它使用 Direct 还是 SSH Tunnel，并能切换到另一个 host 而不误改底层网络字段。
 
-用于在非局域网环境下通过 SSH gateway 访问托管好的 OpenCode Server。网络拓扑：
+**Host 列表**：
+
+- Settings 顶部显示 Current Host 卡片：名称、transport、地址摘要、连接状态、Test 按钮。
+- 点击进入 Hosts 管理页，列表展示所有 profiles；当前 profile 使用左侧 accent bar + checkmark 标识。
+- 每个 row 显示名称、transport 摘要、最近状态：例如 `example.com:8006 -> :19001`、`Direct HTTPS + Basic Auth`、`Last used yesterday`。
+- 支持 Add Host、Edit、Duplicate、Delete。删除当前 host 前必须先切到其他 host 或显示确认。
+- Device Public Key 作为设备级设置显示在 Hosts 页底部；它只用于 SSH Tunnel hosts，Direct hosts 不需要。
+
+**Add Host 流程**：
+
+1. 入口优先提供 `Import Host Config`。用户可粘贴管理员给的 setup JSON，避免手动填错 host、port、username、remotePort。
+2. 手动添加时先选择 `Direct` 或 `SSH Tunnel`。
+3. Direct 表单只要求 Name、OpenCode URL、可选 Basic Auth。
+4. SSH Tunnel 表单要求 Name、SSH Gateway Host、SSH Port、SSH Username、Assigned Remote Port。OpenCode URL 不让用户编辑，保存后由 app 使用本地 `127.0.0.1:4096` 连接 tunnel。
+5. SSH Tunnel 表单必须提供 `Copy This Device Public Key`，并说明“发给 server admin，永远不要分享 private key”。
+6. Test Connection 验证当前 transport：Direct 直接请求 `/global/health`；SSH 先建立 tunnel，再请求本地 OpenCode health。
+
+**切换行为**：
+
+- 切换 host 时断开当前 SSH tunnel 和 SSE，再应用新 profile。
+- 切换后清空当前 session selection；session/project 状态属于 host 维度，后续可增加 per-host last selected project/session。
+- 如果新 host 启用 SSH，可尝试自动建立 tunnel；失败只更新连接状态，不弹出阻塞式 alert。
+- Basic Auth credentials 按 profile 存 Keychain；SSH private key 默认仍是设备级同一把 key。
+
+#### 4.4.2 Direct Transport
+
+Direct 用于 app 能直接访问 OpenCode URL 的场景：本地局域网、Tailscale / VPN、HTTPS public server。
+
+**配置项**：
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| Name | profile 名称 | 从 host 推断或用户填写 |
+| OpenCode URL | `ip:port` 或 `http(s)://host:port` | - |
+| Username | Basic Auth 用户名，可选 | - |
+| Password | Basic Auth 密码，可选，存入 Keychain | - |
+
+**协议提示**：当 Direct 使用 HTTP 且不是 localhost / LAN / Tailscale MagicDNS（`*.ts.net`）时，显示非阻塞警告，建议 HTTPS。这个提示只属于 Direct；SSH Tunnel 模式下本地 `http://127.0.0.1:4096` 是预期行为，不显示 HTTPS 警告。
+
+#### 4.4.3 SSH Tunnel Transport（远程访问）
+
+用于通过 SSH gateway 访问托管好的 OpenCode Server。网络拓扑：
 
 ```
 iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (127.0.0.1:4096)
@@ -437,11 +473,11 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
 - 只支持 key-based 认证，不支持密码认证
 - 首次连接采用 TOFU 自动信任并保存服务器 fingerprint，后续严格校验；UI 提供 fingerprint 展示与 reset trusted host
 
-#### 4.4.3 Model Presets
+#### 4.4.4 Model Presets
 
 **当前实现**：固定预设列表（GLM-5.1、GPT-5.4、GPT-5.3 Codex、DeepSeek），无导入、无排序。发送消息时在 body 中携带 `model: { providerID, modelID }`。
 
-#### 4.4.3 Project (Workspace)
+#### 4.4.5 Project (Workspace)
 
 用于指定要查看的 OpenCode 项目。OpenCode Server 支持多项目，每个项目有独立的 session 列表。iOS 客户端通过 `GET /session?directory=<worktree>` 按项目过滤 sessions。
 
@@ -459,10 +495,10 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
 
 **创建限制**：新建 session 仅在选择 Server default 时可用。`POST /session` 不支持传 directory，新 session 始终落在 server 的 current project。当用户选了具体 project 时，新建按钮置灰，旁加 info 图标，提示需用命令行启动 OpenCode 并指定不同的工作目录后再创建。
 
-#### 4.4.4 外观
+#### 4.4.6 外观
 
 - **主题跟随系统**（Light/Dark/Auto）：根据系统 theme 切换明暗两种格式
-#### 4.4.5 About
+#### 4.4.7 About
 
 - 当前 App 版本
 - 连接的 OpenCode Server 版本（来自 `GET /global/health` 的 `version` 字段）
@@ -473,10 +509,17 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
 
 ```swift
 @Observable class AppState {
-    // Connection
-    var serverURL: String
+    // Host profiles
+    var hostProfiles: [HostProfile]
+    var currentHostProfileID: UUID
+    var currentHostProfile: HostProfile
+
+    // Derived connection state for current host
+    var serverURL: String              // derived from currentHostProfile.serverURL
     var isConnected: Bool
     var serverVersion: String?
+    var sshTunnelConfig: SSHTunnelConfig? // present only for sshTunnel transport
+    var connectionTransport: HostTransport
     
     // Project (workspace filter)
     var projects: [Project]
@@ -504,6 +547,8 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
     var recentPermissions: [PermissionLog]
 }
 ```
+
+迁移策略：第一版实现可以保留现有 `serverURL` / Basic Auth / `SSHTunnelManager.config` 字段作为 current profile 的展开缓存，但持久化 source of truth 应收敛到 `hostProfiles`。切换 profile 时由 profile 写回这些现有 runtime 字段，避免一次重构影响 APIClient / SSE / SSH tunnel 的稳定性。
 
 ### 5.2 SSE 事件处理
 

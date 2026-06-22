@@ -1,0 +1,504 @@
+import SwiftUI
+
+struct CurrentHostSummaryView: View {
+    @Bindable var state: AppState
+
+    var body: some View {
+        let profile = state.currentHostProfile
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(profile?.displayName ?? "No Host")
+                    .font(.headline)
+                Spacer()
+                Text(profile?.transport.label ?? "")
+                    .font(.caption)
+                    .foregroundStyle(DesignColors.Brand.primary)
+            }
+            Text(profile?.connectionSummary ?? "Add a host to connect")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            HStack {
+                if state.isConnected {
+                    Label(L10n.t(.settingsConnected), systemImage: "checkmark.circle")
+                } else {
+                    Label(L10n.t(.settingsDisconnected), systemImage: "xmark.circle")
+                }
+                Spacer()
+                if let version = state.serverVersion {
+                    Text(version)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct HostProfilesView: View {
+    @Bindable var state: AppState
+    @State private var editorMode: HostProfileEditorMode?
+    @State private var publicKeyCopied = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Form {
+            Section {
+                if let current = state.currentHostProfile {
+                    CurrentHostCard(state: state, profile: current)
+                        .accessibilityIdentifier("hosts-current-card")
+                }
+            } header: {
+                Text("Current Host")
+            } footer: {
+                Text("A host is one OpenCode environment. It can be reached directly over LAN, Tailscale, VPN, HTTPS, or through an SSH tunnel.")
+            }
+
+            Section("Hosts") {
+                ForEach(state.hostProfiles) { profile in
+                    HostProfileRow(state: state, profile: profile)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                do {
+                                    try state.deleteHostProfile(profile)
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button {
+                                state.duplicateHostProfile(profile)
+                            } label: {
+                                Label("Duplicate", systemImage: "plus.square.on.square")
+                            }
+                            .tint(.gray)
+                        }
+                        .contextMenu {
+                            Button("Edit") { editorMode = .edit(profile) }
+                            Button("Duplicate") { state.duplicateHostProfile(profile) }
+                            Button("Delete", role: .destructive) {
+                                do { try state.deleteHostProfile(profile) } catch { errorMessage = error.localizedDescription }
+                            }
+                        }
+                }
+
+                Button {
+                    editorMode = .add
+                } label: {
+                    Label("Add Host", systemImage: "plus.circle")
+                }
+                .accessibilityIdentifier("hosts-add-host")
+            }
+            .accessibilityIdentifier("hosts-list-section")
+
+            #if !os(visionOS)
+            Section("Device Key") {
+                Button {
+                    copyPublicKey()
+                } label: {
+                    Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : "Copy This Device Public Key", systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
+                }
+                .accessibilityIdentifier("hosts-copy-device-public-key")
+                Text("Use this same device key for SSH tunnel hosts. Direct hosts do not need it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            #endif
+        }
+        .navigationTitle("Hosts")
+        .sheet(item: $editorMode) { mode in
+            HostProfileEditorView(state: state, mode: mode)
+        }
+        .alert("Host Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button(L10n.t(.commonOk), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private func copyPublicKey() {
+        #if !os(visionOS)
+        do {
+            let key = try state.sshTunnelManager.generateOrGetPublicKey()
+            UIPasteboard.general.string = key
+            publicKeyCopied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { publicKeyCopied = false }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        #endif
+    }
+}
+
+private struct CurrentHostCard: View {
+    @Bindable var state: AppState
+    let profile: HostProfile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(profile.displayName)
+                    .font(.headline)
+                Spacer()
+                Label(profile.transport.label, systemImage: profile.transport == .sshTunnel ? "terminal" : "network")
+                    .font(.caption)
+                    .foregroundStyle(DesignColors.Brand.primary)
+            }
+            Text(profile.connectionSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                if state.isConnected {
+                    Label(L10n.t(.settingsConnected), systemImage: "checkmark.circle")
+                } else {
+                    Label(L10n.t(.settingsDisconnected), systemImage: "xmark.circle")
+                }
+                Spacer()
+                Button(L10n.t(.settingsTestConnection)) {
+                    Task { await state.refresh() }
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct HostProfileRow: View {
+    @Bindable var state: AppState
+    let profile: HostProfile
+
+    private var isCurrent: Bool { profile.id == state.currentHostProfileID }
+
+    var body: some View {
+        Button {
+            Task { await state.switchHostProfile(to: profile.id) }
+        } label: {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isCurrent ? DesignColors.Brand.primary : Color.clear)
+                    .frame(width: 3, height: 42)
+                Image(systemName: profile.transport == .sshTunnel ? "terminal" : "network")
+                    .frame(width: 24)
+                    .foregroundStyle(isCurrent ? DesignColors.Brand.primary : .secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(profile.displayName)
+                        .foregroundStyle(.primary)
+                    Text(profile.connectionSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if let lastUsedAt = profile.lastUsedAt {
+                        Text(lastUsedAt, style: .relative)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(DesignColors.Brand.primary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .accessibilityIdentifier("host-profile-\(profile.id.uuidString)")
+    }
+}
+
+enum HostProfileEditorMode: Identifiable {
+    case add
+    case edit(HostProfile)
+
+    var id: String {
+        switch self {
+        case .add: return "add"
+        case .edit(let profile): return profile.id.uuidString
+        }
+    }
+}
+
+struct HostProfileEditorView: View {
+    @Bindable var state: AppState
+    let mode: HostProfileEditorMode
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var profile: HostProfile
+    @State private var password: String
+    @State private var importText = ""
+    @State private var errorMessage: String?
+    @State private var publicKeyCopied = false
+
+    init(state: AppState, mode: HostProfileEditorMode) {
+        self.state = state
+        self.mode = mode
+        let initial: HostProfile
+        switch mode {
+        case .add:
+            initial = HostProfile(name: "", transport: .direct, serverURL: "", basicAuth: nil, ssh: nil)
+        case .edit(let profile):
+            initial = profile
+        }
+        _profile = State(initialValue: initial)
+        _password = State(initialValue: initial.basicAuth.flatMap { KeychainHelper.load(forKey: $0.keychainPasswordID) } ?? "")
+        _importText = State(initialValue: Self.uiTestImportJSON)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if case .add = mode {
+                    Section {
+                        TextEditor(text: $importText)
+                            .frame(minHeight: 80)
+                            .textInputAutocapitalization(.never)
+                            .accessibilityIdentifier("host-import-json")
+                        Button {
+                            do {
+                                profile = try state.importHostProfile(from: importText)
+                                importText = ""
+                            } catch {
+                                errorMessage = error.localizedDescription
+                            }
+                        } label: {
+                            Label("Import Host Config", systemImage: "square.and.arrow.down")
+                        }
+                        .accessibilityIdentifier("host-import-config")
+                        .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    } footer: {
+                        Text("Paste a setup JSON from your server admin, or continue with manual setup below.")
+                    }
+                }
+
+                Section {
+                    Picker("Connection Type", selection: $profile.transport) {
+                        ForEach(HostTransport.allCases) { transport in
+                            Text(transport.label).tag(transport)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("host-transport-picker")
+                    .onChange(of: profile.transport) { _, newValue in
+                        if newValue == .sshTunnel {
+                            profile.serverURL = APIClient.defaultServer
+                            if profile.ssh == nil { profile.ssh = .default }
+                        } else {
+                            profile.ssh = nil
+                        }
+                    }
+                } footer: {
+                    Text("Direct is for LAN, VPN, Tailscale, or HTTPS. SSH Tunnel is for an OpenCode server behind an SSH gateway.")
+                }
+
+                Section("Host") {
+                    TextField("Name", text: $profile.name)
+                        .accessibilityIdentifier("host-name")
+                    if profile.transport == .direct {
+                        TextField("OpenCode URL", text: $profile.serverURL)
+                            .textContentType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .accessibilityIdentifier("host-server-url")
+                    } else {
+                        LabeledContent("OpenCode URL") {
+                            Text("Managed by SSH tunnel")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if profile.transport == .sshTunnel {
+                    Section {
+                        TextField("Gateway Host", text: sshHostBinding)
+                            .textContentType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .accessibilityIdentifier("host-ssh-gateway")
+                        LabeledNumberField(title: "SSH Port", value: sshPortBinding, accessibilityID: "host-ssh-port")
+                        TextField("SSH Username", text: sshUsernameBinding)
+                            .textInputAutocapitalization(.never)
+                            .accessibilityIdentifier("host-ssh-username")
+                        LabeledNumberField(title: "Assigned Remote Port", value: sshRemotePortBinding, accessibilityID: "host-ssh-remote-port")
+                    } header: {
+                        Text("SSH Gateway")
+                    } footer: {
+                        Text("These values come from your OpenCode host admin. The app connects locally through the tunnel after this is saved.")
+                    }
+                    .accessibilityIdentifier("host-ssh-gateway-section")
+
+                    #if !os(visionOS)
+                    Section("Device Key") {
+                        Button {
+                            copyPublicKey()
+                        } label: {
+                            Label(publicKeyCopied ? L10n.t(.settingsPublicKeyCopied) : "Copy This Device Public Key", systemImage: publicKeyCopied ? "checkmark" : "doc.on.doc")
+                        }
+                        .accessibilityIdentifier("host-editor-copy-device-public-key")
+                        Text("Send this public key to the server admin before testing. Never share the private key.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    #endif
+                }
+
+                Section("Basic Auth") {
+                    TextField("Username", text: basicAuthUsernameBinding)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                }
+
+                Section {
+                    Button(L10n.t(.settingsTestConnection)) {
+                        save(makeCurrent: true)
+                        Task { await state.refresh() }
+                    }
+                    .disabled(!canSave)
+                    Text("Save is enabled after required fields are present. Test verifies the selected transport and OpenCode health endpoint.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle(isEditing ? "Edit Host" : "Add Host")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t(.commonCancel)) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        save(makeCurrent: true)
+                        dismiss()
+                    }
+                    .disabled(!canSave)
+                    .accessibilityIdentifier("host-save")
+                }
+            }
+            .alert("Host Error", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button(L10n.t(.commonOk), role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private var isEditing: Bool {
+        if case .edit = mode { return true }
+        return false
+    }
+
+    private static var uiTestImportJSON: String {
+        guard ProcessInfo.processInfo.arguments.contains("UITEST_HOST_IMPORT_JSON_PREFILL") else { return "" }
+        return #"{"version":1,"name":"Imported SSH","transport":"sshTunnel","ssh":{"host":"gateway.example.invalid","port":8006,"username":"opencode","remotePort":19001}}"#
+    }
+
+    private var canSave: Bool {
+        let nameOK = !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        switch profile.transport {
+        case .direct:
+            return nameOK && !profile.serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .sshTunnel:
+            return nameOK && (profile.ssh?.isValid ?? false)
+        }
+    }
+
+    private var basicAuthUsernameBinding: Binding<String> {
+        Binding {
+            profile.basicAuth?.username ?? ""
+        } set: { newValue in
+            if newValue.isEmpty && password.isEmpty {
+                profile.basicAuth = nil
+            } else {
+                let passwordID = profile.basicAuth?.keychainPasswordID ?? AppState.passwordKeychainID(for: profile.id)
+                profile.basicAuth = BasicAuthConfig(username: newValue, keychainPasswordID: passwordID)
+            }
+        }
+    }
+
+    private var sshHostBinding: Binding<String> {
+        Binding { profile.ssh?.host ?? "" } set: { updateSSH { $0.host = $1 }($0) }
+    }
+
+    private var sshUsernameBinding: Binding<String> {
+        Binding { profile.ssh?.username ?? "opencode" } set: { updateSSH { $0.username = $1 }($0) }
+    }
+
+    private var sshPortBinding: Binding<Int> {
+        Binding { profile.ssh?.port ?? 8006 } set: { newValue in updateSSH { $0.port = newValue } }
+    }
+
+    private var sshRemotePortBinding: Binding<Int> {
+        Binding { profile.ssh?.remotePort ?? 19001 } set: { newValue in updateSSH { $0.remotePort = newValue } }
+    }
+
+    private func updateSSH(_ edit: (inout SSHTunnelConfig) -> Void) {
+        var ssh = profile.ssh ?? .default
+        ssh.isEnabled = true
+        edit(&ssh)
+        profile.ssh = ssh
+        profile.serverURL = APIClient.defaultServer
+    }
+
+    private func updateSSH(_ edit: @escaping (inout SSHTunnelConfig, String) -> Void) -> (String) -> Void {
+        { value in
+            var ssh = profile.ssh ?? .default
+            ssh.isEnabled = true
+            edit(&ssh, value)
+            profile.ssh = ssh
+            profile.serverURL = APIClient.defaultServer
+        }
+    }
+
+    private func save(makeCurrent: Bool) {
+        var toSave = profile
+        if toSave.transport == .sshTunnel {
+            var ssh = toSave.ssh ?? .default
+            ssh.isEnabled = true
+            toSave.ssh = ssh
+            toSave.serverURL = APIClient.defaultServer
+        }
+        state.saveHostProfile(toSave, password: password, makeCurrent: makeCurrent)
+    }
+
+    private func copyPublicKey() {
+        #if !os(visionOS)
+        do {
+            let key = try state.sshTunnelManager.generateOrGetPublicKey()
+            UIPasteboard.general.string = key
+            publicKeyCopied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { publicKeyCopied = false }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        #endif
+    }
+}
+
+private struct LabeledNumberField: View {
+    let title: String
+    @Binding var value: Int
+    let accessibilityID: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            TextField("", value: $value, formatter: NumberFormatter())
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 90)
+                .accessibilityIdentifier(accessibilityID)
+        }
+    }
+}
