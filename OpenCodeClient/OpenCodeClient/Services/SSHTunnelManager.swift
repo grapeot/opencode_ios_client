@@ -77,6 +77,14 @@ enum SSHKnownHostStore {
     }
 }
 
+struct SSHHostKeyMismatch: Equatable {
+    let host: String
+    let port: Int
+    let expectedFingerprint: String
+    let presentedFingerprint: String
+    let presentedOpenSSHKey: String
+}
+
 #if !os(visionOS)
 private final class SSHTOFUHostKeyValidator: NIOSSHClientServerAuthenticationDelegate {
     private let host: String
@@ -97,7 +105,8 @@ private final class SSHTOFUHostKeyValidator: NIOSSHClientServerAuthenticationDel
             validationCompletePromise.fail(
                 SSHError.hostKeyMismatch(
                     expected: SSHKnownHostStore.fingerprint(openSSHKey: trusted),
-                    got: SSHKnownHostStore.fingerprint(openSSHKey: presented)
+                    got: SSHKnownHostStore.fingerprint(openSSHKey: presented),
+                    presentedOpenSSHKey: presented
                 )
             )
             return
@@ -170,6 +179,7 @@ struct SSHTunnelConfig: Codable, Equatable {
 final class SSHTunnelManager: ObservableObject {
     @Published private(set) var status: SSHConnectionStatus = .disconnected
     @Published private(set) var trustedHostFingerprint: String?
+    @Published private(set) var pendingHostKeyMismatch: SSHHostKeyMismatch?
     @Published var config: SSHTunnelConfig {
         didSet { saveConfig() }
     }
@@ -221,6 +231,10 @@ final class SSHTunnelManager: ObservableObject {
 
     func clearTrustedHost() {
         trustedHostFingerprint = nil
+        pendingHostKeyMismatch = nil
+    }
+
+    func trustPendingHostKey() {
     }
 }
 #else
@@ -228,6 +242,7 @@ final class SSHTunnelManager: ObservableObject {
 final class SSHTunnelManager: ObservableObject {
     @Published private(set) var status: SSHConnectionStatus = .disconnected
     @Published private(set) var trustedHostFingerprint: String?
+    @Published private(set) var pendingHostKeyMismatch: SSHHostKeyMismatch?
     @Published var config: SSHTunnelConfig {
         didSet {
             saveConfig()
@@ -279,11 +294,21 @@ final class SSHTunnelManager: ObservableObject {
         }
         
         status = .connecting
+        pendingHostKeyMismatch = nil
         
         do {
             try await establishTunnel(privateKeyData: privateKeyData)
             status = .connected
         } catch {
+            if case let SSHError.hostKeyMismatch(expected, got, presentedOpenSSHKey) = error {
+                pendingHostKeyMismatch = SSHHostKeyMismatch(
+                    host: config.host,
+                    port: config.port,
+                    expectedFingerprint: expected,
+                    presentedFingerprint: got,
+                    presentedOpenSSHKey: presentedOpenSSHKey
+                )
+            }
             disconnect()
             status = .error(error.localizedDescription)
         }
@@ -310,6 +335,7 @@ final class SSHTunnelManager: ObservableObject {
         let client = try await SSHClient.connect(to: settings)
         self.sshClient = client
         self.trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: config.host, port: config.port)
+        self.pendingHostKeyMismatch = nil
         
         #if DEBUG
         print("[SSH] Connected successfully")
@@ -459,6 +485,14 @@ final class SSHTunnelManager: ObservableObject {
     func clearTrustedHost() {
         SSHKnownHostStore.clear(host: config.host, port: config.port)
         trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: config.host, port: config.port)
+        pendingHostKeyMismatch = nil
+    }
+
+    func trustPendingHostKey() {
+        guard let pending = pendingHostKeyMismatch else { return }
+        SSHKnownHostStore.trust(host: pending.host, port: pending.port, openSSHKey: pending.presentedOpenSSHKey)
+        trustedHostFingerprint = SSHKnownHostStore.fingerprint(host: pending.host, port: pending.port)
+        pendingHostKeyMismatch = nil
     }
 
     private func connectionSnapshot() -> (localPort: Int, remotePort: Int) {
@@ -520,7 +554,7 @@ enum SSHError: LocalizedError {
     case keyNotFound
     case invalidKeyFormat
     case tunnelFailed(String)
-    case hostKeyMismatch(expected: String, got: String)
+    case hostKeyMismatch(expected: String, got: String, presentedOpenSSHKey: String)
     
     var errorDescription: String? {
         switch self {
@@ -534,7 +568,7 @@ enum SSHError: LocalizedError {
             return L10n.t(.sshErrorInvalidKeyFormat)
         case .tunnelFailed(let reason):
             return L10n.t(.sshErrorTunnelFailed, reason)
-        case .hostKeyMismatch(let expected, let got):
+        case .hostKeyMismatch(let expected, let got, _):
             return L10n.t(.sshErrorHostKeyMismatch, expected, got)
         }
     }

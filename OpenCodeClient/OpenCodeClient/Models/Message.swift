@@ -5,6 +5,83 @@
 
 import Foundation
 
+enum DisplayTextDecoder {
+    static func decodeJSONUnicodeEscapes(_ text: String) -> String {
+        var result = ""
+        var index = text.startIndex
+
+        func hexDigit(_ character: Character) -> UInt32? {
+            guard let value = character.unicodeScalars.first?.value else { return nil }
+            if (48...57).contains(value) { return value - 48 }
+            if (97...102).contains(value) { return value - 97 + 10 }
+            if (65...70).contains(value) { return value - 65 + 10 }
+            return nil
+        }
+
+        func hexValue(at start: String.Index) -> (value: UInt32, end: String.Index)? {
+            var value: UInt32 = 0
+            var cursor = start
+            for _ in 0..<4 {
+                guard cursor < text.endIndex, let digit = hexDigit(text[cursor]) else { return nil }
+                value = value * 16 + digit
+                cursor = text.index(after: cursor)
+            }
+            return (value, cursor)
+        }
+
+        while index < text.endIndex {
+            guard text[index] == "\\" else {
+                result.append(text[index])
+                index = text.index(after: index)
+                continue
+            }
+
+            let uIndex = text.index(after: index)
+            guard uIndex < text.endIndex, text[uIndex] == "u" else {
+                result.append(text[index])
+                index = uIndex
+                continue
+            }
+
+            let hexStart = text.index(after: uIndex)
+            guard let first = hexValue(at: hexStart) else {
+                result.append(text[index])
+                index = uIndex
+                continue
+            }
+
+            if (0xD800...0xDBFF).contains(first.value) {
+                let slash = first.end
+                if slash < text.endIndex,
+                   text[slash] == "\\" {
+                    let secondU = text.index(after: slash)
+                    if secondU < text.endIndex,
+                       text[secondU] == "u",
+                       let second = hexValue(at: text.index(after: secondU)),
+                       (0xDC00...0xDFFF).contains(second.value) {
+                        let scalar = 0x10000 + ((first.value - 0xD800) << 10) + (second.value - 0xDC00)
+                        if let unicodeScalar = UnicodeScalar(scalar) {
+                            result.append(Character(unicodeScalar))
+                            index = second.end
+                            continue
+                        }
+                    }
+                }
+            }
+
+            if let unicodeScalar = UnicodeScalar(first.value) {
+                result.append(Character(unicodeScalar))
+                index = first.end
+            } else {
+                result.append(text[index])
+                index = uIndex
+            }
+        }
+
+        return result
+    }
+}
+
 nonisolated struct Message: Codable, Identifiable {
     let id: String
     let sessionID: String
@@ -254,8 +331,14 @@ nonisolated struct Part: Codable, Identifiable {
     var toolReason: String? { state?.title }
     /// 命令/输入摘要
     var toolInputSummary: String? { state?.inputSummary }
+    var toolInputSummaryForDisplay: String? {
+        toolInputSummary.map(DisplayTextDecoder.decodeJSONUnicodeEscapes)
+    }
     /// 输出结果
     var toolOutput: String? { state?.output }
+    var toolOutputForDisplay: String? {
+        toolOutput.map(DisplayTextDecoder.decodeJSONUnicodeEscapes)
+    }
 
     var toolTodos: [TodoItem] {
         if let t = metadata?.todos, !t.isEmpty { return t }

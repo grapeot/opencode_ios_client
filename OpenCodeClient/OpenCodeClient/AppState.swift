@@ -316,6 +316,7 @@ final class AppState {
     var serverVersion: String?
     var connectionError: String?
     var connectionDiagnostic: ConnectionDiagnostic?
+    var pendingSSHHostKeyMismatch: SSHHostKeyMismatch?
     var sendError: String?
 
     // Session activity (rendered in transcript; session-scoped)

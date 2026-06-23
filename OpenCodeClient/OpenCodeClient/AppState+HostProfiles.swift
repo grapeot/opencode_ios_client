@@ -45,6 +45,19 @@ extension AppState {
         UserDefaults.standard.set(data, forKey: Self.hostProfilesKey)
     }
 
+    func trustPendingSSHHostKeyAndReconnect() async {
+        #if !os(visionOS)
+        sshTunnelManager.trustPendingHostKey()
+        pendingSSHHostKeyMismatch = nil
+        sshTunnelManager.disconnect()
+        await testConnection()
+        #endif
+    }
+
+    func dismissPendingSSHHostKeyMismatch() {
+        pendingSSHHostKeyMismatch = nil
+    }
+
     func applyCurrentHostProfileToRuntime(persistLegacy: Bool = true) {
         guard let profile = currentHostProfile else { return }
 

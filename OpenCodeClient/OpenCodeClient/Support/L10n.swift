@@ -101,6 +101,9 @@ enum L10n {
         case settingsCommandCopied
         case settingsUntrusted
         case settingsRotate
+        case settingsTrustHostKeyTitle
+        case settingsTrustHostKeyMessage
+        case settingsTrustHostKeyConfirm
 
         case settingsConnecting
         case settingsProject
@@ -481,6 +484,9 @@ enum L10n {
         Key.settingsCommandCopied.rawValue: "Command Copied",
         Key.settingsUntrusted.rawValue: "Untrusted",
         Key.settingsRotate.rawValue: "Rotate",
+        Key.settingsTrustHostKeyTitle.rawValue: "Trust New SSH Host Key?",
+        Key.settingsTrustHostKeyMessage.rawValue: "%@:%d presented a different host key.\n\nPrevious: %@\nNew: %@\n\nTrust it only if you expected the server to be rebuilt or reinstalled.",
+        Key.settingsTrustHostKeyConfirm.rawValue: "Trust and Reconnect",
         Key.settingsConnecting.rawValue: "Connecting...",
         Key.settingsProject.rawValue: "Project (Workspace)",
         Key.settingsProjectServerDefault.rawValue: "Server default",
@@ -861,6 +867,9 @@ enum L10n {
         Key.settingsCommandCopied.rawValue: "命令已复制",
         Key.settingsUntrusted.rawValue: "未信任",
         Key.settingsRotate.rawValue: "更换",
+        Key.settingsTrustHostKeyTitle.rawValue: "信任新的 SSH Host Key？",
+        Key.settingsTrustHostKeyMessage.rawValue: "%@:%d 返回了不同的 host key。\n\n之前：%@\n新的：%@\n\n只有在你确认服务器刚重建或重装时，才信任这个新 key。",
+        Key.settingsTrustHostKeyConfirm.rawValue: "信任并重连",
         Key.errorServerAddressEmpty.rawValue: "服务器地址不能为空",
         Key.errorWanRequiresHttps.rawValue: "WAN 地址必须使用 HTTPS",
         Key.errorUsingLanHttp.rawValue: "正在使用 LAN HTTP",
@@ -1049,7 +1058,7 @@ enum L10n {
         Key.folderEmptyTitle.rawValue: "文件夹为空",
         Key.folderEmptyDescription.rawValue: "此目录没有条目。",
 
-        Key.patchFilesChangedOne.rawValue: "%d 文件已变更",
+        Key.patchFilesChangedOne.rawValue: "%d 个文件已变更",
         Key.patchFilesChangedMany.rawValue: "%d 个文件已变更",
 
         Key.contextUsageHelp.rawValue: "上下文用量",
@@ -1203,7 +1212,7 @@ enum L10n {
     static func t(_ key: Key, _ arguments: CVarArg...) -> String {
         let template = t(key)
         guard !arguments.isEmpty else { return template }
-        return String(format: template, locale: currentLocale, arguments)
+        return String(format: template, locale: currentLocale, arguments: arguments)
     }
 
     static func toolCallsCount(_ count: Int) -> String {

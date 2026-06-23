@@ -142,6 +142,29 @@ struct HostProfilesView: View {
         } message: {
             Text(L10n.t(.settingsRotateKeyPrompt))
         }
+        .alert(
+            L10n.t(.settingsTrustHostKeyTitle),
+            isPresented: Binding(
+                get: { state.pendingSSHHostKeyMismatch != nil },
+                set: { if !$0 { state.dismissPendingSSHHostKeyMismatch() } }
+            ),
+            presenting: state.pendingSSHHostKeyMismatch
+        ) { _ in
+            Button(L10n.t(.commonCancel), role: .cancel) {
+                state.dismissPendingSSHHostKeyMismatch()
+            }
+            Button(L10n.t(.settingsTrustHostKeyConfirm)) {
+                Task { await state.trustPendingSSHHostKeyAndReconnect() }
+            }
+        } message: { mismatch in
+            Text(L10n.t(
+                .settingsTrustHostKeyMessage,
+                mismatch.host,
+                mismatch.port,
+                mismatch.expectedFingerprint,
+                mismatch.presentedFingerprint
+            ))
+        }
     }
 
     private func copyPublicKey() {

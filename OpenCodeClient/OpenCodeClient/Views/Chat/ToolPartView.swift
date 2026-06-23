@@ -98,7 +98,7 @@ struct ToolPartView: View {
                     }
                 }
                 if part.tool != "todowrite",
-                   let input = part.toolInputSummary ?? part.metadata?.input,
+                   let input = part.toolInputSummaryForDisplay ?? part.metadata?.input.map(DisplayTextDecoder.decodeJSONUnicodeEscapes),
                    !input.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t(.toolCommandInput))
@@ -113,7 +113,7 @@ struct ToolPartView: View {
                     LabeledContent(L10n.t(.toolPath), value: path)
                 }
                 if part.tool != "todowrite",
-                   let output = part.toolOutput,
+                   let output = part.toolOutputForDisplay,
                    !output.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t(.toolOutput))
