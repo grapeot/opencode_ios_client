@@ -228,6 +228,16 @@ struct OpenCodeClientTests {
         #expect(part.stateDisplay == "completed")
     }
 
+    @Test func toolDisplayDecodesJSONUnicodeEscapes() throws {
+        let partJson = """
+        {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","text":null,"tool":"bash","callID":"c1","state":{"status":"completed","input":{"command":"say \\u4f60\\u597d"},"output":"\\u4e2d\\u6587 \\ud83d\\ude00","title":"done","metadata":{},"time":{"start":0,"end":1}},"metadata":null,"files":null}
+        """
+        let data = partJson.data(using: .utf8)!
+        let part = try JSONDecoder().decode(Part.self, from: data)
+        #expect(part.toolInputSummaryForDisplay == "say 你好")
+        #expect(part.toolOutputForDisplay == "中文 😀")
+    }
+
     @Test func partDecodingAcceptsStringFileEntries() throws {
         let partJson = """
         {"id":"p1","messageID":"m1","sessionID":"s1","type":"patch","text":null,"tool":null,"callID":null,"state":null,"metadata":null,"files":["src/main.swift",{"path":"src/utils.swift"}]}
@@ -1509,7 +1519,7 @@ struct SSHTunnelTests {
         #expect(SSHError.keyNotFound.errorDescription?.contains("key not found") == true)
         #expect(SSHError.invalidKeyFormat.errorDescription?.contains("Invalid") == true)
         #expect(SSHError.tunnelFailed("x").errorDescription?.contains("Tunnel") == true)
-        #expect(SSHError.hostKeyMismatch(expected: "a", got: "b").errorDescription?.contains("Host key mismatch") == true)
+        #expect(SSHError.hostKeyMismatch(expected: "a", got: "b", presentedOpenSSHKey: "ssh-ed25519 AAAA").errorDescription?.contains("Host key mismatch") == true)
     }
 
     @Test @MainActor func sshTunnelManagerInitialStatus() {

@@ -54,6 +54,7 @@ extension AppState {
 
     func testConnection() async {
         connectionError = nil
+        pendingSSHHostKeyMismatch = nil
         updateConnectionDiagnostic(phase: .health, message: L10n.t(.hostDiagnosticCheckingHealth))
 
         #if !os(visionOS)
@@ -69,6 +70,7 @@ extension AppState {
             if case .error(let message) = sshTunnelManager.status {
                 isConnected = false
                 connectionError = L10n.t(.hostDiagnosticSSHTunnelFailed, message)
+                pendingSSHHostKeyMismatch = sshTunnelManager.pendingHostKeyMismatch
                 updateConnectionDiagnostic(
                     phase: .failed,
                     message: connectionError ?? message,
