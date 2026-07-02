@@ -2023,13 +2023,13 @@ struct ModelSelectionPersistenceTests {
         }
     }
 
-    @Test @MainActor func defaultSelectionUsesDeepSeekV4Flash() {
+    @Test @MainActor func defaultSelectionUsesGemini35Flash() {
         withIsolatedModelSelectionDefaults {
             let state = AppState()
 
             #expect(state.selectedModelIndex == 2)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "DeepSeek V4 Flash")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "deepseek/deepseek-v4-flash")
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.5 Flash")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.5-flash")
         }
     }
 
