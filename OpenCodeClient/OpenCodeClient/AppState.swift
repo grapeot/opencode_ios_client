@@ -521,8 +521,6 @@ final class AppState {
     var providerModelsIndex: [String: ProviderModel] = [:]
     var providerConfigError: String? = nil
 
-    @ObservationIgnored var _cachedContextUsage: ContextUsageSnapshot?
-
     let apiClient: APIClientProtocol
     let sseClient: SSEClientProtocol
     let sshTunnelManager: SSHTunnelManager

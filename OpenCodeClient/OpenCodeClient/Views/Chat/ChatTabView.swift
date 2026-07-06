@@ -841,6 +841,7 @@ struct ChatTabView: View {
             .onChange(of: state.currentSessionID) { oldID, newID in
                 let draftText = inputText
                 Task { @MainActor in
+                    await Task.yield()
                     state.setDraftText(draftText, for: oldID)
                     syncDraftFromState(sessionID: newID)
                     isNearBottom = true
@@ -850,7 +851,11 @@ struct ChatTabView: View {
             }
             .onChange(of: inputText) { _, newValue in
                 guard !isSyncingDraft else { return }
-                state.setDraftText(newValue, for: state.currentSessionID)
+                Task { @MainActor in
+                    await Task.yield()
+                    guard !isSyncingDraft, inputText == newValue else { return }
+                    state.setDraftText(newValue, for: state.currentSessionID)
+                }
             }
             .onChange(of: selectedPhotoItems) { _, newItems in
                 Task { await loadSelectedPhotos(newItems) }

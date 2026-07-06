@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct ToolPartView: View {
+    private static let outputPreviewCharacterLimit = 12_000
+
     @Environment(\.colorScheme) private var colorScheme
     let part: Part
     let sessionTodos: [TodoItem]
@@ -74,6 +76,15 @@ struct ToolPartView: View {
         return raw.split(separator: "/").last.map(String.init) ?? raw
     }
 
+    private static func outputPreview(_ output: String) -> String {
+        guard output.count > outputPreviewCharacterLimit else { return output }
+        return String(output.prefix(outputPreviewCharacterLimit))
+    }
+
+    private static func isOutputTruncated(_ output: String) -> Bool {
+        output.count > outputPreviewCharacterLimit
+    }
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
@@ -137,9 +148,14 @@ struct ToolPartView: View {
                                 }
                             }
                         } else {
-                            Text(output)
+                            Text(Self.outputPreview(output))
                                 .font(DesignTypography.microMono)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                            if Self.isOutputTruncated(output) {
+                                Text("Output truncated: showing first \(Self.outputPreviewCharacterLimit.formatted()) of \(output.count.formatted()) characters.")
+                                    .font(DesignTypography.micro)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }

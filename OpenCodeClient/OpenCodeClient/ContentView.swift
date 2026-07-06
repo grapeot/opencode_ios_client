@@ -13,6 +13,7 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
+    @State private var selectedTab = 0
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -174,9 +175,13 @@ struct ContentView: View {
                 return state.fileToOpenInFilesTab.map { FilePathWrapper(path: $0) }
             },
             set: { newValue, _ in
-                state.fileToOpenInFilesTab = newValue?.path
-                if newValue == nil, !useSplitLayout {
-                    state.selectedTab = 0
+                Task { @MainActor in
+                    await Task.yield()
+                    state.fileToOpenInFilesTab = newValue?.path
+                    if newValue == nil, !useSplitLayout {
+                        selectedTab = 0
+                        state.selectedTab = 0
+                    }
                 }
             }
         )
@@ -458,16 +463,33 @@ struct ContentView: View {
         }
         .preferredColorScheme(themeColorScheme)
         .environment(\.locale, L10n.currentLocale)
+        .onAppear {
+            selectedTab = state.selectedTab
+        }
         .onChange(of: sizeClass) { _, newValue in
             // iPhone → iPad 或 split layout 切换时，将 sheet 预览迁移到中间栏预览。
             if newValue == .regular, let p = state.fileToOpenInFilesTab {
-                state.previewFilePath = p
-                state.fileToOpenInFilesTab = nil
+                Task { @MainActor in
+                    await Task.yield()
+                    state.previewFilePath = p
+                    state.fileToOpenInFilesTab = nil
+                }
             }
         }
-        .onChange(of: state.selectedTab) { oldTab, newTab in
+        .onChange(of: selectedTab) { oldTab, newTab in
+            Task { @MainActor in
+                await Task.yield()
+                state.selectedTab = newTab
+            }
             if oldTab == 2 && newTab != 2 {
                 Task { await state.refresh() }
+            }
+        }
+        .onChange(of: state.selectedTab) { _, newTab in
+            guard selectedTab != newTab else { return }
+            Task { @MainActor in
+                await Task.yield()
+                selectedTab = newTab
             }
         }
         .sheet(item: filePreviewSheetItem) { wrapper in
@@ -476,8 +498,13 @@ struct ContentView: View {
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button {
-                                state.fileToOpenInFilesTab = nil
-                                if !useSplitLayout { state.selectedTab = 0 }
+                                Task { @MainActor in
+                                    state.fileToOpenInFilesTab = nil
+                                    if !useSplitLayout {
+                                        selectedTab = 0
+                                        state.selectedTab = 0
+                                    }
+                                }
                             } label: {
                                 Image(systemName: "xmark")
                             }
@@ -502,10 +529,7 @@ struct ContentView: View {
 
     /// iPhone：Tab Bar 三 Tab
     private var tabLayout: some View {
-        TabView(selection: Binding(
-            get: { state.selectedTab },
-            set: { state.selectedTab = $0 }
-        )) {
+        TabView(selection: $selectedTab) {
             ChatTabView(state: state)
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
                 .tag(0)

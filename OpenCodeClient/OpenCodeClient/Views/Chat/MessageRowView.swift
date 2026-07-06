@@ -7,7 +7,7 @@ import SwiftUI
 import MarkdownUI
 
 struct MessageRowView: View {
-    private static let markdownRenderCharacterLimit = 50_000
+    private static let markdownRenderCharacterLimit = 12_000
     private static let largeMessagePreviewCharacterLimit = 12_000
 
     @Bindable var state: AppState
