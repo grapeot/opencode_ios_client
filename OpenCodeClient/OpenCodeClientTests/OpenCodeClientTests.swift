@@ -1383,6 +1383,14 @@ struct MessageRenderingHeuristicTests {
         #expect(MessageRowView.isLargeMessage(text) == true)
         #expect(MessageRowView.largeMessagePreview(text).count == 12_000)
     }
+
+    @Test func ringStatusConsolePasteSkipsExpensiveMarkdownRendering() {
+        let text = String(repeating: "$ smart_home git:(master) npm run ring:status\n", count: 360)
+
+        #expect(text.count > 12_000)
+        #expect(MessageRowView.isLargeMessage(text) == true)
+        #expect(MessageRowView.largeMessagePreview(text).count == 12_000)
+    }
 }
 
 struct ChatScrollBehaviorTests {

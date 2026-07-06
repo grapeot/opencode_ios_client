@@ -21,7 +21,6 @@ extension AppState {
     var contextUsageSnapshot: ContextUsageSnapshot? {
         guard let sessionID = currentSessionID,
               let session = currentSession else {
-            _cachedContextUsage = nil
             return nil
         }
 
@@ -32,24 +31,18 @@ extension AppState {
         guard let last = assistantWithTokens,
               let tokens = last.info.tokens,
               let model = last.info.resolvedModel else {
-            if let cached = _cachedContextUsage, cached.sessionID == sessionID {
-                return cached
-            }
             return nil
         }
 
         let key = "\(model.providerID)/\(model.modelID)"
         guard let contextLimit = providerModelsIndex[key]?.limit?.context else {
-            if let cached = _cachedContextUsage, cached.sessionID == sessionID {
-                return cached
-            }
             return nil
         }
 
         let sumCost = messages.compactMap { $0.info.cost }.reduce(0.0, +)
         let totalCost: Double? = sumCost > 0 ? sumCost : nil
 
-        let snapshot = ContextUsageSnapshot(
+        return ContextUsageSnapshot(
             sessionID: sessionID,
             sessionTitle: session.title,
             providerID: model.providerID,
@@ -59,8 +52,6 @@ extension AppState {
             latestMessageCost: last.info.cost,
             totalSessionCost: totalCost
         )
-        _cachedContextUsage = snapshot
-        return snapshot
     }
 }
 
