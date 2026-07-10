@@ -253,7 +253,7 @@ struct ContentView: View {
             role: "assistant",
             parentID: userMessageID,
             providerID: "openai",
-            modelID: "gpt-5.5",
+            modelID: "gpt-5.6-sol",
             model: nil,
             error: nil,
             time: .init(created: 1_100, completed: 1_200),
