@@ -1974,32 +1974,35 @@ struct ModelSelectionPersistenceTests {
         }
     }
 
-    @Test @MainActor func legacyGPT54SelectionMapsToCurrentGPT55Preset() {
+    @Test @MainActor func legacyGPTSelectionMapsToCurrentGPT56SolPreset() {
         withIsolatedModelSelectionDefaults {
             let sessionID = "session-gpt"
-            let legacySelection = [sessionID: "openai/gpt-5.4"]
-            let encoded = try! JSONEncoder().encode(legacySelection)
-            UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
+            for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5"] {
+                UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
+                let legacySelection = [sessionID: legacyID]
+                let encoded = try! JSONEncoder().encode(legacySelection)
+                UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
 
-            let state = AppState()
-            let session = Session(
-                id: sessionID,
-                slug: sessionID,
-                projectID: "p1",
-                directory: "/tmp",
-                parentID: nil,
-                title: sessionID,
-                version: "1",
-                time: .init(created: 0, updated: 100, archived: nil),
-                share: nil,
-                summary: nil
-            )
+                let state = AppState()
+                let session = Session(
+                    id: sessionID,
+                    slug: sessionID,
+                    projectID: "p1",
+                    directory: "/tmp",
+                    parentID: nil,
+                    title: sessionID,
+                    version: "1",
+                    time: .init(created: 0, updated: 100, archived: nil),
+                    share: nil,
+                    summary: nil
+                )
 
-            state.selectSession(session)
+                state.selectSession(session)
 
-            #expect(state.selectedModelIndex == 1)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.5")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.5")
+                #expect(state.selectedModelIndex == 1)
+                #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.6 Sol")
+                #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.6-sol")
+            }
         }
     }
 
