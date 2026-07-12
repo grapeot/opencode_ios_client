@@ -40,6 +40,10 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_HOST_PROFILES_FIXTURE")
     }
 
+    private static var hasUITestQuotaFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_QUOTA_FIXTURE")
+    }
+
     /// Which bundled fixture markdown to render in the web preview. Defaults to
     /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
     private static var webPreviewFixtureName: String {
@@ -59,6 +63,11 @@ struct ContentView: View {
 
     private static func makeInitialState() -> AppState {
         let state = AppState()
+
+        if hasUITestQuotaFixture {
+            applyQuotaFixture(to: state)
+            return state
+        }
 
         if hasUITestHostProfilesFixture {
             applyHostProfilesFixture(to: state)
@@ -131,6 +140,38 @@ struct ContentView: View {
         state.currentSessionID = "root-session"
         state.expandedSessionIDs = ["root-session", "archived-session"]
         return state
+    }
+
+    private static func applyQuotaFixture(to state: AppState) {
+        let sessionID = "quota-fixture-session"
+        state.sessions = [
+            Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp/quota-fixture",
+                parentID: nil,
+                title: "Quota UX Review",
+                version: "1",
+                time: .init(created: 1_000, updated: 2_000, archived: nil),
+                share: nil,
+                summary: nil
+            )
+        ]
+        state.currentSessionID = sessionID
+        state.draftInputsBySessionID[sessionID] = ""
+        state.selectedModelIndex = 6
+        state.aiUsageDashboardURL = "http://usage-dashboard.local:7995"
+        state.aiUsageQuotaState = .ready(.init(
+            generatedAt: "2026-07-12T09:40:00",
+            fetchedAt: Date(),
+            quotas: [
+                AIUsageQuota(provider: "codex", label: "5h", usedPercentage: 29, remainingPercentage: 71, nextResetTimeMs: 1_783_842_841_000, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "codex", label: "7d", usedPercentage: 62, remainingPercentage: 38, nextResetTimeMs: 1_783_950_000_000, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "claude", label: "5h", usedPercentage: 84, remainingPercentage: 16, nextResetTimeMs: 1_783_850_000_000, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "glm", label: "5h", usedPercentage: 8, remainingPercentage: 92, nextResetTimeMs: 1_783_860_000_000, nextResetISO: nil, usage: nil, remaining: nil),
+            ]
+        ))
     }
 
     private static func applyHostProfilesFixture(to state: AppState) {
@@ -370,7 +411,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture {
             return
         }
 

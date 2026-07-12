@@ -93,6 +93,7 @@ struct ChatToolbarView: View {
     private var rightButtons: some View {
         HStack(spacing: DesignSpacing.md) {
             configButton
+            AIUsageQuotaButton(state: state)
             todoButton
             ContextUsageButton(state: state)
             
@@ -126,6 +127,7 @@ struct ChatToolbarView: View {
                     .stroke(DesignColors.Brand.primary.opacity(0.30), lineWidth: 1)
             )
         }
+        .accessibilityIdentifier("chat-toolbar-model")
         .sheet(isPresented: $showConfigSheet) {
             NavigationStack {
                 List {

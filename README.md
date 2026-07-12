@@ -15,6 +15,7 @@ No Apple Developer account needed. Just tap the link on your iOS device.
 - **Chat**: send messages, switch models, view AI replies with streaming, inspect tool calls and reasoning
 - **Files**: file tree browser, session diffs, markdown preview, image preview with zoom/pan, code view with line numbers
 - **Settings**: server connection, Basic Auth, SSH tunnel, theme, voice transcription
+- **Usage limits**: optional AI Usage Dashboard integration for provider quota windows
 
 ### Apple Vision Pro support
 
@@ -43,6 +44,14 @@ Current visionOS baseline limitations:
 2. Open the iOS app, go to Settings, enter the server address (e.g. `http://192.168.x.x:4096`)
 3. Tap Test Connection
 4. Switch to Chat, create or select a session, and start talking
+
+### Optional usage limits
+
+Set an AI Usage Dashboard base URL in Settings to show the selected model's
+primary quota beside the model picker. Opening Usage & Limits reads the cached
+quota snapshot. The refresh button explicitly waits for a full provider update
+and then reloads the compact quota endpoint. The app does not poll or trigger
+automatic provider refreshes, and the quota UI is absent when no URL is set.
 
 ## Remote Access
 
