@@ -88,6 +88,9 @@ enum L10n {
         case settingsTested
         case settingsAbout
         case settingsServerVersion
+        case settingsAIUsageDashboard
+        case settingsAIUsageDashboardURL
+        case settingsAIUsageDashboardFooter
         case settingsRotateKeyTitle
         case settingsRotateKeyPrompt
         case settingsPublicKeyTitle
@@ -315,6 +318,20 @@ enum L10n {
         case contextUsageLoadingConfig
         case contextUsageNoUsageData
         case contextUsageConfigNotLoaded
+        case quotaTitle
+        case quotaDataSource
+        case quotaNotLoaded
+        case quotaLoading
+        case quotaRefreshing
+        case quotaRefreshingProviders
+        case quotaNoCachedData
+        case quotaStale
+        case quotaLastFetched
+        case quotaGeneratedAt
+        case quotaRemainingFormat
+        case quotaUsedFormat
+        case quotaResetFormat
+        case quotaCurrentModelAccessibility
 
         case sessionTitle
         case sessionsTitle
@@ -472,6 +489,9 @@ enum L10n {
         Key.settingsTested.rawValue: "OK",
         Key.settingsAbout.rawValue: "About",
         Key.settingsServerVersion.rawValue: "Server Version",
+        Key.settingsAIUsageDashboard.rawValue: "AI Usage Dashboard",
+        Key.settingsAIUsageDashboardURL.rawValue: "Dashboard URL (optional)",
+        Key.settingsAIUsageDashboardFooter.rawValue: "Leave blank for no quota UI. Enter the dashboard base URL or the full /api/v1/quotas endpoint.",
         Key.settingsRotateKeyTitle.rawValue: "Rotate SSH Key?",
         Key.settingsRotateKeyPrompt.rawValue: "This will generate a new key pair for this device. Update the public key on your SSH server before using SSH tunnel hosts again.",
         Key.settingsPublicKeyTitle.rawValue: "Your Public Key",
@@ -697,6 +717,20 @@ enum L10n {
         Key.contextUsageLoadingConfig.rawValue: "Loading provider config...",
         Key.contextUsageNoUsageData.rawValue: "No usage data",
         Key.contextUsageConfigNotLoaded.rawValue: "Provider config not loaded",
+        Key.quotaTitle.rawValue: "Usage & Limits",
+        Key.quotaDataSource.rawValue: "Data Source",
+        Key.quotaNotLoaded.rawValue: "Quota data has not been loaded.",
+        Key.quotaLoading.rawValue: "Loading quota data...",
+        Key.quotaRefreshing.rawValue: "Refreshing cached quota data...",
+        Key.quotaRefreshingProviders.rawValue: "Refreshing providers...",
+        Key.quotaNoCachedData.rawValue: "No cached quota snapshot. Refresh AI Usage Dashboard on the host.",
+        Key.quotaStale.rawValue: "Showing stale quota data",
+        Key.quotaLastFetched.rawValue: "Last fetched",
+        Key.quotaGeneratedAt.rawValue: "Generated at",
+        Key.quotaRemainingFormat.rawValue: "%d%% left",
+        Key.quotaUsedFormat.rawValue: "%d%% used",
+        Key.quotaResetFormat.rawValue: "Resets %@",
+        Key.quotaCurrentModelAccessibility.rawValue: "Current model quota: %@",
 
         Key.sessionTitle.rawValue: "Session",
         Key.sessionsTitle.rawValue: "Sessions",
@@ -855,6 +889,9 @@ enum L10n {
         Key.settingsTested.rawValue: "可用",
         Key.settingsAbout.rawValue: "关于",
         Key.settingsServerVersion.rawValue: "服务器版本",
+        Key.settingsAIUsageDashboard.rawValue: "AI 用量面板",
+        Key.settingsAIUsageDashboardURL.rawValue: "面板地址（可选）",
+        Key.settingsAIUsageDashboardFooter.rawValue: "留空时不显示任何 quota 界面。可填写面板根地址或完整的 /api/v1/quotas 地址。",
         Key.settingsRotateKeyTitle.rawValue: "要更换 SSH 密钥吗？",
         Key.settingsRotateKeyPrompt.rawValue: "这将为本设备生成一对新密钥。再次使用 SSH Tunnel hosts 前，请同步更新 SSH server 上的公钥。",
         Key.settingsPublicKeyTitle.rawValue: "你的公钥",
@@ -1083,6 +1120,20 @@ enum L10n {
         Key.contextUsageLoadingConfig.rawValue: "正在加载服务商配置...",
         Key.contextUsageNoUsageData.rawValue: "无使用数据",
         Key.contextUsageConfigNotLoaded.rawValue: "未加载服务商配置",
+        Key.quotaTitle.rawValue: "用量与限额",
+        Key.quotaDataSource.rawValue: "数据来源",
+        Key.quotaNotLoaded.rawValue: "尚未加载 quota 数据。",
+        Key.quotaLoading.rawValue: "正在加载 quota 数据...",
+        Key.quotaRefreshing.rawValue: "正在刷新缓存的 quota 数据...",
+        Key.quotaRefreshingProviders.rawValue: "正在从服务商更新数据...",
+        Key.quotaNoCachedData.rawValue: "没有缓存的 quota 快照。请先在主机上刷新 AI Usage Dashboard。",
+        Key.quotaStale.rawValue: "正在显示过期 quota 数据",
+        Key.quotaLastFetched.rawValue: "上次获取",
+        Key.quotaGeneratedAt.rawValue: "生成时间",
+        Key.quotaRemainingFormat.rawValue: "剩余 %d%%",
+        Key.quotaUsedFormat.rawValue: "已用 %d%%",
+        Key.quotaResetFormat.rawValue: "%@ 重置",
+        Key.quotaCurrentModelAccessibility.rawValue: "当前模型 quota：%@",
 
         Key.sessionTitle.rawValue: "会话",
         Key.sessionsTitle.rawValue: "会话",

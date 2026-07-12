@@ -171,16 +171,19 @@ final class AppState {
     static let customProjectPathKey = "customProjectPath"
     static let hostProfilesKey = "hostProfiles.v1"
     static let currentHostProfileIDKey = "currentHostProfileID.v1"
+    static let aiUsageDashboardURLKey = "aiUsageDashboardURL"
     static let languagePreferenceKey = L10n.languagePreferenceUserDefaultsKey
 
     init(
         apiClient: APIClientProtocol = APIClient(),
         sseClient: SSEClientProtocol = SSEClient(),
-        sshTunnelManager: SSHTunnelManager? = nil
+        sshTunnelManager: SSHTunnelManager? = nil,
+        aiUsageQuotaClient: AIUsageQuotaClientProtocol = AIUsageQuotaClient()
     ) {
         self.apiClient = apiClient
         self.sseClient = sseClient
         self.sshTunnelManager = sshTunnelManager ?? SSHTunnelManager()
+        self.aiUsageQuotaClient = aiUsageQuotaClient
         if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
             if storedServer == APIConstants.legacyDefaultServer {
                 _serverURL = APIClient.defaultServer
@@ -203,6 +206,7 @@ final class AppState {
         _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
         _languagePreference = L10n.languagePreference
+        _aiUsageDashboardURL = UserDefaults.standard.string(forKey: Self.aiUsageDashboardURLKey) ?? ""
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
         let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
@@ -312,6 +316,21 @@ final class AppState {
     var aiBuilderConnectionOK: Bool = false
     var aiBuilderLastTestedAt: Date? = nil
     var isTestingAIBuilderConnection: Bool = false
+    var _aiUsageDashboardURL: String = ""
+    var aiUsageDashboardURL: String {
+        get { _aiUsageDashboardURL }
+        set {
+            _aiUsageDashboardURL = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.aiUsageDashboardURLKey)
+            aiUsageQuotaState = .idle
+            aiUsageQuotaTestOK = false
+            aiUsageQuotaError = nil
+        }
+    }
+    var aiUsageQuotaState: AIUsageQuotaState = .idle
+    var isRefreshingAIUsageProviders = false
+    var aiUsageQuotaTestOK = false
+    var aiUsageQuotaError: String?
     var isConnected: Bool = false
     var serverVersion: String?
     var connectionError: String?
@@ -528,6 +547,7 @@ final class AppState {
     let apiClient: APIClientProtocol
     let sseClient: SSEClientProtocol
     let sshTunnelManager: SSHTunnelManager
+    let aiUsageQuotaClient: AIUsageQuotaClientProtocol
     var sseTask: Task<Void, Never>?
 
     /// Guard against race conditions when rapidly switching sessions.

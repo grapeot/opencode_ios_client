@@ -102,6 +102,45 @@ struct SettingsTabView: View {
                     }
                 }
 
+                Section {
+                    TextField(L10n.t(.settingsAIUsageDashboardURL), text: $state.aiUsageDashboardURL)
+                        .textContentType(.URL)
+                        .autocapitalization(.none)
+                        .accessibilityIdentifier("settings-ai-usage-url")
+
+                    HStack {
+                        Button(L10n.t(.settingsTestConnection)) {
+                            Task { await state.refreshAIUsageQuotas(force: true) }
+                        }
+                        .disabled(!state.isAIUsageQuotaConfigured || {
+                            if case .loading = state.aiUsageQuotaState { return true }
+                            return false
+                        }())
+                        .accessibilityIdentifier("settings-ai-usage-test")
+
+                        Spacer()
+                        if case .loading = state.aiUsageQuotaState {
+                            ProgressView()
+                        } else if state.aiUsageQuotaTestOK {
+                            Label(L10n.t(.commonOk), systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(DesignColors.Semantic.success)
+                        } else if state.aiUsageQuotaError != nil {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(DesignColors.Semantic.warning)
+                        }
+                    }
+
+                    if let error = state.aiUsageQuotaError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text(L10n.t(.settingsAIUsageDashboard))
+                } footer: {
+                    Text(L10n.t(.settingsAIUsageDashboardFooter))
+                }
+
                 Section(L10n.t(.settingsSpeechRecognition)) {
                     TextField(L10n.t(.settingsAiBuilderBaseURL), text: $state.aiBuilderBaseURL)
                         .textContentType(.URL)

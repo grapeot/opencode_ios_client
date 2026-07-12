@@ -39,14 +39,22 @@ struct OpenCodeClientTests {
     @Test @MainActor func migrateLegacyDefaultServerAddress() {
         let key = "serverURL"
         let previous = UserDefaults.standard.string(forKey: key)
+        let previousProfiles = UserDefaults.standard.data(forKey: AppState.hostProfilesKey)
+        let previousProfileID = UserDefaults.standard.string(forKey: AppState.currentHostProfileIDKey)
         defer {
             if let previous {
                 UserDefaults.standard.set(previous, forKey: key)
             } else {
                 UserDefaults.standard.removeObject(forKey: key)
             }
+            if let previousProfiles { UserDefaults.standard.set(previousProfiles, forKey: AppState.hostProfilesKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.hostProfilesKey) }
+            if let previousProfileID { UserDefaults.standard.set(previousProfileID, forKey: AppState.currentHostProfileIDKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.currentHostProfileIDKey) }
         }
 
+        UserDefaults.standard.removeObject(forKey: AppState.hostProfilesKey)
+        UserDefaults.standard.removeObject(forKey: AppState.currentHostProfileIDKey)
         UserDefaults.standard.set("localhost:4096", forKey: key)
         let state = AppState()
         #expect(state.serverURL == "127.0.0.1:4096")
