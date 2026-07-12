@@ -172,12 +172,15 @@ struct ContentView: View {
             get: {
                 // 仅在 iPhone / compact 时使用 sheet 预览；iPad 在中间栏内联预览。
                 guard !useSplitLayout else { return nil }
-                return state.fileToOpenInFilesTab.map { FilePathWrapper(path: $0) }
+                return state.fileToOpenInFilesTab.map {
+                    FilePathWrapper(path: $0, workspaceDirectory: state.fileToOpenInFilesTabWorkspaceDirectory)
+                }
             },
             set: { newValue, _ in
                 Task { @MainActor in
                     await Task.yield()
                     state.fileToOpenInFilesTab = newValue?.path
+                    state.fileToOpenInFilesTabWorkspaceDirectory = newValue?.workspaceDirectory
                     if newValue == nil, !useSplitLayout {
                         selectedTab = 0
                         state.selectedTab = 0
@@ -472,7 +475,9 @@ struct ContentView: View {
                 Task { @MainActor in
                     await Task.yield()
                     state.previewFilePath = p
+                    state.previewFileWorkspaceDirectory = state.fileToOpenInFilesTabWorkspaceDirectory
                     state.fileToOpenInFilesTab = nil
+                    state.fileToOpenInFilesTabWorkspaceDirectory = nil
                 }
             }
         }
@@ -494,12 +499,13 @@ struct ContentView: View {
         }
         .sheet(item: filePreviewSheetItem) { wrapper in
             NavigationStack {
-                FileContentView(state: state, filePath: wrapper.path)
+                FileContentView(state: state, filePath: wrapper.path, workspaceDirectory: wrapper.workspaceDirectory)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button {
                                 Task { @MainActor in
                                     state.fileToOpenInFilesTab = nil
+                                    state.fileToOpenInFilesTabWorkspaceDirectory = nil
                                     if !useSplitLayout {
                                         selectedTab = 0
                                         state.selectedTab = 0
@@ -609,7 +615,8 @@ struct ContentView: View {
 
 private struct FilePathWrapper: Identifiable {
     let path: String
-    var id: String { path }
+    let workspaceDirectory: String?
+    var id: String { "\(workspaceDirectory ?? ""):\(path)" }
 }
 
 private struct TabletFilesColumn: View {
@@ -621,7 +628,7 @@ private struct TabletFilesColumn: View {
         NavigationStack {
             Group {
                 if let path = state.previewFilePath, !path.isEmpty {
-                    FileContentView(state: state, filePath: path)
+                    FileContentView(state: state, filePath: path, workspaceDirectory: state.previewFileWorkspaceDirectory)
                 } else {
                     FileTreeView(state: state, forceSplitPreview: true)
                         .searchable(text: $state.fileSearchQuery, prompt: L10n.t(.appSearchFiles))
@@ -658,7 +665,9 @@ private struct TabletFilesColumn: View {
                     if let path = state.previewFilePath, !path.isEmpty {
                         Button {
                             state.previewFilePath = nil
+                            state.previewFileWorkspaceDirectory = nil
                             state.fileToOpenInFilesTab = nil
+                            state.fileToOpenInFilesTabWorkspaceDirectory = nil
                         } label: {
                             Image(systemName: "xmark")
                         }
