@@ -55,18 +55,19 @@ extension AppState {
         }
     }
 
-    func loadFileContent(path: String) async throws -> FileContent {
-        let resolved = PathNormalizer.resolveWorkspaceRelativePath(path, workspaceDirectory: currentSession?.directory)
+    func loadFileContent(path: String, workspaceDirectory: String? = nil) async throws -> FileContent {
+        let directory = workspaceDirectory ?? currentSession?.directory
+        let resolved = PathNormalizer.resolveWorkspaceRelativePath(path, workspaceDirectory: directory)
         if resolved.hasPrefix("/") {
             let url = URL(fileURLWithPath: resolved)
             return try await apiClient.fileContent(path: url.lastPathComponent, directory: url.deletingLastPathComponent().path)
         }
-        return try await apiClient.fileContent(path: resolved, directory: nil)
+        return try await apiClient.fileContent(path: resolved, directory: directory)
     }
 
-    func loadFileContent(pathBytes: [UInt8]) async throws -> FileContent {
+    func loadFileContent(pathBytes: [UInt8], workspaceDirectory: String? = nil) async throws -> FileContent {
         let path = String(decoding: pathBytes, as: UTF8.self)
-        return try await loadFileContent(path: path)
+        return try await loadFileContent(path: path, workspaceDirectory: workspaceDirectory)
     }
 
     func toggleFileExpanded(_ path: String) {

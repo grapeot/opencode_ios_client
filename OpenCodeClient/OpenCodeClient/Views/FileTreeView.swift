@@ -35,6 +35,7 @@ struct FileTreeView: View {
                     if useSplitPreview {
                         Button {
                             state.previewFilePath = item.node.path
+                            state.previewFileWorkspaceDirectory = state.currentSession?.directory
                         } label: {
                             FileRow(
                                 node: item.node,
@@ -55,7 +56,7 @@ struct FileTreeView: View {
         }
         .listStyle(.plain)
         .navigationDestination(for: String.self) { path in
-            FileContentView(state: state, filePath: path)
+            FileContentView(state: state, filePath: path, workspaceDirectory: state.currentSession?.directory)
         }
         .onAppear {
             if state.fileTreeRoot.isEmpty {

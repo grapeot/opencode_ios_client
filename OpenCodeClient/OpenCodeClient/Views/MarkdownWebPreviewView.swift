@@ -42,6 +42,7 @@ struct MarkdownWebPreviewContainer: View {
 
     @State private var resolvedMarkdown: String?
     @State private var renderError: String?
+    @State private var linkError: String?
     @State private var proceedDespiteSize = false
 
     var body: some View {
@@ -72,10 +73,18 @@ struct MarkdownWebPreviewContainer: View {
                 in: source,
                 markdownFilePath: markdownFilePath,
                 workspaceDirectory: workspaceDirectory,
-                fetchContent: { path in try await state.loadFileContent(path: path) }
+                fetchContent: { path in try await state.loadFileContent(path: path, workspaceDirectory: workspaceDirectory) }
             )
             guard !Task.isCancelled, source == text else { return }
             resolvedMarkdown = resolved
+        }
+        .alert(L10n.t(.appError), isPresented: Binding(
+            get: { linkError != nil },
+            set: { if !$0 { linkError = nil } }
+        )) {
+            Button(L10n.t(.commonOk)) { linkError = nil }
+        } message: {
+            if let linkError { Text(linkError) }
         }
     }
 
@@ -87,17 +96,17 @@ struct MarkdownWebPreviewContainer: View {
     /// the app's Files preview (same target the Chat→file jump uses). Fragment-only
     /// hrefs are ignored (the WebView scrolls in place).
     private func openWorkspacePath(_ href: String) {
-        let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return }
-        // Drop any fragment so `doc.md#section` opens `doc.md`.
-        let pathPart = trimmed.split(separator: "#", maxSplits: 1).first.map(String.init) ?? trimmed
-        let resolved = MarkdownImageResolver.resolveRelativeReference(
-            pathPart,
-            markdownFilePath: markdownFilePath,
-            workspaceDirectory: workspaceDirectory
-        )
-        guard !resolved.isEmpty else { return }
-        state.fileToOpenInFilesTab = resolved
+        switch WorkspaceLinkResolver.resolve(href, workspaceDirectory: workspaceDirectory, baseFilePath: markdownFilePath) {
+        case .external(let url):
+            openURL(url)
+        case .file(let path):
+            state.fileToOpenInFilesTab = path
+            state.fileToOpenInFilesTabWorkspaceDirectory = workspaceDirectory
+        case .fragmentOnly:
+            return
+        case .rejected(let reason):
+            linkError = reason
+        }
     }
 
     private var oversizeGate: some View {

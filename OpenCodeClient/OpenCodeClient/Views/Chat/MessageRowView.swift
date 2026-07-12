@@ -15,6 +15,7 @@ struct MessageRowView: View {
     let sessionTodos: [TodoItem]
     let workspaceDirectory: String?
     let onOpenResolvedPath: (String) -> Void
+    let onOpenMarkdownResolvedPath: (String) -> Void
     let onOpenFilesTab: () -> Void
     let onForkFromMessage: ((String) -> Void)?
     let onEditFromMessage: ((String) -> Void)?
@@ -96,7 +97,13 @@ struct MessageRowView: View {
                 .font(font)
                 .textSelection(.enabled)
         } else if shouldRenderMarkdown(text) {
-            ResolvedMarkdownView(text: text, state: state, workspaceDirectory: workspaceDirectory)
+            ResolvedMarkdownView(
+                text: text,
+                state: state,
+                workspaceDirectory: workspaceDirectory,
+                handlesWorkspaceLinks: !isUser,
+                onOpenResolvedPath: onOpenMarkdownResolvedPath
+            )
                 .font(font)
                 .textSelection(.enabled)
         } else {
@@ -110,23 +117,45 @@ struct MessageRowView: View {
         let text: String
         let state: AppState
         let workspaceDirectory: String?
+        let handlesWorkspaceLinks: Bool
+        let onOpenResolvedPath: (String) -> Void
+        @Environment(\.openURL) private var openURL
         @State private var resolvedText: String?
         
         var body: some View {
             Markdown(resolvedText ?? text)
                 .markdownImageProvider(
                     WorkspaceMarkdownImageProvider(
-                        loadFileContent: { pathBytes in try await state.loadFileContent(pathBytes: pathBytes) },
+                        loadFileContent: { pathBytes in try await state.loadFileContent(pathBytes: pathBytes, workspaceDirectory: workspaceDirectory) },
                         workspaceDirectory: workspaceDirectory
                     )
                 )
+                .environment(\.openURL, OpenURLAction { url in
+                    guard handlesWorkspaceLinks else {
+                        openURL(url)
+                        return .handled
+                    }
+                    switch WorkspaceLinkResolver.resolve(url.absoluteString, workspaceDirectory: workspaceDirectory) {
+                    case .external(let externalURL):
+                        openURL(externalURL)
+                        return .handled
+                    case .file(let path):
+                        onOpenResolvedPath(path)
+                        return .handled
+                    case .fragmentOnly:
+                        return .handled
+                    case .rejected(let reason):
+                        state.sendError = reason
+                        return .discarded
+                    }
+                })
                 .task(id: text) {
                     resolvedText = nil
                     let sourceText = text
                     let resolved = await MarkdownImageResolver.resolveImages(
                         in: sourceText,
                         workspaceDirectory: workspaceDirectory,
-                        fetchContent: { path in try await state.loadFileContent(path: path) }
+                        fetchContent: { path in try await state.loadFileContent(path: path, workspaceDirectory: workspaceDirectory) }
                     )
                     guard !Task.isCancelled, sourceText == text else { return }
                     resolvedText = resolved

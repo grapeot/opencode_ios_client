@@ -563,14 +563,16 @@ struct ChatTabView: View {
                                             case .group(let group):
                                                 switch group {
                                                 case .user(let msg):
+                                                    let workspaceDirectory = workspaceDirectory(for: msg.info.sessionID)
                                                     MessageRowView(
                                                         state: state,
                                                         message: msg,
                                                         sessionTodos: state.sessionTodos[msg.info.sessionID] ?? [],
-                                                         workspaceDirectory: state.currentSession?.directory,
-                                                         onOpenResolvedPath: openFileInChat,
-                                                         onOpenFilesTab: openFilesTab,
-                                                         onForkFromMessage: { messageID in
+                                                          workspaceDirectory: workspaceDirectory,
+                                                          onOpenResolvedPath: { openFileInChat($0) },
+                                                          onOpenMarkdownResolvedPath: { openFileInChat($0, workspaceDirectory: workspaceDirectory) },
+                                                          onOpenFilesTab: openFilesTab,
+                                                          onForkFromMessage: { messageID in
                                                              Task { await state.forkSession(messageID: messageID) }
                                                          },
                                                          onEditFromMessage: { messageID in
@@ -583,13 +585,15 @@ struct ChatTabView: View {
                                                 case .assistantMerged(let msgs):
                                                     if let first = msgs.first {
                                                         let merged = MessageWithParts(info: first.info, parts: msgs.flatMap(\.parts))
+                                                        let workspaceDirectory = workspaceDirectory(for: merged.info.sessionID)
                                                         MessageRowView(
                                                             state: state,
                                                             message: merged,
                                                             sessionTodos: state.sessionTodos[merged.info.sessionID] ?? [],
-                                                             workspaceDirectory: state.currentSession?.directory,
-                                                             onOpenResolvedPath: openFileInChat,
-                                                             onOpenFilesTab: openFilesTab,
+                                                              workspaceDirectory: workspaceDirectory,
+                                                              onOpenResolvedPath: { openFileInChat($0) },
+                                                              onOpenMarkdownResolvedPath: { openFileInChat($0, workspaceDirectory: workspaceDirectory) },
+                                                              onOpenFilesTab: openFilesTab,
                                                              onForkFromMessage: { messageID in
                                                                  Task { await state.forkSession(messageID: messageID) }
                                                              },
@@ -1047,13 +1051,20 @@ struct ChatTabView: View {
         }
     }
 
-    private func openFileInChat(_ resolvedPath: String) {
+    private func workspaceDirectory(for sessionID: String) -> String? {
+        state.sessions.first(where: { $0.id == sessionID })?.directory ?? state.currentSession?.directory
+    }
+
+    private func openFileInChat(_ resolvedPath: String, workspaceDirectory: String? = nil) {
         guard !resolvedPath.isEmpty else { return }
         if sizeClass == .regular {
             state.previewFilePath = resolvedPath
+            state.previewFileWorkspaceDirectory = workspaceDirectory
             state.fileToOpenInFilesTab = nil
+            state.fileToOpenInFilesTabWorkspaceDirectory = nil
         } else {
             state.fileToOpenInFilesTab = resolvedPath
+            state.fileToOpenInFilesTabWorkspaceDirectory = workspaceDirectory
             state.selectedTab = 1
         }
     }

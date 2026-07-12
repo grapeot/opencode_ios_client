@@ -45,6 +45,7 @@ enum MarkdownPreviewMode: String, CaseIterable {
 struct FileContentView: View {
     @Bindable var state: AppState
     let filePath: String
+    var workspaceDirectory: String? = nil
     @State private var content: String?
     @State private var imageData: Data?
     @State private var isLoading = false
@@ -61,6 +62,10 @@ struct FileContentView: View {
 
     private var fileName: String {
         filePath.split(separator: "/").last.map(String.init) ?? filePath
+    }
+
+    private var effectiveWorkspaceDirectory: String? {
+        workspaceDirectory ?? state.currentSession?.directory
     }
 
     @ToolbarContentBuilder
@@ -166,7 +171,7 @@ struct FileContentView: View {
                         text: text,
                         state: state,
                         markdownFilePath: filePath,
-                        workspaceDirectory: state.currentSession?.directory
+                        workspaceDirectory: effectiveWorkspaceDirectory
                     )
                 }
             case .web:
@@ -174,7 +179,7 @@ struct FileContentView: View {
                     text: text,
                     state: state,
                     markdownFilePath: filePath,
-                    workspaceDirectory: state.currentSession?.directory,
+                    workspaceDirectory: effectiveWorkspaceDirectory,
                     isOversized: useRaw,
                     onSwitchToNative: { previewMode = .native },
                     onSwitchToSource: { previewMode = .source }
@@ -194,7 +199,7 @@ struct FileContentView: View {
         content = nil
         Task {
             do {
-                let fc = try await state.loadFileContent(path: filePath)
+                let fc = try await state.loadFileContent(path: filePath, workspaceDirectory: effectiveWorkspaceDirectory)
                 await MainActor.run {
                     if isImage {
                         if let rawContent = fc.content {
@@ -336,7 +341,7 @@ struct MarkdownPreviewView: View {
                     )
                         .markdownImageProvider(
                             WorkspaceMarkdownImageProvider(
-                                loadFileContent: { pathBytes in try await state.loadFileContent(pathBytes: pathBytes) },
+                                loadFileContent: { pathBytes in try await state.loadFileContent(pathBytes: pathBytes, workspaceDirectory: workspaceDirectory) },
                                 workspaceDirectory: workspaceDirectory
                             )
                         )
@@ -353,7 +358,7 @@ struct MarkdownPreviewView: View {
                 in: sourceText,
                 markdownFilePath: markdownFilePath,
                 workspaceDirectory: workspaceDirectory,
-                fetchContent: { path in try await state.loadFileContent(path: path) }
+                fetchContent: { path in try await state.loadFileContent(path: path, workspaceDirectory: workspaceDirectory) }
             )
             guard !Task.isCancelled, sourceText == Self.normalizeStandaloneImageBlocks(text) else { return }
             resolvedPreviewText = resolved
