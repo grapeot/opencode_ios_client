@@ -112,6 +112,15 @@ struct AIUsageQuotaDetailView: View {
                          ? L10n.t(.quotaRefreshingProviders)
                          : (previous == nil ? L10n.t(.quotaLoading) : L10n.t(.quotaRefreshing)))
                 }
+                if let previous {
+                    LabeledContent(L10n.t(.quotaLastFetched), value: previous.fetchedAt.formatted(date: .omitted, time: .shortened))
+                    if let generatedAt = previous.generatedAt {
+                        LabeledContent(L10n.t(.quotaGeneratedAt)) {
+                            Text(generatedAt)
+                                .accessibilityIdentifier("quota-generated-at")
+                        }
+                    }
+                }
             case .empty:
                 Text(L10n.t(.quotaNoCachedData)).foregroundStyle(.secondary)
             case .failed(_, let message):
@@ -121,7 +130,10 @@ struct AIUsageQuotaDetailView: View {
             case .ready(let snapshot):
                 LabeledContent(L10n.t(.quotaLastFetched), value: snapshot.fetchedAt.formatted(date: .omitted, time: .shortened))
                 if let generatedAt = snapshot.generatedAt {
-                    LabeledContent(L10n.t(.quotaGeneratedAt), value: generatedAt)
+                    LabeledContent(L10n.t(.quotaGeneratedAt)) {
+                        Text(generatedAt)
+                            .accessibilityIdentifier("quota-generated-at")
+                    }
                 }
             }
             Text(state.aiUsageDashboardURL)

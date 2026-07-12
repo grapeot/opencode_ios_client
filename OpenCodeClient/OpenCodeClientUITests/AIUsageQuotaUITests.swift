@@ -15,6 +15,10 @@ final class AIUsageQuotaUITests: XCTestCase {
         badge.tap()
         XCTAssertTrue(app.staticTexts["Usage & Limits"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["OpenAI / Codex"].waitForExistence(timeout: 8))
+        app.swipeUp()
+        let generatedAt = app.descendants(matching: .any)["quota-generated-at"]
+        XCTAssertTrue(generatedAt.waitForExistence(timeout: 8))
+        XCTAssertTrue(generatedAt.label.contains("2026-07-12T09:40:00"))
         saveScreenshot(app, name: "quota-detail")
     }
 

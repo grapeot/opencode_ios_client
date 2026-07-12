@@ -50,8 +50,9 @@ Current visionOS baseline limitations:
 Set an AI Usage Dashboard base URL in Settings to show the selected model's
 primary quota beside the model picker. Opening Usage & Limits reads the cached
 quota snapshot. The refresh button explicitly waits for a full provider update
-and then reloads the compact quota endpoint. The app does not poll or trigger
-automatic provider refreshes, and the quota UI is absent when no URL is set.
+and then reloads the compact quota endpoint. Details show both the API snapshot's
+generation time and the device's local fetch time. The app does not poll or
+trigger automatic provider refreshes, and the quota UI is absent when no URL is set.
 
 ## Remote Access
 
