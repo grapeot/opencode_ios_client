@@ -1911,6 +1911,14 @@ struct ModelPresetShortNameTests {
         let preset = ModelPreset(displayName: "GPT-5.3 Codex", providerID: "openai", modelID: "gpt-5.3-codex")
         #expect(preset.shortName == "GPT")
     }
+
+    @Test func gptSolModeShortNames() {
+        let pro = ModelPreset(displayName: "GPT-5.6 Sol Pro", providerID: "openai", modelID: "gpt-5.6-sol-pro")
+        let fast = ModelPreset(displayName: "GPT-5.6 Sol Fast", providerID: "openai", modelID: "gpt-5.6-sol-fast")
+
+        #expect(pro.shortName == "GPT-P")
+        #expect(fast.shortName == "GPT-F")
+    }
     
     @Test func unknownModelFallsBackToDisplayName() {
         let preset = ModelPreset(displayName: "Custom Model", providerID: "custom", modelID: "custom-1")
@@ -1979,6 +1987,7 @@ struct ModelSelectionPersistenceTests {
             let sessionID = "session-gpt"
             for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5"] {
                 UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
+                UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
                 let legacySelection = [sessionID: legacyID]
                 let encoded = try! JSONEncoder().encode(legacySelection)
                 UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
@@ -2051,6 +2060,19 @@ struct ModelSelectionPersistenceTests {
             #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
             let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
             #expect(preset?.displayName == "DeepSeek Local")
+        }
+    }
+
+    @Test @MainActor func defaultPresetsIncludeGPT56SolModes() {
+        withIsolatedModelSelectionDefaults {
+            let state = AppState()
+
+            #expect(state.modelPresets.contains(where: {
+                $0.id == "openai/gpt-5.6-sol-pro" && $0.displayName == "GPT-5.6 Sol Pro"
+            }))
+            #expect(state.modelPresets.contains(where: {
+                $0.id == "openai/gpt-5.6-sol-fast" && $0.displayName == "GPT-5.6 Sol Fast"
+            }))
         }
     }
 }
