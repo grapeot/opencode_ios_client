@@ -19,7 +19,7 @@ extension AppState {
         switch savedID {
         case "zai-coding-plan/glm-5.2", "zai-coding-plan/glm-5.1", "zai-coding-plan/glm-5-turbo":
             return "zai-coding-plan/glm-5.2"
-        case "openai/gpt-5.4", "openai/gpt-5.5":
+        case "openai/gpt-5.4", "openai/gpt-5.5", "openai/gpt-5.6-sol-pro":
             return "openai/gpt-5.6-sol"
         case "ollama-cloud/kimi-k2.6":
             return "ollama-cloud/glm-5.2"
