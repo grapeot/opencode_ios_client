@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class CarModeUITests: XCTestCase {
     override func setUpWithError() throws {
@@ -7,6 +8,9 @@ final class CarModeUITests: XCTestCase {
 
     @MainActor
     func testCarModeFixtureShowsDrivingSurface() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else {
+            throw XCTSkip("Car Mode is iPhone-only")
+        }
         let app = XCUIApplication()
         app.launchArguments = ["UITEST_CAR_MODE_FIXTURE"]
         app.launch()
@@ -20,6 +24,19 @@ final class CarModeUITests: XCTestCase {
         attachment.name = "car-mode-fixture"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    func testCarModeIsHiddenOnIPad() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else {
+            throw XCTSkip("iPad-only coverage")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_CAR_MODE_FIXTURE"]
+        app.launch()
+
+        XCTAssertTrue(app.otherElements["ipad-workspace-layout"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.otherElements["car-mode-root"].exists)
     }
 
     @MainActor

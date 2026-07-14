@@ -258,7 +258,6 @@ enum L10n {
         case chatEditFromHere
         case chatForkFromHere
         case carTitle
-        case carModePicker
         case carReady
         case carListening
         case carFinalizing
@@ -682,7 +681,6 @@ enum L10n {
         Key.chatEditFromHere.rawValue: "Edit from here",
         Key.chatForkFromHere.rawValue: "Fork from here",
         Key.carTitle.rawValue: "Car Mode",
-        Key.carModePicker.rawValue: "Mode",
         Key.carReady.rawValue: "Ready",
         Key.carListening.rawValue: "Listening",
         Key.carFinalizing.rawValue: "Finishing transcript",
@@ -1109,7 +1107,6 @@ enum L10n {
         Key.chatLargeMessagePreviewNotice.rawValue: "消息较长：当前只显示前 %@ / %@ 个字符。为保持流畅，已跳过 Markdown 渲染。",
         Key.chatEditFromHere.rawValue: "从这里编辑",
         Key.carTitle.rawValue: "驾驶模式",
-        Key.carModePicker.rawValue: "模式",
         Key.carReady.rawValue: "可以说话",
         Key.carListening.rawValue: "正在听",
         Key.carFinalizing.rawValue: "正在完成转写",

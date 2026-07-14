@@ -154,6 +154,13 @@ struct OpenCodeClientTests {
         #expect(!CarSpeechAudioPolicy.options.contains(.allowBluetoothHFP))
     }
 
+    @Test func rootTabOrderKeepsCarModeOnIPhoneAfterFiles() {
+        #expect(RootTab.chat.rawValue == 0)
+        #expect(RootTab.files.rawValue == 1)
+        #expect(RootTab.car.rawValue == 2)
+        #expect(RootTab.settings.rawValue == 3)
+    }
+
     @Test @MainActor func structuredSpeechFallsBackWhenAssistantHasNoTextPart() {
         let envelope = CarResponseEnvelope(
             version: 1,
@@ -3079,9 +3086,13 @@ struct CarModeFlowTests {
 
     @Test @MainActor func failedStructuredResponseKeepsCarModeFailed() async throws {
         let oldSelection = UserDefaults.standard.string(forKey: AppState.selectedProjectWorktreeKey)
+        let oldCarSessions = UserDefaults.standard.data(forKey: AppState.carSessionsByContextKey)
+        UserDefaults.standard.removeObject(forKey: AppState.carSessionsByContextKey)
         defer {
             if let oldSelection { UserDefaults.standard.set(oldSelection, forKey: AppState.selectedProjectWorktreeKey) }
             else { UserDefaults.standard.removeObject(forKey: AppState.selectedProjectWorktreeKey) }
+            if let oldCarSessions { UserDefaults.standard.set(oldCarSessions, forKey: AppState.carSessionsByContextKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.carSessionsByContextKey) }
         }
         let api = MockAPIClient()
         let speech = MockCarSpeechOutput()

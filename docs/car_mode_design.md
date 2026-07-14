@@ -40,7 +40,7 @@ V1 不承诺后台持续录音、SSE 或 TTS。切到 Maps 或其他 App 后，C
 
 Foreground Car Mode 已落地到 `car-mode` 分支：
 
-- iPhone 提供 Chat / Car / Files / Settings 四个 Tab，iPad 提供 Chat / Car 顶层模式。
+- iPhone 提供 Chat / Files / Car / Settings 四个 Tab；iPad 和 Apple Vision Pro 不显示 Car Mode。iPad 即使进入 compact 窗口也不会显示 Car Tab。
 - Car session 与普通 Chat selection 分离，并按 host UUID + workspace 持久化；session 404 时只重建一次。
 - VoiceFlow final transcript 自动发送到同步 structured prompt endpoint，固定使用 `openai/gpt-5.6-sol-fast` 和 `build` agent。
 - 客户端只消费 schema 验证后的 `assistant.structured`，以 completed assistant message ID 去重 TTS 和 action。
@@ -49,7 +49,7 @@ Foreground Car Mode 已落地到 `car-mode` 分支：
 - 普通 Chat 在 assistant 没有 text part 时回退显示 `assistant.structured.speech`，使 Car session 可读。
 - 切后台会停止当前录音、朗读和前台 request，但不会清除 Car session。
 
-验证结果：325 个 unit tests 通过；两个 Car UI tests 通过，覆盖驾驶界面和 structured Car history 在普通 Chat 中可见。固定 simulator 为 iPhone 16 / iOS 18.4，UDID `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，测试使用 `-parallel-testing-enabled NO`。
+验证结果：326 个 unit tests 通过；iPhone UI tests 覆盖驾驶界面和 structured Car history 在普通 Chat 中可见；iPad 专项 UI test 确认 workspace 可见且 Car 页面不存在；visionOS simulator build 通过。固定 iPhone simulator 为 iPhone 16 / iOS 18.4，UDID `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，测试使用 `-parallel-testing-enabled NO`。
 
 Server 修复位于 nested checkout commit `43a4a0e53`（`fix(schema): preserve structured output format in history`）。`packages/schema` compatibility tests、`packages/opencode` structured-output tests 及两者 typecheck 均通过。当前 4096 是 commit 之前启动的 Bun source process，必须由用户在 Zellij `z_dev` 中重启后才会加载修复；无需构建 dist binary。客户端 TTS 路由修复已在真机确认可正常出声。
 
@@ -347,12 +347,12 @@ OpenCodeClient/OpenCodeClient/ContentView.swift:577
 建议顺序：
 
 ```text
-Chat / Car / Files / Settings
+Chat / Files / Car / Settings
 ```
 
 当前 Tab 使用整数 tag。增加 Car 前建议引入 `RootTab` enum，避免 Files、Settings 和文件跳转继续依赖硬编码 index。
 
-iPad 当前不是 Tab，而是 Sessions / Files / Chat 三栏。Car Mode 应作为顶层模式切换后的独立全屏页面，不要增加第四栏。
+iPad 当前不是 Tab，而是 Sessions / Files / Chat 三栏。根据实际使用场景，Car Mode 仅在 iPhone 显示，不进入 iPad 或 Apple Vision Pro；门控依据 device idiom/platform，而非仅依据窗口 size class。
 
 ### Session 与网络
 
@@ -528,7 +528,7 @@ iOS 负责：
 ### Phase 1：Foreground Car Mode
 
 - iPhone Car Tab。
-- iPad 顶层 Car 模式。
+- iPad 和 Apple Vision Pro 不显示 Car Mode；iPad compact 窗口同样隐藏。
 - 独立、持久化的 Car session。
 - VoiceFlowKit stop 后自动发送。
 - 固定 GPT-5.6 Sol Fast。

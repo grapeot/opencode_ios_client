@@ -6,12 +6,12 @@
 
 - **最后更新**：2026-07-14
 - **分支**：`car-mode`
-- **编译/测试**：Car Mode build-for-testing、325 unit tests、2 UI tests 均通过（iPhone 16 Simulator OS 18.4）
+- **编译/测试**：Car Mode build-for-testing、326 unit tests、2 个 iPhone UI tests、1 个 iPad 隐藏断言和 visionOS build 均通过
 - **Phase**：Foreground Car Mode implemented；live server restart 后的 history 复验待完成
 
 ### 2026-07-14 — Car Mode 实现与 server history 修复
 
-- iPhone 新增独立 Car Tab，iPad 新增 Chat / Car 顶层模式；VoiceFlow final transcript 自动提交到持久化的 Car session。
+- iPhone 新增独立 Car Tab，顺序为 Chat / Files / Car / Settings；iPad（包括 compact 窗口）和 Apple Vision Pro 不显示 Car Mode。VoiceFlow final transcript 自动提交到持久化的 Car session。
 - Car session 按 host UUID + workspace 隔离，不复用普通 Chat 的 `currentSessionID`；持久化 session ID、最后处理的 assistant message ID 和 pending confirmation。
 - 新增同步 structured prompt API，固定 `openai/gpt-5.6-sol-fast` + `build`；客户端只消费 schema 验证后的 `assistant.structured`。
 - Apple TTS 显式使用 `.playback` + `.spokenAudio`，发送前关闭录音 audio session，修复 UI 显示朗读但声音可能留在 receiver/Bluetooth HFP route 的问题。
@@ -19,7 +19,7 @@
 - 普通 Chat 在 structured assistant 没有 text part 时显示 `assistant.structured.speech`，并新增 UI fixture 验证 Car history 可见。
 - nested server commit `43a4a0e53` 修复 structured user message 的 `info.format` wire schema；schema/opencode 定向测试和 typecheck 通过。
 - 当前 4096 是 Zellij `z_dev` 中、修复 commit 之前启动的 Bun source process。用户按原配置重启后会直接加载当前 checkout 的新源码，不需要构建 dist binary；在重启前 live history endpoint 仍保留旧行为。
-- 验证：固定 simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，`-parallel-testing-enabled NO`；325 unit tests 和 `CarModeUITests` 两项均通过。
+- 验证：固定 iPhone simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，`-parallel-testing-enabled NO`；326 unit tests、两个 iPhone Car UI tests、一个 iPad 隐藏断言和 visionOS simulator build 均通过。
 - 真机已确认 TTS 正常出声。剩余 live 复验：server 重启后真实 structured Car session 可在普通 Chat 读取。Smart Home、邮件、iMessage、route-duration skills 仍未产品化或完成真实 E2E。
 
 ### 2026-07-13 — Car Mode feasibility 与设计

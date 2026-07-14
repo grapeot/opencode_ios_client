@@ -10,8 +10,8 @@ import UIKit
 
 enum RootTab: Int {
     case chat
-    case car
     case files
+    case car
     case settings
 }
 
@@ -21,7 +21,6 @@ struct ContentView: View {
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
     @State private var selectedTab = 0
-    @State private var tabletMode: RootTab = .chat
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -302,6 +301,14 @@ struct ContentView: View {
     /// iPad / Vision Pro：左右分栏，无 Tab Bar
     private var useSplitLayout: Bool { sizeClass == .regular }
 
+    private var showsCarMode: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
+
     private var themeColorScheme: ColorScheme? {
         switch state.themePreference {
         case "light": return .light
@@ -336,7 +343,7 @@ struct ContentView: View {
     @ViewBuilder
     private var rootLayout: some View {
         if useSplitLayout {
-            splitLayout
+            tabletWorkspaceLayout
         } else {
             tabLayout
         }
@@ -683,13 +690,15 @@ struct ContentView: View {
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
                 .tag(RootTab.chat.rawValue)
 
-            CarModeView(state: state)
-                .tabItem { Label(L10n.t(.carTab), systemImage: "car.fill") }
-                .tag(RootTab.car.rawValue)
-
             FilesTabView(state: state)
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(RootTab.files.rawValue)
+
+            if showsCarMode {
+                CarModeView(state: state)
+                    .tabItem { Label(L10n.t(.carTab), systemImage: "car.fill") }
+                    .tag(RootTab.car.rawValue)
+            }
 
             SettingsTabView(state: state)
                 .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
@@ -699,31 +708,6 @@ struct ContentView: View {
 
     /// iPad / Vision Pro：Android-aligned three-pane layout.
     @State private var sessionsCollapsed: Bool = false
-
-    @ViewBuilder
-    private var splitLayout: some View {
-        #if os(iOS)
-        VStack(spacing: 0) {
-            Picker(L10n.t(.carModePicker), selection: $tabletMode) {
-                Label(L10n.t(.appChat), systemImage: "rectangle.split.3x1").tag(RootTab.chat)
-                Label(L10n.t(.carTab), systemImage: "car.fill").tag(RootTab.car)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 360)
-            .padding(.vertical, DesignSpacing.sm)
-
-            Divider()
-            if tabletMode == .car {
-                CarModeView(state: state)
-            } else {
-                tabletWorkspaceLayout
-            }
-        }
-        #else
-        tabletWorkspaceLayout
-        #endif
-    }
 
     private var tabletWorkspaceLayout: some View {
         GeometryReader { geo in
@@ -782,6 +766,7 @@ struct ContentView: View {
                 }
             }
         }
+        .accessibilityIdentifier("ipad-workspace-layout")
     }
 }
 
