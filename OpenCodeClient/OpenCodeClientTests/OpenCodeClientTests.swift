@@ -1920,11 +1920,9 @@ struct ModelPresetShortNameTests {
         #expect(preset.shortName == "GPT")
     }
 
-    @Test func gptSolModeShortNames() {
-        let pro = ModelPreset(displayName: "GPT-5.6 Sol Pro", providerID: "openai", modelID: "gpt-5.6-sol-pro")
+    @Test func gptSolFastShortName() {
         let fast = ModelPreset(displayName: "GPT-5.6 Sol Fast", providerID: "openai", modelID: "gpt-5.6-sol-fast")
 
-        #expect(pro.shortName == "GPT-P")
         #expect(fast.shortName == "GPT-F")
     }
     
@@ -1993,7 +1991,7 @@ struct ModelSelectionPersistenceTests {
     @Test @MainActor func legacyGPTSelectionMapsToCurrentGPT56SolPreset() {
         withIsolatedModelSelectionDefaults {
             let sessionID = "session-gpt"
-            for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5"] {
+            for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5", "openai/gpt-5.6-sol-pro"] {
                 UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
                 UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
                 let legacySelection = [sessionID: legacyID]
@@ -2071,13 +2069,11 @@ struct ModelSelectionPersistenceTests {
         }
     }
 
-    @Test @MainActor func defaultPresetsIncludeGPT56SolModes() {
+    @Test @MainActor func defaultPresetsIncludeGPT56SolFastAndExcludeRemovedPro() {
         withIsolatedModelSelectionDefaults {
             let state = AppState()
 
-            #expect(state.modelPresets.contains(where: {
-                $0.id == "openai/gpt-5.6-sol-pro" && $0.displayName == "GPT-5.6 Sol Pro"
-            }))
+            #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-pro" }))
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-sol-fast" && $0.displayName == "GPT-5.6 Sol Fast"
             }))

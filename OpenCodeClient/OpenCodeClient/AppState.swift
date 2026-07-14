@@ -423,7 +423,6 @@ final class AppState {
         ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash"),
         ModelPreset(displayName: "DeepSeek V4 Pro", providerID: "deepseek", modelID: "deepseek-v4-pro"),
         ModelPreset(displayName: "Ollama GLM 5.2", providerID: "ollama-cloud", modelID: "glm-5.2"),
-        ModelPreset(displayName: "GPT-5.6 Sol Pro", providerID: "openai", modelID: "gpt-5.6-sol-pro"),
         ModelPreset(displayName: "GPT-5.6 Sol Fast", providerID: "openai", modelID: "gpt-5.6-sol-fast"),
     ]
     var selectedModelIndex: Int = 2
