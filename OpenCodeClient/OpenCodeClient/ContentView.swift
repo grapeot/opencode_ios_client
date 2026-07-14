@@ -8,12 +8,20 @@ import SwiftUI
 import UIKit
 #endif
 
+enum RootTab: Int {
+    case chat
+    case car
+    case files
+    case settings
+}
+
 struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
     @State private var selectedTab = 0
+    @State private var tabletMode: RootTab = .chat
 
     init() {
         _state = State(initialValue: Self.makeInitialState())
@@ -44,6 +52,14 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_QUOTA_FIXTURE")
     }
 
+    private static var hasUITestCarModeFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CAR_MODE_FIXTURE")
+    }
+
+    private static var hasUITestCarHistoryFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CAR_HISTORY_FIXTURE")
+    }
+
     /// Which bundled fixture markdown to render in the web preview. Defaults to
     /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
     private static var webPreviewFixtureName: String {
@@ -63,6 +79,25 @@ struct ContentView: View {
 
     private static func makeInitialState() -> AppState {
         let state = AppState()
+
+        if hasUITestCarHistoryFixture {
+            applyCarHistoryFixture(to: state)
+            return state
+        }
+
+        if hasUITestCarModeFixture {
+            state.isConnected = true
+            state.selectedTab = RootTab.car.rawValue
+            state.carLastTranscript = "Navigate to Space Needle and avoid the traffic on I-5."
+            state.carLastResponse = CarResponseEnvelope(
+                version: 1,
+                status: .completed,
+                speech: "I found a faster route. It saves twelve minutes and is ready in Apple Maps.",
+                confirmation: nil,
+                clientActions: []
+            )
+            return state
+        }
 
         if hasUITestQuotaFixture {
             applyQuotaFixture(to: state)
@@ -142,6 +177,73 @@ struct ContentView: View {
         return state
     }
 
+    private static func applyCarHistoryFixture(to state: AppState) {
+        let sessionID = "car-history-session"
+        state.isConnected = true
+        state.selectedTab = RootTab.chat.rawValue
+        state.sessions = [
+            Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp/car-history",
+                parentID: nil,
+                title: "Car Mode",
+                version: "1",
+                time: .init(created: 1, updated: 3, archived: nil),
+                share: nil,
+                summary: nil
+            )
+        ]
+        state.currentSessionID = sessionID
+        let user = Message(
+            id: "car-user",
+            sessionID: sessionID,
+            role: "user",
+            parentID: nil,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: .init(created: 1, completed: nil),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        let assistant = Message(
+            id: "car-assistant",
+            sessionID: sessionID,
+            role: "assistant",
+            parentID: user.id,
+            providerID: "openai",
+            modelID: "gpt-5.6-sol-fast",
+            model: nil,
+            error: nil,
+            time: .init(created: 2, completed: 3),
+            finish: "tool-calls",
+            tokens: nil,
+            cost: nil,
+            structured: CarResponseEnvelope(
+                version: 1,
+                status: .completed,
+                speech: "The garage door is closed.",
+                confirmation: nil,
+                clientActions: []
+            )
+        )
+        let userPart = decodePart([
+            "id": "car-user-text",
+            "messageID": user.id,
+            "sessionID": sessionID,
+            "type": "text",
+            "text": "Is the garage door closed?",
+        ])
+        state.messages = [
+            MessageWithParts(info: user, parts: [userPart]),
+            MessageWithParts(info: assistant, parts: []),
+        ]
+    }
+
     private static func applyQuotaFixture(to state: AppState) {
         let sessionID = "quota-fixture-session"
         state.sessions = [
@@ -194,7 +296,7 @@ struct ContentView: View {
         state.hostProfiles = [local, ssh]
         state.currentHostProfileID = local.id
         state.applyCurrentHostProfileToRuntime(persistLegacy: false)
-        state.selectedTab = 2
+        state.selectedTab = RootTab.settings.rawValue
     }
 
     /// iPad / Vision Pro：左右分栏，无 Tab Bar
@@ -223,8 +325,8 @@ struct ContentView: View {
                     state.fileToOpenInFilesTab = newValue?.path
                     state.fileToOpenInFilesTabWorkspaceDirectory = newValue?.workspaceDirectory
                     if newValue == nil, !useSplitLayout {
-                        selectedTab = 0
-                        state.selectedTab = 0
+                        selectedTab = RootTab.chat.rawValue
+                        state.selectedTab = RootTab.chat.rawValue
                     }
                 }
             }
@@ -411,7 +513,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture {
             return
         }
 
@@ -527,7 +629,7 @@ struct ContentView: View {
                 await Task.yield()
                 state.selectedTab = newTab
             }
-            if oldTab == 2 && newTab != 2 {
+            if oldTab == RootTab.settings.rawValue && newTab != RootTab.settings.rawValue {
                 Task { await state.refresh() }
             }
         }
@@ -548,8 +650,8 @@ struct ContentView: View {
                                     state.fileToOpenInFilesTab = nil
                                     state.fileToOpenInFilesTabWorkspaceDirectory = nil
                                     if !useSplitLayout {
-                                        selectedTab = 0
-                                        state.selectedTab = 0
+                                        selectedTab = RootTab.chat.rawValue
+                                        state.selectedTab = RootTab.chat.rawValue
                                     }
                                 }
                             } label: {
@@ -574,27 +676,56 @@ struct ContentView: View {
         }
     }
 
-    /// iPhone：Tab Bar 三 Tab
+    /// iPhone: four top-level modes.
     private var tabLayout: some View {
         TabView(selection: $selectedTab) {
             ChatTabView(state: state)
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
-                .tag(0)
+                .tag(RootTab.chat.rawValue)
+
+            CarModeView(state: state)
+                .tabItem { Label(L10n.t(.carTab), systemImage: "car.fill") }
+                .tag(RootTab.car.rawValue)
 
             FilesTabView(state: state)
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
-                .tag(1)
+                .tag(RootTab.files.rawValue)
 
             SettingsTabView(state: state)
                 .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
-                .tag(2)
+                .tag(RootTab.settings.rawValue)
         }
     }
 
     /// iPad / Vision Pro：Android-aligned three-pane layout.
     @State private var sessionsCollapsed: Bool = false
 
+    @ViewBuilder
     private var splitLayout: some View {
+        #if os(iOS)
+        VStack(spacing: 0) {
+            Picker(L10n.t(.carModePicker), selection: $tabletMode) {
+                Label(L10n.t(.appChat), systemImage: "rectangle.split.3x1").tag(RootTab.chat)
+                Label(L10n.t(.carTab), systemImage: "car.fill").tag(RootTab.car)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 360)
+            .padding(.vertical, DesignSpacing.sm)
+
+            Divider()
+            if tabletMode == .car {
+                CarModeView(state: state)
+            } else {
+                tabletWorkspaceLayout
+            }
+        }
+        #else
+        tabletWorkspaceLayout
+        #endif
+    }
+
+    private var tabletWorkspaceLayout: some View {
         GeometryReader { geo in
             let total = geo.size.width
             // 折叠时 Sessions 宽度收为 0，Files / Chat 平分总宽度。

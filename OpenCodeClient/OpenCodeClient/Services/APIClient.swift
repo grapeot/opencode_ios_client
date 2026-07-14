@@ -116,6 +116,48 @@ actor APIClient {
         return try JSONDecoder().decode(Session.self, from: data)
     }
 
+    func promptStructured(
+        sessionID: String,
+        text: String,
+        system: String,
+        format: StructuredOutputFormat,
+        agent: String = "build",
+        model: Message.ModelInfo
+    ) async throws -> MessageWithParts {
+        struct PromptBody: Encodable {
+            struct PartInput: Encodable {
+                let type: String
+                let text: String
+            }
+
+            struct ModelInput: Encodable {
+                let providerID: String
+                let modelID: String
+            }
+
+            let parts: [PartInput]
+            let system: String
+            let format: StructuredOutputFormat
+            let agent: String
+            let model: ModelInput
+        }
+
+        let body = PromptBody(
+            parts: [.init(type: "text", text: text)],
+            system: system,
+            format: format,
+            agent: agent,
+            model: .init(providerID: model.providerID, modelID: model.modelID)
+        )
+        let bodyData = try JSONEncoder().encode(body)
+        let (responseData, _) = try await makeRequest(
+            path: "/session/\(sessionID)/message",
+            method: "POST",
+            body: bodyData
+        )
+        return try JSONDecoder().decode(MessageWithParts.self, from: responseData)
+    }
+
     func createSession(title: String? = nil) async throws -> Session {
         let body = title.map { ["title": $0] } ?? [:]
         let data = try JSONEncoder().encode(body)
@@ -677,12 +719,14 @@ protocol APIClientProtocol: Actor {
     func projects() async throws -> [Project]
     func projectCurrent() async throws -> Project?
     func sessions(directory: String?, limit: Int) async throws -> [Session]
+    func session(sessionID: String) async throws -> Session
     func createSession(title: String?) async throws -> Session
     func updateSession(sessionID: String, title: String) async throws -> Session
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
     func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?) async throws
+    func promptStructured(sessionID: String, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts
     func abort(sessionID: String) async throws
     func sessionStatus() async throws -> [String: SessionStatus]
     func pendingPermissions() async throws -> [APIClient.PermissionRequest]

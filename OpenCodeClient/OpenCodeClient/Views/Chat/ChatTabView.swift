@@ -1065,12 +1065,12 @@ struct ChatTabView: View {
         } else {
             state.fileToOpenInFilesTab = resolvedPath
             state.fileToOpenInFilesTabWorkspaceDirectory = workspaceDirectory
-            state.selectedTab = 1
+            state.selectedTab = RootTab.files.rawValue
         }
     }
 
     private func openFilesTab() {
-        state.selectedTab = 1
+        state.selectedTab = RootTab.files.rawValue
     }
 
     private var sessionListEdgeSwipeGesture: some Gesture {

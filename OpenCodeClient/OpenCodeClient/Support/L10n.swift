@@ -33,6 +33,7 @@ enum L10n {
         case commonCancel
         case commonRetry
 
+        case carTab
         case navFiles
         case navSettings
         case navPreview
@@ -256,6 +257,30 @@ enum L10n {
         case chatLargeMessagePreviewNotice
         case chatEditFromHere
         case chatForkFromHere
+        case carTitle
+        case carModePicker
+        case carReady
+        case carListening
+        case carFinalizing
+        case carWorking
+        case carSpeaking
+        case carNeedsConfirmation
+        case carFailed
+        case carStartSpeaking
+        case carStopAndSend
+        case carStopSpeaking
+        case carSpeakConfirmation
+        case carEmptyPrompt
+        case carNewSession
+        case carNewSessionPrompt
+        case carConfirmUtterance
+        case carCancelUtterance
+        case carNotConnected
+        case carServerDefaultRequired
+        case carInvalidResponse
+        case carUnsupportedAction
+        case carMapsUnavailable
+        case carTranscriptionFailed
         case attachmentImageTitle
         case attachmentFileTitle
         case attachmentRemoveImageAccessibilityLabel
@@ -434,6 +459,7 @@ enum L10n {
         Key.commonOk.rawValue: "OK",
         Key.commonCancel.rawValue: "Cancel",
         Key.commonRetry.rawValue: "Retry",
+        Key.carTab.rawValue: "Car",
         Key.navFiles.rawValue: "Files",
         Key.navSettings.rawValue: "Settings",
         Key.navPreview.rawValue: "Preview",
@@ -655,6 +681,30 @@ enum L10n {
         Key.chatLargeMessagePreviewNotice.rawValue: "Large message: showing first %@ of %@ characters. Markdown rendering is skipped to keep the app responsive.",
         Key.chatEditFromHere.rawValue: "Edit from here",
         Key.chatForkFromHere.rawValue: "Fork from here",
+        Key.carTitle.rawValue: "Car Mode",
+        Key.carModePicker.rawValue: "Mode",
+        Key.carReady.rawValue: "Ready",
+        Key.carListening.rawValue: "Listening",
+        Key.carFinalizing.rawValue: "Finishing transcript",
+        Key.carWorking.rawValue: "OpenCode is working",
+        Key.carSpeaking.rawValue: "Speaking",
+        Key.carNeedsConfirmation.rawValue: "Confirmation needed",
+        Key.carFailed.rawValue: "Needs attention",
+        Key.carStartSpeaking.rawValue: "Start speaking",
+        Key.carStopAndSend.rawValue: "Stop and send",
+        Key.carStopSpeaking.rawValue: "Stop speaking",
+        Key.carSpeakConfirmation.rawValue: "Say confirm or cancel",
+        Key.carEmptyPrompt.rawValue: "Ask about home, messages, traffic, or where to go.",
+        Key.carNewSession.rawValue: "New Car Session",
+        Key.carNewSessionPrompt.rawValue: "Start a new Car session and leave the current context behind?",
+        Key.carConfirmUtterance.rawValue: "Confirm.",
+        Key.carCancelUtterance.rawValue: "Cancel.",
+        Key.carNotConnected.rawValue: "Connect to OpenCode before using Car Mode.",
+        Key.carServerDefaultRequired.rawValue: "Car Mode can create sessions only in the Server default workspace.",
+        Key.carInvalidResponse.rawValue: "OpenCode returned an invalid Car Mode response.",
+        Key.carUnsupportedAction.rawValue: "OpenCode requested an unsupported client action.",
+        Key.carMapsUnavailable.rawValue: "Apple Maps could not open this route.",
+        Key.carTranscriptionFailed.rawValue: "The recording could not be transcribed.",
         Key.attachmentImageTitle.rawValue: "Image",
         Key.attachmentFileTitle.rawValue: "Attachment",
         Key.attachmentRemoveImageAccessibilityLabel.rawValue: "Remove image",
@@ -834,6 +884,7 @@ enum L10n {
         Key.commonOk.rawValue: "确定",
         Key.commonCancel.rawValue: "取消",
         Key.commonRetry.rawValue: "重试",
+        Key.carTab.rawValue: "驾驶",
         Key.navFiles.rawValue: "文件",
         Key.navSettings.rawValue: "设置",
         Key.navPreview.rawValue: "预览",
@@ -1057,6 +1108,30 @@ enum L10n {
         Key.chatLoadingMoreHistory.rawValue: "正在加载更多历史消息...",
         Key.chatLargeMessagePreviewNotice.rawValue: "消息较长：当前只显示前 %@ / %@ 个字符。为保持流畅，已跳过 Markdown 渲染。",
         Key.chatEditFromHere.rawValue: "从这里编辑",
+        Key.carTitle.rawValue: "驾驶模式",
+        Key.carModePicker.rawValue: "模式",
+        Key.carReady.rawValue: "可以说话",
+        Key.carListening.rawValue: "正在听",
+        Key.carFinalizing.rawValue: "正在完成转写",
+        Key.carWorking.rawValue: "OpenCode 正在处理",
+        Key.carSpeaking.rawValue: "正在朗读",
+        Key.carNeedsConfirmation.rawValue: "需要确认",
+        Key.carFailed.rawValue: "需要处理",
+        Key.carStartSpeaking.rawValue: "开始说话",
+        Key.carStopAndSend.rawValue: "停止并发送",
+        Key.carStopSpeaking.rawValue: "停止朗读",
+        Key.carSpeakConfirmation.rawValue: "说确认或取消",
+        Key.carEmptyPrompt.rawValue: "可以询问家里状态、消息、路况，或要去哪里。",
+        Key.carNewSession.rawValue: "新建驾驶会话",
+        Key.carNewSessionPrompt.rawValue: "新建驾驶会话并离开当前上下文？",
+        Key.carConfirmUtterance.rawValue: "确认。",
+        Key.carCancelUtterance.rawValue: "取消。",
+        Key.carNotConnected.rawValue: "使用驾驶模式前，请先连接 OpenCode。",
+        Key.carServerDefaultRequired.rawValue: "驾驶模式目前只能在服务器默认工作区新建会话。",
+        Key.carInvalidResponse.rawValue: "OpenCode 返回的驾驶模式响应无效。",
+        Key.carUnsupportedAction.rawValue: "OpenCode 请求了不支持的客户端操作。",
+        Key.carMapsUnavailable.rawValue: "Apple 地图无法打开这条路线。",
+        Key.carTranscriptionFailed.rawValue: "无法完成这段录音的转写。",
         Key.chatForkFromHere.rawValue: "从这里分叉",
         Key.attachmentImageTitle.rawValue: "图片",
         Key.attachmentFileTitle.rawValue: "附件",
