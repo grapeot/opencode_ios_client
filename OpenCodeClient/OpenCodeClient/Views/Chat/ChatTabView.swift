@@ -76,6 +76,11 @@ struct ChatTabView: View {
     @State var speechRecoveryActive = false
     @State var speechAudioLevel: Float = 0
     @State var speechAudioLevelTask: Task<Void, Never>?
+    @State var speechRecordingLimitTask: Task<Void, Never>?
+    @State var speechTranscriptionTask: Task<Void, Never>?
+    @State var speechTranscriptionID: UUID?
+    @State var recordingVoiceProvider: VoiceTranscriptionProvider?
+    @State var fluidVoicePCMBuffer = SpeechPCMBuffer()
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var imageAttachments: [ComposerImageAttachment] = []
     @State private var attachmentError: String?

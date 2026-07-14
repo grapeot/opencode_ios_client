@@ -54,6 +54,34 @@ and then reloads the compact quota endpoint. Details show both the API snapshot'
 generation time and the device's local fetch time. The app does not poll or
 trigger automatic provider refreshes, and the quota UI is absent when no URL is set.
 
+### FluidVoice transcription
+
+The voice provider can be selected in **Settings → Speech Recognition**. VoiceFlow remains the default. FluidVoice records locally while the microphone is active, then uploads one WAV file when recording stops; it does not provide streaming or partial transcripts.
+
+Enable FluidVoice's local API on the Mac:
+
+```bash
+defaults write com.FluidApp.app LocalAPIEnabled -bool true
+defaults write com.FluidApp.app LocalAPIPort -int 47733
+```
+
+Restart FluidVoice after changing these settings. To enable the optional **Post-process with Fluid Intelligence** setting, configure FluidVoice with:
+
+```bash
+defaults write com.FluidApp.app SelectedDictationPromptID -string '__FLUID_1__'
+defaults write com.FluidApp.app DictationPromptOff -bool false
+```
+
+Restart FluidVoice again after changing the Fluid Intelligence settings.
+
+FluidVoice accepts only loopback clients on the Mac. A physical iPhone therefore cannot connect directly to port `47733`. Use Tailscale Serve as an authenticated tailnet proxy whose backend is:
+
+```text
+http://127.0.0.1:47733
+```
+
+Enter the HTTPS URL assigned by Tailscale Serve as the FluidVoice Base URL in the app. Do not disable FluidVoice's loopback restriction or expose its unauthenticated local API port directly to a LAN or the internet.
+
 ## Remote Access
 
 The app is designed for LAN use by default. Two options for remote access:

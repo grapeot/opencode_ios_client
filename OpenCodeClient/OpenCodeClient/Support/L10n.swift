@@ -80,10 +80,17 @@ enum L10n {
         case settingsAppearance
         case settingsTheme
         case settingsSpeechRecognition
+        case settingsVoiceProvider
+        case settingsVoiceProviderVoiceFlow
+        case settingsVoiceProviderFluidVoice
         case settingsAiBuilderBaseURL
         case settingsAiBuilderToken
         case settingsCustomPrompt
         case settingsTerminology
+        case settingsFluidVoiceBaseURL
+        case settingsFluidVoicePostprocess
+        case settingsFluidVoiceStatus
+        case settingsFluidVoiceVersion
         case settingsTesting
         case settingsTested
         case settingsAbout
@@ -481,10 +488,17 @@ enum L10n {
         Key.settingsAppearance.rawValue: "Appearance",
         Key.settingsTheme.rawValue: "Theme",
         Key.settingsSpeechRecognition.rawValue: "Speech Recognition",
+        Key.settingsVoiceProvider.rawValue: "Voice Provider",
+        Key.settingsVoiceProviderVoiceFlow.rawValue: "VoiceFlow",
+        Key.settingsVoiceProviderFluidVoice.rawValue: "FluidVoice",
         Key.settingsAiBuilderBaseURL.rawValue: "AI Builder Base URL",
         Key.settingsAiBuilderToken.rawValue: "AI Builder Token",
         Key.settingsCustomPrompt.rawValue: "Custom Prompt",
         Key.settingsTerminology.rawValue: "Terminology (comma-separated)",
+        Key.settingsFluidVoiceBaseURL.rawValue: "FluidVoice Base URL",
+        Key.settingsFluidVoicePostprocess.rawValue: "Post-process with Fluid Intelligence",
+        Key.settingsFluidVoiceStatus.rawValue: "Status",
+        Key.settingsFluidVoiceVersion.rawValue: "Version",
         Key.settingsTesting.rawValue: "Testing...",
         Key.settingsTested.rawValue: "OK",
         Key.settingsAbout.rawValue: "About",
@@ -881,10 +895,17 @@ enum L10n {
         Key.settingsAppearance.rawValue: "外观",
         Key.settingsTheme.rawValue: "主题",
         Key.settingsSpeechRecognition.rawValue: "语音识别",
+        Key.settingsVoiceProvider.rawValue: "语音服务",
+        Key.settingsVoiceProviderVoiceFlow.rawValue: "VoiceFlow",
+        Key.settingsVoiceProviderFluidVoice.rawValue: "FluidVoice",
         Key.settingsAiBuilderBaseURL.rawValue: "AI Builder 服务地址",
         Key.settingsAiBuilderToken.rawValue: "AI Builder 访问令牌",
         Key.settingsCustomPrompt.rawValue: "自定义提示词",
         Key.settingsTerminology.rawValue: "术语（逗号分隔）",
+        Key.settingsFluidVoiceBaseURL.rawValue: "FluidVoice 服务地址",
+        Key.settingsFluidVoicePostprocess.rawValue: "使用 Fluid Intelligence 后处理",
+        Key.settingsFluidVoiceStatus.rawValue: "状态",
+        Key.settingsFluidVoiceVersion.rawValue: "版本",
         Key.settingsTesting.rawValue: "测试中...",
         Key.settingsTested.rawValue: "可用",
         Key.settingsAbout.rawValue: "关于",
