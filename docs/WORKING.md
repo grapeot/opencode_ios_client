@@ -4,10 +4,31 @@
 
 ## 当前状态
 
-- **最后更新**：2026-06-18
-- **分支**：`feature/image-attachments`
-- **编译/测试**：✅ `xcodebuild test` on iPhone 16 Simulator OS 18.4 通过
-- **Phase**：Image attachments Phase 1/2 ready to merge
+- **最后更新**：2026-07-14
+- **分支**：`car-mode`
+- **编译/测试**：Car Mode build-for-testing、325 unit tests、2 UI tests 均通过（iPhone 16 Simulator OS 18.4）
+- **Phase**：Foreground Car Mode implemented；live server restart 后的 history 复验待完成
+
+### 2026-07-14 — Car Mode 实现与 server history 修复
+
+- iPhone 新增独立 Car Tab，iPad 新增 Chat / Car 顶层模式；VoiceFlow final transcript 自动提交到持久化的 Car session。
+- Car session 按 host UUID + workspace 隔离，不复用普通 Chat 的 `currentSessionID`；持久化 session ID、最后处理的 assistant message ID 和 pending confirmation。
+- 新增同步 structured prompt API，固定 `openai/gpt-5.6-sol-fast` + `build`；客户端只消费 schema 验证后的 `assistant.structured`。
+- Apple TTS 显式使用 `.playback` + `.spokenAudio`，发送前关闭录音 audio session，修复 UI 显示朗读但声音可能留在 receiver/Bluetooth HFP route 的问题。
+- 客户端 action allowlist 仅含 `open_navigation`，由 iOS 校验 typed destination/waypoints 后构造 Apple Maps URL。
+- 普通 Chat 在 structured assistant 没有 text part 时显示 `assistant.structured.speech`，并新增 UI fixture 验证 Car history 可见。
+- nested server commit `43a4a0e53` 修复 structured user message 的 `info.format` wire schema；schema/opencode 定向测试和 typecheck 通过。
+- 当前 4096 是 Zellij `z_dev` 中、修复 commit 之前启动的 Bun source process。用户按原配置重启后会直接加载当前 checkout 的新源码，不需要构建 dist binary；在重启前 live history endpoint 仍保留旧行为。
+- 验证：固定 simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，`-parallel-testing-enabled NO`；325 unit tests 和 `CarModeUITests` 两项均通过。
+- 真机已确认 TTS 正常出声。剩余 live 复验：server 重启后真实 structured Car session 可在普通 Chat 读取。Smart Home、邮件、iMessage、route-duration skills 仍未产品化或完成真实 E2E。
+
+### 2026-07-13 — Car Mode feasibility 与设计
+
+- 新增 `docs/car_mode_design.md`，将驾驶语音入口收敛为 OpenCode iOS 内的独立 Car Mode，而不是继续维护独立 App。
+- live OpenCode API 已验证：`system + format(json_schema)` 能返回 `assistant.structured`；同一 session 第二轮可复用上一轮目的地；tool 执行后仍可返回 structured final。
+- 发现 production blocker：structured user message 持久化 `format` 后，message list endpoint 会在 `info.format` 输出校验时报 `OutputFormatJsonSchema` BadRequest。同步 `/message` 可做 UI/TTS spike，但历史恢复、Chat 查看和异步 exactly-once 处理前必须修复 server schema。
+- live `skill` tool 当前未注册 workspace 的 Smart Home、邮件、iMessage 和地图 skills；产品化需正式注册 Car allowlist 或改为 typed tools，不能把通用 `read + bash` 当稳定权限边界。
+- 产品边界：切到 Maps 或其他 App 后不承诺后台持续交互，但保留按 host/workspace 隔离的 Car session ID；切回后继续 append 同一个 session。
 
 ### 2026-06-18 — Image attachments Phase 1/2
 
