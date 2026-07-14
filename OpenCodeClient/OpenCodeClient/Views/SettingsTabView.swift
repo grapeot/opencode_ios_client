@@ -4,9 +4,13 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct SettingsTabView: View {
     @Bindable var state: AppState
+    @Binding var isCarModeEnabled: Bool
     @FocusState private var isServerAddressFocused: Bool
 
     @State private var showPublicKeySheet = false
@@ -14,6 +18,14 @@ struct SettingsTabView: View {
     @State private var copiedPublicKey = false
     @State private var publicKeyForSheet = ""
     @State private var publicKeyLoadError: String?
+
+    private var supportsCarMode: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
         NavigationStack {
@@ -103,6 +115,20 @@ struct SettingsTabView: View {
                 }
 
                 Section {
+                    if supportsCarMode {
+                        HStack {
+                            Text(L10n.t(.settingsCarMode))
+                            Spacer()
+                            Toggle("", isOn: $isCarModeEnabled)
+                                .labelsHidden()
+                                .accessibilityLabel(L10n.t(.settingsCarMode))
+                                .accessibilityIdentifier("settings-car-mode-toggle")
+                        }
+                    }
+
+                    Text(L10n.t(.settingsAIUsageDashboard))
+                        .font(.subheadline.weight(.semibold))
+
                     TextField(L10n.t(.settingsAIUsageDashboardURL), text: $state.aiUsageDashboardURL)
                         .textContentType(.URL)
                         .autocapitalization(.none)
@@ -136,7 +162,7 @@ struct SettingsTabView: View {
                             .foregroundStyle(.red)
                     }
                 } header: {
-                    Text(L10n.t(.settingsAIUsageDashboard))
+                    Text(L10n.t(.settingsExperimentalFeatures))
                 } footer: {
                     Text(L10n.t(.settingsAIUsageDashboardFooter))
                 }

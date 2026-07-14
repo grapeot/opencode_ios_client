@@ -27,6 +27,28 @@ final class CarModeUITests: XCTestCase {
     }
 
     @MainActor
+    func testExperimentalCarModeToggleControlsTab() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else {
+            throw XCTSkip("Car Mode settings are iPhone-only")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_CAR_DISABLED_FIXTURE"]
+        app.launch()
+
+        XCTAssertEqual(app.tabBars.buttons.count, 3)
+        app.tabBars.buttons.element(boundBy: 2).tap()
+        let toggle = app.switches["settings-car-mode-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Experimental Features"].exists)
+        XCTAssertTrue(app.staticTexts["AI Usage Dashboard"].exists)
+
+        toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertTrue(app.tabBars.buttons.element(boundBy: 3).waitForExistence(timeout: 4))
+        XCTAssertEqual(app.tabBars.buttons.count, 4)
+    }
+
+    @MainActor
     func testCarModeIsHiddenOnIPad() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else {
             throw XCTSkip("iPad-only coverage")
@@ -37,6 +59,8 @@ final class CarModeUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["ipad-workspace-layout"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.otherElements["car-mode-root"].exists)
+        app.buttons["ipad-settings-button"].tap()
+        XCTAssertFalse(app.switches["settings-car-mode-toggle"].exists)
     }
 
     @MainActor

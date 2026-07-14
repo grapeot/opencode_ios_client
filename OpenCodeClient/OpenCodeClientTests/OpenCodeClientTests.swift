@@ -161,6 +161,21 @@ struct OpenCodeClientTests {
         #expect(RootTab.settings.rawValue == 3)
     }
 
+    @Test @MainActor func carModeFeatureFlagDefaultsOffAndPersists() {
+        let previous = UserDefaults.standard.object(forKey: AppState.carModeEnabledKey)
+        UserDefaults.standard.removeObject(forKey: AppState.carModeEnabledKey)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: AppState.carModeEnabledKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.carModeEnabledKey) }
+        }
+
+        let initial = AppState()
+        #expect(!initial.isCarModeEnabled)
+
+        initial.isCarModeEnabled = true
+        #expect(AppState().isCarModeEnabled)
+    }
+
     @Test @MainActor func structuredSpeechFallsBackWhenAssistantHasNoTextPart() {
         let envelope = CarResponseEnvelope(
             version: 1,

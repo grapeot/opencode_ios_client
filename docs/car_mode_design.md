@@ -40,7 +40,8 @@ V1 不承诺后台持续录音、SSE 或 TTS。切到 Maps 或其他 App 后，C
 
 Foreground Car Mode 已落地到 `car-mode` 分支：
 
-- iPhone 提供 Chat / Files / Car / Settings 四个 Tab；iPad 和 Apple Vision Pro 不显示 Car Mode。iPad 即使进入 compact 窗口也不会显示 Car Tab。
+- Car Mode 位于 Settings → Experimental Features，持久化开关默认关闭。开启后，iPhone 提供 Chat / Files / Car / Settings 四个 Tab；关闭时不显示 Car Tab。
+- iPad 和 Apple Vision Pro 不显示 Car Mode。iPad 即使进入 compact 窗口也不会显示 Car Tab 或开关。
 - Car session 与普通 Chat selection 分离，并按 host UUID + workspace 持久化；session 404 时只重建一次。
 - VoiceFlow final transcript 自动发送到同步 structured prompt endpoint，固定使用 `openai/gpt-5.6-sol-fast` 和 `build` agent。
 - 客户端只消费 schema 验证后的 `assistant.structured`，以 completed assistant message ID 去重 TTS 和 action。
@@ -49,7 +50,7 @@ Foreground Car Mode 已落地到 `car-mode` 分支：
 - 普通 Chat 在 assistant 没有 text part 时回退显示 `assistant.structured.speech`，使 Car session 可读。
 - 切后台会停止当前录音、朗读和前台 request，但不会清除 Car session。
 
-验证结果：326 个 unit tests 通过；iPhone UI tests 覆盖驾驶界面和 structured Car history 在普通 Chat 中可见；iPad 专项 UI test 确认 workspace 可见且 Car 页面不存在；visionOS simulator build 通过。固定 iPhone simulator 为 iPhone 16 / iOS 18.4，UDID `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，测试使用 `-parallel-testing-enabled NO`。
+验证结果：327 个 unit tests 通过；iPhone UI tests 覆盖驾驶界面、实验开关控制 Tab，以及 structured Car history 在普通 Chat 中可见；iPad 专项 UI test 确认 workspace 可见且 Car 页面和 Settings 开关均不存在；visionOS simulator build 通过。固定 iPhone simulator 为 iPhone 16 / iOS 18.4，UDID `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，测试使用 `-parallel-testing-enabled NO`。
 
 Server 修复位于 nested checkout commit `43a4a0e53`（`fix(schema): preserve structured output format in history`）。`packages/schema` compatibility tests、`packages/opencode` structured-output tests 及两者 typecheck 均通过。当前 4096 是 commit 之前启动的 Bun source process，必须由用户在 Zellij `z_dev` 中重启后才会加载修复；无需构建 dist binary。客户端 TTS 路由修复已在真机确认可正常出声。
 
@@ -528,6 +529,7 @@ iOS 负责：
 ### Phase 1：Foreground Car Mode
 
 - iPhone Car Tab。
+- Settings 的 Experimental Features section 提供 Car Mode 开关，默认关闭；同一 section 容纳 AI Usage Dashboard 的 URL 和连接测试配置。
 - iPad 和 Apple Vision Pro 不显示 Car Mode；iPad compact 窗口同样隐藏。
 - 独立、持久化的 Car session。
 - VoiceFlowKit stop 后自动发送。

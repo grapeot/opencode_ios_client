@@ -172,6 +172,7 @@ final class AppState {
     static let hostProfilesKey = "hostProfiles.v1"
     static let currentHostProfileIDKey = "currentHostProfileID.v1"
     static let aiUsageDashboardURLKey = "aiUsageDashboardURL"
+    static let carModeEnabledKey = "carModeEnabled"
     static let languagePreferenceKey = L10n.languagePreferenceUserDefaultsKey
     static let carSessionsByContextKey = "carSessionsByContext.v1"
 
@@ -210,6 +211,7 @@ final class AppState {
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
         _languagePreference = L10n.languagePreference
         _aiUsageDashboardURL = UserDefaults.standard.string(forKey: Self.aiUsageDashboardURLKey) ?? ""
+        isCarModeEnabled = UserDefaults.standard.bool(forKey: Self.carModeEnabledKey)
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
         let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
@@ -339,6 +341,9 @@ final class AppState {
     var isRefreshingAIUsageProviders = false
     var aiUsageQuotaTestOK = false
     var aiUsageQuotaError: String?
+    var isCarModeEnabled = false {
+        didSet { UserDefaults.standard.set(isCarModeEnabled, forKey: Self.carModeEnabledKey) }
+    }
     var isConnected: Bool = false
     var serverVersion: String?
     var connectionError: String?

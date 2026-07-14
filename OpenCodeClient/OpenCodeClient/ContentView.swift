@@ -21,9 +21,12 @@ struct ContentView: View {
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
     @State private var selectedTab = 0
+    @State private var carModeEnabled: Bool
 
     init() {
-        _state = State(initialValue: Self.makeInitialState())
+        let initialState = Self.makeInitialState()
+        _state = State(initialValue: initialState)
+        _carModeEnabled = State(initialValue: initialState.isCarModeEnabled)
     }
 
     private static var hasUITestSessionTreeFixture: Bool {
@@ -59,6 +62,10 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_CAR_HISTORY_FIXTURE")
     }
 
+    private static var hasUITestCarDisabledFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CAR_DISABLED_FIXTURE")
+    }
+
     /// Which bundled fixture markdown to render in the web preview. Defaults to
     /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
     private static var webPreviewFixtureName: String {
@@ -84,8 +91,15 @@ struct ContentView: View {
             return state
         }
 
+        if hasUITestCarDisabledFixture {
+            state.isCarModeEnabled = false
+            state.selectedTab = RootTab.chat.rawValue
+            return state
+        }
+
         if hasUITestCarModeFixture {
             state.isConnected = true
+            state.isCarModeEnabled = true
             state.selectedTab = RootTab.car.rawValue
             state.carLastTranscript = "Navigate to Space Needle and avoid the traffic on I-5."
             state.carLastResponse = CarResponseEnvelope(
@@ -303,10 +317,20 @@ struct ContentView: View {
 
     private var showsCarMode: Bool {
         #if os(iOS)
-        UIDevice.current.userInterfaceIdiom == .phone
+        UIDevice.current.userInterfaceIdiom == .phone && carModeEnabled
         #else
         false
         #endif
+    }
+
+    private var carModeEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { carModeEnabled },
+            set: { isEnabled in
+                carModeEnabled = isEnabled
+                state.isCarModeEnabled = isEnabled
+            }
+        )
     }
 
     private var themeColorScheme: ColorScheme? {
@@ -520,7 +544,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture {
             return
         }
 
@@ -647,6 +671,11 @@ struct ContentView: View {
                 selectedTab = newTab
             }
         }
+        .onChange(of: carModeEnabled) { _, isEnabled in
+            guard !isEnabled, selectedTab == RootTab.car.rawValue else { return }
+            selectedTab = RootTab.chat.rawValue
+            state.selectedTab = RootTab.chat.rawValue
+        }
         .sheet(item: filePreviewSheetItem) { wrapper in
             NavigationStack {
                 FileContentView(state: state, filePath: wrapper.path, workspaceDirectory: wrapper.workspaceDirectory)
@@ -673,7 +702,7 @@ struct ContentView: View {
             Task { await state.refresh() }
         }) {
             NavigationStack {
-                SettingsTabView(state: state)
+                SettingsTabView(state: state, isCarModeEnabled: carModeEnabledBinding)
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             Button(L10n.t(.appClose)) { showSettingsSheet = false }
@@ -683,8 +712,16 @@ struct ContentView: View {
         }
     }
 
-    /// iPhone: four top-level modes.
+    @ViewBuilder
     private var tabLayout: some View {
+        if showsCarMode {
+            carEnabledTabLayout
+        } else {
+            standardTabLayout
+        }
+    }
+
+    private var standardTabLayout: some View {
         TabView(selection: $selectedTab) {
             ChatTabView(state: state)
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
@@ -694,13 +731,27 @@ struct ContentView: View {
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(RootTab.files.rawValue)
 
-            if showsCarMode {
-                CarModeView(state: state)
-                    .tabItem { Label(L10n.t(.carTab), systemImage: "car.fill") }
-                    .tag(RootTab.car.rawValue)
-            }
+            SettingsTabView(state: state, isCarModeEnabled: carModeEnabledBinding)
+                .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
+                .tag(RootTab.settings.rawValue)
+        }
+    }
 
-            SettingsTabView(state: state)
+    private var carEnabledTabLayout: some View {
+        TabView(selection: $selectedTab) {
+            ChatTabView(state: state)
+                .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
+                .tag(RootTab.chat.rawValue)
+
+            FilesTabView(state: state)
+                .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
+                .tag(RootTab.files.rawValue)
+
+            CarModeView(state: state)
+                .tabItem { Label(L10n.t(.carTab), systemImage: "car.fill") }
+                .tag(RootTab.car.rawValue)
+
+            SettingsTabView(state: state, isCarModeEnabled: carModeEnabledBinding)
                 .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
                 .tag(RootTab.settings.rawValue)
         }
@@ -858,7 +909,7 @@ private struct TabletSessionsColumn: View {
         NavigationStack {
             Group {
                 if showSettings {
-                    SettingsTabView(state: state)
+                    SettingsTabView(state: state, isCarModeEnabled: .constant(false))
                 } else if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
@@ -945,6 +996,7 @@ private struct TabletSessionsColumn: View {
                             } label: {
                                 Image(systemName: "gear")
                             }
+                            .accessibilityIdentifier("ipad-settings-button")
                         }
                     }
                 }

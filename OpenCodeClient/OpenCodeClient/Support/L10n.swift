@@ -89,6 +89,8 @@ enum L10n {
         case settingsTested
         case settingsAbout
         case settingsServerVersion
+        case settingsExperimentalFeatures
+        case settingsCarMode
         case settingsAIUsageDashboard
         case settingsAIUsageDashboardURL
         case settingsAIUsageDashboardFooter
@@ -514,6 +516,8 @@ enum L10n {
         Key.settingsTested.rawValue: "OK",
         Key.settingsAbout.rawValue: "About",
         Key.settingsServerVersion.rawValue: "Server Version",
+        Key.settingsExperimentalFeatures.rawValue: "Experimental Features",
+        Key.settingsCarMode.rawValue: "Car Mode",
         Key.settingsAIUsageDashboard.rawValue: "AI Usage Dashboard",
         Key.settingsAIUsageDashboardURL.rawValue: "Dashboard URL (optional)",
         Key.settingsAIUsageDashboardFooter.rawValue: "Leave blank for no quota UI. Enter the dashboard base URL or the full /api/v1/quotas endpoint.",
@@ -938,6 +942,8 @@ enum L10n {
         Key.settingsTested.rawValue: "可用",
         Key.settingsAbout.rawValue: "关于",
         Key.settingsServerVersion.rawValue: "服务器版本",
+        Key.settingsExperimentalFeatures.rawValue: "实验性功能",
+        Key.settingsCarMode.rawValue: "车载模式",
         Key.settingsAIUsageDashboard.rawValue: "AI 用量面板",
         Key.settingsAIUsageDashboardURL.rawValue: "面板地址（可选）",
         Key.settingsAIUsageDashboardFooter.rawValue: "留空时不显示任何 quota 界面。可填写面板根地址或完整的 /api/v1/quotas 地址。",
