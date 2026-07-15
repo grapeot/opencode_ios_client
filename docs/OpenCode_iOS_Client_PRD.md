@@ -313,6 +313,22 @@ Archive 行为：点击 Archive 后，session 立即从 Active 分区移入 Arch
 
 **实现说明**：使用 SwiftUI `Menu`（tap 触发）而非 `.contextMenu`（需长按），确保可发现性。Fork 后的 session 标题自动变为 "{原标题} (fork #N)"。
 
+#### 4.2.7 Session Deep Link（跨入口定位会话）
+
+客户端支持统一的只读导航链接：
+
+```text
+opencode://session/<session_id>
+```
+
+链接可以来自 Chat 中的 Agent Markdown，也可以来自 Notes、邮件、网页或其他 App。用户点击后，客户端在当前 Host 上验证目标 session；验证成功才切换 project、session 和 Chat，失败则保留原 session 并显示全局错误。App 未运行或正在恢复连接时先保留导航意图，待当前 Host 可用后再解析。
+
+Session 搜索仍由 Agent 和 workspace semantic-search 完成，不在客户端增加搜索页面、embedding 索引或 archive 读取能力。Agent 返回 3-5 个带原文证据的候选，并把明确动作写为 `[在 OpenCode 中打开](opencode://session/<session_id>)`；只有 metadata 明确标记为 OpenCode 且含合法 session ID 的结果才能生成 action link。
+
+V1 的可用范围是当前配置的 Host。链接不携带设备本地 Host Profile UUID、server URL、凭证、query 或绝对路径，也不自动轮询或切换其他 Host。OpenCode 软归档 session 只要当前 server 仍可读取即可打开；仅存在于离线 SQLite/Markdown archive 的历史不自动恢复。
+
+Deep link 是低权限导航动作，不是命令通道。它不能发送 prompt、批准权限、执行 tool、删除或归档 session，也不能在 Markdown 渲染后自动触发。V1 不支持 message 定位参数；在 Chat 具备可靠 scroll/highlight 前，带 query、fragment 或额外 path 的链接一律拒绝。
+
 ### 4.3 Files Tab（文件浏览与 Diff）
 
 > Files Tab 在产品定位上是一个**兜底入口**，不是主工作流。用户绝大部分文件访问都是通过 Chat 窗口中的 tool/patch 卡片点击跳转完成的——在 Chat 流中看到 `edit_file` 或 `patch` 卡片，直接点文件路径就可以预览。Files Tab 的存在是为了：当用户需要全局视角（浏览所有被修改的文件）、或者需要搜索一个没在 Chat 卡片中出现过的文件时，有一个可用的入口。因此它不需要是最精致的 Tab，但它必须可靠。

@@ -145,8 +145,14 @@ extension AppState {
     func loadSessions() async {
         guard isConnected else { return }
         do {
+            let selectedSession = currentSession
             let loaded = try await fetchSessions(limit: loadedSessionLimit)
             sessions = loaded
+            if let selectedSession,
+               currentSessionID == selectedSession.id,
+               !sessions.contains(where: { $0.id == selectedSession.id }) {
+                sessions.insert(selectedSession, at: 0)
+            }
             hasMoreSessions = loaded.count >= loadedSessionLimit
 
             // Only auto-select first session if there's no persisted selection at all
@@ -183,9 +189,15 @@ extension AppState {
         defer { isLoadingMoreSessions = false }
 
         do {
+            let selectedSession = currentSession
             let loaded = try await fetchSessions(limit: nextLimit)
             loadedSessionLimit = nextLimit
             sessions = loaded
+            if let selectedSession,
+               currentSessionID == selectedSession.id,
+               !sessions.contains(where: { $0.id == selectedSession.id }) {
+                sessions.insert(selectedSession, at: 0)
+            }
             hasMoreSessions = loaded.count >= loadedSessionLimit
 
             if currentSessionID == nil, let first = sessions.first {

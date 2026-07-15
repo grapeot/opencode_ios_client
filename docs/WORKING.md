@@ -5,9 +5,18 @@
 ## 当前状态
 
 - **最后更新**：2026-07-15
-- **分支**：`car-mode`
-- **编译/测试**：Car Mode build-for-testing、327 unit tests、3 个 iPhone UI tests、1 个 iPad 隐藏测试和 visionOS build 均通过
-- **Phase**：Foreground Car Mode implemented；Car session 归档后由客户端恢复 iOS Active 状态
+- **分支**：`feat/session-deep-links`
+- **编译/测试**：iPhone 16 / iOS 18.4 build 与全量 test suite 通过；36 个 UI tests 中 4 个 opt-in tests 按预期 skip
+- **Phase**：`opencode://session/<id>` cold/warm launch 与 Chat Markdown navigation implemented
+
+### 2026-07-15 — Session deep link 与 Agent 搜索链接
+
+- 注册 `opencode://session/<session_id>`，使用严格 URI parser 拒绝未知 host、query、fragment、userinfo、port、非法 ID 和多层 path。
+- cold/warm URL 与 Chat Markdown 点击共用 AppState router；连接恢复后用当前 Host 的 `GET /session/:id` 验证，成功后切换 project/session，失败保留原上下文。
+- 后台和 Host 切换会使旧 resolve generation 失效，避免 SSH 重连前丢链接或旧 Host 响应污染新 Host。
+- session list 刷新会保留当前已验证 session，避免历史目标落在 100 条窗口外后被覆盖；Files tree 使用目标 project directory 重新加载。
+- 新增 parser/state tests、Markdown tap fixture 和 cold pending fixture；同时固定 UI suites 的 portrait 前置条件，消除 launch tests 遗留方向导致的跨测试污染。
+- 产品行为和技术 contract 已分别并入主 PRD §4.2.7 与 RFC §4.4。Workspace private semantic-search overlay 已规定候选证据与 `[在 OpenCode 中打开](opencode://session/<id>)` 输出 contract。
 
 ### 2026-07-15 — Car session active 恢复与文档收敛
 

@@ -66,6 +66,14 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_CAR_DISABLED_FIXTURE")
     }
 
+    private static var hasUITestDeepLinkFixture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("UITEST_DEEP_LINK_FIXTURE")
+        #else
+        false
+        #endif
+    }
+
     /// Which bundled fixture markdown to render in the web preview. Defaults to
     /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
     private static var webPreviewFixtureName: String {
@@ -84,7 +92,29 @@ struct ContentView: View {
     }
 
     private static func makeInitialState() -> AppState {
-        let state = AppState()
+        let state: AppState
+        if hasUITestDeepLinkFixture {
+            state = AppState(
+                deepLinkSessionResolver: { sessionID in
+                    guard sessionID == "ses_deep_link_target" else {
+                        throw APIError.httpError(statusCode: 404, data: Data())
+                    }
+                    return deepLinkFixtureSession(
+                        id: sessionID,
+                        title: "Deep Link Target",
+                        directory: "/tmp/deep-link-target"
+                    )
+                },
+                deepLinkHydratesSelection: false
+            )
+        } else {
+            state = AppState()
+        }
+
+        if hasUITestDeepLinkFixture {
+            applyDeepLinkFixture(to: state)
+            return state
+        }
 
         if hasUITestCarHistoryFixture {
             applyCarHistoryFixture(to: state)
@@ -188,6 +218,56 @@ struct ContentView: View {
         state.currentSessionID = "root-session"
         state.expandedSessionIDs = ["root-session", "archived-session"]
         return state
+    }
+
+    private static func deepLinkFixtureSession(id: String, title: String, directory: String) -> Session {
+        Session(
+            id: id,
+            slug: id,
+            projectID: "deep-link-project",
+            directory: directory,
+            parentID: nil,
+            title: title,
+            version: "1",
+            time: .init(created: 1, updated: 2, archived: nil),
+            share: nil,
+            summary: nil
+        )
+    }
+
+    private static func applyDeepLinkFixture(to state: AppState) {
+        let source = deepLinkFixtureSession(
+            id: "ses_deep_link_source",
+            title: "Deep Link Source",
+            directory: "/tmp/deep-link-source"
+        )
+        state.isConnected = true
+        state.sessions = [source]
+        state.currentSessionID = source.id
+        state.selectedTab = RootTab.chat.rawValue
+
+        let assistant = Message(
+            id: "msg_deep_link_assistant",
+            sessionID: source.id,
+            role: "assistant",
+            parentID: nil,
+            providerID: "fixture",
+            modelID: "fixture",
+            model: nil,
+            error: nil,
+            time: .init(created: 1, completed: 2),
+            finish: "stop",
+            tokens: nil,
+            cost: nil
+        )
+        let text = decodePart([
+            "id": "part_deep_link_text",
+            "messageID": assistant.id,
+            "sessionID": source.id,
+            "type": "text",
+            "text": "[Open target session](opencode://session/ses_deep_link_target)",
+        ])
+        state.messages = [MessageWithParts(info: assistant, parts: [text])]
     }
 
     private static func applyCarHistoryFixture(to state: AppState) {
@@ -544,7 +624,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture || Self.hasUITestDeepLinkFixture {
             return
         }
 
@@ -570,6 +650,7 @@ struct ContentView: View {
 
         if state.isConnected {
             state.connectSSE()
+            await state.processPendingDeepLinkIfPossible()
         } else {
             state.disconnectSSE()
         }
@@ -623,7 +704,13 @@ struct ContentView: View {
     private var mainBody: some View {
         rootLayout
         .task {
+            if Self.hasUITestDeepLinkFixture,
+               let rawURL = ProcessInfo.processInfo.environment["UITEST_INITIAL_DEEP_LINK"],
+               let url = URL(string: rawURL) {
+                state.receiveDeepLink(url)
+            }
             await restoreConnectionFlow()
+            await state.processPendingDeepLinkIfPossible()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             Task {
@@ -631,12 +718,40 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            state.invalidateDeepLinkRoute(keepPending: true)
+            state.isConnected = false
             state.disconnectSSE()
             #if !os(visionOS)
             if state.sshTunnelManager.config.isEnabled {
                 state.sshTunnelManager.disconnect()
             }
             #endif
+        }
+        .onOpenURL { url in
+            state.receiveDeepLink(url)
+        }
+        .overlay {
+            if case .resolving = state.deepLinkRouteState {
+                ProgressView(L10n.t(.deepLinkOpening))
+                    .padding(.horizontal, DesignSpacing.lg)
+                    .padding(.vertical, DesignSpacing.md)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignCorners.medium))
+                    .accessibilityIdentifier("deep-link-opening")
+            }
+        }
+        .alert(
+            L10n.t(.appError),
+            isPresented: Binding(
+                get: { state.deepLinkError != nil },
+                set: { if !$0 { state.deepLinkError = nil } }
+            )
+        ) {
+            Button(L10n.t(.commonOk)) { state.deepLinkError = nil }
+        } message: {
+            if let error = state.deepLinkError {
+                Text(error)
+                    .accessibilityIdentifier("deep-link-error")
+            }
         }
         .preferredColorScheme(themeColorScheme)
         .environment(\.locale, L10n.currentLocale)

@@ -1,6 +1,11 @@
 import XCTest
 
 final class AIUsageQuotaUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
+
     @MainActor
     func testQuotaBadgeAndDetailFixture() throws {
         let app = XCUIApplication()
