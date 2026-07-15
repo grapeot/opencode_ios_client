@@ -84,17 +84,21 @@ extension AppState {
 
     private func ensureCarSession() async throws -> Session {
         guard isConnected else { throw CarModeError.notConnected }
-        guard canCreateSession else { throw CarModeError.selectedProjectUnsupported }
 
         if let record = currentCarSessionRecord {
             do {
-                return try await apiClient.session(sessionID: record.sessionID)
+                let session = try await apiClient.session(sessionID: record.sessionID)
+                guard session.isArchived else { return session }
+                let restored = try await apiClient.updateSessionArchived(sessionID: session.id, archived: -1)
+                upsertSession(restored)
+                return restored
             } catch APIError.httpError(let statusCode, _) where statusCode == 404 {
                 carSessionsByContext.removeValue(forKey: carContextKey)
                 persistCarSessions()
             }
         }
 
+        guard canCreateSession else { throw CarModeError.selectedProjectUnsupported }
         let session = try await apiClient.createSession(title: "Car Mode")
         carSessionsByContext[carContextKey] = CarSessionRecord(
             sessionID: session.id,

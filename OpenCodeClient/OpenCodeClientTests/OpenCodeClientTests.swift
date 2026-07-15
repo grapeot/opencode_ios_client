@@ -2822,6 +2822,10 @@ actor MockAPIClient: APIClientProtocol {
         createSessionResult = session
     }
 
+    func setSessionResult(_ session: Session) {
+        sessionResult = session
+    }
+
     func setMessagesResult(_ messages: [MessageWithParts]) {
         messagesResult = messages
     }
@@ -3058,6 +3062,18 @@ struct CarModeFlowTests {
         ))
 
         await state.submitCarTurn("Is the garage closed?")
+        await api.setSessionResult(Session(
+            id: session.id,
+            slug: session.slug,
+            projectID: session.projectID,
+            directory: session.directory,
+            parentID: nil,
+            title: session.title,
+            version: session.version,
+            time: .init(created: 1, updated: 2, archived: 2),
+            share: nil,
+            summary: nil
+        ))
         await state.submitCarTurn("Is the garage still closed?")
 
         #expect(state.currentCarSessionID == session.id)
@@ -3065,6 +3081,76 @@ struct CarModeFlowTests {
         #expect(speech.spokenTexts == ["The garage door is closed."])
         #expect(await api.promptStructuredCalls.count == 2)
         #expect(await api.promptStructuredCalls.first?.modelID == "gpt-5.6-sol-fast")
+        #expect(await api.promptStructuredCalls.allSatisfy { $0.sessionID == session.id })
+        #expect(await api.updateSessionArchivedCalls.map(\.1) == [-1])
+    }
+
+    @Test @MainActor func selectedProjectCanRestoreExistingCarSession() async throws {
+        let oldSelection = UserDefaults.standard.string(forKey: AppState.selectedProjectWorktreeKey)
+        let oldCarSessions = UserDefaults.standard.data(forKey: AppState.carSessionsByContextKey)
+        UserDefaults.standard.removeObject(forKey: AppState.selectedProjectWorktreeKey)
+        UserDefaults.standard.removeObject(forKey: AppState.carSessionsByContextKey)
+        defer {
+            if let oldSelection { UserDefaults.standard.set(oldSelection, forKey: AppState.selectedProjectWorktreeKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.selectedProjectWorktreeKey) }
+            if let oldCarSessions { UserDefaults.standard.set(oldCarSessions, forKey: AppState.carSessionsByContextKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.carSessionsByContextKey) }
+        }
+
+        let api = MockAPIClient()
+        let state = AppState(apiClient: api, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.serverCurrentProjectWorktree = "/workspace/server-default"
+        state.selectedProjectWorktree = "/workspace/selected"
+        let session = Session(
+            id: "selected-car-session",
+            slug: "selected-car-session",
+            projectID: "p1",
+            directory: "/workspace/selected",
+            parentID: nil,
+            title: "Car Mode",
+            version: "1",
+            time: .init(created: 1, updated: 2, archived: 3),
+            share: nil,
+            summary: nil
+        )
+        state.carSessionsByContext[state.carContextKey] = CarSessionRecord(
+            sessionID: session.id,
+            lastHandledAssistantMessageID: nil,
+            pendingConfirmationID: nil,
+            lastUsedAt: Date()
+        )
+        await api.setSessionResult(session)
+        await api.setPromptStructuredResult(MessageWithParts(
+            info: Message(
+                id: "selected-assistant",
+                sessionID: session.id,
+                role: "assistant",
+                parentID: "selected-user",
+                providerID: "openai",
+                modelID: "gpt-5.6-sol-fast",
+                model: nil,
+                error: nil,
+                time: .init(created: 4, completed: 5),
+                finish: "tool-calls",
+                tokens: nil,
+                cost: nil,
+                structured: CarResponseEnvelope(
+                    version: 1,
+                    status: .completed,
+                    speech: "Restored.",
+                    confirmation: nil,
+                    clientActions: []
+                )
+            ),
+            parts: []
+        ))
+
+        await state.submitCarTurn("Continue")
+
+        #expect(state.carPhase == .idle)
+        #expect(await api.updateSessionArchivedCalls.map(\.0) == [session.id])
+        #expect(await api.promptStructuredCalls.map(\.sessionID) == [session.id])
     }
 
     @Test @MainActor func carSessionContextSeparatesHostsAndWorkspaces() {
