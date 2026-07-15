@@ -168,44 +168,101 @@ struct SettingsTabView: View {
                 }
 
                 Section(L10n.t(.settingsSpeechRecognition)) {
-                    TextField(L10n.t(.settingsAiBuilderBaseURL), text: $state.aiBuilderBaseURL)
-                        .textContentType(.URL)
-                        .autocapitalization(.none)
+                    Picker(L10n.t(.settingsVoiceProvider), selection: $state.voiceTranscriptionProvider) {
+                        Text(L10n.t(.settingsVoiceProviderVoiceFlow)).tag(VoiceTranscriptionProvider.voiceFlow)
+                        Text(L10n.t(.settingsVoiceProviderFluidVoice)).tag(VoiceTranscriptionProvider.fluidVoice)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("settings-voice-provider")
 
-                    SecureField(L10n.t(.settingsAiBuilderToken), text: $state.aiBuilderToken)
-                        .textContentType(.password)
+                    if state.voiceTranscriptionProvider == .voiceFlow {
+                        TextField(L10n.t(.settingsAiBuilderBaseURL), text: $state.aiBuilderBaseURL)
+                            .textContentType(.URL)
+                            .autocapitalization(.none)
 
-                    TextField(L10n.t(.settingsCustomPrompt), text: $state.aiBuilderCustomPrompt, axis: .vertical)
-                        .lineLimit(3...6)
+                        SecureField(L10n.t(.settingsAiBuilderToken), text: $state.aiBuilderToken)
+                            .textContentType(.password)
 
-                    TextField(L10n.t(.settingsTerminology), text: $state.aiBuilderTerminology)
-                        .textContentType(.none)
-                        .autocapitalization(.none)
+                        TextField(L10n.t(.settingsCustomPrompt), text: $state.aiBuilderCustomPrompt, axis: .vertical)
+                            .lineLimit(3...6)
 
-                    HStack {
-                        Button {
-                            Task { await state.testAIBuilderConnection() }
-                        } label: {
-                            if state.isTestingAIBuilderConnection {
-                                HStack(spacing: 8) {
-                                    ProgressView()
-                                        .scaleEffect(0.9)
-                                    Text(L10n.t(.settingsTesting))
+                        TextField(L10n.t(.settingsTerminology), text: $state.aiBuilderTerminology)
+                            .textContentType(.none)
+                            .autocapitalization(.none)
+
+                        HStack {
+                            Button {
+                                Task { await state.testAIBuilderConnection() }
+                            } label: {
+                                if state.isTestingAIBuilderConnection {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                            .scaleEffect(0.9)
+                                        Text(L10n.t(.settingsTesting))
+                                    }
+                                } else {
+                                    Text(L10n.t(.settingsTestConnection))
                                 }
-                            } else {
-                                Text(L10n.t(.settingsTestConnection))
+                            }
+                            .disabled(
+                                state.aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || state.isTestingAIBuilderConnection
+                            )
+                            Spacer()
+                            if state.aiBuilderConnectionOK {
+                                Label(L10n.t(.commonOk), systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(DesignColors.Semantic.success)
+                            } else if let err = state.aiBuilderConnectionError {
+                                Text(err)
+                                    .foregroundStyle(.red)
                             }
                         }
-                        .disabled(
-                            state.aiBuilderToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                || state.isTestingAIBuilderConnection
-                        )
-                        Spacer()
-                        if state.aiBuilderConnectionOK {
-                            Label(L10n.t(.commonOk), systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(DesignColors.Semantic.success)
-                        } else if let err = state.aiBuilderConnectionError {
-                            Text(err)
+                    } else {
+                        TextField(L10n.t(.settingsFluidVoiceBaseURL), text: $state.fluidVoiceBaseURL)
+                            .textContentType(.URL)
+                            .autocapitalization(.none)
+                            .accessibilityIdentifier("settings-fluidvoice-base-url")
+                            .onSubmit { _ = try? state.normalizeFluidVoiceBaseURL() }
+
+                        Toggle(L10n.t(.settingsFluidVoicePostprocess), isOn: $state.fluidVoicePostprocess)
+                            .accessibilityIdentifier("settings-fluidvoice-postprocess")
+
+                        HStack {
+                            Button {
+                                Task { await state.testFluidVoiceConnection() }
+                            } label: {
+                                if state.isTestingFluidVoiceConnection {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                            .scaleEffect(0.9)
+                                        Text(L10n.t(.settingsTesting))
+                                    }
+                                } else {
+                                    Text(L10n.t(.settingsTestConnection))
+                                }
+                            }
+                            .disabled(
+                                state.fluidVoiceBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || state.isTestingFluidVoiceConnection
+                            )
+                            .accessibilityIdentifier("settings-fluidvoice-test")
+
+                            Spacer()
+                            if state.fluidVoiceConnectionOK {
+                                Label(L10n.t(.commonOk), systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(DesignColors.Semantic.success)
+                            }
+                        }
+
+                        if let status = state.fluidVoiceHealthStatus {
+                            LabeledContent(L10n.t(.settingsFluidVoiceStatus), value: status)
+                        }
+                        if let version = state.fluidVoiceHealthVersion {
+                            LabeledContent(L10n.t(.settingsFluidVoiceVersion), value: version)
+                        }
+                        if let error = state.fluidVoiceConnectionError {
+                            Text(error)
+                                .font(.caption)
                                 .foregroundStyle(.red)
                         }
                     }

@@ -9,6 +9,13 @@ import Observation
 import os
 import VoiceFlowKit
 
+enum VoiceTranscriptionProvider: String, CaseIterable, Identifiable, Sendable {
+    case voiceFlow
+    case fluidVoice
+
+    var id: String { rawValue }
+}
+
 struct SessionNode: Identifiable {
     let session: Session
     let children: [SessionNode]
@@ -165,6 +172,9 @@ final class AppState {
     static let aiBuilderTerminologyKey = "aiBuilderTerminology"
     static let aiBuilderLastOKSignatureKey = "aiBuilderLastOKSignature"
     static let aiBuilderLastOKTestedAtKey = "aiBuilderLastOKTestedAt"
+    static let voiceTranscriptionProviderKey = "voiceTranscriptionProvider"
+    static let fluidVoiceBaseURLKey = "fluidVoiceBaseURL"
+    static let fluidVoicePostprocessKey = "fluidVoicePostprocess"
     static let draftInputsBySessionKey = "draftInputsBySession"
     static let selectedModelBySessionKey = "selectedModelBySession"
     static let selectedProjectWorktreeKey = "selectedProjectWorktree"
@@ -207,6 +217,11 @@ final class AppState {
         _aiBuilderToken = KeychainHelper.load(forKey: Self.aiBuilderTokenKeychainKey) ?? ""
         _aiBuilderCustomPrompt = UserDefaults.standard.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
         _aiBuilderTerminology = UserDefaults.standard.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
+        _voiceTranscriptionProvider = VoiceTranscriptionProvider(
+            rawValue: UserDefaults.standard.string(forKey: Self.voiceTranscriptionProviderKey) ?? ""
+        ) ?? .voiceFlow
+        _fluidVoiceBaseURL = UserDefaults.standard.string(forKey: Self.fluidVoiceBaseURLKey) ?? ""
+        _fluidVoicePostprocess = UserDefaults.standard.bool(forKey: Self.fluidVoicePostprocessKey)
         _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
         _languagePreference = L10n.languagePreference
@@ -326,6 +341,43 @@ final class AppState {
     var aiBuilderConnectionOK: Bool = false
     var aiBuilderLastTestedAt: Date? = nil
     var isTestingAIBuilderConnection: Bool = false
+
+    var _voiceTranscriptionProvider: VoiceTranscriptionProvider = .voiceFlow
+    var voiceTranscriptionProvider: VoiceTranscriptionProvider {
+        get { _voiceTranscriptionProvider }
+        set {
+            _voiceTranscriptionProvider = newValue
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.voiceTranscriptionProviderKey)
+        }
+    }
+
+    var _fluidVoiceBaseURL: String = ""
+    var fluidVoiceBaseURL: String {
+        get { _fluidVoiceBaseURL }
+        set {
+            _fluidVoiceBaseURL = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.fluidVoiceBaseURLKey)
+            fluidVoiceConnectionOK = false
+            fluidVoiceConnectionError = nil
+            fluidVoiceHealthStatus = nil
+            fluidVoiceHealthVersion = nil
+        }
+    }
+
+    var _fluidVoicePostprocess = false
+    var fluidVoicePostprocess: Bool {
+        get { _fluidVoicePostprocess }
+        set {
+            _fluidVoicePostprocess = newValue
+            UserDefaults.standard.set(newValue, forKey: Self.fluidVoicePostprocessKey)
+        }
+    }
+
+    var fluidVoiceConnectionOK = false
+    var fluidVoiceConnectionError: String?
+    var fluidVoiceHealthStatus: String?
+    var fluidVoiceHealthVersion: String?
+    var isTestingFluidVoiceConnection = false
     var _aiUsageDashboardURL: String = ""
     var aiUsageDashboardURL: String {
         get { _aiUsageDashboardURL }
@@ -560,6 +612,7 @@ final class AppState {
     let sseClient: SSEClientProtocol
     let sshTunnelManager: SSHTunnelManager
     let aiUsageQuotaClient: AIUsageQuotaClientProtocol
+    let fluidVoiceClient = FluidVoiceClient()
     var sseTask: Task<Void, Never>?
 
     var carSessionsByContext: [String: CarSessionRecord] = [:]
