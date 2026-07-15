@@ -8,15 +8,25 @@ import SwiftUI
 import UIKit
 #endif
 
+enum RootTab: Int {
+    case chat
+    case files
+    case car
+    case settings
+}
+
 struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
     @State private var selectedTab = 0
+    @State private var carModeEnabled: Bool
 
     init() {
-        _state = State(initialValue: Self.makeInitialState())
+        let initialState = Self.makeInitialState()
+        _state = State(initialValue: initialState)
+        _carModeEnabled = State(initialValue: initialState.isCarModeEnabled)
     }
 
     private static var hasUITestSessionTreeFixture: Bool {
@@ -44,6 +54,18 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_QUOTA_FIXTURE")
     }
 
+    private static var hasUITestCarModeFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CAR_MODE_FIXTURE")
+    }
+
+    private static var hasUITestCarHistoryFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CAR_HISTORY_FIXTURE")
+    }
+
+    private static var hasUITestCarDisabledFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CAR_DISABLED_FIXTURE")
+    }
+
     /// Which bundled fixture markdown to render in the web preview. Defaults to
     /// the HTML-cards fixture; override via WEB_PREVIEW_FIXTURE_NAME env var.
     private static var webPreviewFixtureName: String {
@@ -63,6 +85,32 @@ struct ContentView: View {
 
     private static func makeInitialState() -> AppState {
         let state = AppState()
+
+        if hasUITestCarHistoryFixture {
+            applyCarHistoryFixture(to: state)
+            return state
+        }
+
+        if hasUITestCarDisabledFixture {
+            state.isCarModeEnabled = false
+            state.selectedTab = RootTab.chat.rawValue
+            return state
+        }
+
+        if hasUITestCarModeFixture {
+            state.isConnected = true
+            state.isCarModeEnabled = true
+            state.selectedTab = RootTab.car.rawValue
+            state.carLastTranscript = "Navigate to Space Needle and avoid the traffic on I-5."
+            state.carLastResponse = CarResponseEnvelope(
+                version: 1,
+                status: .completed,
+                speech: "I found a faster route. It saves twelve minutes and is ready in Apple Maps.",
+                confirmation: nil,
+                clientActions: []
+            )
+            return state
+        }
 
         if hasUITestQuotaFixture {
             applyQuotaFixture(to: state)
@@ -142,6 +190,73 @@ struct ContentView: View {
         return state
     }
 
+    private static func applyCarHistoryFixture(to state: AppState) {
+        let sessionID = "car-history-session"
+        state.isConnected = true
+        state.selectedTab = RootTab.chat.rawValue
+        state.sessions = [
+            Session(
+                id: sessionID,
+                slug: sessionID,
+                projectID: "p1",
+                directory: "/tmp/car-history",
+                parentID: nil,
+                title: "Car Mode",
+                version: "1",
+                time: .init(created: 1, updated: 3, archived: nil),
+                share: nil,
+                summary: nil
+            )
+        ]
+        state.currentSessionID = sessionID
+        let user = Message(
+            id: "car-user",
+            sessionID: sessionID,
+            role: "user",
+            parentID: nil,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: .init(created: 1, completed: nil),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        let assistant = Message(
+            id: "car-assistant",
+            sessionID: sessionID,
+            role: "assistant",
+            parentID: user.id,
+            providerID: "openai",
+            modelID: "gpt-5.6-sol-fast",
+            model: nil,
+            error: nil,
+            time: .init(created: 2, completed: 3),
+            finish: "tool-calls",
+            tokens: nil,
+            cost: nil,
+            structured: CarResponseEnvelope(
+                version: 1,
+                status: .completed,
+                speech: "The garage door is closed.",
+                confirmation: nil,
+                clientActions: []
+            )
+        )
+        let userPart = decodePart([
+            "id": "car-user-text",
+            "messageID": user.id,
+            "sessionID": sessionID,
+            "type": "text",
+            "text": "Is the garage door closed?",
+        ])
+        state.messages = [
+            MessageWithParts(info: user, parts: [userPart]),
+            MessageWithParts(info: assistant, parts: []),
+        ]
+    }
+
     private static func applyQuotaFixture(to state: AppState) {
         let sessionID = "quota-fixture-session"
         state.sessions = [
@@ -194,11 +309,29 @@ struct ContentView: View {
         state.hostProfiles = [local, ssh]
         state.currentHostProfileID = local.id
         state.applyCurrentHostProfileToRuntime(persistLegacy: false)
-        state.selectedTab = 2
+        state.selectedTab = RootTab.settings.rawValue
     }
 
     /// iPad / Vision Pro：左右分栏，无 Tab Bar
     private var useSplitLayout: Bool { sizeClass == .regular }
+
+    private var showsCarMode: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone && carModeEnabled
+        #else
+        false
+        #endif
+    }
+
+    private var carModeEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { carModeEnabled },
+            set: { isEnabled in
+                carModeEnabled = isEnabled
+                state.isCarModeEnabled = isEnabled
+            }
+        )
+    }
 
     private var themeColorScheme: ColorScheme? {
         switch state.themePreference {
@@ -223,8 +356,8 @@ struct ContentView: View {
                     state.fileToOpenInFilesTab = newValue?.path
                     state.fileToOpenInFilesTabWorkspaceDirectory = newValue?.workspaceDirectory
                     if newValue == nil, !useSplitLayout {
-                        selectedTab = 0
-                        state.selectedTab = 0
+                        selectedTab = RootTab.chat.rawValue
+                        state.selectedTab = RootTab.chat.rawValue
                     }
                 }
             }
@@ -234,7 +367,7 @@ struct ContentView: View {
     @ViewBuilder
     private var rootLayout: some View {
         if useSplitLayout {
-            splitLayout
+            tabletWorkspaceLayout
         } else {
             tabLayout
         }
@@ -411,7 +544,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture {
             return
         }
 
@@ -527,7 +660,7 @@ struct ContentView: View {
                 await Task.yield()
                 state.selectedTab = newTab
             }
-            if oldTab == 2 && newTab != 2 {
+            if oldTab == RootTab.settings.rawValue && newTab != RootTab.settings.rawValue {
                 Task { await state.refresh() }
             }
         }
@@ -537,6 +670,11 @@ struct ContentView: View {
                 await Task.yield()
                 selectedTab = newTab
             }
+        }
+        .onChange(of: carModeEnabled) { _, isEnabled in
+            guard !isEnabled, selectedTab == RootTab.car.rawValue else { return }
+            selectedTab = RootTab.chat.rawValue
+            state.selectedTab = RootTab.chat.rawValue
         }
         .sheet(item: filePreviewSheetItem) { wrapper in
             NavigationStack {
@@ -548,8 +686,8 @@ struct ContentView: View {
                                     state.fileToOpenInFilesTab = nil
                                     state.fileToOpenInFilesTabWorkspaceDirectory = nil
                                     if !useSplitLayout {
-                                        selectedTab = 0
-                                        state.selectedTab = 0
+                                        selectedTab = RootTab.chat.rawValue
+                                        state.selectedTab = RootTab.chat.rawValue
                                     }
                                 }
                             } label: {
@@ -564,7 +702,7 @@ struct ContentView: View {
             Task { await state.refresh() }
         }) {
             NavigationStack {
-                SettingsTabView(state: state)
+                SettingsTabView(state: state, isCarModeEnabled: carModeEnabledBinding)
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             Button(L10n.t(.appClose)) { showSettingsSheet = false }
@@ -574,27 +712,55 @@ struct ContentView: View {
         }
     }
 
-    /// iPhone：Tab Bar 三 Tab
+    @ViewBuilder
     private var tabLayout: some View {
+        if showsCarMode {
+            carEnabledTabLayout
+        } else {
+            standardTabLayout
+        }
+    }
+
+    private var standardTabLayout: some View {
         TabView(selection: $selectedTab) {
             ChatTabView(state: state)
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
-                .tag(0)
+                .tag(RootTab.chat.rawValue)
 
             FilesTabView(state: state)
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
-                .tag(1)
+                .tag(RootTab.files.rawValue)
 
-            SettingsTabView(state: state)
+            SettingsTabView(state: state, isCarModeEnabled: carModeEnabledBinding)
                 .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
-                .tag(2)
+                .tag(RootTab.settings.rawValue)
+        }
+    }
+
+    private var carEnabledTabLayout: some View {
+        TabView(selection: $selectedTab) {
+            ChatTabView(state: state)
+                .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
+                .tag(RootTab.chat.rawValue)
+
+            FilesTabView(state: state)
+                .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
+                .tag(RootTab.files.rawValue)
+
+            CarModeView(state: state)
+                .tabItem { Label(L10n.t(.carTab), systemImage: "car.fill") }
+                .tag(RootTab.car.rawValue)
+
+            SettingsTabView(state: state, isCarModeEnabled: carModeEnabledBinding)
+                .tabItem { Label(L10n.t(.navSettings), systemImage: "gear") }
+                .tag(RootTab.settings.rawValue)
         }
     }
 
     /// iPad / Vision Pro：Android-aligned three-pane layout.
     @State private var sessionsCollapsed: Bool = false
 
-    private var splitLayout: some View {
+    private var tabletWorkspaceLayout: some View {
         GeometryReader { geo in
             let total = geo.size.width
             // 折叠时 Sessions 宽度收为 0，Files / Chat 平分总宽度。
@@ -651,6 +817,7 @@ struct ContentView: View {
                 }
             }
         }
+        .accessibilityIdentifier("ipad-workspace-layout")
     }
 }
 
@@ -742,7 +909,7 @@ private struct TabletSessionsColumn: View {
         NavigationStack {
             Group {
                 if showSettings {
-                    SettingsTabView(state: state)
+                    SettingsTabView(state: state, isCarModeEnabled: .constant(false))
                 } else if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
@@ -829,6 +996,7 @@ private struct TabletSessionsColumn: View {
                             } label: {
                                 Image(systemName: "gear")
                             }
+                            .accessibilityIdentifier("ipad-settings-button")
                         }
                     }
                 }

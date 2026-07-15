@@ -172,18 +172,22 @@ final class AppState {
     static let hostProfilesKey = "hostProfiles.v1"
     static let currentHostProfileIDKey = "currentHostProfileID.v1"
     static let aiUsageDashboardURLKey = "aiUsageDashboardURL"
+    static let carModeEnabledKey = "carModeEnabled"
     static let languagePreferenceKey = L10n.languagePreferenceUserDefaultsKey
+    static let carSessionsByContextKey = "carSessionsByContext.v1"
 
     init(
         apiClient: APIClientProtocol = APIClient(),
         sseClient: SSEClientProtocol = SSEClient(),
         sshTunnelManager: SSHTunnelManager? = nil,
-        aiUsageQuotaClient: AIUsageQuotaClientProtocol = AIUsageQuotaClient()
+        aiUsageQuotaClient: AIUsageQuotaClientProtocol = AIUsageQuotaClient(),
+        carSpeechOutput: CarSpeechOutputProviding? = nil
     ) {
         self.apiClient = apiClient
         self.sseClient = sseClient
         self.sshTunnelManager = sshTunnelManager ?? SSHTunnelManager()
         self.aiUsageQuotaClient = aiUsageQuotaClient
+        self.carSpeechOutput = carSpeechOutput ?? CarSpeechOutputService()
         if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
             if storedServer == APIConstants.legacyDefaultServer {
                 _serverURL = APIClient.defaultServer
@@ -207,6 +211,7 @@ final class AppState {
         _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
         _languagePreference = L10n.languagePreference
         _aiUsageDashboardURL = UserDefaults.standard.string(forKey: Self.aiUsageDashboardURLKey) ?? ""
+        isCarModeEnabled = UserDefaults.standard.bool(forKey: Self.carModeEnabledKey)
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
         let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
@@ -226,6 +231,11 @@ final class AppState {
         if let data = UserDefaults.standard.data(forKey: Self.selectedModelBySessionKey),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             selectedModelIDBySessionID = decoded
+        }
+
+        if let data = UserDefaults.standard.data(forKey: Self.carSessionsByContextKey),
+           let decoded = try? JSONDecoder().decode([String: CarSessionRecord].self, from: data) {
+            carSessionsByContext = decoded
         }
     }
 
@@ -331,6 +341,9 @@ final class AppState {
     var isRefreshingAIUsageProviders = false
     var aiUsageQuotaTestOK = false
     var aiUsageQuotaError: String?
+    var isCarModeEnabled = false {
+        didSet { UserDefaults.standard.set(isCarModeEnabled, forKey: Self.carModeEnabledKey) }
+    }
     var isConnected: Bool = false
     var serverVersion: String?
     var connectionError: String?
@@ -521,7 +534,7 @@ final class AppState {
 
     var sessionDiffs: [FileDiff] { get { fileStore.sessionDiffs } set { fileStore.sessionDiffs = newValue } }
     var selectedDiffFile: String? { get { fileStore.selectedDiffFile } set { fileStore.selectedDiffFile = newValue } }
-    var selectedTab: Int = 0  // 0=Chat, 1=Files, 2=Settings
+    var selectedTab: Int = RootTab.chat.rawValue
     var fileToOpenInFilesTab: String?  // 从 Chat 中 tool 点击跳转时设置，Files tab 或 sheet 展示
     var fileToOpenInFilesTabWorkspaceDirectory: String?
 
@@ -548,6 +561,14 @@ final class AppState {
     let sshTunnelManager: SSHTunnelManager
     let aiUsageQuotaClient: AIUsageQuotaClientProtocol
     var sseTask: Task<Void, Never>?
+
+    var carSessionsByContext: [String: CarSessionRecord] = [:]
+    var carPhase: CarModePhase = .idle
+    var carLastTranscript = ""
+    var carLastResponse: CarResponseEnvelope?
+    var carError: String?
+    var carActiveTurnID: UUID?
+    let carSpeechOutput: CarSpeechOutputProviding
 
     /// Guard against race conditions when rapidly switching sessions.
     /// Each selectSession call generates a new ID; async tasks check if they're still current.

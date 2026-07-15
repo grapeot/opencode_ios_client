@@ -96,6 +96,37 @@ nonisolated struct Message: Codable, Identifiable {
     let finish: String?
     let tokens: TokenInfo?
     let cost: Double?
+    let structured: CarResponseEnvelope?
+
+    init(
+        id: String,
+        sessionID: String,
+        role: String,
+        parentID: String?,
+        providerID: String?,
+        modelID: String?,
+        model: ModelInfo?,
+        error: MessageError?,
+        time: TimeInfo,
+        finish: String?,
+        tokens: TokenInfo?,
+        cost: Double?,
+        structured: CarResponseEnvelope? = nil
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.role = role
+        self.parentID = parentID
+        self.providerID = providerID
+        self.modelID = modelID
+        self.model = model
+        self.error = error
+        self.time = time
+        self.finish = finish
+        self.tokens = tokens
+        self.cost = cost
+        self.structured = structured
+    }
 
     struct ModelInfo: Codable {
         let providerID: String

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AVFoundation
 import SwiftUI
 import Testing
 import VoiceFlowKit
@@ -114,6 +115,97 @@ struct OpenCodeClientTests {
         #expect(message.tokens?.output == 2)
         #expect(message.tokens?.reasoning == 3)
         #expect(message.tokens?.total == 15)
+    }
+
+    @Test func structuredCarMessageDecoding() throws {
+        let json = """
+        {"id":"a1","sessionID":"car-1","role":"assistant","parentID":"u1","time":{"created":1,"completed":2},"finish":"tool-calls","structured":{"version":1,"status":"needs_confirmation","speech":"Open the route?","confirmation":{"id":"confirm-1","prompt":"Confirm or cancel"},"clientActions":[]}}
+        """
+        let message = try JSONDecoder().decode(Message.self, from: Data(json.utf8))
+        #expect(message.structured?.version == 1)
+        #expect(message.structured?.status == .needsConfirmation)
+        #expect(message.structured?.confirmation?.id == "confirm-1")
+        #expect(message.finish == "tool-calls")
+    }
+
+    @Test func carNavigationURLUsesTypedDestination() throws {
+        let action = CarClientAction(
+            id: "route-1",
+            type: "open_navigation",
+            destination: "Space Needle, Seattle",
+            waypoints: ["Pike Place Market"]
+        )
+        let url = try #require(CarClientActionDispatcher.navigationURL(for: action))
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        #expect(components.host == "maps.apple.com")
+        #expect(query["daddr"] == "Space Needle, Seattle")
+        #expect(query["dirflg"] == "d")
+        #expect(query["waypoints"] == "Pike Place Market")
+
+        let rejected = CarClientAction(id: "bad", type: "open_url", destination: "https://example.com", waypoints: nil)
+        #expect(CarClientActionDispatcher.navigationURL(for: rejected) == nil)
+    }
+
+    @Test func carSpeechUsesPlaybackAudioPolicy() {
+        #expect(CarSpeechAudioPolicy.category == .playback)
+        #expect(CarSpeechAudioPolicy.mode == .spokenAudio)
+        #expect(CarSpeechAudioPolicy.options.contains(.duckOthers))
+        #expect(!CarSpeechAudioPolicy.options.contains(.allowBluetoothHFP))
+    }
+
+    @Test func rootTabOrderKeepsCarModeOnIPhoneAfterFiles() {
+        #expect(RootTab.chat.rawValue == 0)
+        #expect(RootTab.files.rawValue == 1)
+        #expect(RootTab.car.rawValue == 2)
+        #expect(RootTab.settings.rawValue == 3)
+    }
+
+    @Test @MainActor func carModeFeatureFlagDefaultsOffAndPersists() {
+        let previous = UserDefaults.standard.object(forKey: AppState.carModeEnabledKey)
+        UserDefaults.standard.removeObject(forKey: AppState.carModeEnabledKey)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: AppState.carModeEnabledKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.carModeEnabledKey) }
+        }
+
+        let initial = AppState()
+        #expect(!initial.isCarModeEnabled)
+
+        initial.isCarModeEnabled = true
+        #expect(AppState().isCarModeEnabled)
+    }
+
+    @Test @MainActor func structuredSpeechFallsBackWhenAssistantHasNoTextPart() {
+        let envelope = CarResponseEnvelope(
+            version: 1,
+            status: .completed,
+            speech: "The garage door is closed.",
+            confirmation: nil,
+            clientActions: []
+        )
+        let info = Message(
+            id: "assistant-car",
+            sessionID: "car-session",
+            role: "assistant",
+            parentID: "user-car",
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: .init(created: 1, completed: 2),
+            finish: "tool-calls",
+            tokens: nil,
+            cost: nil,
+            structured: envelope
+        )
+        let message = MessageWithParts(info: info, parts: [])
+        #expect(MessageRowView.structuredSpeechFallback(for: message) == envelope.speech)
+
+        let textPart = try! JSONDecoder().decode(Part.self, from: Data("""
+        {"id":"p1","messageID":"assistant-car","sessionID":"car-session","type":"text","text":"Visible text"}
+        """.utf8))
+        #expect(MessageRowView.structuredSpeechFallback(for: MessageWithParts(info: info, parts: [textPart])) == nil)
     }
 
     // Regression: server.connected event has no directory; SSEEvent.directory must be optional
@@ -2700,6 +2792,10 @@ actor MockAPIClient: APIClientProtocol {
     var messagesCallCount = 0
     var promptError: Error?
     var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
+    var promptStructuredCalls: [(sessionID: String, text: String, system: String, agent: String, providerID: String, modelID: String)] = []
+    var promptStructuredResult: MessageWithParts?
+    var sessionResult: Session?
+    var sessionError: Error?
     var deletedSessionIDs: [String] = []
     var updateSessionCalls: [(String, String)] = []
     var updateSessionArchivedCalls: [(String, Int)] = []
@@ -2708,6 +2804,7 @@ actor MockAPIClient: APIClientProtocol {
     var fileListResults: [String: [FileNode]] = [:]
     var fileListRequests: [(path: String, directory: String?)] = []
     var fileContentRequests: [(path: String, directory: String?)] = []
+    var abortSessionIDs: [String] = []
 
     func setHealthError(_ error: Error?) {
         healthError = error
@@ -2745,6 +2842,14 @@ actor MockAPIClient: APIClientProtocol {
         promptError = error
     }
 
+    func setPromptStructuredResult(_ result: MessageWithParts) {
+        promptStructuredResult = result
+    }
+
+    func setSessionError(_ error: Error?) {
+        sessionError = error
+    }
+
     func setForkSessionResult(_ session: Session) {
         forkSessionResult = session
     }
@@ -2777,6 +2882,10 @@ actor MockAPIClient: APIClientProtocol {
     func sessions(directory: String?, limit: Int) async throws -> [Session] {
         sessionLimitRequests.append(limit)
         return sessionsByLimit[limit] ?? sessionsResult
+    }
+    func session(sessionID: String) async throws -> Session {
+        if let sessionError { throw sessionError }
+        return sessionResult ?? createSessionResult
     }
     func createSession(title: String?) async throws -> Session { createSessionResult }
 
@@ -2828,7 +2937,16 @@ actor MockAPIClient: APIClientProtocol {
         if let promptError { throw promptError }
     }
 
-    func abort(sessionID: String) async throws {}
+    func promptStructured(sessionID: String, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts {
+        promptStructuredCalls.append((sessionID, text, system, agent, model.providerID, model.modelID))
+        if let promptError { throw promptError }
+        guard let promptStructuredResult else { throw CarModeError.invalidResponse }
+        return promptStructuredResult
+    }
+
+    func abort(sessionID: String) async throws {
+        abortSessionIDs.append(sessionID)
+    }
     func sessionStatus() async throws -> [String: SessionStatus] { [:] }
     func pendingPermissions() async throws -> [APIClient.PermissionRequest] { [] }
     func respondPermission(sessionID: String, permissionID: String, response: APIClient.PermissionResponse) async throws {}
@@ -2864,6 +2982,194 @@ actor MockAPIClient: APIClientProtocol {
         revertSessionCalls.append((sessionID, messageID, partID))
         if let revertSessionError { throw revertSessionError }
         return revertSessionResult
+    }
+}
+
+@MainActor
+final class MockCarSpeechOutput: CarSpeechOutputProviding {
+    var spokenTexts: [String] = []
+    var stopCount = 0
+
+    func speak(_ text: String) async {
+        spokenTexts.append(text)
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+}
+
+struct CarModeFlowTests {
+    @Test @MainActor func submitCarTurnReusesScopedSessionAndSpeaksOnce() async throws {
+        let defaultsKey = AppState.carSessionsByContextKey
+        let oldValue = UserDefaults.standard.data(forKey: defaultsKey)
+        UserDefaults.standard.removeObject(forKey: defaultsKey)
+        defer {
+            if let oldValue { UserDefaults.standard.set(oldValue, forKey: defaultsKey) }
+            else { UserDefaults.standard.removeObject(forKey: defaultsKey) }
+        }
+
+        let api = MockAPIClient()
+        let speech = MockCarSpeechOutput()
+        let state = AppState(
+            apiClient: api,
+            sseClient: MockSSEClient(),
+            sshTunnelManager: SSHTunnelManager(),
+            carSpeechOutput: speech
+        )
+        state.isConnected = true
+        state.serverCurrentProjectWorktree = "/tmp/car-workspace"
+        let session = Session(
+            id: "car-session",
+            slug: "car-session",
+            projectID: "p1",
+            directory: "/tmp/car-workspace",
+            parentID: nil,
+            title: "Car Mode",
+            version: "1",
+            time: .init(created: 1, updated: 1, archived: nil),
+            share: nil,
+            summary: nil
+        )
+        await api.setCreateSessionResult(session)
+        await api.setPromptStructuredResult(MessageWithParts(
+            info: Message(
+                id: "assistant-1",
+                sessionID: session.id,
+                role: "assistant",
+                parentID: "user-1",
+                providerID: "openai",
+                modelID: "gpt-5.6-sol-fast",
+                model: nil,
+                error: nil,
+                time: .init(created: 2, completed: 3),
+                finish: "tool-calls",
+                tokens: nil,
+                cost: nil,
+                structured: CarResponseEnvelope(
+                    version: 1,
+                    status: .completed,
+                    speech: "The garage door is closed.",
+                    confirmation: nil,
+                    clientActions: []
+                )
+            ),
+            parts: []
+        ))
+
+        await state.submitCarTurn("Is the garage closed?")
+        await state.submitCarTurn("Is the garage still closed?")
+
+        #expect(state.currentCarSessionID == session.id)
+        #expect(state.carPhase == .idle)
+        #expect(speech.spokenTexts == ["The garage door is closed."])
+        #expect(await api.promptStructuredCalls.count == 2)
+        #expect(await api.promptStructuredCalls.first?.modelID == "gpt-5.6-sol-fast")
+    }
+
+    @Test @MainActor func carSessionContextSeparatesHostsAndWorkspaces() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.serverCurrentProjectWorktree = "/workspace/a"
+        let first = state.carContextKey
+        state.serverCurrentProjectWorktree = "/workspace/b"
+        let second = state.carContextKey
+        state.currentHostProfileID = UUID()
+        let third = state.carContextKey
+
+        #expect(first != second)
+        #expect(second != third)
+    }
+
+    @Test @MainActor func selectedProjectCannotReuseServerDefaultCarSession() async {
+        let oldSelection = UserDefaults.standard.string(forKey: AppState.selectedProjectWorktreeKey)
+        defer {
+            if let oldSelection { UserDefaults.standard.set(oldSelection, forKey: AppState.selectedProjectWorktreeKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.selectedProjectWorktreeKey) }
+        }
+        let api = MockAPIClient()
+        let state = AppState(apiClient: api, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.isConnected = true
+        state.serverCurrentProjectWorktree = "/workspace/server-default"
+        state.selectedProjectWorktree = "/workspace/selected"
+
+        await state.submitCarTurn("Hello")
+
+        #expect(state.carPhase == .failed)
+        #expect(state.carError == CarModeError.selectedProjectUnsupported.localizedDescription)
+        #expect(await api.promptStructuredCalls.isEmpty)
+    }
+
+    @Test @MainActor func failedStructuredResponseKeepsCarModeFailed() async throws {
+        let oldSelection = UserDefaults.standard.string(forKey: AppState.selectedProjectWorktreeKey)
+        let oldCarSessions = UserDefaults.standard.data(forKey: AppState.carSessionsByContextKey)
+        UserDefaults.standard.removeObject(forKey: AppState.carSessionsByContextKey)
+        defer {
+            if let oldSelection { UserDefaults.standard.set(oldSelection, forKey: AppState.selectedProjectWorktreeKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.selectedProjectWorktreeKey) }
+            if let oldCarSessions { UserDefaults.standard.set(oldCarSessions, forKey: AppState.carSessionsByContextKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.carSessionsByContextKey) }
+        }
+        let api = MockAPIClient()
+        let speech = MockCarSpeechOutput()
+        let state = AppState(
+            apiClient: api,
+            sseClient: MockSSEClient(),
+            sshTunnelManager: SSHTunnelManager(),
+            carSpeechOutput: speech
+        )
+        state.isConnected = true
+        state.selectedProjectWorktree = nil
+        let session = Session(
+            id: "car-failed",
+            slug: "car-failed",
+            projectID: "p1",
+            directory: "/tmp",
+            parentID: nil,
+            title: "Car Mode",
+            version: "1",
+            time: .init(created: 1, updated: 1, archived: nil),
+            share: nil,
+            summary: nil
+        )
+        await api.setCreateSessionResult(session)
+        await api.setPromptStructuredResult(MessageWithParts(
+            info: Message(
+                id: "assistant-failed",
+                sessionID: session.id,
+                role: "assistant",
+                parentID: "user-1",
+                providerID: "openai",
+                modelID: "gpt-5.6-sol-fast",
+                model: nil,
+                error: nil,
+                time: .init(created: 2, completed: 3),
+                finish: "tool-calls",
+                tokens: nil,
+                cost: nil,
+                structured: CarResponseEnvelope(
+                    version: 1,
+                    status: .failed,
+                    speech: "I could not complete that request.",
+                    confirmation: nil,
+                    clientActions: []
+                )
+            ),
+            parts: []
+        ))
+
+        await state.submitCarTurn("Try it")
+
+        #expect(state.carPhase == .failed)
+        #expect(speech.spokenTexts == ["I could not complete that request."])
+    }
+
+    @Test @MainActor func cancellingWithoutActiveTurnDoesNotAbortSession() async {
+        let api = MockAPIClient()
+        let state = AppState(apiClient: api, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+
+        await state.cancelCarInteraction()
+
+        #expect(await api.abortSessionIDs.isEmpty)
     }
 }
 

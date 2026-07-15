@@ -191,6 +191,11 @@ struct MessageRowView: View {
         return trimmed.contains("\n\n")
     }
 
+    static func structuredSpeechFallback(for message: MessageWithParts) -> String? {
+        guard !message.parts.contains(where: { $0.isText }) else { return nil }
+        return message.info.structured?.speech
+    }
+
     private struct LargeMessagePreview: View {
         let text: String
         let preview: String
@@ -280,6 +285,12 @@ struct MessageRowView: View {
             // No "OpenCode" speaker title — the user's blue left-bar vs the
             // assistant's container-less reply already make it clear who's
             // speaking, so an extra blue label is redundant.
+            if let structuredSpeech = Self.structuredSpeechFallback(for: message) {
+                markdownText(structuredSpeech, isUser: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("structured-assistant-speech")
+            }
+
             ForEach(assistantBlocks) { block in
                 switch block {
                 case .text(let part):
