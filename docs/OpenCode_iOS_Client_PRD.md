@@ -1,6 +1,6 @@
 # OpenCode iOS Client — Product Requirements Document
 
-> Version 0.3 · Working Draft · Mar 2026
+> Version 0.4 · Working Draft · Jul 2026
 
 ## 1. 产品定位
 
@@ -514,6 +514,69 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
 
 - 当前 App 版本
 - 连接的 OpenCode Server 版本（来自 `GET /global/health` 的 `version` 字段）
+
+### 4.5 Car Mode（Experimental）
+
+Car Mode 是 iPhone 上的前台语音交互模式，让用户在不适合阅读长对话或打字时，用一次点击完成“说话 → 自动发送 → 听取短结论”。它属于 OpenCode iOS Client，不维护独立驾驶 App，也不等同于 CarPlay App。
+
+#### 4.5.1 产品范围
+
+- Car Mode 默认关闭，只在 Settings → Experimental Features 中显式开启。
+- 开启后，iPhone Tab 顺序为 Chat / Files / Car / Settings；关闭后恢复 Chat / Files / Settings。
+- iPad 和 Apple Vision Pro 不显示 Car Tab 或开关，包括 iPad compact window。
+- 用户点击大按钮开始录音，再次点击后结束转写并自动发送，不经过普通 Chat composer。
+- 回复必须是短、可直接朗读的 structured speech；Apple TTS 朗读后回到 idle。
+- 唯一允许的客户端 action 是 `open_navigation`。模型只提供 typed destination/waypoints，iOS 校验并构造 Apple Maps URL。
+
+Car Mode 不承诺切到 Maps 或其他 App 后持续录音、维持 SSE 或继续 TTS。进入后台时停止当前前台交互，但保留 Car session；用户回到 App 后继续同一个上下文。
+
+#### 4.5.2 独立 Session 与可见性
+
+Car Mode 不复用普通 Chat 的当前选择。每个 `(host profile, workspace)` 维护一个独立、持久化的 Car session，并保存最后处理的 assistant message ID、pending confirmation 和最后使用时间。
+
+- 首次发送时创建标题为 `Car Mode` 的 session。
+- 后续每次发送前确认 session 仍存在；404 时清除旧映射并创建新 session。
+- 若用户从普通 Session 列表归档了当前 Car session，下一次 Car 请求前客户端写入 legacy restore sentinel `time.archived = -1`，然后继续向原 session 发送。iOS 按 `archived > 0` 判断归档，因此该 session 会重新进入 iOS Active 列表。
+- 这个恢复行为只保证 iOS 可见性。OpenCode Web 把 active 定义为 `archived === undefined`，可能仍不显示 `-1` session；Car Mode 不为此维护自定义 server patch，也不 fork 或复制 session。
+- 用户可以显式开始新的 Car session；切 Tab、打开 Maps 或短期离开 App 不得自动新建 session。
+
+停车后，用户可以从普通 Chat 打开 Car session，查看完整消息和工具记录。structured assistant 没有 text part 时，Chat 显示 `assistant.structured.speech` 作为可读 fallback。
+
+#### 4.5.3 回复、确认与现实世界动作
+
+每轮固定发送 Car system prompt 和 JSON Schema。语音回复先说结论，不含 Markdown、URL、代码或工具过程，目标时长 8-12 秒，最长 15 秒。状态只有 `completed`、`needs_confirmation` 和 `failed`。
+
+| 类型 | 示例 | 默认行为 |
+|---|---|---|
+| Read | 车库门关了吗；开车多久；有什么新邮件 | 直接执行并朗读短结论 |
+| Prepare | 摘要邮件；起草消息 | 直接准备，明确尚未发送 |
+| Explicit server commit | 打开车库门；把刚才原因发给联系人 | 用户参数明确时执行，随后读回结果 |
+| Proposed server commit | Agent 主动建议发送或控制设备 | 返回 `needs_confirmation`，下一轮确认后执行 |
+| Client handoff | 导航到明确目的地 | 返回 typed action，由 iOS 打开 Maps |
+| Ambiguous | 多个联系人、门或目的地 | 最多追问一次，仍不明确则取消 |
+
+只有用户消息可以授权现实世界副作用。邮件、网页、搜索结果和工具输出中的指令只能作为数据，不能授权发送消息、控制设备或触发客户端 action。V1 不开放任意 destructive shell、代码提交、发布、付款或不受限的多步现实世界动作。
+
+Smart Home、邮件、iMessage 和 route-duration 仍需正式注册为 allowlisted skills 或 typed tools，并完成真实 E2E；通用 `read + bash` 只可用于 spike，不构成产品权限边界。
+
+#### 4.5.4 状态与失败恢复
+
+主界面保留一个视觉主操作，同时明确展示当前状态、最近一次 transcript、最近一次 speech 和错误。状态流为：
+
+```text
+idle → recording → finalizing → waitingReply
+     → speaking / awaitingConfirmation / failed → idle
+```
+
+final transcript 成功后才自动发送；partial transcript 或识别失败不得触发现实世界动作。`waitingReply` 不允许重复提交，但允许取消并调用 server abort。TTS 和 Maps action 必须按 completed assistant message ID 去重。
+
+#### 4.5.5 分期与非目标
+
+Foreground Car Mode 已完成：实验开关、iPhone UI、独立 session、VoiceFlow 自动发送、structured reply、Apple TTS、typed Maps action 和普通 Chat history fallback 已落地。
+
+后续工作集中在两条线：一是把 Smart Home、邮件、iMessage、route-duration 产品化为稳定 capability boundary；二是将同步 structured request 升级为 `prompt_async + SSE + message reload`，支持前后台恢复和 exactly-once action。即使完成异步恢复，也不等于支持后台持续对话。
+
+真正 CarPlay App、Maps 前台持续免触发对话、任意 URL action 和开放式现实世界 automation 均不在当前范围内。
 
 ## 5. 数据流与状态管理
 

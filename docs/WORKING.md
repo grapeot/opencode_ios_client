@@ -4,10 +4,16 @@
 
 ## 当前状态
 
-- **最后更新**：2026-07-14
+- **最后更新**：2026-07-15
 - **分支**：`car-mode`
 - **编译/测试**：Car Mode build-for-testing、327 unit tests、3 个 iPhone UI tests、1 个 iPad 隐藏测试和 visionOS build 均通过
-- **Phase**：Foreground Car Mode implemented；live server restart 后的 history 复验待完成
+- **Phase**：Foreground Car Mode implemented；Car session 归档后由客户端恢复 iOS Active 状态
+
+### 2026-07-15 — Car session active 恢复与文档收敛
+
+- 每个 Car turn 发送前检查持久化 session；若 `time.archived > 0`，客户端写入 legacy restore sentinel `-1` 后继续使用原 session。该行为不 fork、不复制历史，也不要求 archive-list server patch。
+- iOS 按 `archived > 0` 区分 Active / Archived，因此恢复后重新出现在 iOS Active 列表。OpenCode Web 只接受 `archived === undefined` 的差异不纳入本功能保证。
+- Car Mode 产品需求并入 `OpenCode_iOS_Client_PRD.md`，技术 contract 与验证证据并入 `OpenCode_iOS_Client_RFC.md`；删除独立 `car_mode_design.md`，避免三份文档漂移。
 
 ### 2026-07-14 — Car Mode 实现与 server history 修复
 
@@ -18,13 +24,13 @@
 - 客户端 action allowlist 仅含 `open_navigation`，由 iOS 校验 typed destination/waypoints 后构造 Apple Maps URL。
 - 普通 Chat 在 structured assistant 没有 text part 时显示 `assistant.structured.speech`，并新增 UI fixture 验证 Car history 可见。
 - nested server commit `43a4a0e53` 修复 structured user message 的 `info.format` wire schema；schema/opencode 定向测试和 typecheck 通过。
-- 当前 4096 是 Zellij `z_dev` 中、修复 commit 之前启动的 Bun source process。用户按原配置重启后会直接加载当前 checkout 的新源码，不需要构建 dist binary；在重启前 live history endpoint 仍保留旧行为。
+- live 4096 已验证可读取目标 Car session 的完整 structured history；14 条消息和 3 条 structured assistant 均保留。
 - 验证：固定 iPhone simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，`-parallel-testing-enabled NO`；327 unit tests、三个 iPhone Car UI tests、一个 iPad 隐藏测试和 visionOS simulator build 均通过。iPad 测试同时确认 Car 页面和 Settings 开关均不存在。
-- 真机已确认 TTS 正常出声。剩余 live 复验：server 重启后真实 structured Car session 可在普通 Chat 读取。Smart Home、邮件、iMessage、route-duration skills 仍未产品化或完成真实 E2E。
+- 真机已确认 TTS 正常出声，live structured Car history 已可读取。Smart Home、邮件、iMessage、route-duration skills 仍未产品化或完成真实 E2E。
 
 ### 2026-07-13 — Car Mode feasibility 与设计
 
-- 新增 `docs/car_mode_design.md`，将驾驶语音入口收敛为 OpenCode iOS 内的独立 Car Mode，而不是继续维护独立 App。
+- 完成 Car Mode feasibility 设计，将驾驶语音入口收敛为 OpenCode iOS 内的独立模式；结论现已归入主 PRD/RFC。
 - live OpenCode API 已验证：`system + format(json_schema)` 能返回 `assistant.structured`；同一 session 第二轮可复用上一轮目的地；tool 执行后仍可返回 structured final。
 - 发现 production blocker：structured user message 持久化 `format` 后，message list endpoint 会在 `info.format` 输出校验时报 `OutputFormatJsonSchema` BadRequest。同步 `/message` 可做 UI/TTS spike，但历史恢复、Chat 查看和异步 exactly-once 处理前必须修复 server schema。
 - live `skill` tool 当前未注册 workspace 的 Smart Home、邮件、iMessage 和地图 skills；产品化需正式注册 Car allowlist 或改为 typed tools，不能把通用 `read + bash` 当稳定权限边界。

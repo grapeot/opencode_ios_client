@@ -607,6 +607,107 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 - **交互**：点击 ring 弹 sheet 展示 provider/model、context limit、total tokens、token breakdown（input/output/reasoning/cache read/cache write）与 total cost。
 - **常驻可见**：ring 在 idle、busy、streaming 等所有状态下始终显示。`ChatTabView` 不向 `.navigationBarTrailing` 注入 `ProgressView`；busy 状态已由输入栏红色停止按钮传达，toolbar spinner 已移除。
 
+### 10. Car Mode 技术方案（已实现 Foreground Phase）
+
+#### 10.1 组件与平台门控
+
+Car Mode 只在 iPhone 编译路径和运行时 idiom 下显示。`isCarModeEnabled` 持久化于 UserDefaults，默认 `false`；Settings 的开关和 Car Tab 使用同一个条件。iPad、iPad compact window 与 visionOS 均不暴露入口。
+
+主要组件：
+
+- `AppState+CarMode.swift`：session lifecycle、turn state、structured response 和 exactly-once 状态。
+- `Models/CarMode.swift`：versioned response envelope 与 JSON Schema。
+- `Views/Car/CarModeView.swift`：录音、等待、朗读、确认和失败 UI。
+- `CarSpeechOutputService.swift`：Apple TTS 与 AudioSession 切换。
+- `CarClientActionDispatcher.swift`：typed Maps action allowlist。
+- `APIClient.promptStructured(...)`：同步 `POST /session/:id/message` wrapper。
+
+#### 10.2 Structured Prompt Contract
+
+每轮请求显式携带 `system` 和 `format: json_schema`，固定使用 `build` agent 与 `openai/gpt-5.6-sol-fast`。server 通过 StructuredOutput tool 校验并把结果写入 `assistant.structured`。客户端不从自然语言 text part 推断 action，也不因 structured assistant 的 `finish == tool-calls` 判定失败。
+
+最小 envelope：
+
+```json
+{
+  "version": 1,
+  "status": "completed",
+  "speech": "车库门关着，状态刚刚更新。",
+  "confirmation": null,
+  "clientActions": []
+}
+```
+
+需要确认时，`status` 为 `needs_confirmation` 并携带稳定 confirmation ID；导航完成时最多返回一个 typed action：
+
+```json
+{
+  "version": 1,
+  "status": "completed",
+  "speech": "正在打开前往 Bright Horizons 的导航。",
+  "confirmation": null,
+  "clientActions": [
+    {
+      "id": "route-1",
+      "type": "open_navigation",
+      "destination": "Bright Horizons, Bellevue",
+      "waypoints": []
+    }
+  ]
+}
+```
+
+Schema 限制 version、status、speech 长度、action 数量和 action type。system prompt 约束 speech 先说结论、不含 Markdown/URL/代码、默认 8-12 秒且不超过 15 秒，并声明只有用户消息可以授权现实世界副作用。
+
+#### 10.3 Session Lifecycle 与归档恢复
+
+Car session key 为 `hostProfileID + effectiveProjectDirectory`，与普通 Chat 的 `currentSessionID` 分离。本地记录：
+
+```text
+sessionID
+lastHandledAssistantMessageID
+pendingConfirmationID
+lastUsedAt
+```
+
+每个 turn 都调用 `ensureCarSession()`：
+
+1. 无记录时创建 `Car Mode` session 并保存。
+2. 有记录时调用 `GET /session/:id`；404 清除记录并创建一次新 session。
+3. session 的 `time.archived > 0` 时，调用 `PATCH /session/:id` 写入 `{ "time": { "archived": -1 } }`，用 server 已接受的 legacy restore sentinel 恢复 iOS Active 状态，然后继续使用原 session。
+4. 不 fork、不复制历史，也不为 Web global list 修改 server。OpenCode Web 可能要求 `archived === undefined`，因此 `-1` 的跨客户端可见性不属于 Car Mode 保证。
+
+切后台、切 Tab 或打开 Maps 会停止录音、TTS 和当前前台 request，但不清除 session ID。用户显式选择 New Car Session 时才移除当前 context mapping。
+
+#### 10.4 Turn State 与 Exactly-Once
+
+```text
+idle
+→ recording
+→ finalizing
+→ waitingReply
+→ speaking / awaitingConfirmation / failed
+→ idle
+```
+
+只有 VoiceFlow final transcript 自动提交。响应必须同时满足目标 session、assistant role、`time.completed != nil`、可解码的 version 1 structured envelope 和非空 speech。客户端用 assistant message ID 去重 TTS/action，用 confirmation ID 关联下一轮。取消活动 turn 时停止 TTS，并 best-effort 调用 `POST /session/:id/abort`。
+
+当前 Foreground Phase 使用同步 endpoint，直接获得最终 assistant；普通 Chat 的异步 `prompt_async → SSE → reload` 不复用这条状态机。后续异步化仍需保留上述 completion predicate 和 exactly-once ID，不得仅凭 `session.status == idle` 触发朗读或 action。
+
+#### 10.5 Audio 与 Client Action
+
+VoiceFlow finalization 完成后先释放录音 AudioSession，再由 TTS service 切换到 `.playback` + `.spokenAudio`。这避免声音残留在 receiver 或 Bluetooth HFP route。录音开始或取消时停止当前朗读。
+
+`open_navigation` 是唯一客户端 action。dispatcher 校验 version/type、destination/waypoints 长度并严格 URL encode，再生成 Apple Maps unified URL。模型不得返回任意 URL。客户端先完成短 TTS，再打开 Maps；文案只能说“正在打开路线”，不能声称导航已经开始或路线已经修改。
+
+#### 10.6 Server Contract 与验证证据
+
+Car Mode 不维护 archive-list server patch。唯一独立 server compatibility 修复是 structured user message `info.format` 的 wire schema，使 `GET /session/:id/message` 能读取持久化 structured turns；该修复位于 nested checkout commit `43a4a0e53`，与 Car session active-list 行为无关。
+
+2026-07-13 live spike 已验证：同步 structured speech 返回有效 object；同一 session 第二轮保留上一轮目的地；tool execution 后仍能以 structured final 结束。它只证明通用 tool → structured 链路，不证明 Smart Home、邮件、iMessage 或 route-duration 已注册、授权或完成真实 E2E。
+
+客户端验证覆盖 unit state flow、structured history fallback、iPhone 实验开关与 Car UI、iPad 入口隐藏，以及 visionOS build。测试固定使用串行 `xcodebuild` 和 `-parallel-testing-enabled NO`。
+
 ---
 
 ## 实现规划
