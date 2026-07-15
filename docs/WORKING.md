@@ -16,7 +16,7 @@
 - 后台和 Host 切换会使旧 resolve generation 失效，避免 SSH 重连前丢链接或旧 Host 响应污染新 Host。
 - session list 刷新会保留当前已验证 session，避免历史目标落在 100 条窗口外后被覆盖；Files tree 使用目标 project directory 重新加载。
 - 新增 parser/state tests、Markdown tap fixture 和 cold pending fixture；同时固定 UI suites 的 portrait 前置条件，消除 launch tests 遗留方向导致的跨测试污染。
-- 设计和完整 E2E 计划见 `docs/TMP_deep_link.md`。Workspace private semantic-search overlay 已规定候选证据与 `[在 OpenCode 中打开](opencode://session/<id>)` 输出 contract。
+- 产品行为和技术 contract 已分别并入主 PRD §4.2.7 与 RFC §4.4。Workspace private semantic-search overlay 已规定候选证据与 `[在 OpenCode 中打开](opencode://session/<id>)` 输出 contract。
 
 ### 2026-07-15 — Car session active 恢复与文档收敛
 

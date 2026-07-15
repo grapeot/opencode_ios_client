@@ -480,6 +480,37 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 
 **实现**：仅当 `effectiveProjectDirectory == nil`（用户选 Server default）时允许创建。当用户选了具体 project 时，新建按钮置灰，旁加 info 图标，点击显示提示：需用命令行启动 OpenCode 并指定不同的工作目录，然后在此选 Server default 再创建。`canCreateSession` 控制按钮可用性。
 
+#### 4.4 Session Deep Link
+
+**协议**：V1 只接受 `opencode://session/<session_id>`。`OpenCodeDeepLinkParser` 是无副作用纯函数，要求 scheme 和 host 分别为 `opencode`、`session`，path 只有一个 segment，session ID 以 `ses_` 开头且后续仅含 ASCII 字母、数字、下划线或连字符。parser 拒绝 userinfo、port、query、fragment、多层 path、控制字符、Unicode、重复 percent encoding 和过长 ID。未知 scheme 不由 deep-link router 处理。
+
+**实现分层**：
+
+- `Utils/OpenCodeDeepLink.swift` 定义 URI contract 和 parser。
+- `AppState+DeepLinks.swift` 持有 `pendingDeepLink`、`deepLinkRouteState`、全局错误和 route generation token。
+- `ContentView.onOpenURL` 处理系统 cold/warm launch；`MessageRowView` 的 `OpenURLAction` 先识别 OpenCode link，再回落到既有 HTTP/workspace link resolver。
+- `Info.plist` 通过 `CFBundleURLTypes` 注册 `opencode` scheme；Debug 和 Release 共用同一配置。
+
+**解析状态机**：
+
+```text
+receive URL
+  -> strict parse
+  -> store latest pending route
+  -> wait while disconnected
+  -> GET /session/:id on current Host
+  -> apply target directory + upsert session
+  -> select session + hydrate Chat + reload Files
+```
+
+客户端必须在 `GET /session/:id` 成功前保留原 `currentSessionID` 和 messages。目标 session 不要求已进入当前 100 条列表窗口；验证后先按 `Session.directory` 设置已知 project 或 custom project，再 upsert 并调用现有 session hydration。Session 列表刷新需保留当前已验证 session，Files root/children 请求使用 `effectiveProjectDirectory`。
+
+**生命周期与并发**：cold launch 或 SSH 恢复期间只保存 pending route，连接成功后消费。App 进入后台或切换 Host 时更新 generation token，使旧 Host 的 in-flight 响应失效，同时保留最后一个 pending link 给新连接处理。新链接覆盖旧链接，不建立队列；同一 session 重复点击幂等。404 显示“当前 Host 不可用”，其他网络错误显示通用打开失败，二者均不切换上下文。
+
+**安全边界**：URL 不接受 server、Host Profile、凭证、模型、prompt、tool action 或任意 command。Deep link 只能由用户点击或系统显式唤起，不能因 Markdown 渲染自动执行。V1 不跨 Host 搜索，不恢复离线 archive DB，不支持 `?message=`。
+
+**验证**：unit tests 覆盖 parser 白名单、404/断连、project 切换、列表窗口保留和 route invalidation；fixture XCUITest 覆盖 assistant Markdown 点击与 cold pending route。完整系统验收使用 Simulator `simctl openurl` 和独立临时 server，不触碰 live `4096`。Agent 搜索输出另用 synthetic archive 验证 source、frontmatter session ID、候选去重和证据邻接；真实 Agent acceptance 保持 opt-in，不进入每次 unit test。
+
 ### 5. 消息与文档 UI
 
 #### 5.1 消息流
