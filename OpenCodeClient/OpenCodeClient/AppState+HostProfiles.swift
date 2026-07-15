@@ -164,6 +164,7 @@ extension AppState {
     func switchHostProfile(to id: UUID) async {
         guard id != currentHostProfileID,
               hostProfiles.contains(where: { $0.id == id }) else { return }
+        invalidateDeepLinkRoute(keepPending: true)
         persistRuntimeToCurrentHostProfile()
         disconnectSSE()
         #if !os(visionOS)
@@ -173,6 +174,7 @@ extension AppState {
         applyCurrentHostProfileToRuntime()
         resetConnectionRuntimeForHostSwitch()
         await refresh()
+        await processPendingDeepLinkIfPossible()
     }
 
     func deleteHostProfile(_ profile: HostProfile) throws {

@@ -131,6 +131,10 @@ struct MessageRowView: View {
                     )
                 )
                 .environment(\.openURL, OpenURLAction { url in
+                    if OpenCodeDeepLinkParser.handles(url) {
+                        state.receiveDeepLink(url)
+                        return .handled
+                    }
                     guard handlesWorkspaceLinks else {
                         openURL(url)
                         return .handled

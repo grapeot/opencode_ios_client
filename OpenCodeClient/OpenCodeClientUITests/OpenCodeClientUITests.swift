@@ -15,7 +15,7 @@ final class OpenCodeClientUITests: XCTestCase {
         // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
 
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
+        XCUIDevice.shared.orientation = .portrait
     }
 
     override func tearDownWithError() throws {
@@ -81,6 +81,34 @@ final class OpenCodeClientUITests: XCTestCase {
         attachment.name = "session-archive-fixture"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    func testAssistantSessionDeepLinkFixture() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_DEEP_LINK_FIXTURE"]
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Deep Link Source"].waitForExistence(timeout: 8))
+        let link = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Open target session"))
+            .firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 8), "Assistant Markdown session link should be accessible")
+        link.tap()
+
+        XCTAssertTrue(app.navigationBars["Deep Link Target"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.textViews["chat-input"].exists)
+    }
+
+    @MainActor
+    func testColdPendingSessionDeepLinkFixture() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_DEEP_LINK_FIXTURE"]
+        app.launchEnvironment["UITEST_INITIAL_DEEP_LINK"] = "opencode://session/ses_deep_link_target"
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Deep Link Target"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.textViews["chat-input"].exists)
     }
 
     @MainActor

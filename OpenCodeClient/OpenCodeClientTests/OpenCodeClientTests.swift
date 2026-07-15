@@ -2796,6 +2796,7 @@ actor MockAPIClient: APIClientProtocol {
     var promptStructuredResult: MessageWithParts?
     var sessionResult: Session?
     var sessionError: Error?
+    var sessionRequests: [String] = []
     var deletedSessionIDs: [String] = []
     var updateSessionCalls: [(String, String)] = []
     var updateSessionArchivedCalls: [(String, Int)] = []
@@ -2888,6 +2889,7 @@ actor MockAPIClient: APIClientProtocol {
         return sessionsByLimit[limit] ?? sessionsResult
     }
     func session(sessionID: String) async throws -> Session {
+        sessionRequests.append(sessionID)
         if let sessionError { throw sessionError }
         return sessionResult ?? createSessionResult
     }
@@ -3285,6 +3287,22 @@ struct AppStateFlowTests {
         #expect(state.fileTreeRoot.map(\.path) == ["src"])
         #expect(state.isFileExpanded("src"))
         #expect(state.cachedChildren(for: "src")?.map(\.path) == ["src/main.swift"])
+    }
+
+    @Test @MainActor func loadFileTreeUsesSelectedProjectDirectory() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.selectedProjectWorktree = "/tmp/target"
+
+        await state.loadFileTree()
+        _ = await state.loadFileChildren(path: "src")
+
+        let requests = await apiClient.fileListRequests
+        #expect(requests.count == 2)
+        #expect(requests[0].path == "")
+        #expect(requests[0].directory == "/tmp/target")
+        #expect(requests[1].path == "src")
+        #expect(requests[1].directory == "/tmp/target")
     }
 
     @Test @MainActor func testConnectionConfiguresInjectedClient() async {

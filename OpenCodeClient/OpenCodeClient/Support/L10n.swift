@@ -28,6 +28,10 @@ enum L10n {
         case appError
         case appSearchFiles
         case appSearchFilesTitle
+        case deepLinkOpening
+        case deepLinkInvalid
+        case deepLinkSessionUnavailable
+        case deepLinkOpenFailed
 
         case commonOk
         case commonCancel
@@ -457,6 +461,10 @@ enum L10n {
         Key.appError.rawValue: "Error",
         Key.appSearchFiles.rawValue: "Search files",
         Key.appSearchFilesTitle.rawValue: "Search files",
+        Key.deepLinkOpening.rawValue: "Opening session...",
+        Key.deepLinkInvalid.rawValue: "This OpenCode session link is invalid.",
+        Key.deepLinkSessionUnavailable.rawValue: "This session is not available on the current host. It may belong to another host or exist only in offline history.",
+        Key.deepLinkOpenFailed.rawValue: "OpenCode could not open this session. Check the current host connection and try again.",
         Key.commonOk.rawValue: "OK",
         Key.commonCancel.rawValue: "Cancel",
         Key.commonRetry.rawValue: "Retry",
@@ -883,6 +891,10 @@ enum L10n {
         Key.appError.rawValue: "错误",
         Key.appSearchFiles.rawValue: "搜索文件",
         Key.appSearchFilesTitle.rawValue: "搜索文件",
+        Key.deepLinkOpening.rawValue: "正在打开会话…",
+        Key.deepLinkInvalid.rawValue: "这个 OpenCode 会话链接无效。",
+        Key.deepLinkSessionUnavailable.rawValue: "当前主机上找不到这个会话。它可能属于其他主机，或只存在于离线历史中。",
+        Key.deepLinkOpenFailed.rawValue: "无法打开这个会话，请检查当前主机连接后重试。",
         Key.commonOk.rawValue: "确定",
         Key.commonCancel.rawValue: "取消",
         Key.commonRetry.rawValue: "重试",

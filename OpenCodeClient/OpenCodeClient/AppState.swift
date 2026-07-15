@@ -181,13 +181,17 @@ final class AppState {
         sseClient: SSEClientProtocol = SSEClient(),
         sshTunnelManager: SSHTunnelManager? = nil,
         aiUsageQuotaClient: AIUsageQuotaClientProtocol = AIUsageQuotaClient(),
-        carSpeechOutput: CarSpeechOutputProviding? = nil
+        carSpeechOutput: CarSpeechOutputProviding? = nil,
+        deepLinkSessionResolver: ((String) async throws -> Session)? = nil,
+        deepLinkHydratesSelection: Bool = true
     ) {
         self.apiClient = apiClient
         self.sseClient = sseClient
         self.sshTunnelManager = sshTunnelManager ?? SSHTunnelManager()
         self.aiUsageQuotaClient = aiUsageQuotaClient
         self.carSpeechOutput = carSpeechOutput ?? CarSpeechOutputService()
+        self.deepLinkSessionResolver = deepLinkSessionResolver
+        self.deepLinkHydratesSelection = deepLinkHydratesSelection
         if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
             if storedServer == APIConstants.legacyDefaultServer {
                 _serverURL = APIClient.defaultServer
@@ -350,6 +354,10 @@ final class AppState {
     var connectionDiagnostic: ConnectionDiagnostic?
     var pendingSSHHostKeyMismatch: SSHHostKeyMismatch?
     var sendError: String?
+    var pendingDeepLink: OpenCodeDeepLink?
+    var deepLinkRouteState: DeepLinkRouteState = .idle
+    var deepLinkError: String?
+    var deepLinkRouteID = UUID()
 
     // Session activity (rendered in transcript; session-scoped)
     var sessionActivities: [String: SessionActivity] = [:]
@@ -560,6 +568,8 @@ final class AppState {
     let sseClient: SSEClientProtocol
     let sshTunnelManager: SSHTunnelManager
     let aiUsageQuotaClient: AIUsageQuotaClientProtocol
+    let deepLinkSessionResolver: ((String) async throws -> Session)?
+    let deepLinkHydratesSelection: Bool
     var sseTask: Task<Void, Never>?
 
     var carSessionsByContext: [String: CarSessionRecord] = [:]
