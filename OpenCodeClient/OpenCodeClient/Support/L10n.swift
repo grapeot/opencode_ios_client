@@ -442,6 +442,7 @@ enum L10n {
         case activityGatheringThoughts
         case configureTitle
         case configureModel
+        case configureModelSearch
         case configureAgent
         case configureNoAgents
 
@@ -872,6 +873,7 @@ enum L10n {
 
         Key.configureTitle.rawValue: "Configure",
         Key.configureModel.rawValue: "Model",
+        Key.configureModelSearch.rawValue: "Search models",
         Key.configureAgent.rawValue: "Agent",
         Key.configureNoAgents.rawValue: "No agents available",
 
@@ -1302,6 +1304,7 @@ enum L10n {
 
         Key.configureTitle.rawValue: "配置",
         Key.configureModel.rawValue: "模型",
+        Key.configureModelSearch.rawValue: "搜索模型",
         Key.configureAgent.rawValue: "智能体",
         Key.configureNoAgents.rawValue: "暂无可用智能体",
 
