@@ -5,8 +5,9 @@ import UIKit
 
 enum CarClientActionDispatcher {
     static func navigationURL(for action: CarClientAction) -> URL? {
-        let destination = action.destination.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard action.type == "open_navigation", !destination.isEmpty, destination.count <= 240 else {
+        guard case .openNavigation(_, let rawDestination, let waypoints) = action else { return nil }
+        let destination = rawDestination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !destination.isEmpty, destination.count <= 240 else {
             return nil
         }
 
@@ -18,7 +19,7 @@ enum CarClientActionDispatcher {
             URLQueryItem(name: "daddr", value: destination),
             URLQueryItem(name: "dirflg", value: "d"),
         ]
-        if let waypoints = action.waypoints, !waypoints.isEmpty {
+        if let waypoints, !waypoints.isEmpty {
             let validWaypoints = waypoints
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty && $0.count <= 240 }

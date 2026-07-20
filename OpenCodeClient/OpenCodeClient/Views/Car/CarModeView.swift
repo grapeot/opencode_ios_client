@@ -36,7 +36,8 @@ struct CarModeView: View {
     private var primaryLabel: String {
         switch displayPhase {
         case .recording: return L10n.t(.carStopAndSend)
-        case .finalizing, .waitingReply: return L10n.t(.commonCancel)
+        case .finalizing: return L10n.t(.commonCancel)
+        case .waitingReply: return L10n.t(.carStopResponse)
         case .speaking: return L10n.t(.carStopSpeaking)
         case .awaitingConfirmation: return L10n.t(.carSpeakConfirmation)
         case .failed: return L10n.t(.commonRetry)

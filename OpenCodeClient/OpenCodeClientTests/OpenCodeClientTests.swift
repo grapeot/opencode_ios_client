@@ -129,9 +129,8 @@ struct OpenCodeClientTests {
     }
 
     @Test func carNavigationURLUsesTypedDestination() throws {
-        let action = CarClientAction(
+        let action = CarClientAction.openNavigation(
             id: "route-1",
-            type: "open_navigation",
             destination: "Space Needle, Seattle",
             waypoints: ["Pike Place Market"]
         )
@@ -143,7 +142,7 @@ struct OpenCodeClientTests {
         #expect(query["dirflg"] == "d")
         #expect(query["waypoints"] == "Pike Place Market")
 
-        let rejected = CarClientAction(id: "bad", type: "open_url", destination: "https://example.com", waypoints: nil)
+        let rejected = CarClientAction.unknown(id: "bad", type: "open_url")
         #expect(CarClientActionDispatcher.navigationURL(for: rejected) == nil)
     }
 
@@ -2792,8 +2791,9 @@ actor MockAPIClient: APIClientProtocol {
     var messagesCallCount = 0
     var promptError: Error?
     var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
-    var promptStructuredCalls: [(sessionID: String, text: String, system: String, agent: String, providerID: String, modelID: String)] = []
+    var promptStructuredCalls: [(sessionID: String, messageID: String?, text: String, system: String, agent: String, providerID: String, modelID: String)] = []
     var promptStructuredResult: MessageWithParts?
+    var promptStructuredDelayNanoseconds: UInt64 = 0
     var sessionResult: Session?
     var sessionError: Error?
     var sessionRequests: [String] = []
@@ -2849,6 +2849,10 @@ actor MockAPIClient: APIClientProtocol {
 
     func setPromptStructuredResult(_ result: MessageWithParts) {
         promptStructuredResult = result
+    }
+
+    func setPromptStructuredDelayNanoseconds(_ value: UInt64) {
+        promptStructuredDelayNanoseconds = value
     }
 
     func setSessionError(_ error: Error?) {
@@ -2943,8 +2947,11 @@ actor MockAPIClient: APIClientProtocol {
         if let promptError { throw promptError }
     }
 
-    func promptStructured(sessionID: String, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts {
-        promptStructuredCalls.append((sessionID, text, system, agent, model.providerID, model.modelID))
+    func promptStructured(sessionID: String, messageID: String?, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts {
+        promptStructuredCalls.append((sessionID, messageID, text, system, agent, model.providerID, model.modelID))
+        if promptStructuredDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: promptStructuredDelayNanoseconds)
+        }
         if let promptError { throw promptError }
         guard let promptStructuredResult else { throw CarModeError.invalidResponse }
         return promptStructuredResult

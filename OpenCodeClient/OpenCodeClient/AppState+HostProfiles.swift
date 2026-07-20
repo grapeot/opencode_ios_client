@@ -175,6 +175,7 @@ extension AppState {
         resetConnectionRuntimeForHostSwitch()
         await refresh()
         await processPendingDeepLinkIfPossible()
+        await retryClientCapabilityOutbox()
     }
 
     func deleteHostProfile(_ profile: HostProfile) throws {

@@ -118,6 +118,7 @@ actor APIClient {
 
     func promptStructured(
         sessionID: String,
+        messageID: String? = nil,
         text: String,
         system: String,
         format: StructuredOutputFormat,
@@ -136,6 +137,7 @@ actor APIClient {
             }
 
             let parts: [PartInput]
+            let messageID: String?
             let system: String
             let format: StructuredOutputFormat
             let agent: String
@@ -144,6 +146,7 @@ actor APIClient {
 
         let body = PromptBody(
             parts: [.init(type: "text", text: text)],
+            messageID: messageID,
             system: system,
             format: format,
             agent: agent,
@@ -726,7 +729,7 @@ protocol APIClientProtocol: Actor {
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
     func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?) async throws
-    func promptStructured(sessionID: String, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts
+    func promptStructured(sessionID: String, messageID: String?, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts
     func abort(sessionID: String) async throws
     func sessionStatus() async throws -> [String: SessionStatus]
     func pendingPermissions() async throws -> [APIClient.PermissionRequest]
@@ -747,3 +750,24 @@ protocol APIClientProtocol: Actor {
 }
 
 extension APIClient: APIClientProtocol {}
+
+extension APIClientProtocol {
+    func promptStructured(
+        sessionID: String,
+        text: String,
+        system: String,
+        format: StructuredOutputFormat,
+        agent: String,
+        model: Message.ModelInfo
+    ) async throws -> MessageWithParts {
+        try await promptStructured(
+            sessionID: sessionID,
+            messageID: nil,
+            text: text,
+            system: system,
+            format: format,
+            agent: agent,
+            model: model
+        )
+    }
+}

@@ -65,7 +65,11 @@ extension AppState {
     func cancelCarInteraction() async {
         let sessionID = currentCarSessionID
         let shouldAbort = carActiveTurnID != nil
+        if let callbackID = carActiveCapabilityCallbackID {
+            try? clientCapabilityStore.removeOutbox(callbackID: callbackID)
+        }
         carActiveTurnID = nil
+        carActiveCapabilityCallbackID = nil
         carSpeechOutput.stop()
         carPhase = .idle
         if shouldAbort, let sessionID {
@@ -125,10 +129,6 @@ extension AppState {
             carActiveTurnID = nil
             return
         }
-        guard envelope.clientActions.allSatisfy({ CarClientActionDispatcher.navigationURL(for: $0) != nil }) else {
-            throw CarModeError.unsupportedAction
-        }
-
         var record = currentCarSessionRecord ?? CarSessionRecord(
             sessionID: sessionID,
             lastHandledAssistantMessageID: nil,
@@ -147,8 +147,20 @@ extension AppState {
         guard carActiveTurnID == turnID else { return }
 
         if envelope.status == .completed, let action = envelope.clientActions.first {
-            guard await CarClientActionDispatcher.dispatch(action) else {
-                throw CarModeError.mapsUnavailable
+            switch action {
+            case .openNavigation:
+                guard await CarClientActionDispatcher.dispatch(action) else {
+                    throw CarModeError.mapsUnavailable
+                }
+            case .healthExportAll:
+                await requestClientCapability(
+                    action,
+                    sessionID: sessionID,
+                    carContextKey: carContextKey,
+                    assistantMessageID: response.info.id
+                )
+            case .unknown:
+                break
             }
         }
 
@@ -163,7 +175,7 @@ extension AppState {
         carActiveTurnID = nil
     }
 
-    private func persistCarSessions() {
+    func persistCarSessions() {
         if carSessionsByContext.isEmpty {
             UserDefaults.standard.removeObject(forKey: Self.carSessionsByContextKey)
         } else if let data = try? JSONEncoder().encode(carSessionsByContext) {
