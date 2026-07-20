@@ -290,6 +290,7 @@ enum L10n {
         case carStartSpeaking
         case carStopAndSend
         case carStopSpeaking
+        case carStopResponse
         case carSpeakConfirmation
         case carEmptyPrompt
         case carNewSession
@@ -735,6 +736,7 @@ enum L10n {
         Key.carStartSpeaking.rawValue: "Start speaking",
         Key.carStopAndSend.rawValue: "Stop and send",
         Key.carStopSpeaking.rawValue: "Stop speaking",
+        Key.carStopResponse.rawValue: "Stop response",
         Key.carSpeakConfirmation.rawValue: "Say confirm or cancel",
         Key.carEmptyPrompt.rawValue: "Ask about home, messages, traffic, or where to go.",
         Key.carNewSession.rawValue: "New Car Session",
@@ -1183,6 +1185,7 @@ enum L10n {
         Key.carStartSpeaking.rawValue: "开始说话",
         Key.carStopAndSend.rawValue: "停止并发送",
         Key.carStopSpeaking.rawValue: "停止朗读",
+        Key.carStopResponse.rawValue: "停止响应",
         Key.carSpeakConfirmation.rawValue: "说确认或取消",
         Key.carEmptyPrompt.rawValue: "可以询问家里状态、消息、路况，或要去哪里。",
         Key.carNewSession.rawValue: "新建驾驶会话",

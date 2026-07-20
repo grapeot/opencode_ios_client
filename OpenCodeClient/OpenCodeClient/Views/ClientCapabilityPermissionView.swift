@@ -28,27 +28,32 @@ struct ClientCapabilityPermissionView: View {
 
                 Spacer()
 
-                Button(L10n.t(.capabilityAllowOnce)) {
-                    Task { await state.resolveClientCapabilityPermission(allow: true) }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("capability-allow-once")
+                HStack(alignment: .top, spacing: DesignSpacing.sm) {
+                    Button {
+                        Task { await state.resolveClientCapabilityPermission(allow: true) }
+                    } label: {
+                        permissionButtonLabel(L10n.t(.capabilityAllowOnce))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("capability-allow-once")
 
-                Button(L10n.t(.capabilityAllowAlways)) {
-                    Task { await state.resolveClientCapabilityPermission(allow: true, always: true) }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("capability-allow-always")
+                    Button {
+                        Task { await state.resolveClientCapabilityPermission(allow: true, always: true) }
+                    } label: {
+                        permissionButtonLabel(L10n.t(.capabilityAllowAlways))
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("capability-allow-always")
 
-                Button(L10n.t(.commonCancel), role: .cancel) {
-                    Task { await state.resolveClientCapabilityPermission(allow: false) }
+                    Button(role: .cancel) {
+                        Task { await state.resolveClientCapabilityPermission(allow: false) }
+                    } label: {
+                        permissionButtonLabel(L10n.t(.commonCancel))
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("capability-cancel")
                 }
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("capability-cancel")
+                .controlSize(.large)
             }
             .padding(DesignSpacing.lg)
             .navigationTitle(L10n.t(.capabilityPermissionTitle))
@@ -56,5 +61,14 @@ struct ClientCapabilityPermissionView: View {
         }
         .presentationDetents([.medium])
         .interactiveDismissDisabled()
+    }
+
+    private func permissionButtonLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, minHeight: 44)
     }
 }

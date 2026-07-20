@@ -16,7 +16,8 @@
 - OpenCode 在打开 Health App 前写入 15 分钟 Pending；合法 callback 原子收敛到 6 小时 Outbox。重复、过期、损坏 callback 不产生第二条 continuation。
 - Callback 先本地验收，不依赖 server 连接；continuation 使用记录的 Host、Car context 和 session，以及确定性 message ID + query-before-retry，不读取当前 Chat selection。
 - 正式产品、实现和 wire contract 分别维护在 `client_capabilities_prd.md`、`client_capabilities_rfc.md` 和 `client_capabilities_protocol.md`；canonical agent 入口为 `skills/client_capabilities.md`。
-- 验证覆盖严格 parser、canonical handoff URL、store lifecycle、allow-once、原 session continuation 和 permission fixture UI。固定 iPhone simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8` 的顺序 build 与全量 test 通过；350 个 Swift Testing tests 和 37 个 UI tests 通过，4 个 opt-in UI tests 按预期 skip。
+- 验证覆盖严格 parser、canonical handoff URL、store lifecycle、allow-once、原 session continuation、callback 停止语义和 permission fixture UI。固定 iPhone simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8` 的顺序 build 与全量 test 通过；352 个 Swift Testing tests 和 37 个 UI tests 通过，4 个 opt-in UI tests 按预期 skip。
+- 真机 E2E 验收后收敛两处 UX：授权页三个短按钮改为等宽横排，英文最多在按钮内折成两行；callback continuation 进入 Car Mode 原有 `waitingReply`，显示红色“停止响应”主按钮，取消时同时 abort session 并删除对应 Outbox，避免后台已提交但前台看起来无事发生。
 
 ### 2026-07-15 — Session deep link 与 Agent 搜索链接
 

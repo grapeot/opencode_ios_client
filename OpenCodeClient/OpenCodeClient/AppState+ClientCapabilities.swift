@@ -143,22 +143,33 @@ extension AppState {
             try? clientCapabilityStore.removeOutbox(callbackID: record.callbackID)
             return
         }
+        let continuationTurnID = beginClientCapabilityContinuationIfVisible(record)
         do {
             let routeGeneration = deepLinkRouteID
             for pollAttempt in 0..<15 {
+                guard clientCapabilityContinuationIsActive(record, turnID: continuationTurnID) else { return }
                 let history = try await apiClient.messages(sessionID: record.sessionID, limit: nil)
-                guard clientCapabilityRouteIsCurrent(record, generation: routeGeneration) else { return }
+                guard clientCapabilityRouteIsCurrent(record, generation: routeGeneration),
+                      clientCapabilityContinuationIsActive(record, turnID: continuationTurnID) else { return }
                 if history.contains(where: { $0.info.id == record.continuationMessageID }) {
                     if let response = history.first(where: {
                         $0.info.isAssistant && $0.info.parentID == record.continuationMessageID
                     }), response.info.time.completed != nil {
-                        try await handleClientCapabilityContinuationResponse(response, record: record)
+                        try await handleClientCapabilityContinuationResponse(
+                            response,
+                            record: record,
+                            continuationTurnID: continuationTurnID
+                        )
                         try clientCapabilityStore.removeOutbox(callbackID: record.callbackID)
                         return
                     }
-                    guard pollAttempt < 14 else { return }
+                    guard pollAttempt < 14 else {
+                        finishClientCapabilityContinuationFailure(record, turnID: continuationTurnID)
+                        return
+                    }
                     try await Task.sleep(for: .seconds(2))
-                    guard clientCapabilityRouteIsCurrent(record, generation: routeGeneration) else { return }
+                    guard clientCapabilityRouteIsCurrent(record, generation: routeGeneration),
+                          clientCapabilityContinuationIsActive(record, turnID: continuationTurnID) else { return }
                     continue
                 }
 
@@ -172,21 +183,28 @@ extension AppState {
                     model: CarModeProtocol.model
                 )
                 guard clientCapabilityRouteIsCurrent(record, generation: routeGeneration) else { return }
-                try await handleClientCapabilityContinuationResponse(response, record: record)
+                try await handleClientCapabilityContinuationResponse(
+                    response,
+                    record: record,
+                    continuationTurnID: continuationTurnID
+                )
                 try clientCapabilityStore.removeOutbox(callbackID: record.callbackID)
                 return
             }
         } catch APIError.httpError(let statusCode, _) where [401, 403, 404].contains(statusCode) {
             try? clientCapabilityStore.removeOutbox(callbackID: record.callbackID)
             clientCapabilityError = ClientCapabilityError.continuationFailed.localizedDescription
+            finishClientCapabilityContinuationFailure(record, turnID: continuationTurnID)
         } catch {
             // Retryable transport and server errors remain in Outbox until reconnect or expiration.
+            finishClientCapabilityContinuationFailure(record, turnID: continuationTurnID)
         }
     }
 
     private func handleClientCapabilityContinuationResponse(
         _ response: MessageWithParts,
-        record callbackRecord: ClientCapabilityCallbackRecord
+        record callbackRecord: ClientCapabilityCallbackRecord,
+        continuationTurnID: UUID?
     ) async throws {
         guard response.info.isAssistant,
               response.info.sessionID == callbackRecord.sessionID,
@@ -210,11 +228,15 @@ extension AppState {
         carSessionsByContext[callbackRecord.carContextKey] = carRecord
         persistCarSessions()
 
-        guard carContextKey == callbackRecord.carContextKey, carActiveTurnID == nil else { return }
+        guard let continuationTurnID,
+              carContextKey == callbackRecord.carContextKey,
+              carActiveTurnID == continuationTurnID,
+              carActiveCapabilityCallbackID == callbackRecord.callbackID else { return }
         carLastResponse = envelope
         carPhase = .speaking
         await carSpeechOutput.speak(envelope.speech)
-        guard carActiveTurnID == nil,
+        guard carActiveTurnID == continuationTurnID,
+              carActiveCapabilityCallbackID == callbackRecord.callbackID,
               carContextKey == callbackRecord.carContextKey,
               currentHostProfileID == callbackRecord.hostProfileID,
               clientCapabilityHostSignature(for: callbackRecord.hostProfileID) == callbackRecord.hostConfigurationSignature else { return }
@@ -223,6 +245,33 @@ extension AppState {
         case .needsConfirmation: carPhase = .awaitingConfirmation
         case .failed: carPhase = .failed
         }
+        carActiveTurnID = nil
+        carActiveCapabilityCallbackID = nil
+    }
+
+    private func beginClientCapabilityContinuationIfVisible(
+        _ record: ClientCapabilityCallbackRecord
+    ) -> UUID? {
+        guard carContextKey == record.carContextKey, carActiveTurnID == nil else { return nil }
+        let turnID = UUID()
+        carActiveTurnID = turnID
+        carActiveCapabilityCallbackID = record.callbackID
+        carError = nil
+        carPhase = .waitingReply
+        return turnID
+    }
+
+    private func finishClientCapabilityContinuationFailure(
+        _ record: ClientCapabilityCallbackRecord,
+        turnID: UUID?
+    ) {
+        guard let turnID,
+              carActiveTurnID == turnID,
+              carActiveCapabilityCallbackID == record.callbackID else { return }
+        carActiveTurnID = nil
+        carActiveCapabilityCallbackID = nil
+        carError = ClientCapabilityError.continuationFailed.localizedDescription
+        carPhase = .failed
     }
 
     func clientCapabilityHostSignature(for hostProfileID: UUID) -> String? {
@@ -248,6 +297,14 @@ extension AppState {
             && deepLinkRouteID == generation
             && currentHostProfileID == record.hostProfileID
             && clientCapabilityHostSignature(for: record.hostProfileID) == record.hostConfigurationSignature
+    }
+
+    private func clientCapabilityContinuationIsActive(
+        _ record: ClientCapabilityCallbackRecord,
+        turnID: UUID?
+    ) -> Bool {
+        guard let turnID else { return true }
+        return carActiveTurnID == turnID && carActiveCapabilityCallbackID == record.callbackID
     }
 
     nonisolated static func healthExportURL(callbackID: String) -> URL? {

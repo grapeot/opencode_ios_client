@@ -88,6 +88,15 @@ final class CarModeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["capability-allow-always"].exists)
         XCTAssertTrue(app.buttons["capability-cancel"].exists)
         XCTAssertTrue(app.staticTexts["Sync last night's sleep data before analysis"].exists)
+        let allowOnce = app.buttons["capability-allow-once"].frame
+        let allowAlways = app.buttons["capability-allow-always"].frame
+        let cancel = app.buttons["capability-cancel"].frame
+        XCTAssertEqual(allowOnce.midY, allowAlways.midY, accuracy: 4)
+        XCTAssertEqual(allowAlways.midY, cancel.midY, accuracy: 4)
+        XCTAssertEqual(allowOnce.width, allowAlways.width, accuracy: 4)
+        XCTAssertEqual(allowAlways.width, cancel.width, accuracy: 4)
+        XCTAssertLessThan(allowOnce.minX, allowAlways.minX)
+        XCTAssertLessThan(allowAlways.minX, cancel.minX)
 
         app.buttons["capability-cancel"].tap()
         XCTAssertFalse(app.buttons["capability-allow-once"].waitForExistence(timeout: 1))

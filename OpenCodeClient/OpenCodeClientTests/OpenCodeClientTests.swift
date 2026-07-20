@@ -2793,6 +2793,7 @@ actor MockAPIClient: APIClientProtocol {
     var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
     var promptStructuredCalls: [(sessionID: String, messageID: String?, text: String, system: String, agent: String, providerID: String, modelID: String)] = []
     var promptStructuredResult: MessageWithParts?
+    var promptStructuredDelayNanoseconds: UInt64 = 0
     var sessionResult: Session?
     var sessionError: Error?
     var sessionRequests: [String] = []
@@ -2848,6 +2849,10 @@ actor MockAPIClient: APIClientProtocol {
 
     func setPromptStructuredResult(_ result: MessageWithParts) {
         promptStructuredResult = result
+    }
+
+    func setPromptStructuredDelayNanoseconds(_ value: UInt64) {
+        promptStructuredDelayNanoseconds = value
     }
 
     func setSessionError(_ error: Error?) {
@@ -2944,6 +2949,9 @@ actor MockAPIClient: APIClientProtocol {
 
     func promptStructured(sessionID: String, messageID: String?, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts {
         promptStructuredCalls.append((sessionID, messageID, text, system, agent, model.providerID, model.modelID))
+        if promptStructuredDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: promptStructuredDelayNanoseconds)
+        }
         if let promptError { throw promptError }
         guard let promptStructuredResult else { throw CarModeError.invalidResponse }
         return promptStructuredResult

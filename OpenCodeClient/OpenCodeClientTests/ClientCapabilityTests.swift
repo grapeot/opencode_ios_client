@@ -243,6 +243,132 @@ struct ClientCapabilityContinuationTests {
         #expect(speech.spokenTexts.isEmpty)
     }
 
+    @Test @MainActor func visibleCallbackShowsWorkingStateUntilResponseCompletes() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("client-capability-visible-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = ClientCapabilityCallbackStore(rootDirectory: root)
+        let api = MockAPIClient()
+        let speech = MockCarSpeechOutput()
+        let state = AppState(
+            apiClient: api,
+            sseClient: MockSSEClient(),
+            sshTunnelManager: SSHTunnelManager(),
+            carSpeechOutput: speech,
+            clientCapabilityStore: store,
+            clientCapabilityURLOpener: { _ in true }
+        )
+        state.isConnected = true
+        state.serverCurrentProjectWorktree = "/health-workspace"
+        let contextKey = state.carContextKey
+        let hostSignature = try #require(state.clientCapabilityHostSignature(for: state.currentHostProfileID))
+        let record = try store.createPending(
+            capability: .healthExportAll,
+            hostProfileID: state.currentHostProfileID,
+            hostConfigurationSignature: hostSignature,
+            carContextKey: contextKey,
+            sessionID: "ses_visible_health",
+            assistantMessageID: "msg_request",
+            actionID: "health-visible"
+        )
+        state.carSessionsByContext[contextKey] = CarSessionRecord(
+            sessionID: record.sessionID,
+            lastHandledAssistantMessageID: record.assistantMessageID,
+            pendingConfirmationID: nil,
+            lastUsedAt: Date()
+        )
+        await api.setMessagesResult([])
+        await api.setPromptStructuredDelayNanoseconds(300_000_000)
+        await api.setPromptStructuredResult(Self.assistantResponse(
+            id: "msg_visible_analysis",
+            sessionID: record.sessionID,
+            parentID: record.continuationMessageID
+        ))
+        let callback = ClientActionCallback(
+            callbackID: record.callbackID,
+            status: .success,
+            sent: 12,
+            upserted: 12,
+            failedCategories: [],
+            errorCode: nil
+        )
+
+        let callbackTask = Task { await state.receiveClientActionCallback(callback) }
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(state.carPhase == .waitingReply)
+        #expect(state.carActiveTurnID != nil)
+        #expect(state.carActiveCapabilityCallbackID == record.callbackID)
+
+        await callbackTask.value
+
+        #expect(state.carPhase == .idle)
+        #expect(state.carActiveTurnID == nil)
+        #expect(state.carActiveCapabilityCallbackID == nil)
+        #expect(speech.spokenTexts == ["The Health data is ready."])
+    }
+
+    @Test @MainActor func stoppingVisibleCallbackAbortsAndRemovesRetry() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("client-capability-cancel-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = ClientCapabilityCallbackStore(rootDirectory: root)
+        let api = MockAPIClient()
+        let speech = MockCarSpeechOutput()
+        let state = AppState(
+            apiClient: api,
+            sseClient: MockSSEClient(),
+            sshTunnelManager: SSHTunnelManager(),
+            carSpeechOutput: speech,
+            clientCapabilityStore: store,
+            clientCapabilityURLOpener: { _ in true }
+        )
+        state.isConnected = true
+        state.serverCurrentProjectWorktree = "/health-workspace"
+        let contextKey = state.carContextKey
+        let hostSignature = try #require(state.clientCapabilityHostSignature(for: state.currentHostProfileID))
+        let record = try store.createPending(
+            capability: .healthExportAll,
+            hostProfileID: state.currentHostProfileID,
+            hostConfigurationSignature: hostSignature,
+            carContextKey: contextKey,
+            sessionID: "ses_cancel_health",
+            assistantMessageID: "msg_request",
+            actionID: "health-cancel"
+        )
+        state.carSessionsByContext[contextKey] = CarSessionRecord(
+            sessionID: record.sessionID,
+            lastHandledAssistantMessageID: record.assistantMessageID,
+            pendingConfirmationID: nil,
+            lastUsedAt: Date()
+        )
+        await api.setMessagesResult([])
+        await api.setPromptStructuredDelayNanoseconds(300_000_000)
+        await api.setPromptStructuredResult(Self.assistantResponse(
+            id: "msg_cancelled_analysis",
+            sessionID: record.sessionID,
+            parentID: record.continuationMessageID
+        ))
+        let callback = ClientActionCallback(
+            callbackID: record.callbackID,
+            status: .success,
+            sent: 12,
+            upserted: 12,
+            failedCategories: [],
+            errorCode: nil
+        )
+
+        let callbackTask = Task { await state.receiveClientActionCallback(callback) }
+        try await Task.sleep(for: .milliseconds(50))
+        await state.cancelCarInteraction()
+        await callbackTask.value
+
+        #expect(state.carPhase == .idle)
+        #expect(state.carActiveTurnID == nil)
+        #expect(state.carActiveCapabilityCallbackID == nil)
+        #expect(speech.spokenTexts.isEmpty)
+        #expect(try store.outboxRecords().isEmpty)
+        #expect(await api.abortSessionIDs == [record.sessionID])
+    }
+
     private static func assistantResponse(id: String, sessionID: String, parentID: String) -> MessageWithParts {
         MessageWithParts(
             info: Message(

@@ -595,6 +595,7 @@ final class AppState {
     var carLastResponse: CarResponseEnvelope?
     var carError: String?
     var carActiveTurnID: UUID?
+    var carActiveCapabilityCallbackID: String?
     let carSpeechOutput: CarSpeechOutputProviding
     let clientCapabilityStore: ClientCapabilityCallbackStore
     let clientCapabilityURLOpener: @MainActor (URL) async -> Bool

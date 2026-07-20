@@ -65,7 +65,11 @@ extension AppState {
     func cancelCarInteraction() async {
         let sessionID = currentCarSessionID
         let shouldAbort = carActiveTurnID != nil
+        if let callbackID = carActiveCapabilityCallbackID {
+            try? clientCapabilityStore.removeOutbox(callbackID: callbackID)
+        }
         carActiveTurnID = nil
+        carActiveCapabilityCallbackID = nil
         carSpeechOutput.stop()
         carPhase = .idle
         if shouldAbort, let sessionID {
