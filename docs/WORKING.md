@@ -9,6 +9,15 @@
 - **编译/测试**：iPhone 16 / iOS 18.4 build 与全量 test suite 通过；36 个 UI tests 中 4 个 opt-in tests 按预期 skip
 - **Phase**：`opencode://session/<id>` cold/warm launch 与 Chat Markdown navigation implemented
 
+### 2026-07-19 — Health Quantification client capability
+
+- Car Mode action 改为 tolerant typed union，保留 Maps，并新增 `health_quantification.export_all`；未知未来 action 不再让整条 structured speech 解码失败。
+- 首次调用显示本地授权 sheet，支持仅这次、以后自动允许和取消；Settings 可撤销 Health export 自动授权。
+- OpenCode 在打开 Health App 前写入 15 分钟 Pending；合法 callback 原子收敛到 6 小时 Outbox。重复、过期、损坏 callback 不产生第二条 continuation。
+- Callback 先本地验收，不依赖 server 连接；continuation 使用记录的 Host、Car context 和 session，以及确定性 message ID + query-before-retry，不读取当前 Chat selection。
+- 正式产品、实现和 wire contract 分别维护在 `client_capabilities_prd.md`、`client_capabilities_rfc.md` 和 `client_capabilities_protocol.md`；canonical agent 入口为 `skills/client_capabilities.md`。
+- 验证覆盖严格 parser、canonical handoff URL、store lifecycle、allow-once、原 session continuation 和 permission fixture UI。固定 iPhone simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8` 的顺序 build 与全量 test 通过；350 个 Swift Testing tests 和 37 个 UI tests 通过，4 个 opt-in UI tests 按预期 skip。
+
 ### 2026-07-15 — Session deep link 与 Agent 搜索链接
 
 - 注册 `opencode://session/<session_id>`，使用严格 URI parser 拒绝未知 host、query、fragment、userinfo、port、非法 ID 和多层 path。

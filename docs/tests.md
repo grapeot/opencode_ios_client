@@ -52,6 +52,7 @@ Tier 1 是纯逻辑和数据契约测试，不需要真实 server，也不依赖
 - `SSEEvent` payload shape。
 - `TodoItem`、`Project`、`QuestionRequest` 等 API model。
 - URL 修正、scheme 补全、路径规范化、文件路径提取。
+- Client capability action/callback decoding、Pending/Outbox expiration 与幂等、权限和原 session continuation。
 - `ToolCardClassifier`：哪些 part 进入 file-card grid，哪些折叠进 merged tool calls row；目录 read 的识别和 entries parsing。
 
 这一层回答的是：client 对它已知的输入格式和纯规则是否正确。它不证明真实 server 当前仍然发送这些格式；这个问题由 Tier 3 回答。
@@ -87,6 +88,7 @@ iOS 这一层有两种形态。
 - `UITEST_TOOL_CARDS_FIXTURE`：验证 tool card grid、merged tool calls row、展开后的内容。
 - `UITEST_F3_TRANSCRIBING_FIXTURE`：验证 voice rail 在 agent running + transcribing 并行状态下仍保留 text review/send，并把 agent interrupt 降到 `⋯` 菜单。
 - `UITEST_F3_RETRY_FIXTURE`：验证 preserved-audio retry 状态清楚表达“重试同一段音频”，并且恢复动作与 agent abort 语义分离。
+- `UITEST_CLIENT_CAPABILITY_FIXTURE`：验证 Health export 本地授权理由、仅这次、以后自动允许和取消入口。
 - launch/input smoke：验证 app 启动、chat input 可达、长输入保持可滚动。
 
 Tier 2 保护 client 内部状态编排和 view wiring，但它仍然运行在我们构造的世界里。server 改了 protocol，而 mock 还在发旧 payload，Tier 2 可能继续通过。所以它不能替代 Tier 3。

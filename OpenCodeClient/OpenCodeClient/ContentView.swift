@@ -66,6 +66,10 @@ struct ContentView: View {
         ProcessInfo.processInfo.arguments.contains("UITEST_CAR_DISABLED_FIXTURE")
     }
 
+    private static var hasUITestClientCapabilityFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_CLIENT_CAPABILITY_FIXTURE")
+    }
+
     private static var hasUITestDeepLinkFixture: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains("UITEST_DEEP_LINK_FIXTURE")
@@ -138,6 +142,17 @@ struct ContentView: View {
                 speech: "I found a faster route. It saves twelve minutes and is ready in Apple Maps.",
                 confirmation: nil,
                 clientActions: []
+            )
+            return state
+        }
+
+        if hasUITestClientCapabilityFixture {
+            state.pendingClientCapabilityRequest = PendingClientCapabilityRequest(
+                action: .healthExportAll(id: "health-fixture", reason: "Sync last night's sleep data before analysis"),
+                hostProfileID: state.currentHostProfileID,
+                sessionID: "ses_health_fixture",
+                carContextKey: "fixture|health",
+                assistantMessageID: "msg_health_fixture"
             )
             return state
         }
@@ -624,7 +639,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture || Self.hasUITestDeepLinkFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture || Self.hasUITestClientCapabilityFixture || Self.hasUITestDeepLinkFixture {
             return
         }
 
@@ -651,6 +666,7 @@ struct ContentView: View {
         if state.isConnected {
             state.connectSSE()
             await state.processPendingDeepLinkIfPossible()
+            await state.retryClientCapabilityOutbox()
         } else {
             state.disconnectSSE()
         }
@@ -704,6 +720,7 @@ struct ContentView: View {
     private var mainBody: some View {
         rootLayout
         .task {
+            state.cleanupClientCapabilityCallbacks()
             if Self.hasUITestDeepLinkFixture,
                let rawURL = ProcessInfo.processInfo.environment["UITEST_INITIAL_DEEP_LINK"],
                let url = URL(string: rawURL) {
@@ -715,6 +732,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             Task {
                 await restoreConnectionFlow()
+                state.cleanupClientCapabilityCallbacks()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
@@ -752,6 +770,21 @@ struct ContentView: View {
                 Text(error)
                     .accessibilityIdentifier("deep-link-error")
             }
+        }
+        .sheet(item: $state.pendingClientCapabilityRequest) { request in
+            ClientCapabilityPermissionView(state: state, request: request)
+        }
+        .alert(
+            L10n.t(.appError),
+            isPresented: Binding(
+                get: { state.clientCapabilityError != nil },
+                set: { if !$0 { state.clientCapabilityError = nil } }
+            )
+        ) {
+            Button(L10n.t(.commonOk)) { state.clientCapabilityError = nil }
+        } message: {
+            Text(state.clientCapabilityError ?? "")
+                .accessibilityIdentifier("client-capability-error")
         }
         .preferredColorScheme(themeColorScheme)
         .environment(\.locale, L10n.currentLocale)

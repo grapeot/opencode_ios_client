@@ -167,6 +167,8 @@ struct SettingsTabView: View {
                     Text(L10n.t(.settingsAIUsageDashboardFooter))
                 }
 
+                clientCapabilitiesSection
+
                 Section(L10n.t(.settingsSpeechRecognition)) {
                     TextField(L10n.t(.settingsAiBuilderBaseURL), text: $state.aiBuilderBaseURL)
                         .textContentType(.URL)
@@ -279,6 +281,31 @@ struct SettingsTabView: View {
                 ))
             }
         }
+    }
+
+    private var clientCapabilitiesSection: some View {
+        Section {
+            LabeledContent(
+                L10n.t(.capabilityHealthExportTitle),
+                value: healthExportPermissionDescription
+            )
+            if state.healthExportPermission == .allowAlways {
+                Button(L10n.t(.capabilityRevoke), role: .destructive) {
+                    state.revokeHealthExportPermission()
+                }
+                .accessibilityIdentifier("capability-health-revoke")
+            }
+        } header: {
+            Text(L10n.t(.capabilitySettingsTitle))
+        } footer: {
+            Text(L10n.t(.capabilitySettingsFooter))
+        }
+    }
+
+    private var healthExportPermissionDescription: String {
+        state.healthExportPermission == .allowAlways
+            ? L10n.t(.capabilityAllowedAutomatically)
+            : L10n.t(.capabilityAskEveryTime)
     }
 
     private func loadPublicKeyForSheet() {

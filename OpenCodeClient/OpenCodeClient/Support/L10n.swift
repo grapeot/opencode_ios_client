@@ -32,6 +32,22 @@ enum L10n {
         case deepLinkInvalid
         case deepLinkSessionUnavailable
         case deepLinkOpenFailed
+        case capabilityPermissionTitle
+        case capabilityHealthExportTitle
+        case capabilityHealthExportDescription
+        case capabilityReason
+        case capabilityPermissionFooter
+        case capabilityAllowOnce
+        case capabilityAllowAlways
+        case capabilitySettingsTitle
+        case capabilityAllowedAutomatically
+        case capabilityAskEveryTime
+        case capabilityRevoke
+        case capabilitySettingsFooter
+        case capabilityAlreadyRunning
+        case capabilityLaunchFailed
+        case capabilityInvalidCallback
+        case capabilityContinuationFailed
 
         case commonOk
         case commonCancel
@@ -465,6 +481,22 @@ enum L10n {
         Key.deepLinkInvalid.rawValue: "This OpenCode session link is invalid.",
         Key.deepLinkSessionUnavailable.rawValue: "This session is not available on the current host. It may belong to another host or exist only in offline history.",
         Key.deepLinkOpenFailed.rawValue: "OpenCode could not open this session. Check the current host connection and try again.",
+        Key.capabilityPermissionTitle.rawValue: "Client Capability",
+        Key.capabilityHealthExportTitle.rawValue: "Sync Health Quantification data",
+        Key.capabilityHealthExportDescription.rawValue: "Export the latest HealthKit data to the configured Health Quantification server.",
+        Key.capabilityReason.rawValue: "Reason",
+        Key.capabilityPermissionFooter.rawValue: "OpenCode constructs a one-time callback. Health details are not returned through the link.",
+        Key.capabilityAllowOnce.rawValue: "Allow Once",
+        Key.capabilityAllowAlways.rawValue: "Always Allow",
+        Key.capabilitySettingsTitle.rawValue: "Client Capabilities",
+        Key.capabilityAllowedAutomatically.rawValue: "Allowed automatically",
+        Key.capabilityAskEveryTime.rawValue: "Ask every time",
+        Key.capabilityRevoke.rawValue: "Revoke Automatic Access",
+        Key.capabilitySettingsFooter.rawValue: "Automatic access only applies to exporting Health data. It does not authorize analysis or other side effects.",
+        Key.capabilityAlreadyRunning.rawValue: "A Health export is already in progress.",
+        Key.capabilityLaunchFailed.rawValue: "Health Quantification is not installed or could not be opened.",
+        Key.capabilityInvalidCallback.rawValue: "OpenCode rejected an invalid or expired Health export callback.",
+        Key.capabilityContinuationFailed.rawValue: "The Health export finished, but OpenCode could not continue the original session.",
         Key.commonOk.rawValue: "OK",
         Key.commonCancel.rawValue: "Cancel",
         Key.commonRetry.rawValue: "Retry",
@@ -895,6 +927,22 @@ enum L10n {
         Key.deepLinkInvalid.rawValue: "这个 OpenCode 会话链接无效。",
         Key.deepLinkSessionUnavailable.rawValue: "当前主机上找不到这个会话。它可能属于其他主机，或只存在于离线历史中。",
         Key.deepLinkOpenFailed.rawValue: "无法打开这个会话，请检查当前主机连接后重试。",
+        Key.capabilityPermissionTitle.rawValue: "客户端能力",
+        Key.capabilityHealthExportTitle.rawValue: "同步健康量化数据",
+        Key.capabilityHealthExportDescription.rawValue: "将最新 HealthKit 数据导出到健康量化 App 已配置的服务器。",
+        Key.capabilityReason.rawValue: "原因",
+        Key.capabilityPermissionFooter.rawValue: "OpenCode 会生成一次性回调链接，链接不会返回健康明细。",
+        Key.capabilityAllowOnce.rawValue: "仅这次允许",
+        Key.capabilityAllowAlways.rawValue: "以后自动允许",
+        Key.capabilitySettingsTitle.rawValue: "客户端能力",
+        Key.capabilityAllowedAutomatically.rawValue: "自动允许",
+        Key.capabilityAskEveryTime.rawValue: "每次询问",
+        Key.capabilityRevoke.rawValue: "撤销自动授权",
+        Key.capabilitySettingsFooter.rawValue: "自动授权只允许导出健康数据，不授权分析或其他副作用。",
+        Key.capabilityAlreadyRunning.rawValue: "健康数据同步已在进行。",
+        Key.capabilityLaunchFailed.rawValue: "未安装健康量化 App，或无法打开。",
+        Key.capabilityInvalidCallback.rawValue: "OpenCode 拒绝了无效或已过期的健康导出回调。",
+        Key.capabilityContinuationFailed.rawValue: "健康数据已导出，但 OpenCode 无法继续原会话。",
         Key.commonOk.rawValue: "确定",
         Key.commonCancel.rawValue: "取消",
         Key.commonRetry.rawValue: "重试",

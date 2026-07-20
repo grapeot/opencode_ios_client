@@ -59,6 +59,9 @@ docs/security.md
 # Environment variables (contains credentials)
 .env
 
+# Local design drafts and temporary artifacts
+tmp_*
+
 # Markdown Web Preview 子项目的 PRD / RFC 已合并进主 PRD §4.3.5 / 主 RFC §7.5；
 # 完整决策过程保留在磁盘但不再随仓库分发。
 docs/Markdown_Web_Preview_PRD.md

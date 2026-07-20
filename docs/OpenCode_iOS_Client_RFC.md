@@ -650,7 +650,7 @@ Car Mode 只在 iPhone 编译路径和运行时 idiom 下显示。`isCarModeEnab
 - `Models/CarMode.swift`：versioned response envelope 与 JSON Schema。
 - `Views/Car/CarModeView.swift`：录音、等待、朗读、确认和失败 UI。
 - `CarSpeechOutputService.swift`：Apple TTS 与 AudioSession 切换。
-- `CarClientActionDispatcher.swift`：typed Maps action allowlist。
+- `CarClientActionDispatcher.swift`：typed Maps action allowlist；Health action 交给独立 capability dispatcher。
 - `APIClient.promptStructured(...)`：同步 `POST /session/:id/message` wrapper。
 
 #### 10.2 Structured Prompt Contract
@@ -729,7 +729,7 @@ idle
 
 VoiceFlow finalization 完成后先释放录音 AudioSession，再由 TTS service 切换到 `.playback` + `.spokenAudio`。这避免声音残留在 receiver 或 Bluetooth HFP route。录音开始或取消时停止当前朗读。
 
-`open_navigation` 是唯一客户端 action。dispatcher 校验 version/type、destination/waypoints 长度并严格 URL encode，再生成 Apple Maps unified URL。模型不得返回任意 URL。客户端先完成短 TTS，再打开 Maps；文案只能说“正在打开路线”，不能声称导航已经开始或路线已经修改。
+`open_navigation` 由 Maps dispatcher 校验 destination/waypoints 并构造 Apple Maps URL。`health_quantification.export_all` 使用独立本地授权、Pending/Outbox 和 callback continuation；正式技术合同见 [`client_capabilities_rfc.md`](client_capabilities_rfc.md) 与 [`client_capabilities_protocol.md`](client_capabilities_protocol.md)。两种 action 都不接受模型提供任意 URL。
 
 #### 10.6 Server Contract 与验证证据
 

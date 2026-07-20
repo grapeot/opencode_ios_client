@@ -74,4 +74,22 @@ final class CarModeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["The garage door is closed."].exists)
         XCTAssertTrue(app.staticTexts["structured-assistant-speech"].exists)
     }
+
+    @MainActor
+    func testHealthCapabilityShowsLocalPermissionSheet() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else {
+            throw XCTSkip("Client capability fixture is iPhone-only")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_CLIENT_CAPABILITY_FIXTURE"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["capability-allow-once"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["capability-allow-always"].exists)
+        XCTAssertTrue(app.buttons["capability-cancel"].exists)
+        XCTAssertTrue(app.staticTexts["Sync last night's sleep data before analysis"].exists)
+
+        app.buttons["capability-cancel"].tap()
+        XCTAssertFalse(app.buttons["capability-allow-once"].waitForExistence(timeout: 1))
+    }
 }

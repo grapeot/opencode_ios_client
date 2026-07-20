@@ -8,6 +8,9 @@ import CryptoKit
 import Observation
 import os
 import VoiceFlowKit
+#if os(iOS)
+import UIKit
+#endif
 
 struct SessionNode: Identifiable {
     let session: Session
@@ -175,6 +178,7 @@ final class AppState {
     static let carModeEnabledKey = "carModeEnabled"
     static let languagePreferenceKey = L10n.languagePreferenceUserDefaultsKey
     static let carSessionsByContextKey = "carSessionsByContext.v1"
+    static let healthExportPermissionKey = "clientCapability.healthExportAll.permission.v1"
 
     init(
         apiClient: APIClientProtocol = APIClient(),
@@ -183,7 +187,9 @@ final class AppState {
         aiUsageQuotaClient: AIUsageQuotaClientProtocol = AIUsageQuotaClient(),
         carSpeechOutput: CarSpeechOutputProviding? = nil,
         deepLinkSessionResolver: ((String) async throws -> Session)? = nil,
-        deepLinkHydratesSelection: Bool = true
+        deepLinkHydratesSelection: Bool = true,
+        clientCapabilityStore: ClientCapabilityCallbackStore = .applicationSupport(),
+        clientCapabilityURLOpener: (@MainActor (URL) async -> Bool)? = nil
     ) {
         self.apiClient = apiClient
         self.sseClient = sseClient
@@ -192,6 +198,14 @@ final class AppState {
         self.carSpeechOutput = carSpeechOutput ?? CarSpeechOutputService()
         self.deepLinkSessionResolver = deepLinkSessionResolver
         self.deepLinkHydratesSelection = deepLinkHydratesSelection
+        self.clientCapabilityStore = clientCapabilityStore
+        self.clientCapabilityURLOpener = clientCapabilityURLOpener ?? { url in
+            #if os(iOS)
+            return await UIApplication.shared.open(url)
+            #else
+            return false
+            #endif
+        }
         if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
             if storedServer == APIConstants.legacyDefaultServer {
                 _serverURL = APIClient.defaultServer
@@ -216,6 +230,9 @@ final class AppState {
         _languagePreference = L10n.languagePreference
         _aiUsageDashboardURL = UserDefaults.standard.string(forKey: Self.aiUsageDashboardURLKey) ?? ""
         isCarModeEnabled = UserDefaults.standard.bool(forKey: Self.carModeEnabledKey)
+        healthExportPermission = ClientCapabilityPermission(
+            rawValue: UserDefaults.standard.string(forKey: Self.healthExportPermissionKey) ?? ""
+        ) ?? .ask
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
         let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
@@ -579,6 +596,20 @@ final class AppState {
     var carError: String?
     var carActiveTurnID: UUID?
     let carSpeechOutput: CarSpeechOutputProviding
+    let clientCapabilityStore: ClientCapabilityCallbackStore
+    let clientCapabilityURLOpener: @MainActor (URL) async -> Bool
+    var pendingClientCapabilityRequest: PendingClientCapabilityRequest?
+    var clientCapabilityError: String?
+    var clientCapabilityInFlightCallbackIDs: Set<String> = []
+    var healthExportPermission: ClientCapabilityPermission = .ask {
+        didSet {
+            if healthExportPermission == .ask {
+                UserDefaults.standard.removeObject(forKey: Self.healthExportPermissionKey)
+            } else {
+                UserDefaults.standard.set(healthExportPermission.rawValue, forKey: Self.healthExportPermissionKey)
+            }
+        }
+    }
 
     /// Guard against race conditions when rapidly switching sessions.
     /// Each selectSession call generates a new ID; async tasks check if they're still current.

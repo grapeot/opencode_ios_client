@@ -9,6 +9,9 @@ enum DeepLinkRouteState: Equatable {
 extension AppState {
     func receiveDeepLink(_ url: URL) {
         switch OpenCodeDeepLinkParser.parse(url) {
+        case .success(.clientActionReturn(let callback)):
+            deepLinkError = nil
+            Task { await receiveClientActionCallback(callback) }
         case .success(let deepLink):
             deepLinkError = nil
             pendingDeepLink = deepLink
@@ -66,6 +69,9 @@ extension AppState {
                 } else {
                     currentSessionID = session.id
                 }
+                deepLinkRouteState = .idle
+            case .clientActionReturn:
+                pendingDeepLink = nil
                 deepLinkRouteState = .idle
             }
         } catch {
