@@ -2016,7 +2016,12 @@ struct ModelPresetShortNameTests {
 
         #expect(fast.shortName == "GPT-F")
     }
-    
+
+    @Test func gptTerraShortName() {
+        let terra = ModelPreset(displayName: "GPT-5.6 Terra", providerID: "openai", modelID: "gpt-5.6-terra")
+
+        #expect(terra.shortName == "GPT-T")
+    }
     @Test func unknownModelFallsBackToDisplayName() {
         let preset = ModelPreset(displayName: "Custom Model", providerID: "custom", modelID: "custom-1")
         #expect(preset.shortName == "Custom Model")
@@ -2167,6 +2172,9 @@ struct ModelSelectionPersistenceTests {
             #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-pro" }))
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-sol-fast" && $0.displayName == "GPT-5.6 Sol Fast"
+            }))
+            #expect(state.modelPresets.contains(where: {
+                $0.id == "openai/gpt-5.6-terra" && $0.displayName == "GPT-5.6 Terra"
             }))
         }
     }
