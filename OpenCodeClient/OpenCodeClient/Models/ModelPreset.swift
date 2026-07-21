@@ -18,7 +18,7 @@ struct ModelPreset: Codable, Identifiable {
         case "DeepSeek V4 Pro": return "DS-Pro"
         case "Ollama GLM 5.2": return "OGLM-5.2"
         case "GPT-5.6 Sol Fast": return "GPT-F"
-        case "GPT-5.6 Terra": return "GPT-T"
+        case "GPT-5.6 Terra Fast": return "GPT-TF"
         case let name where name.contains("Gemini"): return "Gemini"
         case let name where name.contains("GPT"): return "GPT"
         default: return displayName

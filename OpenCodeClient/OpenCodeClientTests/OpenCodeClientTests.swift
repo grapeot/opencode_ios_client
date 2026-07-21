@@ -421,6 +421,7 @@ struct OpenCodeClientTests {
 
 // MARK: - Host Profiles
 
+@Suite(.serialized)
 struct HostProfileTests {
     @Test func importDirectHostProfile() throws {
         let json = """
@@ -1267,6 +1268,7 @@ struct AppErrorTests {
     }
 }
 
+@Suite(.serialized)
 struct LocalizationTests {
 
     @Test func localizationKeyCoverage() {
@@ -2017,10 +2019,10 @@ struct ModelPresetShortNameTests {
         #expect(fast.shortName == "GPT-F")
     }
 
-    @Test func gptTerraShortName() {
-        let terra = ModelPreset(displayName: "GPT-5.6 Terra", providerID: "openai", modelID: "gpt-5.6-terra")
+    @Test func gptTerraFastShortName() {
+        let terra = ModelPreset(displayName: "GPT-5.6 Terra Fast", providerID: "openai", modelID: "gpt-5.6-terra-fast")
 
-        #expect(terra.shortName == "GPT-T")
+        #expect(terra.shortName == "GPT-TF")
     }
     @Test func unknownModelFallsBackToDisplayName() {
         let preset = ModelPreset(displayName: "Custom Model", providerID: "custom", modelID: "custom-1")
@@ -2174,7 +2176,7 @@ struct ModelSelectionPersistenceTests {
                 $0.id == "openai/gpt-5.6-sol-fast" && $0.displayName == "GPT-5.6 Sol Fast"
             }))
             #expect(state.modelPresets.contains(where: {
-                $0.id == "openai/gpt-5.6-terra" && $0.displayName == "GPT-5.6 Terra"
+                $0.id == "openai/gpt-5.6-terra-fast" && $0.displayName == "GPT-5.6 Terra Fast"
             }))
         }
     }
@@ -3020,6 +3022,7 @@ final class MockCarSpeechOutput: CarSpeechOutputProviding {
     }
 }
 
+@Suite(.serialized)
 struct CarModeFlowTests {
     @Test @MainActor func submitCarTurnReusesScopedSessionAndSpeaksOnce() async throws {
         let defaultsKey = AppState.carSessionsByContextKey
