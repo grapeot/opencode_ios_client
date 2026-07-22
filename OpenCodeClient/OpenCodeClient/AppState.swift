@@ -616,7 +616,7 @@ final class AppState {
     /// Guard against race conditions when rapidly switching sessions.
     /// Each selectSession call generates a new ID; async tasks check if they're still current.
     var sessionLoadingID = UUID()
-    nonisolated private static let sessionPageSize = 100
+    nonisolated private static let sessionPageSize = 400
     var loadedSessionLimit = sessionPageSize
     var hasMoreSessions = true
     var isLoadingMoreSessions = false
