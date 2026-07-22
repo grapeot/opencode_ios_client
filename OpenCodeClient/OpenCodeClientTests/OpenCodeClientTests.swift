@@ -3385,20 +3385,20 @@ struct AppStateFlowTests {
 
     @Test @MainActor func loadMoreSessionsRequestsLargerLimitAndKeepsOnlyRootSidebarSessions() async {
         let apiClient = MockAPIClient()
-        let firstPageChildren = (0..<99).map { index in
+        let firstPageChildren = (0..<399).map { index in
             Self.makeSession(id: "child-\(index)", parentID: "root-1", updated: 99 - index)
         }
-        let secondPageChildren = (0..<99).map { index in
+        let secondPageChildren = (0..<398).map { index in
             Self.makeSession(id: "child-\(index)", parentID: "root-1", updated: 99 - index)
         }
 
         await apiClient.setSessionsResult([
             Self.makeSession(id: "root-1", updated: 100),
-        ] + firstPageChildren, forLimit: 100)
+        ] + firstPageChildren, forLimit: 400)
         await apiClient.setSessionsResult([
             Self.makeSession(id: "root-2", updated: 110),
             Self.makeSession(id: "root-1", updated: 100),
-        ] + secondPageChildren, forLimit: 200)
+        ] + secondPageChildren, forLimit: 800)
 
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.isConnected = true
@@ -3409,14 +3409,14 @@ struct AppStateFlowTests {
 
         await state.loadMoreSessions()
 
-        #expect(await apiClient.sessionLimitRequests == [100, 200])
+        #expect(await apiClient.sessionLimitRequests == [400, 800])
         #expect(state.sidebarSessions.map(\.id) == ["root-2", "root-1"])
         #expect(state.canLoadMoreSessions == false)
     }
 
     @Test @MainActor func loadMoreSessionsPreservesChildHierarchyInCanonicalSessionTree() async {
         let apiClient = MockAPIClient()
-        let fillerChildren = (0..<97).map { index in
+        let fillerChildren = (0..<397).map { index in
             Self.makeSession(
                 id: "child-extra-\(index)",
                 parentID: "root-1",
@@ -3427,13 +3427,13 @@ struct AppStateFlowTests {
             Self.makeSession(id: "root-1", updated: 100),
             Self.makeSession(id: "child-1", parentID: "root-1", updated: 95),
             Self.makeSession(id: "grandchild-1", parentID: "child-1", updated: 90),
-        ] + fillerChildren, forLimit: 100)
+        ] + fillerChildren, forLimit: 400)
         await apiClient.setSessionsResult([
             Self.makeSession(id: "root-2", updated: 110),
             Self.makeSession(id: "root-1", updated: 100),
             Self.makeSession(id: "child-1", parentID: "root-1", updated: 95),
             Self.makeSession(id: "grandchild-1", parentID: "child-1", updated: 90),
-        ] + fillerChildren, forLimit: 200)
+        ] + fillerChildren, forLimit: 800)
 
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.isConnected = true
