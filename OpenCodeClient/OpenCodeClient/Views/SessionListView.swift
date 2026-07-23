@@ -78,7 +78,7 @@ struct SessionListView: View {
                         }
 
                         if activeExpanded {
-                            sessionNodes(activeNodes, archived: false)
+                            sessionNodes(activeNodes, archived: false, attentionCounts: state.sessionAttentionCounts)
                         }
 
                         SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
@@ -86,7 +86,7 @@ struct SessionListView: View {
                         }
 
                         if archivedExpanded {
-                            sessionNodes(archivedNodes, archived: true)
+                            sessionNodes(archivedNodes, archived: true, attentionCounts: state.sessionAttentionCounts)
                         }
 
                         if state.isLoadingMoreSessions {
@@ -134,7 +134,12 @@ struct SessionListView: View {
         dismiss()
     }
 
-    private func sessionNodes(_ nodes: [SessionNode], archived: Bool, depth: Int = 0) -> AnyView {
+    private func sessionNodes(
+        _ nodes: [SessionNode],
+        archived: Bool,
+        depth: Int = 0,
+        attentionCounts: [String: Int]
+    ) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
                 let session = node.session
@@ -143,6 +148,7 @@ struct SessionListView: View {
                 SessionRowView(
                     session: session,
                     status: status,
+                    attentionCount: attentionCounts[session.id, default: 0],
                     isSelected: state.currentSessionID == session.id,
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
@@ -180,7 +186,12 @@ struct SessionListView: View {
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {
-                    sessionNodes(node.children, archived: archived, depth: depth + 1)
+                    sessionNodes(
+                        node.children,
+                        archived: archived,
+                        depth: depth + 1,
+                        attentionCounts: attentionCounts
+                    )
                 }
             }
         )
@@ -261,6 +272,7 @@ struct LoadMoreSessionsRow: View {
 struct SessionRowView: View {
     let session: Session
     let status: SessionStatus?
+    var attentionCount: Int = 0
     let isSelected: Bool
     let isMutating: Bool
     let isArchived: Bool
@@ -329,10 +341,10 @@ struct SessionRowView: View {
                         .font(DesignTypography.meta)
                         .foregroundStyle(isArchived ? DesignColors.Neutral.textTertiary : DesignColors.Neutral.textSecondary)
 
-                    if let status {
-                        Text(statusLabel(status))
+                    if attentionCount > 0 || status != nil {
+                        Text(statusLabel(status, attentionCount: attentionCount))
                             .font(DesignTypography.meta)
-                            .foregroundStyle(statusColor(status))
+                            .foregroundStyle(statusColor(status, attentionCount: attentionCount))
                     }
                 }
             }
@@ -368,16 +380,21 @@ struct SessionRowView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private func statusLabel(_ status: SessionStatus) -> String {
-        switch status.type {
+    private func statusLabel(_ status: SessionStatus?, attentionCount: Int) -> String {
+        if attentionCount > 0 {
+            let label = L10n.t(.sessionsStatusNeedAttention)
+            return attentionCount > 1 ? "\(label) · \(attentionCount)" : label
+        }
+        switch status?.type {
         case "busy": return L10n.t(.sessionsStatusBusy)
         case "retry": return L10n.t(.sessionsStatusRetry)
         default: return L10n.t(.sessionsStatusIdle)
         }
     }
 
-    private func statusColor(_ status: SessionStatus) -> Color {
-        switch status.type {
+    private func statusColor(_ status: SessionStatus?, attentionCount: Int) -> Color {
+        if attentionCount > 0 { return DesignColors.Semantic.error }
+        switch status?.type {
         case "busy", "retry": return DesignColors.Brand.primary
         default: return DesignColors.Neutral.textSecondary
         }

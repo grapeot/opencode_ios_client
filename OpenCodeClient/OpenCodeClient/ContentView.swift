@@ -1071,7 +1071,7 @@ private struct TabletSessionsColumn: View {
                         }
 
                         if activeExpanded {
-                            sessionNodes(activeNodes, archived: false)
+                            sessionNodes(activeNodes, archived: false, attentionCounts: state.sessionAttentionCounts)
                         }
 
                         SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
@@ -1079,7 +1079,7 @@ private struct TabletSessionsColumn: View {
                         }
 
                         if archivedExpanded {
-                            sessionNodes(archivedNodes, archived: true)
+                            sessionNodes(archivedNodes, archived: true, attentionCounts: state.sessionAttentionCounts)
                         }
 
                         if state.isLoadingMoreSessions {
@@ -1170,7 +1170,12 @@ private struct TabletSessionsColumn: View {
         }
     }
 
-    private func sessionNodes(_ nodes: [SessionNode], archived: Bool, depth: Int = 0) -> AnyView {
+    private func sessionNodes(
+        _ nodes: [SessionNode],
+        archived: Bool,
+        depth: Int = 0,
+        attentionCounts: [String: Int]
+    ) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
                 let session = node.session
@@ -1179,6 +1184,7 @@ private struct TabletSessionsColumn: View {
                 SessionRowView(
                     session: session,
                     status: status,
+                    attentionCount: attentionCounts[session.id, default: 0],
                     isSelected: state.currentSessionID == session.id,
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
@@ -1216,7 +1222,12 @@ private struct TabletSessionsColumn: View {
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {
-                    sessionNodes(node.children, archived: archived, depth: depth + 1)
+                    sessionNodes(
+                        node.children,
+                        archived: archived,
+                        depth: depth + 1,
+                        attentionCounts: attentionCounts
+                    )
                 }
             }
         )
