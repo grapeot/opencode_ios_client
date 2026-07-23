@@ -2516,6 +2516,38 @@ struct SessionTreeTests {
         #expect(tree.isEmpty)
     }
 
+    @Test func attentionCountsRollUpThroughAllAncestors() {
+        let sessions = [
+            makeSession(id: "root", updated: 100),
+            makeSession(id: "child", parentID: "root", updated: 90),
+            makeSession(id: "grandchild", parentID: "child", updated: 80),
+        ]
+
+        let counts = AppState.attentionCountsBySession(
+            sessions: sessions,
+            attentionSessionIDs: ["grandchild", "grandchild"]
+        )
+
+        #expect(counts["grandchild"] == 2)
+        #expect(counts["child"] == 2)
+        #expect(counts["root"] == 2)
+    }
+
+    @Test func attentionSessionsSortAheadOfNewerSessions() {
+        let sessions = [
+            makeSession(id: "newer", updated: 200),
+            makeSession(id: "attention", updated: 100),
+        ]
+        let tree = AppState.buildSessionTree(from: sessions)
+
+        let prioritized = AppState.prioritizeAttention(
+            tree,
+            attentionCounts: ["attention": 1]
+        )
+
+        #expect(prioritized.map(\.id) == ["attention", "newer"])
+    }
+
     @Test func sessionTreeExcludesArchivedWhenFiltered() {
         let sessions = [
             makeSession(id: "active", updated: 100),

@@ -485,7 +485,21 @@ final class AppState {
     }
 
     func sessionTree(archived: Bool) -> [SessionNode] {
-        Self.buildSessionTree(from: filteredSessions(archived: archived))
+        Self.prioritizeAttention(
+            Self.buildSessionTree(from: filteredSessions(archived: archived)),
+            attentionCounts: sessionAttentionCounts
+        )
+    }
+
+    var attentionSessionIDs: [String] {
+        pendingPermissions.map(\.sessionID) + pendingQuestions.map(\.sessionID)
+    }
+
+    var sessionAttentionCounts: [String: Int] {
+        Self.attentionCountsBySession(
+            sessions: sessions,
+            attentionSessionIDs: attentionSessionIDs
+        )
     }
 
     var projects: [Project] = []
@@ -718,6 +732,45 @@ final class AppState {
         roots.append(contentsOf: orphans)
         roots.sort { $0.session.time.updated > $1.session.time.updated }
         return roots
+    }
+
+    nonisolated static func attentionCountsBySession(
+        sessions: [Session],
+        attentionSessionIDs: [String]
+    ) -> [String: Int] {
+        let sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        var counts: [String: Int] = [:]
+
+        for sourceSessionID in attentionSessionIDs {
+            var sessionID: String? = sourceSessionID
+            var visited: Set<String> = []
+            while let currentSessionID = sessionID, visited.insert(currentSessionID).inserted {
+                counts[currentSessionID, default: 0] += 1
+                sessionID = sessionsByID[currentSessionID]?.parentID
+            }
+        }
+        return counts
+    }
+
+    nonisolated static func prioritizeAttention(
+        _ nodes: [SessionNode],
+        attentionCounts: [String: Int]
+    ) -> [SessionNode] {
+        nodes
+            .map { node in
+                SessionNode(
+                    session: node.session,
+                    children: prioritizeAttention(node.children, attentionCounts: attentionCounts)
+                )
+            }
+            .sorted { lhs, rhs in
+                let lhsNeedsAttention = attentionCounts[lhs.id, default: 0] > 0
+                let rhsNeedsAttention = attentionCounts[rhs.id, default: 0] > 0
+                if lhsNeedsAttention != rhsNeedsAttention {
+                    return lhsNeedsAttention
+                }
+                return lhs.session.time.updated > rhs.session.time.updated
+            }
     }
 
     var currentSession: Session? {
