@@ -285,8 +285,7 @@ struct MessageRowView: View {
             Image(systemName: "ellipsis")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .accessibilityIdentifier("message-actions")
