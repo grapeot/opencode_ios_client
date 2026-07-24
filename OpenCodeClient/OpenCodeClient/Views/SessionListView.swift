@@ -316,9 +316,11 @@ struct SessionRowView: View {
                     Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
                         .font(DesignTypography.micro)
                         .foregroundStyle(DesignColors.Neutral.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .frame(width: 12)
+                .padding(.horizontal, -16)
                 .accessibilityIdentifier("session-toggle-\(session.id)")
             } else if depth > 0 {
                 RoundedRectangle(cornerRadius: 1.5)
