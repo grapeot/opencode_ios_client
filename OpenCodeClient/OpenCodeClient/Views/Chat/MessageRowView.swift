@@ -5,6 +5,7 @@
 
 import SwiftUI
 import MarkdownUI
+import UIKit
 
 struct MessageRowView: View {
     private static let markdownRenderCharacterLimit = 12_000
@@ -21,6 +22,7 @@ struct MessageRowView: View {
     let onEditFromMessage: ((String) -> Void)?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showsTextSelection = false
 
     // iPhone packs tool/patch cards two-up to keep information density high;
     // iPad has room for a 3-up grid.
@@ -200,6 +202,96 @@ struct MessageRowView: View {
         return message.info.structured?.speech
     }
 
+    static func copyableText(for message: MessageWithParts) -> String {
+        let text = message.parts
+            .filter(\.isText)
+            .compactMap(\.text)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        if !text.isEmpty { return text }
+        return structuredSpeechFallback(for: message) ?? ""
+    }
+
+    static func selectionText(from markdown: String) -> String {
+        var insideCodeFence = false
+        return markdown
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .compactMap { substring -> String? in
+                let line = String(substring)
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                    insideCodeFence.toggle()
+                    return nil
+                }
+                if insideCodeFence { return line }
+
+                var content = line
+                let leadingWhitespace = content.prefix { $0 == " " || $0 == "\t" }
+                var body = content.dropFirst(leadingWhitespace.count)
+                if let markerEnd = body.firstIndex(where: { $0 != "#" }),
+                   markerEnd != body.startIndex,
+                   body.distance(from: body.startIndex, to: markerEnd) <= 6,
+                   body[markerEnd] == " " {
+                    body = body[body.index(after: markerEnd)...]
+                    content = String(leadingWhitespace) + String(body)
+                } else if body.hasPrefix("> ") {
+                    content = String(leadingWhitespace) + String(body.dropFirst(2))
+                }
+
+                guard let inline = try? AttributedString(
+                    markdown: content,
+                    options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+                ) else { return content }
+                return String(inline.characters)
+            }
+            .joined(separator: "\n")
+    }
+
+    private var copyableText: String {
+        Self.copyableText(for: message)
+    }
+
+    private var messageActionsMenu: some View {
+        Menu {
+            Button {
+                showsTextSelection = true
+            } label: {
+                Label(L10n.t(.chatSelectText), systemImage: "text.viewfinder")
+            }
+
+            Button {
+                UIPasteboard.general.string = copyableText
+            } label: {
+                Label(L10n.t(.chatCopyMessage), systemImage: "doc.on.doc")
+            }
+
+            if message.info.isUser, let onEditFromMessage {
+                Button {
+                    onEditFromMessage(message.info.id)
+                } label: {
+                    Label(L10n.t(.chatEditFromHere), systemImage: "pencil")
+                }
+                .disabled(state.isBusy)
+            }
+
+            if let onForkFromMessage {
+                Button {
+                    onForkFromMessage(message.info.id)
+                } label: {
+                    Label(L10n.t(.chatForkFromHere), systemImage: "arrow.triangle.branch")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("message-actions")
+    }
+
     private struct LargeMessagePreview: View {
         let text: String
         let preview: String
@@ -222,6 +314,9 @@ struct MessageRowView: View {
             } else {
                 assistantMessageView
             }
+        }
+        .sheet(isPresented: $showsTextSelection) {
+            MessageTextSelectionSheet(text: copyableText)
         }
     }
 
@@ -254,31 +349,7 @@ struct MessageRowView: View {
                 // User messages don't carry a model line — the model belongs to
                 // the assistant's reply, not to what the human said.
                 Spacer()
-                if onForkFromMessage != nil {
-                    Menu {
-                        if onEditFromMessage != nil {
-                            Button {
-                                onEditFromMessage?(message.info.id)
-                            } label: {
-                                Label(L10n.t(.chatEditFromHere), systemImage: "pencil")
-                            }
-                            .disabled(state.isBusy)
-                        }
-
-                        Button {
-                            onForkFromMessage?(message.info.id)
-                        } label: {
-                            Label(L10n.t(.chatForkFromHere), systemImage: "arrow.triangle.branch")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .contentShape(Rectangle())
-                    }
-                }
+                if !copyableText.isEmpty { messageActionsMenu }
             }
             .padding(.leading, 4)
         }
@@ -309,11 +380,17 @@ struct MessageRowView: View {
 
             // Model footer: same caption2/tertiary "providerID/modelID" treatment as
             // the user message, placed at the end of the assistant turn.
-            if let model = message.info.resolvedModel {
-                Text("\(model.providerID)/\(model.modelID)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.leading, 4)
+            if message.info.resolvedModel != nil || !copyableText.isEmpty {
+                HStack {
+                    if let model = message.info.resolvedModel {
+                        Text("\(model.providerID)/\(model.modelID)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    if !copyableText.isEmpty { messageActionsMenu }
+                }
+                .padding(.leading, 4)
             }
 
             if let err = message.info.errorMessageForDisplay {
@@ -386,6 +463,52 @@ struct MessageRowView: View {
         .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("toolcard.toolcalls")
+    }
+}
+
+private struct MessageTextSelectionSheet: View {
+    let text: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SelectableMessageTextView(text: text)
+                .navigationTitle(L10n.t(.chatSelectText))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L10n.t(.appDone)) { dismiss() }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+private struct SelectableMessageTextView: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.alwaysBounceVertical = true
+        view.adjustsFontForContentSizeCategory = true
+        view.backgroundColor = .clear
+        view.textColor = .label
+        view.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
+        view.accessibilityIdentifier = "message-text-selection"
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        guard view.text != selectableText else { return }
+        view.font = .preferredFont(forTextStyle: .body)
+        view.text = selectableText
+    }
+
+    private var selectableText: String {
+        MessageRowView.selectionText(from: text)
     }
 }
 

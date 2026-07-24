@@ -277,6 +277,8 @@ enum L10n {
         case chatPullToLoadMore
         case chatLoadingMoreHistory
         case chatLargeMessagePreviewNotice
+        case chatSelectText
+        case chatCopyMessage
         case chatEditFromHere
         case chatForkFromHere
         case carTitle
@@ -724,6 +726,8 @@ enum L10n {
         Key.chatPullToLoadMore.rawValue: "Pull down to load more history",
         Key.chatLoadingMoreHistory.rawValue: "Loading more history...",
         Key.chatLargeMessagePreviewNotice.rawValue: "Large message: showing first %@ of %@ characters. Markdown rendering is skipped to keep the app responsive.",
+        Key.chatSelectText.rawValue: "Select Text",
+        Key.chatCopyMessage.rawValue: "Copy Message",
         Key.chatEditFromHere.rawValue: "Edit from here",
         Key.chatForkFromHere.rawValue: "Fork from here",
         Key.carTitle.rawValue: "Car Mode",
@@ -1175,6 +1179,8 @@ enum L10n {
         Key.chatPullToLoadMore.rawValue: "下拉加载更多历史消息",
         Key.chatLoadingMoreHistory.rawValue: "正在加载更多历史消息...",
         Key.chatLargeMessagePreviewNotice.rawValue: "消息较长：当前只显示前 %@ / %@ 个字符。为保持流畅，已跳过 Markdown 渲染。",
+        Key.chatSelectText.rawValue: "选择文本",
+        Key.chatCopyMessage.rawValue: "复制整条消息",
         Key.chatEditFromHere.rawValue: "从这里编辑",
         Key.carTitle.rawValue: "驾驶模式",
         Key.carReady.rawValue: "可以说话",

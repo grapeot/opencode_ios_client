@@ -4,10 +4,19 @@
 
 ## 当前状态
 
-- **最后更新**：2026-07-15
-- **分支**：`feat/session-deep-links`
+- **最后更新**：2026-07-24
+- **分支**：`feat/message-text-selection`
 - **编译/测试**：iPhone 16 / iOS 18.4 build 与全量 test suite 通过；36 个 UI tests 中 4 个 opt-in tests 按预期 skip
 - **Phase**：`opencode://session/<id>` cold/warm launch 与 Chat Markdown navigation implemented
+
+### 2026-07-24 — Chat 跨 Markdown block 文本选择
+
+- 根因定位到 MarkdownUI 的 `BlockSequence`：一条 Markdown 消息会拆成多个 SwiftUI block view；iOS 的 `.textSelection(.enabled)` 只能在单个可选择 view 内工作，无法跨段落、列表和代码块扩展 selection。Chat 没有使用 WKWebView，也不是流式 DOM diff 问题。
+- 保留现有 MarkdownUI 阅读渲染，避免回归 workspace 图片、表格、代码块和链接；user/assistant 消息菜单新增“选择文本”和“复制整条消息”。
+- `Edit from here` 只显示在 user message；`Fork from here` 继续同时支持 user 和 assistant message，允许从任意 turn 分叉。
+- “选择文本”使用单一只读 `UITextView` sheet，逐行清理 Markdown 行内标记，保留段落、列表和代码块的原始换行，再支持 iOS 原生跨行、跨段拖选；“复制整条消息”直接复制完整原始文本。
+- 新增多 text part 拼接测试，确保一条消息的多个文本 part 使用空行连接，不再受 Markdown block 边界影响。
+- 验证：iPhone 16 / iOS 18.4 build 通过；`MessageRenderingHeuristicTests` 7 个定向测试通过。
 
 ### 2026-07-19 — Health Quantification client capability
 

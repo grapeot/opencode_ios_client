@@ -1478,6 +1478,49 @@ struct MessageRenderingHeuristicTests {
         #expect(MessageRowView.hasMarkdownSyntax("```swift\nprint(1)\n```") == true)
     }
 
+    @Test func copyableMessageTextJoinsTextPartsAcrossMarkdownBlocks() throws {
+        let json = """
+        {
+          "info": {
+            "id": "message-1",
+            "sessionID": "session-1",
+            "role": "assistant",
+            "time": { "created": 1 }
+          },
+          "parts": [
+            { "id": "part-1", "sessionID": "session-1", "messageID": "message-1", "type": "text", "text": "First paragraph" },
+            { "id": "part-2", "sessionID": "session-1", "messageID": "message-1", "type": "text", "text": "- second\\n- third" }
+          ]
+        }
+        """
+        let message = try JSONDecoder().decode(MessageWithParts.self, from: Data(json.utf8))
+
+        #expect(
+            MessageRowView.copyableText(for: message)
+                == "First paragraph\n\n- second\n- third"
+        )
+    }
+
+    @Test func selectionTextPreservesMarkdownBlockBoundaries() {
+        let markdown = """
+        # Heading
+
+        First **paragraph**.
+
+        - second
+        - third
+
+        ```swift
+        print("**literal**")
+        ```
+        """
+
+        #expect(
+            MessageRowView.selectionText(from: markdown)
+                == "Heading\n\nFirst paragraph.\n\n- second\n- third\n\nprint(\"**literal**\")"
+        )
+    }
+
     @Test func largeMessageDetectionSkipsExpensiveMarkdownRendering() {
         let text = String(repeating: "- Wells Fargo agreement\n", count: 3_000)
 
