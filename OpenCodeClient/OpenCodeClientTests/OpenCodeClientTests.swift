@@ -2147,13 +2147,13 @@ struct ModelSelectionPersistenceTests {
         }
     }
 
-    @Test @MainActor func defaultSelectionUsesGemini35Flash() {
+    @Test @MainActor func defaultSelectionUsesGemini36Flash() {
         withIsolatedModelSelectionDefaults {
             let state = AppState()
 
             #expect(state.selectedModelIndex == 2)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.5 Flash")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.5-flash")
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.6 Flash")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.6-flash")
         }
     }
 
