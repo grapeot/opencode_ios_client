@@ -454,7 +454,11 @@ final class AppState {
     var streamingPartTexts: [String: String] { get { messageStore.streamingPartTexts } set { messageStore.streamingPartTexts = newValue } }
     var streamingReasoningPart: Part? { get { messageStore.streamingReasoningPart } set { messageStore.streamingReasoningPart = newValue } }
 
-    var modelPresets: [ModelPreset] = [
+    /// Fallback presets shown before the server's provider config has loaded (or if it fails to
+    /// load). Once `loadProvidersConfig()` succeeds, `modelPresets` is replaced with the live
+    /// server list — see `applyDynamicModelPresets(from:)` below. This array intentionally stays
+    /// small; it only needs to cover the "not connected yet" cold-start case.
+    static let defaultModelPresets: [ModelPreset] = [
         ModelPreset(displayName: "GLM-5.2", providerID: "zai-coding-plan", modelID: "glm-5.2"),
         ModelPreset(displayName: "GPT-5.6 Sol", providerID: "openai", modelID: "gpt-5.6-sol"),
         ModelPreset(displayName: "Gemini 3.6 Flash", providerID: "google", modelID: "gemini-3.6-flash"),
@@ -464,6 +468,7 @@ final class AppState {
         ModelPreset(displayName: "GPT-5.6 Sol Fast", providerID: "openai", modelID: "gpt-5.6-sol-fast"),
         ModelPreset(displayName: "GPT-5.6 Terra Fast", providerID: "openai", modelID: "gpt-5.6-terra-fast"),
     ]
+    var modelPresets: [ModelPreset] = AppState.defaultModelPresets
     var selectedModelIndex: Int = 2
     
     var agents: [AgentInfo] = [
@@ -815,6 +820,14 @@ final class AppState {
             _ = await providersResult
             _ = await projectsResult
             await loadMessages()
+            // Re-resolve the model picker against real message history now that both the
+            // messages and the live (possibly just-updated) provider/model list are loaded.
+            // Mirrors the same two-step pattern selectSession() uses: applySavedModelForCurrentSession()
+            // as a fast best-guess, syncModelFromMessageHistory() as the authoritative correction
+            // once history is available. Without this, connecting to a server for the first time
+            // (or reconnecting) leaves the picker on whatever applyDynamicModelPresets() fell back
+            // to, even when the session already has an assistant turn recorded.
+            syncModelFromMessageHistory()
             await refreshPendingPermissions()
             await loadSessionDiff()
             await loadSessionTodos()
@@ -837,8 +850,39 @@ final class AppState {
                 }
             }
             providerModelsIndex = idx
+            applyDynamicModelPresets(from: resp)
         } catch {
             providerConfigError = error.localizedDescription
+        }
+    }
+
+    /// Rebuilds `modelPresets` from the server's live provider/model list, replacing the
+    /// cold-start `defaultModelPresets` fallback. Preserves the current selection by ID across
+    /// the swap so an in-flight session doesn't silently jump to a different model out from
+    /// under the user. `providerID` is always taken from `ConfigProvider.id` (not
+    /// `ProviderModel.providerID`) to stay consistent with how `providerModelsIndex` keys are
+    /// built above, and with how `ContextUsageView` looks up `model.providerID` from message
+    /// history — all three need to agree on the same provider-ID namespace.
+    ///
+    /// See issue #99 (grapeot/opencode_ios_client): this data was already being fetched here,
+    /// just never fed back into the picker.
+    private func applyDynamicModelPresets(from resp: ProvidersResponse) {
+        var dynamicPresets: [ModelPreset] = []
+        for p in resp.providers {
+            for m in p.models.values.sorted(by: { $0.id < $1.id }) where !m.id.isEmpty {
+                dynamicPresets.append(
+                    ModelPreset(displayName: m.name ?? m.id, providerID: p.id, modelID: m.id)
+                )
+            }
+        }
+        guard !dynamicPresets.isEmpty else { return }
+
+        let previousSelectedID = selectedModel?.id
+        modelPresets = dynamicPresets
+        if let previousSelectedID, let idx = modelPresets.firstIndex(where: { $0.id == previousSelectedID }) {
+            selectedModelIndex = idx
+        } else {
+            selectedModelIndex = 0
         }
     }
 

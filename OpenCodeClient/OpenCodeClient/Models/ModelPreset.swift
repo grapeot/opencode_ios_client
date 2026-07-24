@@ -21,7 +21,17 @@ struct ModelPreset: Codable, Identifiable {
         case "GPT-5.6 Terra Fast": return "GPT-TF"
         case let name where name.contains("Gemini"): return "Gemini"
         case let name where name.contains("GPT"): return "GPT"
-        default: return displayName
+        default: return Self.truncated(displayName)
         }
+    }
+
+    /// Generic fallback for names not covered by the special cases above — mainly
+    /// dynamically-loaded models from the server's `/config/providers` response (see
+    /// `AppState.applyDynamicModelPresets`). Keeps the toolbar chip label from growing
+    /// unbounded for long server-provided model names.
+    private static func truncated(_ name: String, maxLength: Int = 16) -> String {
+        guard name.count > maxLength else { return name }
+        let cutoff = name.index(name.startIndex, offsetBy: maxLength)
+        return String(name[..<cutoff]) + "…"
     }
 }
