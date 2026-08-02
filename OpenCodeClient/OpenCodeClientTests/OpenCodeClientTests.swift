@@ -2315,16 +2315,16 @@ struct ModelPresetShortNameTests {
         #expect(preset.shortName == "GPT")
     }
 
-    @Test func gptSolFastShortName() {
-        let fast = ModelPreset(displayName: "GPT-5.6 Sol Fast", providerID: "openai", modelID: "gpt-5.6-sol-fast")
-
-        #expect(fast.shortName == "GPT-F")
-    }
-
     @Test func gptTerraFastShortName() {
         let terra = ModelPreset(displayName: "GPT-5.6 Terra Fast", providerID: "openai", modelID: "gpt-5.6-terra-fast")
 
         #expect(terra.shortName == "GPT-TF")
+    }
+
+    @Test func gptLunaShortName() {
+        let luna = ModelPreset(displayName: "GPT-5.6 Luna", providerID: "openai", modelID: "gpt-5.6-luna")
+
+        #expect(luna.shortName == "GPT-L")
     }
 
     @Test func grok45ShortName() {
@@ -2480,11 +2480,12 @@ struct ModelSelectionPersistenceTests {
             let state = AppState()
 
             #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-pro" }))
-            #expect(state.modelPresets.contains(where: {
-                $0.id == "openai/gpt-5.6-sol-fast" && $0.displayName == "GPT-5.6 Sol Fast"
-            }))
+            #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-fast" }))
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-terra-fast" && $0.displayName == "GPT-5.6 Terra Fast"
+            }))
+            #expect(state.modelPresets.contains(where: {
+                $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
             }))
             #expect(state.modelPresets.last?.id == "xai/grok-4.5")
             #expect(state.modelPresets.contains(where: {

@@ -473,8 +473,8 @@ final class AppState {
         ModelPreset(displayName: "Gemini 3.6 Flash", providerID: "google", modelID: "gemini-3.6-flash"),
         ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash"),
         ModelPreset(displayName: "Ollama GLM 5.2", providerID: "ollama-cloud", modelID: "glm-5.2"),
-        ModelPreset(displayName: "GPT-5.6 Sol Fast", providerID: "openai", modelID: "gpt-5.6-sol-fast"),
         ModelPreset(displayName: "GPT-5.6 Terra Fast", providerID: "openai", modelID: "gpt-5.6-terra-fast"),
+        ModelPreset(displayName: "GPT-5.6 Luna", providerID: "openai", modelID: "gpt-5.6-luna"),
         ModelPreset(displayName: "Grok 4.5", providerID: "xai", modelID: "grok-4.5"),
     ]
     var selectedModelIndex: Int = 2
