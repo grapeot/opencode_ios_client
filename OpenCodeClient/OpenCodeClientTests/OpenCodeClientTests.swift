@@ -2332,11 +2332,6 @@ struct ModelPresetShortNameTests {
         #expect(preset.shortName == "Grok")
     }
 
-    @Test func deepSeekV4Flash0731ShortName() {
-        let preset = ModelPreset(displayName: "DeepSeek V4 Flash 0731", providerID: "ollama-cloud", modelID: "deepseek-v4-flash:0731")
-        #expect(preset.shortName == "DS4F")
-    }
-
     @Test func unknownModelFallsBackToDisplayName() {
         let preset = ModelPreset(displayName: "Custom Model", providerID: "custom", modelID: "custom-1")
         #expect(preset.shortName == "Custom Model")
@@ -2491,11 +2486,11 @@ struct ModelSelectionPersistenceTests {
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-terra-fast" && $0.displayName == "GPT-5.6 Terra Fast"
             }))
-            #expect(state.modelPresets.last?.id == "ollama-cloud/deepseek-v4-flash:0731")
+            #expect(state.modelPresets.last?.id == "xai/grok-4.5")
             #expect(state.modelPresets.contains(where: {
                 $0.id == "xai/grok-4.5" && $0.displayName == "Grok 4.5"
             }))
-            #expect(state.modelPresets.last?.displayName == "DeepSeek V4 Flash 0731")
+            #expect(state.modelPresets.last?.displayName == "Grok 4.5")
         }
     }
 }
