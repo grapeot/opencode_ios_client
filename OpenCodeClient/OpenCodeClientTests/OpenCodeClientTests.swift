@@ -1352,9 +1352,9 @@ struct LocalizationTests {
 struct LayoutConstantsTests {
     
     @Test func splitViewFractions() {
-        #expect(LayoutConstants.SplitView.sidebarWidthFraction == 1.0 / 6.0)
-        #expect(LayoutConstants.SplitView.previewWidthFraction == 5.0 / 12.0)
-        #expect(LayoutConstants.SplitView.chatWidthFraction == 5.0 / 12.0)
+        #expect(LayoutConstants.SplitView.sidebarWidthFraction == CGFloat(1) / CGFloat(6))
+        #expect(LayoutConstants.SplitView.previewWidthFraction == CGFloat(5) / CGFloat(12))
+        #expect(LayoutConstants.SplitView.chatWidthFraction == CGFloat(5) / CGFloat(12))
     }
     
     @Test func splitViewFractionsSum() {

@@ -879,9 +879,6 @@ struct ChatTabView: View {
                 guard newPhase == .background else { return }
                 Task { await stopSpeechForBackground() }
             }
-            .onDisappear {
-                Task { await stopSpeechForBackground() }
-            }
         }
     }
 
