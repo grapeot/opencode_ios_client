@@ -60,4 +60,28 @@ extension AppState {
         selectedModelIDBySessionID[sessionID] = modelPresets[idx].id
         persistSelectedModelMap()
     }
+
+    /// Groups `modelPresets` by provider, in provider-first-appearance order, for the model
+    /// picker sheet. Needed once the list is populated from the live server (see
+    /// `applyDynamicModelPresets`): multiple providers commonly serve identically-named models
+    /// (e.g. a "Claude Sonnet 5" available via both `anthropic` and `openrouter`), and a flat
+    /// list makes those indistinguishable while scrolling. Falls back to the raw provider ID as
+    /// the group label when `providersResponse` hasn't loaded (or failed to load) yet.
+    var groupedModelPresetIndices: [(providerID: String, providerName: String, indices: [Int])] {
+        var order: [String] = []
+        var buckets: [String: [Int]] = [:]
+        for (index, preset) in modelPresets.enumerated() {
+            if buckets[preset.providerID] == nil {
+                order.append(preset.providerID)
+                buckets[preset.providerID] = []
+            }
+            buckets[preset.providerID]?.append(index)
+        }
+        let providerNames = Dictionary(
+            uniqueKeysWithValues: (providersResponse?.providers ?? []).map { ($0.id, $0.name ?? $0.id) }
+        )
+        return order.map { providerID in
+            (providerID: providerID, providerName: providerNames[providerID] ?? providerID, indices: buckets[providerID] ?? [])
+        }
+    }
 }

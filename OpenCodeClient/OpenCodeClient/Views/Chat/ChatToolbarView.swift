@@ -18,7 +18,24 @@ struct ChatToolbarView: View {
     @State private var showCreateDisabledAlert = false
     @State private var showConfigSheet = false
     @State private var showTodoPanel = false
+    @State private var modelSearchText = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
+
+    /// `state.groupedModelPresetIndices` filtered by `modelSearchText`. A query matching the
+    /// provider name (e.g. "anthropic") shows that provider's full lineup; otherwise it filters
+    /// to models whose display name matches (e.g. "sonnet" across every provider that has one).
+    /// Groups with zero matches are dropped entirely so search doesn't leave empty headers behind.
+    private var filteredModelGroups: [(providerID: String, providerName: String, indices: [Int])] {
+        let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return state.groupedModelPresetIndices }
+        return state.groupedModelPresetIndices.compactMap { group in
+            let indices = group.providerName.localizedCaseInsensitiveContains(query)
+                ? group.indices
+                : group.indices.filter { state.modelPresets[$0].displayName.localizedCaseInsensitiveContains(query) }
+            guard !indices.isEmpty else { return nil }
+            return (providerID: group.providerID, providerName: group.providerName, indices: indices)
+        }
+    }
     
     private var useCompactLabels: Bool {
 #if canImport(UIKit)
@@ -132,20 +149,29 @@ struct ChatToolbarView: View {
             NavigationStack {
                 List {
                     Section(L10n.t(.configureModel)) {
-                        ForEach(Array(state.modelPresets.enumerated()), id: \.element.id) { index, preset in
-                            Button {
-                                state.setSelectedModelIndex(index)
-                            } label: {
-                                HStack {
-                                    Text(preset.displayName)
-                                    Spacer()
-                                    if state.selectedModelIndex == index {
-                                        Image(systemName: "checkmark")
-                                            .foregroundColor(DesignColors.Brand.primary)
+                        ForEach(filteredModelGroups, id: \.providerID) { group in
+                            if filteredModelGroups.count > 1 {
+                                Text(group.providerName)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                            ForEach(group.indices, id: \.self) { index in
+                                let preset = state.modelPresets[index]
+                                Button {
+                                    state.setSelectedModelIndex(index)
+                                    showConfigSheet = false
+                                } label: {
+                                    HStack {
+                                        Text(preset.displayName)
+                                        Spacer()
+                                        if state.selectedModelIndex == index {
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(DesignColors.Brand.primary)
+                                        }
                                     }
                                 }
+                                .foregroundColor(.primary)
                             }
-                            .foregroundColor(.primary)
                         }
                     }
                     
@@ -188,6 +214,7 @@ struct ChatToolbarView: View {
                 }
                 .navigationTitle(L10n.t(.configureTitle))
                 .navigationBarTitleDisplayMode(.inline)
+                .searchable(text: $modelSearchText, prompt: L10n.t(.configureModelSearch))
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(L10n.t(.appDone)) {
@@ -197,6 +224,7 @@ struct ChatToolbarView: View {
                 }
             }
             .presentationDetents([.medium, .large])
+            .onDisappear { modelSearchText = "" }
         }
     }
 
