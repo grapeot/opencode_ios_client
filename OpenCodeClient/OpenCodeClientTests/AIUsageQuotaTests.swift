@@ -48,8 +48,8 @@ struct AIUsageQuotaTests {
 
     @Test func mapsSupportedModelsToQuotaProviders() {
         let gpt = ModelPreset(displayName: "GPT-5.6 Sol", providerID: "openai", modelID: "gpt-5.6-sol")
-        let glm = ModelPreset(displayName: "GLM-5.2", providerID: "zai-coding-plan", modelID: "glm-5.2")
-        let gemini = ModelPreset(displayName: "Gemini 3.6 Flash", providerID: "google", modelID: "gemini-3.6-flash")
+        let glm = ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3")
+        let gemini = ModelPreset(displayName: "Gemini 3.7 Flash", providerID: "google", modelID: "gemini-3.7-flash")
 
         #expect(gpt.primaryQuotaKey == AIUsageQuotaKey(provider: "codex", label: "5h"))
         #expect(glm.primaryQuotaKey == AIUsageQuotaKey(provider: "glm", label: "5h"))
