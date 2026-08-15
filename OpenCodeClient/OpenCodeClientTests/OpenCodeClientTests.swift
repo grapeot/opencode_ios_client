@@ -2327,8 +2327,8 @@ struct ModelPresetShortNameTests {
         #expect(luna.shortName == "GPT-L")
     }
 
-    @Test func grok45ShortName() {
-        let preset = ModelPreset(displayName: "Grok 4.5", providerID: "xai", modelID: "grok-4.5")
+    @Test func grok46ShortName() {
+        let preset = ModelPreset(displayName: "Grok 4.6", providerID: "xai", modelID: "grok-4.6")
         #expect(preset.shortName == "Grok")
     }
 
@@ -2366,38 +2366,43 @@ struct ModelSelectionPersistenceTests {
         body()
     }
 
-    @Test @MainActor func legacyGLM51SelectionMapsToCurrentGLM52Preset() {
+    @Test @MainActor func legacyGLMSelectionMapsToCurrentGLM53Preset() {
         withIsolatedModelSelectionDefaults {
-            let sessionID = "session-glm"
-            let legacySelection = [sessionID: "zai-coding-plan/glm-5.1"]
-            let encoded = try! JSONEncoder().encode(legacySelection)
-            UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
+            for legacyID in ["zai-coding-plan/glm-5.1", "zai-coding-plan/glm-5.2", "zai-coding-plan/glm-5-turbo"] {
+                UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
+                UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
+                let sessionID = "session-glm"
+                let legacySelection = [sessionID: legacyID]
+                let encoded = try! JSONEncoder().encode(legacySelection)
+                UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
 
-            let state = AppState()
-            let session = Session(
-                id: sessionID,
-                slug: sessionID,
-                projectID: "p1",
-                directory: "/tmp",
-                parentID: nil,
-                title: sessionID,
-                version: "1",
-                time: .init(created: 0, updated: 100, archived: nil),
-                share: nil,
-                summary: nil
-            )
+                let state = AppState()
+                let session = Session(
+                    id: sessionID,
+                    slug: sessionID,
+                    projectID: "p1",
+                    directory: "/tmp",
+                    parentID: nil,
+                    title: sessionID,
+                    version: "1",
+                    time: .init(created: 0, updated: 100, archived: nil),
+                    share: nil,
+                    summary: nil
+                )
 
-            state.selectSession(session)
+                state.selectSession(session)
 
-            #expect(state.selectedModelIndex == 0)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.2")
+                #expect(state.selectedModelIndex == 0)
+                #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.3")
+                #expect(state.modelPresets[state.selectedModelIndex].id == "zai-coding-plan/glm-5.3")
+            }
         }
     }
 
     @Test @MainActor func legacyGPTSelectionMapsToCurrentGPT56SolPreset() {
         withIsolatedModelSelectionDefaults {
             let sessionID = "session-gpt"
-            for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5", "openai/gpt-5.6-sol-pro"] {
+            for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5", "openai/gpt-5.6-sol-pro", "openai/gpt-5.6-sol-fast"] {
                 UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
                 UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
                 let legacySelection = [sessionID: legacyID]
@@ -2455,13 +2460,13 @@ struct ModelSelectionPersistenceTests {
         }
     }
 
-    @Test @MainActor func defaultSelectionUsesGemini36Flash() {
+    @Test @MainActor func defaultSelectionUsesGemini37Flash() {
         withIsolatedModelSelectionDefaults {
             let state = AppState()
 
             #expect(state.selectedModelIndex == 2)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.6 Flash")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.6-flash")
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.7 Flash")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.7-flash")
         }
     }
 
@@ -2475,7 +2480,7 @@ struct ModelSelectionPersistenceTests {
         }
     }
 
-    @Test @MainActor func defaultPresetsIncludeGPT56SolFastAndExcludeRemovedPro() {
+    @Test @MainActor func defaultPresetsExcludeRemovedGPTVariants() {
         withIsolatedModelSelectionDefaults {
             let state = AppState()
 
@@ -2487,11 +2492,11 @@ struct ModelSelectionPersistenceTests {
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
             }))
-            #expect(state.modelPresets.last?.id == "xai/grok-4.5")
+            #expect(state.modelPresets.last?.id == "xai/grok-4.6")
             #expect(state.modelPresets.contains(where: {
-                $0.id == "xai/grok-4.5" && $0.displayName == "Grok 4.5"
+                $0.id == "xai/grok-4.6" && $0.displayName == "Grok 4.6"
             }))
-            #expect(state.modelPresets.last?.displayName == "Grok 4.5")
+            #expect(state.modelPresets.last?.displayName == "Grok 4.6")
         }
     }
 }

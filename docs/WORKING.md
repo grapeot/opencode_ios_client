@@ -4,10 +4,19 @@
 
 ## 当前状态
 
-- **最后更新**：2026-07-31
-- **分支**：`feat/gpt-live-transcribe`
-- **编译/测试**：VoiceFlowKit is pinned to exact `0.4.0`; iOS Simulator build and both speech suites (26/26) passed against the release. The preceding full suite still had unrelated `LayoutConstantsTests.splitViewFractions` and `ToolCardsUITests.testToolCardsFixtureRendersFileCardsAndMergedToolCalls` failures.
-- **Phase**：GPT Realtime / GPT Live Transcribe / Grok STT host integration; exact VoiceFlowKit `0.4.0` release pin
+- **最后更新**：2026-08-14
+- **分支**：`feat/glm-5.3`
+- **编译/测试**：pending
+- **Phase**：GLM 5.2 → 5.3; Gemini 3.6 Flash → 3.7 Flash; Grok 4.5 → 4.6; remove GPT-5.6 Sol Fast preset
+
+### 2026-08-14 — GLM 5.3 + Gemini 3.7 Flash + Grok 4.6 model preset upgrade
+
+- 模型列表顶部 `zai-coding-plan` 的 GLM 从 `GLM-5.2` / `glm-5.2` 升级为 `GLM-5.3` / `glm-5.3`。`models.dev` 上 `zai-coding-plan` 已列出 `glm-5.3`，server 端无需注入。
+- `ollama-cloud` 那行 `Ollama GLM 5.2` 保持不变，因为 `ollama-cloud` 上游暂未提供 `glm-5.3`。
+- `canonicalModelPresetID` 新增 `zai-coding-plan/glm-5.2` 和 `zai-coding-plan/glm-5.3` 均映射到 `zai-coding-plan/glm-5.3`，让之前选中 GLM-5.2 的 session 平滑迁移到新 preset 而非掉回默认。原有的 `glm-5.1` / `glm-5-turbo` 遗留映射一并指向 `glm-5.3`。
+- 同一 PR 顺带把默认模型 `Gemini 3.6 Flash` / `google/gemini-3.6-flash` 升级为 `Gemini 3.7 Flash` / `gemini-3.7-flash`（`models.dev` 已列出）。沿用上次 3.5 → 3.6 的模式，Gemini 不加 canonical 遗留映射，旧 `gemini-3.6-flash` 保存值按默认逻辑保持当前选择。
+- 尾部 `Grok 4.5` / `xai/grok-4.5` 升级为 `Grok 4.6` / `grok-4.6`（`models.dev` 已列出）。`ModelPreset.shortName` 的 `Grok 4.5 -> Grok` 同步改为 `Grok 4.6 -> Grok`，不加 canonical 遗留映射。
+- 移除 `GPT-5.6 Sol Fast` preset（`openai/gpt-5.6-sol-fast`），与 Android 客户端对齐。`canonicalModelPresetID` 将 `openai/gpt-5.6-sol-fast` 映射到 `openai/gpt-5.6-sol`，已选中该模型的 session 平滑迁移；`ModelPreset.shortName` 的 `GPT-F` 分支删除。Car Mode 内部协议使用的 `gpt-5.6-sol-fast`（`CarModeProtocol.model`）与 selector 无关，保持不变。
 
 ### 2026-07-31 — GPT Live Transcribe host integration
 
