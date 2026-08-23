@@ -2492,11 +2492,11 @@ struct ModelSelectionPersistenceTests {
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
             }))
-            #expect(state.modelPresets.last?.id == "xai/grok-4.6")
             #expect(state.modelPresets.contains(where: {
                 $0.id == "xai/grok-4.6" && $0.displayName == "Grok 4.6"
             }))
-            #expect(state.modelPresets.last?.displayName == "Grok 4.6")
+            #expect(state.modelPresets.last?.id == "qwen38/qwen3.8-27b")
+            #expect(state.modelPresets.last?.displayName == "Qwen 3.8 27B")
         }
     }
 }

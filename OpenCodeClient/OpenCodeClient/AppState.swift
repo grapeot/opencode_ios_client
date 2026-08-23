@@ -476,6 +476,7 @@ final class AppState {
         ModelPreset(displayName: "GPT-5.6 Terra Fast", providerID: "openai", modelID: "gpt-5.6-terra-fast"),
         ModelPreset(displayName: "GPT-5.6 Luna", providerID: "openai", modelID: "gpt-5.6-luna"),
         ModelPreset(displayName: "Grok 4.6", providerID: "xai", modelID: "grok-4.6"),
+        ModelPreset(displayName: "Qwen 3.8 27B", providerID: "qwen38", modelID: "qwen3.8-27b"),
     ]
     var selectedModelIndex: Int = 2
     
