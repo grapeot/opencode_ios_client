@@ -145,6 +145,8 @@ iOS 客户端没有像 Web / Android 那样对 text part 做归一化，具体�
 - `buildAssistantBlocks` 跳过“纯 thinking 尾巴”part 且 tool 合并保持
 
 已知取舍（顺序决策的代价）：模型若在普通回复里用**独立成行**的标签引用示例 thinking 块（且不在代码围栏里），从文本开头到该示例 close 的全部内容（含示例前文）会被切掉。用户已明确该 case 不在 concern 范围；代码围栏里的示例不受影响。
+
+另一个残余 case：若 thinking 里的字面 close 是**行内**（非独立成行）且其后没有任何独立成行 close（当前 session 62 条含标签 text part 中仅 1 条如此），text part 里就没有可识别的切分边界，泄漏的 thinking 会原样保留。Web 端同样不具备这个识别能力（表现一致），没有可靠信号可切，接受不修。
 ### 第三批：模拟器实证渲染路径（暂停，仅本次排查用）
 
 - `AppState+Messages.swift` 的 `loadMessages` 加 `render-part` debug log：每条 assistant 消息的每个 text / reasoning part 打 `type`（server 原始类型）、`isReasoning` / `isText`（app 分类）、换行可视化的内容预览（前 160 字符）。
