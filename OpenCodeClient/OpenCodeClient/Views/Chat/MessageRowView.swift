@@ -31,7 +31,7 @@ struct MessageRowView: View {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
     }
 
-    private enum AssistantBlock: Identifiable {
+    enum AssistantBlock: Identifiable {
         case text(Part)
         case cards([Part])
         case attachment(Part)
@@ -59,7 +59,7 @@ struct MessageRowView: View {
         ToolCardClassifier.isFileOperation(part)
     }
 
-    private var assistantBlocks: [AssistantBlock] {
+    static func buildAssistantBlocks(parts: [Part]) -> [AssistantBlock] {
         var blocks: [AssistantBlock] = []
         var buffer: [Part] = []
 
@@ -69,7 +69,7 @@ struct MessageRowView: View {
             buffer.removeAll(keepingCapacity: true)
         }
 
-        for part in message.parts {
+        for part in parts {
             if part.isReasoning { continue }
             if part.isTool || part.isPatch {
                 buffer.append(part)
@@ -77,6 +77,7 @@ struct MessageRowView: View {
             }
             if part.isStepStart || part.isStepFinish { continue }
             if part.isText {
+                if !isRenderableText(part.text) { continue }
                 flushBuffer()
                 blocks.append(.text(part))
             } else if part.isFile {
@@ -91,16 +92,23 @@ struct MessageRowView: View {
         return blocks
     }
 
+    private var assistantBlocks: [AssistantBlock] {
+        Self.buildAssistantBlocks(parts: message.parts)
+    }
+
     @ViewBuilder
     private func markdownText(_ text: String, isUser: Bool) -> some View {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let font = isUser ? DesignTypography.bodyProminent : DesignTypography.body
-        if Self.isLargeMessage(text) {
-            LargeMessagePreview(text: text, preview: Self.largeMessagePreview(text))
+        if trimmed.isEmpty {
+            EmptyView()
+        } else if Self.isLargeMessage(trimmed) {
+            LargeMessagePreview(text: trimmed, preview: Self.largeMessagePreview(trimmed))
                 .font(font)
                 .textSelection(.enabled)
-        } else if shouldRenderMarkdown(text) {
+        } else if shouldRenderMarkdown(trimmed) {
             ResolvedMarkdownView(
-                text: text,
+                text: trimmed,
                 state: state,
                 workspaceDirectory: workspaceDirectory,
                 handlesWorkspaceLinks: !isUser,
@@ -109,7 +117,7 @@ struct MessageRowView: View {
                 .font(font)
                 .textSelection(.enabled)
         } else {
-            Text(text)
+            Text(trimmed)
                 .font(font)
                 .textSelection(.enabled)
         }
@@ -195,6 +203,11 @@ struct MessageRowView: View {
         }
 
         return trimmed.contains("\n\n")
+    }
+
+    static func isRenderableText(_ text: String?) -> Bool {
+        guard let text else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     static func structuredSpeechFallback(for message: MessageWithParts) -> String? {
