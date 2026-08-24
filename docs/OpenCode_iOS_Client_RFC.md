@@ -616,7 +616,7 @@ receive URL
 
 </details>
 
-完整子项目 PRD / RFC 保留在磁盘 `docs/Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md`，已从 git 跟踪移除；决策过程见 [`WORKING.md`](WORKING.md)。
+完整子项目 PRD / RFC 保留在磁盘 `docs/archive/2026-06_markdown_web_preview_prd.md` / `2026-06_markdown_web_preview_rfc.md`，已从 git 跟踪移除；决策过程见 [`WORKING.md`](WORKING.md)。
 
 ### 8. iPad / Vision Pro 布局（Phase 3）
 
@@ -729,7 +729,7 @@ idle
 
 VoiceFlow finalization 完成后先释放录音 AudioSession，再由 TTS service 切换到 `.playback` + `.spokenAudio`。这避免声音残留在 receiver 或 Bluetooth HFP route。录音开始或取消时停止当前朗读。
 
-`open_navigation` 由 Maps dispatcher 校验 destination/waypoints 并构造 Apple Maps URL。`health_quantification.export_all` 使用独立本地授权、Pending/Outbox 和 callback continuation；正式技术合同见 [`client_capabilities_rfc.md`](client_capabilities_rfc.md) 与 [`client_capabilities_protocol.md`](client_capabilities_protocol.md)。两种 action 都不接受模型提供任意 URL。
+`open_navigation` 由 Maps dispatcher 校验 destination/waypoints 并构造 Apple Maps URL。`health_quantification.export_all` 使用独立本地授权、Pending/Outbox 和 callback continuation；正式技术合同见 [`features/client_capabilities/rfc.md`](features/client_capabilities/rfc.md) 与 [`features/client_capabilities/protocol.md`](features/client_capabilities/protocol.md)。两种 action 都不接受模型提供任意 URL。
 
 #### 10.6 Server Contract 与验证证据
 

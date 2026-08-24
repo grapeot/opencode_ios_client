@@ -70,7 +70,7 @@
 
 <div class="ap-style">
 <h4>⑦ 状态表行 key 用 Phase/Sprint 而非用户体验</h4>
-<span class="ap-evi">证据 · Markdown_Web_Preview_PRD §"实施进度" vs 主 PRD §4.3.5 同信息不同排</span>
+<span class="ap-evi">证据 · 2026-06_markdown_web_preview_prd.md（archive/）§"实施进度" vs 主 PRD §4.3.5 同信息不同排</span>
 <p>同一团队同周写出两版,说明 AI 默认退回工程时序。Row key 替换成"用户在 App 看到什么"后顺序若变化,当前排序就是反模式。</p>
 </div>
 

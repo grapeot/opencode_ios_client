@@ -38,9 +38,9 @@
 - `OpenCodeClient/OpenCodeClientUITests/ToolCardsUITests.swift`
 - `OpenCodeClient/OpenCodeClientUITests/OpenCodeClientUITestsLaunchTests.swift`
 - `ui_driver/`
-- `docs/skill_operate_ios_simulator.md`
-- `docs/skill_ui_test_tasks.md`
-- `docs/ui_test_prompts/01_read_card_visible.md`
+- `skills/operate_ios_simulator.md`
+- `skills/ui_test_tasks.md`
+- `skills/ui_test_prompts/01_read_card_visible.md`
 
 ## Tier 1：unit / contract
 
@@ -136,9 +136,9 @@ Tier 4 由 agent 驱动真实 app，读工具返回的 UI state/截图，根据�
 当前 iOS 最小落地包括：
 
 - `ui_driver/`：`simctl` backed Python CLI skeleton。
-- `docs/skill_operate_ios_simulator.md`：操作层 skill。
-- `docs/skill_ui_test_tasks.md`：Tier 4 测试任务 workflow。
-- `docs/ui_test_prompts/01_read_card_visible.md`：第一条 read-card prompt。
+- `skills/operate_ios_simulator.md`：操作层 skill。
+- `skills/ui_test_tasks.md`：Tier 4 测试任务 workflow。
+- `skills/ui_test_prompts/01_read_card_visible.md`：第一条 read-card prompt。
 - `OpenCodeClientUITests/testCaptureSessionArchiveFixtureScreenshot`：默认 skip 的 deterministic screenshot harness。设置 `TIER4_SCREENSHOT_PATH` 或 `/tmp/opencode-ios-tier4-config.json` 的 `screenshot_path` 后，它用 synthetic session tree fixture 启动真实 app、展开 Archive section，并把 PNG 写到指定路径。
 
 `ui_driver` 支持 `devices`、`launch`、`screenshot`、`tree`、`run-xcuitest`、`configure-server`、`send-prompt`。其中 `tree` 有两种模式：不传 Xcode 参数时是诚实的 screenshot-only observation，返回 `observability: screenshot_only`、空 `nodes` / `compact`，并带 warning；传 `--project`、`--scheme`、`--destination` 时走 `Tier4DriverUITests/testAccessibilityObservationSnapshot`，返回 `observability: xcuitest_accessibility_snapshot` 和 XCTest summary。它仍然不伪装 Android 式完整 accessibility tree。需要精确 element 断言时，用 `run-xcuitest` 或 XCTest-backed `tree` 调用 focused UI harness；这比坐标点击或伪造 tree 更符合 iOS best practice。Tier 4 用截图、XCTest summary 和 agent 判断组合出 verdict，无法判断时报告 BLOCKED。

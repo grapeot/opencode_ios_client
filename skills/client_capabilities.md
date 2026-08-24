@@ -4,7 +4,7 @@
 
 在不开放任意 URL、不复制设备领域逻辑到 OpenCode、也不修改 OpenCode server tool loop 的前提下，为 OpenCode iOS 增加一个 typed、可授权、可恢复、可回到原 session 的设备能力。
 
-正式 wire contract 以 [`../docs/client_capabilities_protocol.md`](../docs/client_capabilities_protocol.md) 为准。开始修改前优先读取该文件、`Models/ClientCapability.swift`、`AppState+ClientCapabilities.swift` 和 provider App 的 deep-link parser/result types。
+正式 wire contract 以 [`../docs/features/client_capabilities/protocol.md`](../docs/features/client_capabilities/protocol.md) 为准。开始修改前优先读取该文件、`Models/ClientCapability.swift`、`AppState+ClientCapabilities.swift` 和 provider App 的 deep-link parser/result types。
 
 ## 适用判断
 
@@ -42,4 +42,4 @@
 
 ## 输出位置
 
-新增能力应更新 `docs/client_capabilities_protocol.md`、对应产品/RFC文档、Swift registry/dispatcher、provider contract 和测试。设计草案或一次性调查不要成为第三份协议 source of truth。
+新增能力应更新 `docs/features/client_capabilities/protocol.md`、对应产品/RFC文档、Swift registry/dispatcher、provider contract 和测试。设计草案或一次性调查不要成为第三份协议 source of truth。

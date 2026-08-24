@@ -392,7 +392,7 @@ Diff 渲染采用 unified diff 格式（类似 GitHub），绿色背景表示新
 | 切文件立刻刷新内容，大文件先弹确认 | <span class="wp-stat ok">上线</span> |
 | `.html` 浏览 / Mermaid / 代码高亮 / 点图放大 | <span class="wp-stat block">下一轮</span> |
 
-详情与来源 — 决策过程见 [`WORKING.md`](WORKING.md)；完整子项目 PRD / RFC 保留在磁盘 `docs/Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md`，已从 git 跟踪移除。
+详情与来源 — 决策过程见 [`WORKING.md`](WORKING.md)；完整子项目 PRD / RFC 保留在磁盘 `docs/archive/2026-06_markdown_web_preview_prd.md` / `2026-06_markdown_web_preview_rfc.md`，已从 git 跟踪移除。
 
 ### 4.4 Settings Tab
 
@@ -542,7 +542,7 @@ Car Mode 是 iPhone 上的前台语音交互模式，让用户在不适合阅读
 - iPad 和 Apple Vision Pro 不显示 Car Tab 或开关，包括 iPad compact window。
 - 用户点击大按钮开始录音，再次点击后结束转写并自动发送，不经过普通 Chat composer。
 - 回复必须是短、可直接朗读的 structured speech；Apple TTS 朗读后回到 idle。
-- 允许的客户端 action 是 `open_navigation` 和 V0 `health_quantification.export_all`。Maps 由 iOS 构造 URL；Health export 经本地授权、受限 App handoff 和原 session callback 完成，产品合同见 [`client_capabilities_prd.md`](client_capabilities_prd.md)。
+- 允许的客户端 action 是 `open_navigation` 和 V0 `health_quantification.export_all`。Maps 由 iOS 构造 URL；Health export 经本地授权、受限 App handoff 和原 session callback 完成，产品合同见 [`features/client_capabilities/prd.md`](features/client_capabilities/prd.md)。
 
 Car Mode 不承诺切到 Maps 或其他 App 后持续录音、维持 SSE 或继续 TTS。进入后台时停止当前前台交互，但保留 Car session；用户回到 App 后继续同一个上下文。
 
