@@ -4,7 +4,7 @@ Type: Workflow
 
 Use for LLM-driven UI testing of the OpenCode iOS client: tasks where fixed assertions are not enough and an agent must inspect simulator evidence, decide whether to wait/retry, and return PASS / FAIL / BLOCKED with evidence.
 
-This workflow depends on `docs/skill_operate_ios_simulator.md`.
+This workflow depends on `skills/operate_ios_simulator.md`.
 
 ## Core Pattern
 
@@ -12,14 +12,14 @@ Tier 4 separates mechanical operations from judgment:
 
 - `ui_driver` CLI is the skeleton. It launches the app, captures screenshots, lists devices, runs targeted XCUITest harnesses, and returns JSON.
 - The agent is the judge. It reads JSON and screenshots, decides whether the evidence satisfies the user scenario, and reports a verdict.
-- Each test is a prompt under `docs/ui_test_prompts/`.
+- Each test is a prompt under `skills/ui_test_prompts/`.
 
 Do not turn a Tier 4 prompt into a coordinate script. If every step is fixed, write an XCUITest or Tier 3 integration test instead.
 
 ## Running A Test Prompt
 
 1. Read the prompt file.
-2. Read `docs/skill_operate_ios_simulator.md`.
+2. Read `skills/operate_ios_simulator.md`.
 3. Build/install the app if needed using standard Xcode workflows.
 4. Use `ui_driver` for available deterministic operations.
 5. For exact iOS element identity, use `ui_driver run-xcuitest` against a focused UI test rather than coordinate tapping.

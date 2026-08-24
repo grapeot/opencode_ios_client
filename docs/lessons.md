@@ -224,3 +224,33 @@ curl -s -N -H "Accept: text/event-stream" "http://192.168.180.128:4096/global/ev
 **最终做法**：分两层修复。第一层，把 `PathNormalizer.normalize()` 改成 stack-based 路径折叠：普通 segment 入栈，`.` 跳过，`..` 出栈（如果栈非空）。这样 `docs/reports/../assets/foo.png` 会正确变成 `docs/assets/foo.png`，同时仍然阻止明显越过 workspace 根的路径穿越。第二层，`FileContentView` 的 markdown preview 不再依赖 `MarkdownUI` 默认网络图片加载器去猜相对路径，而是显式传入 `imageBaseURL` 和自定义 `WorkspaceMarkdownImageProvider`，由客户端通过 `state.loadFileContent` 读取 workspace 内图片并渲染。
 
 **Lesson**：相对路径安全处理不是“把危险段删掉”这么简单。对 `..` 的错误处理会破坏合法路径语义，尤其容易在 markdown 图片、patch 跳转、以及 repo 内部相对文件引用上制造隐蔽 bug。与此同时，Markdown 渲染器的默认图片加载策略往往假设 URL 已经是最终可访问地址；如果产品支持 repo 内相对图片，客户端必须自己提供 base URL 和受控的 image provider，不能把这个责任留给默认网络加载器。
+
+---
+
+## 18. 流式 reasoning parser 是一次性状态机：thinking 里的字面结束标签会永久提前终止 reasoning
+
+**场景**：SGLang `--reasoning-parser qwen3` 这类流式 parser 是**一次性**状态机——reasoning 期内遇到的**第一个** `</think>`（任意位置、行内也算）永久关闭 reasoning，其后内容一律按普通文本透传。模型若在 thinking 里写出字面 `</think>`（例如正在讨论这些标签本身），reasoning 提前收尾，剩余 thinking 加真 `</think>` 全部泄漏进 content 流。
+
+**做法**：怀疑“thinking 泄漏进正文”时，先读 serving 层 parser 源码确认状态机语义（是否一次性、close 如何匹配），再用数据交叉验证：reasoning part 是否在句中截断、text part 是否从同一句后半句接续。
+
+**Lesson**：「把标签当文本」和「结束思考」的歧义 tokenizer 层无法区分，只能在客户端归一化层消化；定位前先搞清 serving 层 parser 的状态机语义，别在 server / 模型层瞎找。
+
+---
+
+## 19. 客户端归一化是模型输出怪癖的正确修复层，且必须 fence-aware
+
+**场景**：server 原样存储、原样返回模型输出（多余换行、泄漏标签都是模型形态，不是 server bug）；同一份数据 Web / Android 各自归一化后渲染正常。某端渲染异常时，问题通常在该端缺了归一化，不在 server / 模型。
+
+**做法**：在客户端渲染层对 text part 做归一化（trim、跳过纯空白、删除泄漏 thinking），且归一化必须 **fence-aware**——逐行识别代码围栏（``` / ~~~），围栏内（含围栏行本身）的标签一律不动，因为 server 侧 parser 对 code fence 零感知。只归一化 assistant text part，用户消息绝不改动（用户讨论标签时必须原样保留）。
+
+**Lesson**：客户端归一化是幂等的（对没有这些怪癖的模型无副作用）、影响面最小、且与 Web / Android 行为对齐——修模型输出怪癖优先在客户端，不动 server / 模型。
+
+---
+
+## 20. 「session 特有 vs 系统性」：对照干净 session 的统计来区分
+
+**场景**：排查某模型输出异常时，容易把“当前 session 特有的 artifact”误判成“该模型的系统性问题”（本例 think 标签泄漏其实来自“正在讨论这些标签本身”的 session，干净 session 里 0 条）。
+
+**做法**：拿一个**干净 session**（不涉及该 artifact 主题、样本量足够大，如 219 条 text part）做对照统计，与当前 session 逐指标对比（前导/尾随换行、纯空白 part、含标签 part 占比等）。干净 session 为 0 而当前 session 显著非 0，是 session 特有；两者都高，才是系统性。
+
+**Lesson**：下“系统性 bug”结论前，先找一份不含该 artifact 的对照样本做统计；没有对照，“看起来很多”不等于“系统性”。

@@ -1,6 +1,6 @@
 # UI Test Prompt: read operation is visibly marked as read
 
-You are testing the OpenCode iOS client in Simulator. First read `docs/skill_operate_ios_simulator.md` and `docs/skill_ui_test_tasks.md`. Use `ui_driver` where it has deterministic commands, and do not invent unsupported capabilities.
+You are testing the OpenCode iOS client in Simulator. First read `skills/operate_ios_simulator.md` and `skills/ui_test_tasks.md`. Use `ui_driver` where it has deterministic commands, and do not invent unsupported capabilities.
 
 ## Goal
 
