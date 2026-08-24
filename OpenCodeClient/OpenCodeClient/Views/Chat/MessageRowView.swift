@@ -440,6 +440,21 @@ struct MessageRowView: View {
             .background(DesignColors.Brand.primary.opacity(DesignColors.userMessageFill(for: colorScheme)))
             .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
 
+            // Inline send-failure banner (async session.error or failed HTTP
+            // send): subtle, non-modal, attached to the affected row. The row's
+            // text stays available for copy & manual resend.
+            if let failureReason = state.messageStore.failedSendReasonsByID[message.info.id] {
+                Text(failureReason)
+                    .font(.caption)
+                    .foregroundStyle(DesignColors.Semantic.error)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DesignColors.Semantic.error.opacity(DesignColors.surfaceFill(for: colorScheme)))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+                    .textSelection(.enabled)
+            }
+
             HStack {
                 // User messages don't carry a model line — the model belongs to
                 // the assistant's reply, not to what the human said.

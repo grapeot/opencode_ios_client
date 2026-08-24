@@ -312,7 +312,8 @@ struct ChatTabView: View {
     private var messageGroups: [MessageGroupItem] {
         let visibleMessages = AppState.visibleMessages(
             state.messages,
-            revertMessageID: state.currentSession?.revert?.messageID
+            revertMessageID: state.currentSession?.revert?.messageID,
+            pendingIDs: state.messageStore.pendingOptimisticMessageIDs
         )
         var result: [MessageGroupItem] = []
         var i = 0

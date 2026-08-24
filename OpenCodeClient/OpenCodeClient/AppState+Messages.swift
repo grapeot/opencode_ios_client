@@ -8,10 +8,14 @@ import os
 ///
 /// State lives on `MessageStore`; this extension only orchestrates.
 extension AppState {
-    nonisolated static func visibleMessages(_ messages: [MessageWithParts], revertMessageID: String?) -> [MessageWithParts] {
+    nonisolated static func visibleMessages(
+        _ messages: [MessageWithParts],
+        revertMessageID: String?,
+        pendingIDs: Set<String> = []
+    ) -> [MessageWithParts] {
         guard let revertMessageID else { return messages }
         return messages.filter { message in
-            message.info.id.hasPrefix("temp-") || message.info.id < revertMessageID
+            pendingIDs.contains(message.info.id) || message.info.id.hasPrefix("temp-") || message.info.id < revertMessageID
         }
     }
 
@@ -30,48 +34,13 @@ extension AppState {
             hasMoreHistoryBySessionID[sessionID] = loaded.count >= fetchLimit
 
             let loadedMessageIDs = Set(loaded.map { $0.info.id })
-            let keepPending = isBusySession(currentSessionStatus)
-            let pendingMessages: [MessageWithParts] = {
-                guard keepPending else { return [] }
-                let pending = messages.filter({ $0.info.id.hasPrefix("temp-user-") })
-                guard let lastLoadedUser = loaded.last(where: { $0.info.isUser }) else { return pending }
-
-                func normalizeEpochMs(_ raw: Int) -> Int {
-                    // Server timestamps may be seconds or milliseconds.
-                    if raw > 0 && raw < 10_000_000_000 { return raw * 1000 }
-                    return raw
-                }
-
-                func normalizeComparableText(_ raw: String) -> String {
-                    raw
-                        .components(separatedBy: .whitespacesAndNewlines)
-                        .filter { !$0.isEmpty }
-                        .joined(separator: " ")
-                }
-
-                let lastLoadedText = normalizeComparableText(
-                    lastLoadedUser.parts.first(where: { $0.isText })?.text ?? ""
-                )
-                let lastLoadedCreated = normalizeEpochMs(lastLoadedUser.info.time.created)
-
-                return pending.filter { m in
-                    guard m.info.isUser else { return true }
-                    let text = normalizeComparableText(
-                        m.parts.first(where: { $0.isText })?.text ?? ""
-                    )
-                    guard !text.isEmpty else { return true }
-                    let textMatches = text == lastLoadedText || lastLoadedText.hasSuffix(text)
-
-                    let created = normalizeEpochMs(m.info.time.created)
-                    let timestampClose: Bool = {
-                        if created == 0 || lastLoadedCreated == 0 { return true }
-                        return abs(lastLoadedCreated - created) <= 60 * 1000
-                    }()
-
-                    if textMatches || timestampClose { return false }
-                    return true
-                }
-            }()
+            // Optimistic rows carry the same deterministic msg_ id the server
+            // persists, so reconciliation is pure id membership: rows whose id
+            // has not appeared server-side yet stay visible, confirmed ids drop
+            // out of the pending set, and the merge below dedupes by id.
+            let pendingMessages = messages.filter { messageStore.isPendingOptimisticMessage($0.info.id) }
+            messageStore.untrackPendingOptimisticMessages(loadedMessageIDs)
+            messageStore.pruneSendFailures(loadedMessageIDs: loadedMessageIDs)
 
             let draftMessages = messages.filter {
                 messageStore.isStreamingDraftMessage($0.info.id) && !loadedMessageIDs.contains($0.info.id)
@@ -201,8 +170,11 @@ extension AppState {
             return true
         } catch {
             let recovered = await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID)
-            sendError = recovered ? L10n.t(.errorSessionNotFound) : error.localizedDescription
-            removeMessage(id: tempMessageID)
+            // Keep the optimistic row and surface the failure inline under it
+            // (no modal alert); the text stays available for copy & resend.
+            let reason = recovered ? L10n.t(.errorSessionNotFound) : error.localizedDescription
+            messageStore.markSendFailed(messageID: tempMessageID, reason: reason)
+            messageStore.untrackPendingOptimisticMessages([tempMessageID])
             return false
         }
     }
@@ -296,11 +268,14 @@ extension AppState {
         let row = MessageWithParts(info: message, parts: parts)
         messages.append(row)
         partsByMessage[messageID] = parts
+        messageStore.trackPendingOptimisticMessage(messageID)
         return messageID
     }
 
     func removeMessage(id: String) {
         messages.removeAll { $0.info.id == id }
         partsByMessage[id] = nil
+        messageStore.untrackPendingOptimisticMessages([id])
+        messageStore.clearSendFailure(messageID: id)
     }
 }

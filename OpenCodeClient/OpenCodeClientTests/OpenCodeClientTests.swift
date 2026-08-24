@@ -4028,7 +4028,7 @@ struct AppStateFlowTests {
         #expect(state.currentSessionID == "created")
     }
 
-    @Test @MainActor func sendMessageRollsBackOptimisticMessageOnFailure() async {
+    @Test @MainActor func sendMessageKeepsOptimisticRowAndMarksSendFailureInlineOnFailure() async {
         let apiClient = MockAPIClient()
         await apiClient.setPromptError(APIError.invalidURL)
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
@@ -4037,8 +4037,29 @@ struct AppStateFlowTests {
         let succeeded = await state.sendMessage("hello")
 
         #expect(succeeded == false)
-        #expect(state.messages.isEmpty)
-        #expect(state.sendError?.isEmpty == false)
+        // Row is retained with an inline failure banner; no modal alert.
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.info.isUser == true)
+        #expect(state.sendError == nil)
+        let failedID = state.messages.first!.info.id
+        #expect(state.messageStore.failedSendReasonsByID[failedID]?.isEmpty == false)
+        #expect(state.messageStore.pendingOptimisticMessageIDs.contains(failedID) == false)
+    }
+
+    @Test @MainActor func sendMessageUsesDeterministicMessageIDSharedWithServer() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        _ = await state.sendMessage("hello")
+
+        let sentMessageIDs = await apiClient.promptAsyncMessageIDs
+        #expect(sentMessageIDs.count == 1)
+        #expect(sentMessageIDs[0].hasPrefix("msg_"))
+        // The optimistic row carries the exact id sent to the server, so
+        // reconciliation is pure id membership (no text/timestamp heuristics).
+        #expect(state.messages.first?.info.id == sentMessageIDs[0])
+        #expect(state.messageStore.pendingOptimisticMessageIDs == Set(sentMessageIDs))
     }
 
     @Test @MainActor func loadMessagesStoresFetchedRowsAndParts() async {
@@ -4190,38 +4211,12 @@ struct AppStateFlowTests {
         #expect(state.hasMoreHistoryBySessionID["s1"] == false)
     }
 
-    @Test @MainActor func loadMessagesDedupesOptimisticUserRowWhenPersistedTextNormalizesWhitespace() async {
+    @Test @MainActor func loadMessagesReplacesOptimisticRowWhenServerConfirmsSameMessageID() async {
         let apiClient = MockAPIClient()
         let now = Int(Date().timeIntervalSince1970 * 1000)
         await apiClient.setMessagesResult([
             Self.makeMessageRow(
-                messageID: "m-user",
-                sessionID: "s1",
-                role: "user",
-                text: "hello world",
-                created: now,
-                completed: now
-            ),
-            Self.makeMessageRow(messageID: "m-assistant", sessionID: "s1", text: "reply")
-        ])
-        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
-        state.currentSessionID = "s1"
-        state.sessionStatuses["s1"] = SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)
-
-        let tempMessageID = state.appendOptimisticUserMessage("hello\n\nworld")
-        await state.loadMessages()
-
-        #expect(state.messages.map(\.info.id) == ["m-user", "m-assistant"])
-        #expect(state.messages.contains(where: { $0.info.id == tempMessageID }) == false)
-        #expect(state.partsByMessage[tempMessageID] == nil)
-    }
-
-    @Test @MainActor func loadMessagesDedupesOptimisticUserRowWhenServerPrependsPluginPrefix() async {
-        let apiClient = MockAPIClient()
-        let now = Int(Date().timeIntervalSince1970 * 1000)
-        await apiClient.setMessagesResult([
-            Self.makeMessageRow(
-                messageID: "m-user",
+                messageID: "msg_shared",
                 sessionID: "s1",
                 role: "user",
                 text: "[analyze-mode]\nANALYSIS MODE. Gather context.\n---\nhello world",
@@ -4232,40 +4227,89 @@ struct AppStateFlowTests {
         ])
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
-        state.sessionStatuses["s1"] = SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)
 
-        let tempMessageID = state.appendOptimisticUserMessage("hello world")
+        // Server-side text rewrites (plugin prefixes, whitespace) are
+        // irrelevant: the optimistic row sent msg_shared and the server
+        // persisted it under the same id.
+        _ = state.appendOptimisticUserMessage("hello world", messageID: "msg_shared")
         await state.loadMessages()
 
-        #expect(state.messages.map(\.info.id) == ["m-user", "m-assistant"])
-        #expect(state.messages.contains(where: { $0.info.id == tempMessageID }) == false)
-        #expect(state.partsByMessage[tempMessageID] == nil)
+        #expect(state.messages.map(\.info.id) == ["msg_shared", "m-assistant"])
+        #expect(state.messageStore.pendingOptimisticMessageIDs.isEmpty)
+        #expect(state.partsByMessage["msg_shared"]?.first?.text?.contains("analyze-mode") == true)
     }
 
-    @Test @MainActor func loadMessagesDedupesOptimisticUserRowByTimestampAlone() async {
+    @Test @MainActor func loadMessagesKeepsOptimisticRowUntilServerRowArrives() async {
         let apiClient = MockAPIClient()
-        let now = Int(Date().timeIntervalSince1970 * 1000)
         await apiClient.setMessagesResult([
-            Self.makeMessageRow(
-                messageID: "m-user",
-                sessionID: "s1",
-                role: "user",
-                text: "different user message",
-                created: now,
-                completed: now
-            ),
-            Self.makeMessageRow(messageID: "m-assistant", sessionID: "s1", text: "reply")
+            Self.makeMessageRow(messageID: "m-assistant", sessionID: "s1", text: "older reply")
         ])
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
-        state.sessionStatuses["s1"] = SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)
+        // Idle session: with deterministic ids the pending row survives until
+        // its id shows up server-side, regardless of session busy state.
+        state.sessionStatuses["s1"] = SessionStatus(type: "idle", attempt: nil, message: nil, next: nil)
 
-        let tempMessageID = state.appendOptimisticUserMessage("original user text")
+        _ = state.appendOptimisticUserMessage("still in flight", messageID: "msg_pending")
         await state.loadMessages()
 
-        #expect(state.messages.map(\.info.id) == ["m-user", "m-assistant"])
-        #expect(state.messages.contains(where: { $0.info.id == tempMessageID }) == false)
-        #expect(state.partsByMessage[tempMessageID] == nil)
+        #expect(state.messages.map(\.info.id) == ["m-assistant", "msg_pending"])
+        #expect(state.messageStore.pendingOptimisticMessageIDs == ["msg_pending"])
+    }
+
+    @Test @MainActor func sessionErrorMarksPendingOptimisticRowAsFailedInline() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        let pendingID = state.appendOptimisticUserMessage("hello", messageID: "msg_pending")
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"session.error","properties":{"sessionID":"s1","error":{"name":"UnknownError","data":{"message":"Error: boom\\nCaused by: stack trace line 2"}}}}}
+        """))
+
+        // Inline banner under the row; reason is the first meaningful line,
+        // prefixed with the error name. No modal alert, no row removal.
+        #expect(state.messageStore.failedSendReasonsByID[pendingID] == "UnknownError: Error: boom")
+        #expect(state.messageStore.pendingOptimisticMessageIDs.isEmpty)
+        #expect(state.messages.contains(where: { $0.info.id == pendingID }))
+        #expect(state.sendError == nil)
+        #expect(await apiClient.messagesCallCount == 1)
+    }
+
+    @Test @MainActor func sessionErrorIgnoresOtherSessions() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        let pendingID = state.appendOptimisticUserMessage("hello", messageID: "msg_pending")
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"session.error","properties":{"sessionID":"s2","error":{"name":"UnknownError","data":{"message":"boom"}}}}}
+        """))
+
+        #expect(state.messageStore.failedSendReasonsByID[pendingID] == nil)
+        #expect(state.messageStore.pendingOptimisticMessageIDs == [pendingID])
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    @Test @MainActor func sessionErrorWithoutPendingRowStillReloads() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"session.error","properties":{"sessionID":"s1","error":{"name":"APIError","data":{"message":"provider down"}}}}}
+        """))
+
+        // No optimistic row to mark; the reload surfaces assistant-row errors.
+        #expect(state.messageStore.failedSendReasonsByID.isEmpty)
+        #expect(await apiClient.messagesCallCount == 1)
+    }
+
+    @Test @MainActor func sessionErrorReasonFallsBackWhenUndecodable() async {
+        let props: [String: AnyCodable] = ["error": AnyCodable("not an object")]
+        let reason = AppState.sessionErrorDisplayReason(properties: props)
+        #expect(reason == L10n.t(.errorOperationFailed))
     }
 
     @Test @MainActor func messageUpdatedIgnoresOtherSession() async {
