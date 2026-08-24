@@ -472,6 +472,8 @@ enum L10n {
         case configureModel
         case configureAgent
         case configureNoAgents
+        case configureModelSearchPlaceholder
+        case configureModelNoMatches
 
         case todoButtonLabel
         case todoPanelTitle
@@ -930,6 +932,8 @@ enum L10n {
         Key.configureModel.rawValue: "Model",
         Key.configureAgent.rawValue: "Agent",
         Key.configureNoAgents.rawValue: "No agents available",
+        Key.configureModelSearchPlaceholder.rawValue: "Search models",
+        Key.configureModelNoMatches.rawValue: "No matching models",
 
         Key.todoButtonLabel.rawValue: "Todo",
         Key.todoPanelTitle.rawValue: "Todo",
@@ -1388,6 +1392,8 @@ enum L10n {
         Key.configureModel.rawValue: "模型",
         Key.configureAgent.rawValue: "智能体",
         Key.configureNoAgents.rawValue: "暂无可用智能体",
+        Key.configureModelSearchPlaceholder.rawValue: "搜索模型",
+        Key.configureModelNoMatches.rawValue: "没有匹配的模型",
 
         Key.todoButtonLabel.rawValue: "任务",
         Key.todoPanelTitle.rawValue: "任务",

@@ -46,6 +46,180 @@ private actor SpeechSenderTestRecorder {
 
 struct OpenCodeClientTests {
 
+    // MARK: - Dynamic model picker
+
+    private static func makeRegistryProvider(
+        id: String,
+        name: String? = nil,
+        models: [(id: String, name: String?, chatCapable: Bool?)]
+    ) -> ConfigProvider {
+        var modelDict: [String: ProviderModel] = [:]
+        for m in models {
+            var caps: ProviderModelCapabilities? = nil
+            if let capable = m.chatCapable {
+                caps = ProviderModelCapabilities(
+                    reasoning: nil,
+                    toolCall: nil,
+                    attachment: nil,
+                    input: nil,
+                    output: ProviderModelIO(text: capable, audio: nil, image: nil, video: nil, pdf: nil)
+                )
+            }
+            modelDict[m.id] = ProviderModel(id: m.id, name: m.name, providerID: id, limit: nil, capabilities: caps)
+        }
+        return ConfigProvider(id: id, name: name, models: modelDict)
+    }
+
+    @Test @MainActor func dynamicPickerUsesConnectedProvidersAndFiltersNonChatModels() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let registry = ProviderRegistryResponse(
+            providers: [
+                // Connected custom Ollama provider (issue #144 scenario):
+                // keyless local endpoint, models must show up.
+                Self.makeRegistryProvider(
+                    id: "ollama",
+                    name: "Ollama (local)",
+                    models: [
+                        ("qwen3-vl:8b", "Qwen3 VL 8B", nil),
+                        ("llama3:latest", nil, nil)
+                    ]
+                ),
+                // Connected provider with a chat model + a TTS-only model.
+                Self.makeRegistryProvider(
+                    id: "google",
+                    name: "Google",
+                    models: [
+                        ("gemini-3.7-flash", "Gemini 3.7 Flash", true),
+                        ("gemini-3.1-flash-tts-preview", "Gemini TTS", false)
+                    ]
+                ),
+                // NOT connected: must be excluded entirely.
+                Self.makeRegistryProvider(
+                    id: "openrouter",
+                    name: "OpenRouter",
+                    models: [("some-model", "Some Model", true)]
+                )
+            ],
+            connectedProviderIDs: ["ollama", "google"]
+        )
+
+        state.rebuildDynamicModelPresets(from: registry)
+
+        let ids = state.dynamicModelPresets.map(\.id)
+        #expect(ids.contains("ollama/qwen3-vl:8b"))
+        #expect(ids.contains("ollama/llama3:latest"))
+        #expect(ids.contains("google/gemini-3.7-flash"))
+        // TTS-only model filtered out by capability.
+        #expect(!ids.contains("google/gemini-3.1-flash-tts-preview"))
+        // Disconnected provider excluded.
+        #expect(!ids.contains("openrouter/some-model"))
+        // Provider display names captured for grouping.
+        #expect(state.providerDisplayNames["ollama"] == "Ollama (local)")
+        // Display name falls back to the model id when server has none.
+        #expect(state.dynamicModelPresets.first(where: { $0.id == "ollama/llama3:latest" })?.displayName == "llama3:latest")
+    }
+
+    @Test @MainActor func dynamicPickerPrefersCuratedOrderThenSortsByName() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let registry = ProviderRegistryResponse(
+            providers: [
+                Self.makeRegistryProvider(id: "xai", name: "xAI", models: [("grok-4.6", "Grok 4.6", true)]),
+                Self.makeRegistryProvider(id: "zai-coding-plan", name: "ZAI", models: [("glm-5.3", "GLM-5.3", true)]),
+                Self.makeRegistryProvider(id: "aaa", name: "AAA", models: [("zzz-model", "ZZZ", true)])
+            ],
+            connectedProviderIDs: ["xai", "zai-coding-plan", "aaa"]
+        )
+
+        state.rebuildDynamicModelPresets(from: registry)
+
+        // Known curated presets (glm-5.3 is preset #1, grok-4.6 last) come
+        // first in curated order; unknown providers follow alphabetically.
+        #expect(state.dynamicModelPresets.map(\.id) == [
+            "zai-coding-plan/glm-5.3",
+            "xai/grok-4.6",
+            "aaa/zzz-model"
+        ])
+    }
+
+    @Test @MainActor func dynamicPickerReanchorsSelectionAndKeepsSessionModel() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        state.selectedModelIDBySessionID["s1"] = "ollama/qwen3-vl:8b"
+        let registry = ProviderRegistryResponse(
+            providers: [
+                Self.makeRegistryProvider(
+                    id: "ollama",
+                    name: "Ollama (local)",
+                    models: [("qwen3-vl:8b", "Qwen3 VL 8B", true), ("llama3:latest", nil, true)]
+                )
+            ],
+            connectedProviderIDs: ["ollama"]
+        )
+
+        state.rebuildDynamicModelPresets(from: registry)
+
+        // Selection follows the saved per-session model into the dynamic list.
+        #expect(state.selectedModel?.id == "ollama/qwen3-vl:8b")
+        // Picker falls back to presets only while the dynamic list is empty.
+        #expect(state.pickerModelPresets.map(\.id).contains("ollama/qwen3-vl:8b"))
+    }
+
+    @Test @MainActor func dynamicPickerFallsBackToPresetsWhenRegistryMissing() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        // Registry never loaded: picker shows the hardcoded presets.
+        #expect(state.dynamicModelPresets.isEmpty)
+        #expect(state.pickerModelPresets.count == state.modelPresets.count)
+        #expect(state.pickerModelPresets.map(\.id) == state.modelPresets.map(\.id))
+    }
+
+    @Test @MainActor func syncModelFromMessageHistoryAddsAdHocEntryForUnknownModel() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        // Session was created elsewhere with a model not in any picker list,
+        // but the provider config index knows its display name.
+        state.providerModelsIndex["ollama/orcarouter/Qwen3.8-27B-Uncensored:latest"] =
+            ProviderModel(id: "orcarouter/Qwen3.8-27B-Uncensored:latest", name: "Qwen3.8 27B Uncensored", providerID: "ollama", limit: nil)
+
+        let info = Message(
+            id: "m1",
+            sessionID: "s1",
+            role: "assistant",
+            parentID: nil,
+            providerID: nil,
+            modelID: nil,
+            model: Message.ModelInfo(providerID: "ollama", modelID: "orcarouter/Qwen3.8-27B-Uncensored:latest"),
+            error: nil,
+            time: Message.TimeInfo(created: 1, completed: 1),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        state.messages = [MessageWithParts(info: info, parts: [])]
+
+        state.syncModelFromMessageHistory()
+
+        // Toolbar now reflects the session's real model via an ad-hoc entry.
+        #expect(state.selectedModel?.id == "ollama/orcarouter/Qwen3.8-27B-Uncensored:latest")
+        #expect(state.selectedModel?.displayName == "Qwen3.8 27B Uncensored")
+        #expect(state.selectedModelIDBySessionID["s1"] == "ollama/orcarouter/Qwen3.8-27B-Uncensored:latest")
+    }
+
+    @Test func providerModelCapabilitiesDecodeFromServerShape() throws {
+        let json = """
+        {"id":"m","name":"M","capabilities":{"reasoning":true,"toolcall":true,"attachment":false,
+         "input":{"text":true,"audio":false},"output":{"text":false,"audio":true}}}
+        """
+        let model = try JSONDecoder().decode(ProviderModel.self, from: Data(json.utf8))
+        #expect(model.capabilities?.reasoning == true)
+        #expect(model.capabilities?.toolCall == true)
+        // TTS-only (no text output) is not chat-capable.
+        #expect(model.capabilities?.isChatCapable == false)
+        // Missing capabilities entirely -> treated as chat-capable.
+        let bare = try JSONDecoder().decode(ProviderModel.self, from: Data("{\"id\":\"m\"}".utf8))
+        #expect(bare.capabilities?.isChatCapable ?? true)
+    }
+
     @Test func defaultServerAddress() {
         #expect(APIClient.defaultServer == "127.0.0.1:4096")
     }
@@ -3510,6 +3684,10 @@ actor MockAPIClient: APIClientProtocol {
     func rejectQuestion(requestID: String) async throws {}
     func providers() async throws -> ProvidersResponse {
         try JSONDecoder().decode(ProvidersResponse.self, from: Data("{\"providers\":[]}".utf8))
+    }
+    var providerRegistryResult: ProviderRegistryResponse?
+    func providerRegistry() async throws -> ProviderRegistryResponse {
+        providerRegistryResult ?? ProviderRegistryResponse(providers: [], connectedProviderIDs: [])
     }
     func agents() async throws -> [AgentInfo] { [] }
     func sessionDiff(sessionID: String) async throws -> [FileDiff] {

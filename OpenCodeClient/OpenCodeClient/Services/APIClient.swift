@@ -453,6 +453,14 @@ actor APIClient {
         return try JSONDecoder().decode(ProvidersResponse.self, from: data)
     }
 
+    /// `/provider`: full provider registry including which providers are
+    /// connected (authenticated or keyless-local), used to scope the model
+    /// picker to models the user can actually run.
+    func providerRegistry() async throws -> ProviderRegistryResponse {
+        let (data, _) = try await makeRequest(path: "/provider")
+        return try JSONDecoder().decode(ProviderRegistryResponse.self, from: data)
+    }
+
     func agents() async throws -> [AgentInfo] {
         let (data, _) = try await makeRequest(path: "/agent")
         return try JSONDecoder().decode([AgentInfo].self, from: data)
@@ -636,6 +644,30 @@ nonisolated struct ProvidersResponse: Decodable {
     }
 }
 
+/// Response of `/provider`: every known provider plus the subset that is
+/// connected (authenticated, or local/keyless providers like a custom
+/// Ollama endpoint, which count as connected without credentials).
+nonisolated struct ProviderRegistryResponse: Decodable {
+    let providers: [ConfigProvider]
+    let connectedProviderIDs: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case all
+        case connected
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        providers = (try? c.decode([ConfigProvider].self, forKey: .all)) ?? []
+        connectedProviderIDs = (try? c.decode([String].self, forKey: .connected)) ?? []
+    }
+
+    init(providers: [ConfigProvider], connectedProviderIDs: [String]) {
+        self.providers = providers
+        self.connectedProviderIDs = connectedProviderIDs
+    }
+}
+
 nonisolated struct ConfigProvider: Decodable {
     let id: String
     let name: String?
@@ -692,6 +724,7 @@ nonisolated struct ProviderModel: Decodable {
     let name: String?
     let providerID: String?
     let limit: ProviderModelLimit?
+    let capabilities: ProviderModelCapabilities?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -699,13 +732,15 @@ nonisolated struct ProviderModel: Decodable {
         case providerID
         case providerId
         case limit
+        case capabilities
     }
 
-    init(id: String, name: String?, providerID: String?, limit: ProviderModelLimit?) {
+    init(id: String, name: String?, providerID: String?, limit: ProviderModelLimit?, capabilities: ProviderModelCapabilities? = nil) {
         self.id = id
         self.name = name
         self.providerID = providerID
         self.limit = limit
+        self.capabilities = capabilities
     }
 
     init(from decoder: Decoder) throws {
@@ -714,7 +749,58 @@ nonisolated struct ProviderModel: Decodable {
         name = try? c.decode(String.self, forKey: .name)
         providerID = (try? c.decode(String.self, forKey: .providerID)) ?? (try? c.decode(String.self, forKey: .providerId))
         limit = try? c.decode(ProviderModelLimit.self, forKey: .limit)
+        capabilities = try? c.decode(ProviderModelCapabilities.self, forKey: .capabilities)
     }
+}
+
+nonisolated struct ProviderModelCapabilities: Codable {
+    let reasoning: Bool?
+    let toolCall: Bool?
+    let attachment: Bool?
+    let input: ProviderModelIO?
+    let output: ProviderModelIO?
+
+    private enum CodingKeys: String, CodingKey {
+        case reasoning
+        case toolCall = "toolcall"
+        case attachment
+        case input
+        case output
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        reasoning = try? c.decode(Bool.self, forKey: .reasoning)
+        toolCall = try? c.decode(Bool.self, forKey: .toolCall)
+        attachment = try? c.decode(Bool.self, forKey: .attachment)
+        input = try? c.decode(ProviderModelIO.self, forKey: .input)
+        output = try? c.decode(ProviderModelIO.self, forKey: .output)
+    }
+
+    init(reasoning: Bool?, toolCall: Bool?, attachment: Bool?, input: ProviderModelIO?, output: ProviderModelIO?) {
+        self.reasoning = reasoning
+        self.toolCall = toolCall
+        self.attachment = attachment
+        self.input = input
+        self.output = output
+    }
+
+    /// Chat-capable means the model can produce text output. Filters out
+    /// embedding/TTS/image-generation-only models from the picker.
+    var isChatCapable: Bool {
+        // Missing capability info is treated as capable: older servers may
+        // not report it, and a false negative would hide working models.
+        guard let output else { return true }
+        return output.text ?? true
+    }
+}
+
+nonisolated struct ProviderModelIO: Codable {
+    let text: Bool?
+    let audio: Bool?
+    let image: Bool?
+    let video: Bool?
+    let pdf: Bool?
 }
 
 nonisolated struct ProviderModelLimit: Codable {
@@ -760,6 +846,7 @@ protocol APIClientProtocol: Actor {
     func replyQuestion(requestID: String, answers: [[String]]) async throws
     func rejectQuestion(requestID: String) async throws
     func providers() async throws -> ProvidersResponse
+    func providerRegistry() async throws -> ProviderRegistryResponse
     func agents() async throws -> [AgentInfo]
     func sessionDiff(sessionID: String) async throws -> [FileDiff]
     func sessionTodos(sessionID: String) async throws -> [TodoItem]

@@ -18,6 +18,7 @@ struct ChatToolbarView: View {
     @State private var showCreateDisabledAlert = false
     @State private var showConfigSheet = false
     @State private var showTodoPanel = false
+    @State private var modelSearchText = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
     
     private var useCompactLabels: Bool {
@@ -131,24 +132,8 @@ struct ChatToolbarView: View {
         .sheet(isPresented: $showConfigSheet) {
             NavigationStack {
                 List {
-                    Section(L10n.t(.configureModel)) {
-                        ForEach(Array(state.modelPresets.enumerated()), id: \.element.id) { index, preset in
-                            Button {
-                                state.setSelectedModelIndex(index)
-                            } label: {
-                                HStack {
-                                    Text(preset.displayName)
-                                    Spacer()
-                                    if state.selectedModelIndex == index {
-                                        Image(systemName: "checkmark")
-                                            .foregroundColor(DesignColors.Brand.primary)
-                                    }
-                                }
-                            }
-                            .foregroundColor(.primary)
-                        }
-                    }
-                    
+                    modelPickerSection
+
                     Section(L10n.t(.configureAgent)) {
                         if state.isLoadingAgents {
                             HStack {
@@ -198,6 +183,87 @@ struct ChatToolbarView: View {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    // MARK: - Model Picker
+
+    /// Groups the dynamic picker list by provider, applying the search
+    /// filter. Entries keep their flat indices (via pickerModelPresets) so
+    /// selection bookkeeping stays index-based.
+    private var modelPickerSection: some View {
+        let presets = state.pickerModelPresets
+        let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let filtered = query.isEmpty
+            ? presets
+            : presets.filter {
+                $0.displayName.lowercased().contains(query)
+                    || $0.modelID.lowercased().contains(query)
+                    || $0.providerID.lowercased().contains(query)
+            }
+        let grouped: [(providerID: String, entries: [(index: Int, preset: ModelPreset)])] = {
+            var byProvider: [String: [(Int, ModelPreset)]] = [:]
+            var order: [String] = []
+            for (idx, preset) in filtered.enumerated() {
+                let pid = preset.providerID
+                if byProvider[pid] == nil { order.append(pid) }
+                byProvider[pid]?.append((idx, preset))
+            }
+            return order.map { ($0, byProvider[$0] ?? []) }
+        }()
+
+        return Section {
+            if !state.dynamicModelPresets.isEmpty {
+                // Dynamic mode: searchable, grouped by connected provider.
+                Section {
+                    TextField(L10n.t(.configureModelSearchPlaceholder), text: $modelSearchText)
+                        .autocorrectionDisabled()
+                }
+                ForEach(grouped, id: \.providerID) { group in
+                    Section(
+                        header: Text(state.providerDisplayNames[group.providerID] ?? group.providerID)
+                    ) {
+                        ForEach(group.entries, id: \.preset.id) { entry in
+                            modelRow(index: entry.index, preset: entry.preset)
+                        }
+                    }
+                }
+                if filtered.isEmpty {
+                    Text(L10n.t(.configureModelNoMatches))
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                // Fallback mode: curated presets (registry unavailable).
+                Section(L10n.t(.configureModel)) {
+                    ForEach(Array(presets.enumerated()), id: \.element.id) { index, preset in
+                        modelRow(index: index, preset: preset)
+                    }
+                }
+            }
+        }
+    }
+
+    private func modelRow(index: Int, preset: ModelPreset) -> some View {
+        Button {
+            state.setSelectedModelIndex(index)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.displayName)
+                    if !state.dynamicModelPresets.isEmpty && preset.displayName != preset.modelID {
+                        Text(preset.modelID)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                if state.selectedModelIndex == index {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(DesignColors.Brand.primary)
+                }
+            }
+        }
+        .foregroundColor(.primary)
     }
 
     // MARK: - Todo Button & Panel

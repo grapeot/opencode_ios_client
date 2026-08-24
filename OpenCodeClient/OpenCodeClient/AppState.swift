@@ -605,10 +605,17 @@ final class AppState {
     var fileSearchQuery: String { get { fileStore.fileSearchQuery } set { fileStore.fileSearchQuery = newValue } }
     var fileSearchResults: [String] { get { fileStore.fileSearchResults } set { fileStore.fileSearchResults = newValue } }
 
-    // Provider config cache (for context usage ring)
+    // Provider config cache (for context usage ring + dynamic model picker)
     var providersResponse: ProvidersResponse? = nil
     var providerModelsIndex: [String: ProviderModel] = [:]
     var providerConfigError: String? = nil
+    /// Dynamic picker entries derived from the server's connected providers.
+    /// Falls back to the hardcoded presets until (or when) the registry
+    /// can't be fetched — presets remain the safety net, never the ceiling.
+    var dynamicModelPresets: [ModelPreset] = []
+    /// Provider display names for grouping the dynamic picker
+    /// (providerID -> human name, e.g. "ollama" -> "Ollama (local)").
+    var providerDisplayNames: [String: String] = [:]
 
     let apiClient: APIClientProtocol
     let sseClient: SSEClientProtocol
@@ -660,8 +667,13 @@ final class AppState {
     var loadingOlderMessagesSessionIDs: Set<String> = []
 
     var selectedModel: ModelPreset? {
-        guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
-        return modelPresets[selectedModelIndex]
+        pickerModelPresets.indices.contains(selectedModelIndex) ? pickerModelPresets[selectedModelIndex] : nil
+    }
+
+    /// Entries shown in the model picker: the server-derived dynamic list
+    /// when available, otherwise the hardcoded presets.
+    var pickerModelPresets: [ModelPreset] {
+        dynamicModelPresets.isEmpty ? modelPresets : dynamicModelPresets
     }
     
     var selectedAgent: AgentInfo? {
@@ -853,6 +865,74 @@ final class AppState {
             providerModelsIndex = idx
         } catch {
             providerConfigError = error.localizedDescription
+        }
+
+        // The dynamic picker prefers the /provider registry: it knows which
+        // providers are connected (incl. keyless local ones like Ollama),
+        // so the picker shows only models the user can actually run.
+        if let registry = try? await apiClient.providerRegistry() {
+            rebuildDynamicModelPresets(from: registry)
+        } else if dynamicModelPresets.isEmpty {
+            // Keep presets as the fallback; leave the previous dynamic list
+            // intact on transient failures so the picker doesn't flicker
+            // back to presets mid-session.
+            Self.logger.warning("loadProvidersConfig: /provider registry unavailable, picker stays on presets")
+        }
+    }
+
+    /// Builds the dynamic picker entries from connected providers, filtering
+    /// to chat-capable models and stable-sorting (favorites first, then by
+    /// preset list order for known models, then provider/model name).
+    func rebuildDynamicModelPresets(from registry: ProviderRegistryResponse) {
+        let connected = Set(registry.connectedProviderIDs)
+        var names: [String: String] = [:]
+        var presets: [ModelPreset] = []
+        let knownOrder: [String: Int] = Dictionary(
+            uniqueKeysWithValues: modelPresets.enumerated().map { ($1.id, $0) }
+        )
+
+        for provider in registry.providers where connected.contains(provider.id) {
+            if let n = provider.name, !n.isEmpty { names[provider.id] = n }
+            for (modelID, model) in provider.models.sorted(by: { $0.key < $1.key }) {
+                guard model.capabilities?.isChatCapable ?? true else { continue }
+                let preset = ModelPreset(
+                    displayName: model.name ?? modelID,
+                    providerID: provider.id,
+                    modelID: modelID
+                )
+                presets.append(preset)
+            }
+        }
+
+        // Stable sort: known preset ids keep their curated order first,
+        // everything else follows alphabetically.
+        presets.sort { a, b in
+            let ai = knownOrder[a.id] ?? Int.max
+            let bi = knownOrder[b.id] ?? Int.max
+            if ai != bi { return ai < bi }
+            if a.providerID != b.providerID { return a.providerID < b.providerID }
+            return a.displayName < b.displayName
+        }
+
+        guard !presets.isEmpty else { return }
+        dynamicModelPresets = presets
+        providerDisplayNames = names
+
+        // Re-anchor the current selection onto the new list so the toolbar
+        // label and per-session memory stay consistent.
+        reanchorSelectedModelIndex()
+    }
+
+    /// After the picker list is rebuilt, point `selectedModelIndex` at the
+    /// same model in the new list (or the canonical successor for aged ids).
+    private func reanchorSelectedModelIndex() {
+        let savedID = currentSessionID.flatMap { selectedModelIDBySessionID[$0] }
+            ?? selectedModel.map { $0.id }
+            ?? pickerModelPresets.first?.id
+        guard let savedID else { return }
+        let canonical = canonicalModelPresetID(for: savedID)
+        if let idx = dynamicModelPresets.firstIndex(where: { $0.id == canonical }) {
+            selectedModelIndex = idx
         }
     }
 
