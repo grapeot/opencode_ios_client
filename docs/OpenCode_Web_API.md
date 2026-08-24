@@ -2,11 +2,11 @@
 
 > 最后核对：2026-08-23 · origin/dev @ 03bba464d
 
-> 本文档基于 OpenCode 官方文档 (opencode.ai/docs) 及 anomalyco/opencode 仓库源码整理，用于了解 OpenCode 的 Web 界面与 HTTP API 能力。
+> 本文档基于 OpenCode 官方文档 (opencode.ai/docs) 及 anomalyco/opencode 仓库源码整理，旨在系统介绍 OpenCode 的 Web 界面与 HTTP API 能力。
 
 ## 1. 概述
 
-OpenCode 是一个开源的 AI 编程 Agent，采用 **Client/Server 架构**。运行 `opencode` 时会同时启动 TUI 和 HTTP Server，其中 TUI 作为客户端与 Server 通信。该架构使得：
+OpenCode 是一款开源的 AI 编程 Agent，采用 **Client/Server 架构**。启动 `opencode` 时会同步拉起 TUI 与 HTTP Server，由 TUI 作为前端客户端与 Server 端通信。这一解耦架构带来了如下优势：
 
 - Web 界面、Desktop App、IDE 插件均可作为**不同的客户端**接入同一后端
 - 支持通过 HTTP API 进行**程序化调用**
@@ -19,12 +19,12 @@ OpenCode 是一个开源的 AI 编程 Agent，采用 **Client/Server 架构**。
 | **opencode-ai/opencode** | 社区 fork，已归档，项目已迁移至 Crush |
 | **chris-tse/opencode-web** | 第三方 Web UI，基于 OpenCode API 的 React 前端 |
 
-本 repo 中 clone 的为 `anomalyco/opencode`（官方主仓库），含 serve/web 命令及完整 HTTP API。
+本 repo 中 clone 的为 `anomalyco/opencode`（官方主仓库），包含 serve/web 命令及完整的 HTTP API 支持。
 
-当前 API 分为两层：
+当前 API 体系划分为两层：
 
-- **Legacy API**（无 `/api` 前缀）：实例级路由，通过 `x-opencode-directory` header 或 query 参数定位 workspace。
-- **V2 API**（`/api` 前缀）：Protocol 层定义的新接口，面向 SDK 和跨 workspace 客户端。
+- **Legacy API**（无 `/api` 前缀）：属于实例级路由，通过 `x-opencode-directory` 请求头或 query 参数定位具体 workspace。
+- **V2 API**（`/api` 前缀）：由 Protocol 层定义的新版接口，专为各类 SDK 与跨 workspace 客户端设计。
 
 ---
 
@@ -44,7 +44,7 @@ opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--mdns-domain` | mDNS 域名 | `opencode.local` |
 | `--cors` | 允许的 CORS 来源（可传多次） | `[]` |
 
-> 未指定端口时 server 先尝试 4096，被占用则取随机空闲端口（`startWithPortFallback` 逻辑）。可用 `--port` 或 config 的 `server.port` 显式指定，显式 `--port` 优先级最高；config 的 `server.port` 可选、无默认值。
+> 若未显式指定端口，server 会优先尝试绑定 4096 端口；若该端口已被占用，则自动回退并随机分配可用空闲端口（即 `startWithPortFallback` 机制）。开发者可通过 `--port` 命令行参数或配置文件中的 `server.port` 显式指定端口，其中命令行 `--port` 的优先级最高；配置项 `server.port` 为可选字段，默认不设值。
 
 ### 2.2 Web 界面（API + 内置 Web UI）
 
@@ -52,9 +52,9 @@ opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
 opencode web
 ```
 
-- 默认在 `127.0.0.1` 启动，端口先试 4096、被占用则取随机空闲端口
-- 自动打开浏览器
-- 与 `opencode serve` 共享同一 API
+- 默认监听 `127.0.0.1` 地址，端口策略同样为优先尝试 4096，遇冲突则自动回退至随机空闲端口
+- 服务就绪后会自动拉起系统默认浏览器访问 Web 页面
+- 底层与 `opencode serve` 完全复用同一套 HTTP API 服务
 
 ### 2.3 认证（可选）
 
@@ -64,9 +64,9 @@ OPENCODE_SERVER_PASSWORD=your-password opencode serve
 OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 ```
 
-- 用户名默认 `opencode`
-- 适用于 `opencode serve` 与 `opencode web`
-- 未设置密码时 server 会打印 warning 并处于无认证状态
+- 默认认证用户名为 `opencode`
+- 认证配置对 `opencode serve` 与 `opencode web` 均生效
+- 若未配置密码，server 启动时会输出 warning 提示，并以无认证模式暴露服务
 
 ---
 
@@ -76,7 +76,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 - **示例**: `http://localhost:4096/doc`
 - **格式**: OpenAPI 3.1
 - **用途**: 查看请求/响应类型、生成 SDK、Swagger 预览
-- 响应为 JSON（`OpenApi.fromApi(PublicApi)` 生成），带 legacy 兼容层
+- 接口响应格式为 JSON（由 `OpenApi.fromApi(PublicApi)` 动态生成），内置了对 legacy 路由的兼容层
 
 ---
 
@@ -319,7 +319,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 
 ### 4.22 V2 API（`/api` 前缀）
 
-V2 API 由 `@opencode-ai/protocol` 包定义，面向 SDK 和跨 workspace 客户端。绝大多数路径以 `/api` 为前缀；project-copy 组例外，沿用 `/experimental/project/:projectID/copy` 路径。
+V2 API 由 `@opencode-ai/protocol` 包统一规范定义，主要面向 SDK 与跨 workspace 客户端调用。除 project-copy 相关接口仍沿用 `/experimental/project/:projectID/copy` 路径外，其余绝大多数路由均统一以 `/api` 作为前缀。
 
 | Method | Path | 说明 |
 |--------|------|------|
@@ -421,7 +421,7 @@ curl "http://localhost:4096/file/content?path=src/main.go"
 
 ### 5.4 IDE 插件驱动 TUI
 
-通过 `--hostname`、`--port` 指定 TUI 的 Server 地址，IDE 插件可调用 `/tui/append-prompt`、`/tui/submit-prompt` 等接口预填并提交 prompt。
+通过 `--hostname` 与 `--port` 参数指定目标 TUI 绑定的 Server 地址后，IDE 插件即可按需调用 `/tui/append-prompt`、`/tui/submit-prompt` 等接口，实现 prompt 内容的自动预填与提交交互。
 
 ### 5.5 使用 V2 API（SDK 客户端）
 
@@ -459,7 +459,7 @@ curl -X POST http://localhost:4096/api/session/:sessionID/prompt \
 | 记忆 | 会话 + AGENTS.md + workspace sync | MEMORY.md / SOUL.md 等 |
 | 扩展 | MCP / Skills / Worktree / Workspace | Skills（ClawHub） |
 
-OpenCode 的 Web + API 架构，为「统一入口 + 程序化调用」提供了可复用的参考实现。
+OpenCode 所采用的 Web + API 双层架构，为构建兼顾“统一交互入口”与“灵活程序化调用”的 Agent 系统提供了成熟且具参考价值的工程实现范式。
 
 ---
 

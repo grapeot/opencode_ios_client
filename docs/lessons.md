@@ -4,253 +4,252 @@
 
 ## 0. 变更工作流：先对齐文档，再改代码
 
-一个稳定且可复用的工作流（尤其适合这个 repo 这种「PRD/RFC 驱动 + 快速迭代」的项目）：
+一套稳定且可复用的工程工作流（尤其适合本项目这种「PRD/RFC 驱动 + 快速迭代」的协作模式）：
 
-1. **先判断 PRD 是否受影响**：如果改动会影响产品行为/交互/范围（哪怕只是 iPad UI 行为），先更新 `docs/OpenCode_iOS_Client_PRD.md`
-2. **再判断 RFC 是否受影响**：如果改动会影响技术方案/约束/阶段计划，更新 `docs/OpenCode_iOS_Client_RFC.md`
-3. **再开始改 code**：按既定文档实现（或同步更新文档里的决策）
-4. **补 test（如果应该有）**：能单测的逻辑尽量用单测锁住回归；UI 变化至少补关键的纯逻辑测试/模型解码测试
-5. **编译通过 + 测试通过**：最后做 `xcodebuild build` + `xcodebuild test`，确保主流程无回归
+1. **先判断 PRD 是否受影响**：只要改动涉及产品行为、交互逻辑或功能范围（哪怕只是微调 iPad UI），都要优先更新 `docs/OpenCode_iOS_Client_PRD.md`。
+2. **再判断 RFC 是否受影响**：若改动改变了技术方案、架构约束或开发分期，同步更新 `docs/OpenCode_iOS_Client_RFC.md`。
+3. **按文档实现代码**：严格依照既定文档编码，实现过程中的方案修正也要及时回写到文档。
+4. **补齐测试用例**：适合单测的业务逻辑尽量通过单元测试防范回归；UI 层面的变更至少要覆盖关键的纯逻辑测试与模型解码测试。
+5. **确保编译与测试全绿**：最后依次执行 `xcodebuild build` 与 `xcodebuild test`，确认主流程无回归。
 
-Lesson：把“为什么这么做”放在 PRD/RFC 里，代码只负责“怎么做”。这样 review、回溯、以及后续迭代都更省力。
+Lesson：把决策背后的“为什么”沉淀在 PRD/RFC 中，代码只需专注“怎么做”。这样无论是 Code Review、问题回溯还是后续迭代，沟通和维护成本都会大幅降低。
 
 ## 1. 直接验证 API，而非先写代码再猜
 
-**场景**：调研 SSE 解析格式时，需要确认 OpenCode `/global/event` 实际返回什么。
+**场景**：调研 SSE 事件格式时，需要明确 OpenCode `/global/event` 的实际响应数据结构。
 
-**反模式**：先写假设、写代码、跑 iOS 客户端、从 log 里看 response。
+**反模式**：先做主观假设并编写解析代码，再运行 iOS 客户端从日志中反推响应格式。
 
-**正确做法**：直接用 `curl` 或工具连 server 验证。例如：
+**正确做法**：直接用 `curl` 等命令行工具连上服务端实测。例如：
 
 ```bash
 curl -s -N -H "Accept: text/event-stream" "http://192.168.180.128:4096/global/event"
 ```
 
-当场即可看到：`data: {"payload":{"type":"server.connected","properties":{}}}`，确认是单行 JSON。
+当场就能确认实际输出为 `data: {"payload":{"type":"server.connected","properties":{}}}`，直观验证其为单行 JSON。
 
-**Lesson**：对外部 API 的调研，优先直接访问；能避免错误假设、减少无效实现。
+**Lesson**：对接或调研外部 API 时，务必优先通过抓包或命令行实测。用真实响应代替主观假设，能省下大量无效编码与调试成本。
 
 ---
 
 ## 2. 测试优先、小步快跑
 
-**场景**：AppState 拆分、PathNormalizer 抽取、Session 过滤等 refactor。
+**场景**：对 AppState 模块拆分、抽取 PathNormalizer 以及 Session 过滤等核心逻辑进行重构。
 
 **做法**：
-- 拆分前先补 test coverage，覆盖核心逻辑
-- 先写 test 规定 expected behavior，再 refactor
-- 每做完一件事就 commit、更新 WORKING.md
+- 拆分前先补齐关键路径的测试用例，覆盖核心业务逻辑。
+- 先通过测试明确预期行为，再动手调整代码结构。
+- 每完成一个独立子任务就及时 commit，并同步更新 `WORKING.md`。
 
-**Lesson**：Test 是 refactor 的安全网；小步 commit 便于回滚与 review。
+**Lesson**：完善的测试是用例重构的安全网；小步提交则能让代码审查更清晰，遇到问题也更易回滚。
 
 ---
 
 ## 3. 用 Task List 组织任务，保证不重复、无遗漏
 
-**场景**：Code Review 1.1–1.4 涉及多个任务：测试、拆分、SSE、session 过滤、PathNormalizer。
+**场景**：处理 Code Review 1.1–1.4 期间涉及多项交叉任务，包括补充测试、模块拆分、SSE 处理、Session 过滤以及 PathNormalizer 抽取等。
 
-**做法**：用结构化 todo 列表管理，每完成一项标记为完成，避免遗漏或重复劳动。
+**做法**：建立结构化的任务清单进行全流程跟踪，每推进一项便勾选归档，杜绝遗漏与重复开发。
 
-**Lesson**：复杂任务拆成可追踪的 checklist，能显著减少「做到一半发现漏了」的情况。
+**Lesson**：把复杂的多目标任务拆解为可量化追踪的 Checklist，能有效避免“做着做着漏了关键点”的被动局面。
 
 ---
 
 ## 4. API 实测 vs 规范假设
 
-**场景**：SSE 规范里有多行 data、`event:`、comment keep-alive 等；Code Review 建议按规范实现。
+**场景**：标准 SSE 规范包含多行 data、`event:` 字段以及注释保活（comment keep-alive）等机制，Code Review 时建议全面兼容标准规范。
 
-**做法**：先实测 API，发现仅用单行 `data:`；当前实现已满足，无需过度实现。
+**做法**：通过抓包实测服务端的真实行为，确认其仅推送单行 `data:`。现有精简实现完全满足业务需求，暂无过度封装的必要。
 
-**Lesson**：规范与实际实现可能不一致；先验证再决定投入，避免 over-engineering。
+**Lesson**：理论规范与实际系统实现往往存在差距；在动手前先验证真实数据流，把精力用在刀刃上，避免过早过度设计。
 
 ---
 
 ## 5. 拆分时保持对外 API 不变
 
-**场景**：AppState 拆成 SessionStore/MessageStore/FileStore/TodoStore。
+**场景**：将庞大的 AppState 重构拆分为 SessionStore、MessageStore、FileStore 和 TodoStore 等专职 Store。
 
-**做法**：通过 computed property 委托，保留 `state.messages`、`state.sessions` 等原有 API；View 无需改动。
+**做法**：在 AppState 上通过计算属性进行转发委托，完整保留 `state.messages`、`state.sessions` 等既有 API，使上层 View 保持零改动。
 
-**Lesson**：内部重构时尽量保持公共接口稳定，减少改动面和回归风险。
+**Lesson**：系统内部重构应尽量维持上层公共接口的稳定性，收敛代码改动面，从而将回归风险降到最低。
 
 ---
 
 ## 6. 多 Session 场景下的 SSE 过滤
 
-**场景**：多 session 并发时，`message.updated` 未按 sessionID 过滤，导致跨 session 污染。
+**场景**：在多 Session 并发场景下，收到的 `message.updated` 事件若未按 sessionID 进行校验过滤，会导致跨会话的数据污染。
 
-**做法**：基于 event 的 `sessionID` 过滤，仅处理当前 session 的事件。
+**做法**：在事件分发层严格提取事件 payload 中的 `sessionID` 进行判定，只对当前激活会话的数据进行响应与更新。
 
-**Lesson**：分布式/多租户场景下，事件要带 session/tenant 标识，并在客户端做过滤。
+**Lesson**：在多会话或类似多租户架构中，事件必须携带唯一的作用域标识（如 Session 或 Tenant ID），客户端也必须在消费前做好精确过滤。
 
 ---
 
 ## 7. 跨模块逻辑集中到统一层
 
-**场景**：路径规范化散落在 Message.swift、视图 trim 等处。
+**场景**：路径规范化逻辑原先零散分布在 Message.swift 和各处视图的字符串裁剪逻辑中，容易产生标准分歧。
 
-**做法**：抽到 `PathNormalizer`，统一处理 a/b 前缀、#、:line:col 等。
+**做法**：将所有路径处理统一收敛到 `PathNormalizer` 工具类中，集中解析并处理 a/b 前缀、锚点 `#` 以及 `:line:col` 行列号等格式。
 
-**Lesson**：跨模块的协议/规则应集中维护，避免重复实现与不一致。
+**Lesson**：凡是涉及跨模块的通用规则或数据清洗逻辑，都应收拢到单一职责层统一维护，避免分散实现带来的冗余与行为不一致。
 
 ---
 
 ## 8. @MainActor 与 test 可测性
 
-**场景**：`shouldProcessMessageEvent` 在 AppState 内，测试调用时报错「main actor-isolated」。
+**场景**：`shouldProcessMessageEvent` 原本声明在 AppState 内部，在单元测试中直接调用时会触发主线程隔离报错（main actor-isolated）。
 
-**做法**：对纯逻辑函数加 `nonisolated`，使其可在 test 中同步调用。
+**做法**：将无状态的纯逻辑方法显式标记为 `nonisolated`，使其能在测试上下文中被同步直接调用。
 
-**Lesson**：需单测的逻辑尽量抽成 nonisolated 或 static，减少与 MainActor 的耦合。
+**Lesson**：需要单元测试覆盖的纯计算或判断逻辑，应尽量抽成 nonisolated 或静态方法，解除与 MainActor 生命周期及并发环境的不必要耦合。
 
 ---
 
 ## 9. SSE-first 不等于“只靠 SSE”，要配一次性补偿同步
 
-**场景**：iOS 前后台切换、网络抖动、切 session、重连后都可能错过部分 SSE 事件。
+**场景**：iOS 应用在发生前后台切换、网络抖动、切换会话或断线重连时，都有可能丢失处于空窗期的 SSE 事件。
 
 **做法**：
-- 常态只用 SSE 推增量，避免 busy 常驻轮询
-- 在关键时机（如 SSE 重连成功、进入会话）执行一次 bootstrap：`loadMessages + refreshPendingPermissions`
-- 把 bootstrap 触发点和日志打清楚（reason / elapsed / messages / permissions）
+- 正常状态下完全依赖 SSE 推送增量，避免常驻高频轮询消耗资源。
+- 在关键生命周期节点（如 SSE 重连成功、用户切入会话时）触发一次轻量全量对账（bootstrap）：执行 `loadMessages + refreshPendingPermissions`。
+- 完善 bootstrap 的触发上下文日志，记录触发原因（reason）、耗时（elapsed）、消息数（messages）及权限项（permissions）。
 
-**Lesson**：移动端实时系统要用“增量主通道 + 一次性全量补偿”组合，既稳又省电。
+**Lesson**：移动端实时通信应当采用“增量事件为主通道 + 关键节点全量对账补偿”的协同设计，在兼顾系统稳定性的同时保持低功耗。
 
 ---
 
 ## 10. SSH 安全默认值：TOFU + mismatch hard fail
 
-**场景**：SSH 隧道若直接 `acceptAnything`，等于关闭主机身份校验。
+**场景**：SSH 隧道如果直接配置 `acceptAnything`，实际上完全放弃了远端主机的身份验证。
 
 **做法**：
-- 首次连接：TOFU 记录 host key（按 host:port）
-- 后续连接：指纹不一致立即失败并提示风险（MITM/重装）
-- UI 提供 fingerprint 展示与 reset trusted host
+- 首次建立连接：采用 TOFU（Trust On First Use）机制，按 host:port 维度持久化记录 host key。
+- 后续再次连接：一旦校验到公钥指纹不一致，立即阻断连接（hard fail）并向用户明确提示中间人攻击（MITM）或主机重装风险。
+- UI 层面提供指纹详情展示，以及重置受信任主机（reset trusted host）的操作入口。
 
-**Lesson**：远程能力一旦上线，安全基线必须先落地；“能连上”不是完成标准，“可信地连上”才是。
+**Lesson**：涉及远程通信的功能上线时，安全基线必须同步落地；“跑通连接”只是第一步，“建立可信通道”才是交付的合格标准。
 
 ---
 
 ## 11. 复杂重构采用 Gate 式 Test-First
 
-**场景**：AppState 拆分会跨状态机、SSE、UI 显示规则，回归风险高。
+**场景**：对 AppState 进行深层次拆分涉及状态机迁移、SSE 分发和 UI 刷新规则等多条链路，回归风险极高。
 
 **做法**：
-- 按 Iteration A/B/C/D 分轮，每轮先补测试，再改结构
-- 每轮定义 Gate（例如行为测试全绿）再进入下一轮
-- 每轮结束记录到 `WORKING.md`，说明新增测试与风险结论
+- 按 Iteration A/B/C/D 拆解为多个渐进迭代轮次，每轮均严格遵循“先补齐行为测试，再改造代码结构”的原则。
+- 为每一轮次设立明确的验收关卡（Gate，例如行为测试全量通过），达标后方可推进至下一轮。
+- 每个轮次完成后在 `WORKING.md` 中做详实记录，清楚列出新增测试点与风险评估结论。
 
-**Lesson**：重构不是“大改一把梭”，而是可验证的增量迁移；Gate 比“感觉没问题”更可靠。
+**Lesson**：复杂重构切忌一蹴而就的大面积修改，而应拆解为可验证的增量迁移；用客观的测试关卡把关，远比主观经验和直觉更可信。
 
 ---
 
 ## 12. Activity 文案要有“防抖语义”，而不是盲目实时
 
-**场景**：tool/reasoning 文案高频切换会导致 UI 抖动与体感噪声。
+**场景**：在工具调用（tool）与模型思考（reasoning）过程中，文案的高频变动会导致界面剧烈抖动，带来严重的视觉噪音。
 
 **做法**：
-- 把文案推导与 debounce 逻辑收敛到统一逻辑层
-- 规则明确：2.5s 窗口内延迟更新，窗口外立即更新
-- 对 completed/running 的时长来源定义优先级，避免伪精确
+- 将文案状态的推导与防抖（debounce）逻辑统一收拢到底层逻辑层处理。
+- 制定清晰的刷新规则：在 2.5s 时间窗口内的变动采用延迟平滑更新，超出窗口后则立即生效。
+- 明确 completed 与 running 状态下耗时数据的计算优先级，避免展示误导性的伪精确数值。
 
-**Lesson**：可读性是实时体验的一部分；“稳定且可信”的状态比“每次变化都立刻显示”更有价值。
+**Lesson**：信息的可读性同样是实时交互体验的重要一环；对于用户而言，一套“稳定且可信”的状态呈现，远比“任何微小变动都立刻刷新”更有价值。
 
 ---
 
 ## 13. SSH UX 需要把“用户下一步动作”写进界面
 
-**场景**：用户常卡在“开了 SSH 但连不上 / 不知道下一步点哪里”。
+**场景**：在配置 SSH 隧道时，用户容易陷入“已开启开关却无法连接，或不清楚下一步该在何处操作”的迷茫状态。
 
 **做法**：
-- 提供可直接复制执行的 SSH command（降低脑内拼接成本）
-- 公钥复制入口常驻可见，不与启用状态强耦合
-- 在 SSH 区域明确提示：启用后还要到上方点 `Test Connection`
+- 直接在界面生成可一键复制的完整 SSH 命令行，消除用户自行拼接命令的认知负担。
+- 将公钥复制入口设为常驻可见，解除其与开关启用状态的强行绑定。
+- 在 SSH 配置区域给出明确的操作指引：开启配置后需回到上方点击 `Test Connection` 完成联通性验证。
 
-**Lesson**：配置型功能的核心不是字段齐全，而是“用户能一次走通”。把关键下一步直接写进 UI 文案。
+**Lesson**：配置类界面的核心价值不仅在于字段完备，更在于能否引导用户顺畅完成全流程。直接在 UI 文案中写明明确的“下一步行动”，能大幅降低交互摩擦。
 
 ---
 
 ## 14. 长会话弱网优化优先做“消息分页”，不是先重做渲染
 
-**场景**：渲染优化后，LAN 已明显流畅，但 SSH tunnel/WAN 首屏仍慢。
+**场景**：完成视图渲染优化后，局域网（LAN）环境下的交互已足够流畅，但在跨公网（WAN）或通过 SSH 隧道访问长会话时，首屏加载依然存在明显延迟。
 
 **做法**：
-- 先确认后端支持 `GET /session/:id/message?limit=`，再在客户端默认只拉最近 3 轮（6 条 message）
-- 提供显式的“下拉加载更多历史消息”交互，每次按固定步长（+6）扩展
-- 文案和状态做本地化，避免用户误解成“数据丢失”
+- 先验证后端支持 `GET /session/:id/message?limit=` 接口，随后在客户端将初次加载策略调整为默认仅拉取最近 3 轮交互（即 6 条 message）。
+- 提供明确的“下拉加载更多历史消息”交互机制，每次按固定步长（+6）向前回溯加载。
+- 对分页提示文案与加载状态做好本地化处理，避免用户产生“旧数据丢失”的误解。
 
-**Lesson**：弱网场景下的首屏体验瓶颈通常是 payload 规模和往返时延。先做可控分页，往往比继续优化 View 层收益更大、更稳定。
+**Lesson**：在弱网与高时延链路上，首屏加载的瓶颈往往在于数据传输体积与网络往返开销（RTT）。先落地受控的消息分页，通常比在 View 渲染层深挖微调能带来更显著、更稳定的性能收益。
 
 ---
 
 ## 15. 先澄清 message 语义，再做 limit 策略
 
-**场景**：用户问“10 次 tool + 1 次最终回答，到底是 11 条 message 还是 1 条？”
+**场景**：讨论消息截断时常会遇到口径疑问：“一个模型交互中包含 10 次工具调用（tool）与 1 次最终回答，整体算作 11 条 message 还是 1 条 message？”
 
 **做法**：
-- 对齐后端数据模型：tool 是 `part`，不是独立 `message`
-- `limit` 限制的是 message 数，不是 tool 次数
-- 在产品文档（PRD/RFC）中明确该语义，避免后续对“3 轮=6 条”的误解
+- 与服务端底层数据模型严格对齐：每次 tool 调用均为 message 下属的一个 `part`，而非独立的 `message` 实体。
+- 明确分页参数 `limit` 控制的是顶层 message 条数，而非 tool 调用的粒度。
+- 在 PRD 与 RFC 等规范文档中统一该定义，消除后续对于“3 轮会话对应 6 条 message”的理解偏差。
 
-**Lesson**：分页策略之前必须先统一计数口径。否则体验讨论会反复卡在“看起来像一条/实际上几条”的语义分歧上。
-
+**Lesson**：在设计分页与截断策略前，必须先理清并统一底层数据实体的计数口径。否则产品与技术讨论很容易在“视觉呈现是一条还是逻辑数据有多条”的歧义上反复内耗。
 
 ---
 
 ## 16. Session 与 Project：创建仅限 Server default
 
-**场景**：新建 session 后，点 Session List 或切后台回前台，新 session 消失。
+**场景**：在 iOS 客户端新建会话后，点击会话列表或将应用切到后台再返回前台时，刚刚创建的新 Session 发生异常消失。
 
-**根因**：`POST /session` 不支持传 directory，server 在其 current project（由启动位置或 Web/TUI 最后使用决定）下创建。iOS 的 Project 选择器只影响 `GET /session?directory=X` 的列表过滤，不改变创建目标。当用户选的 project ≠ server default 时，新建的 session 落在 server default，不在过滤结果中，覆盖后消失。
+**根因**：服务端的 `POST /session` 接口并不支持传入 `directory` 参数，Session 始终创建在服务端的当前默认 Project（由 CLI 启动路径或 Web/TUI 的最后操作决定）下。iOS 端的 Project 切换器本质上只影响 `GET /session?directory=X` 的列表过滤，无法改变新会话的实际创建位置。当用户在客户端选中的 Project 与服务端默认 Project 不一致时，新建的 Session 会落入服务端默认 Project 中，因而无法在当前过滤列表中展示，刷新后便直接“消失”。
 
 **做过的尝试**：
-1. **mergeCurrentSessionIfMissing**：loadSessions 时若 current 不在列表，单独 fetch 并 prepend → 治标不治本，且 GET /session/:id 可能对跨 project 返回 404
-2. **session.updated 按 project 过滤**：避免其他 project 的 session 混入列表 → 保留，正确
-3. **Settings 警告 + 引导去 Web 切换** → 错误：Web 端无法切换 working directory
-4. **移除 Project 选择（回滚）** → 未采用，保留过滤能力
+1. **mergeCurrentSessionIfMissing**：在 `loadSessions` 时若当前会话不在列表中，单独请求该 Session 并强行 prepend 到列表前端 → 治标不治本，且 `GET /session/:id` 跨 Project 查询时可能直接返回 404。
+2. **session.updated 按 project 过滤**：防止其他 Project 的 Session 变动事件混入当前列表 → 属于合理设计，予以保留。
+3. **Settings 警告 + 引导去 Web 切换** → 方案不成立：Web 端同样无法远程更改服务端的 working directory。
+4. **移除 Project 选择（回滚）** → 未采纳：保留多 Project 的列表过滤能力依然有实用价值。
 
-**最终做法**：仅在 Server default 时提供创建按钮。当用户选了具体 project 时，新建按钮置灰，旁加 info 图标，点击显示提示：需用命令行启动 OpenCode 并指定不同的工作目录，然后在此选 Server default 再创建。
+**最终做法**：仅在选择 Server default 时开放新建会话入口。当用户切换到特定 Project 时，新建按钮自动置灰禁用，并在旁边展示 info 提示图标，点击后弹出说明：如需在其他目录下创建会话，需在终端通过命令行携带目标工作目录启动 OpenCode，随后在客户端切回 Server default 即可正常创建。
 
-**Lesson**：多 project 场景下，若 API 不支持创建时指定 project，应限制创建入口而非事后补救；过滤与创建语义分离，避免用户误以为「选了 project 就能在那创建」。
+**Lesson**：在多 Project 体系中，若底层 API 尚不支持在创建时指定工作目录，应在交互层面对创建入口施加约束，而非在数据层做脆弱的事后弥补；要清晰解耦“列表过滤”与“会话创建”的语义边界，避免给用户留下“只要筛选了某个 Project 就能在此创建”的错误心智模型。
 
 ---
 
 ## 17. 相对路径规范化不能“删掉 ..”，必须真正折叠
 
-**场景**：在 iOS markdown preview 中打开 `docs/reports/*.md`，其中内嵌图片写成 `![x](../assets/foo.png)`，文本能显示但图片始终不出现。
+**场景**：在 iOS 客户端的 Markdown 预览中查看 `docs/reports/*.md` 等深层文档时，文中通过相对路径引用的图片（如 `![x](../assets/foo.png)`）无法正常加载显示，而文本排版完全正常。
 
-**根因**：`MarkdownImageResolver` 会先把 markdown 文件目录和相对路径拼成 `docs/reports/../assets/foo.png`，然后交给 `PathNormalizer.resolveWorkspaceRelativePath(...)`。旧实现把 `.` / `..` 直接过滤掉，而不是按文件系统语义折叠，结果错误变成 `docs/reports/assets/foo.png`，请求到了不存在的文件。
+**根因**：`MarkdownImageResolver` 会先将文档所在目录与相对路径拼接为 `docs/reports/../assets/foo.png`，再交由 `PathNormalizer.resolveWorkspaceRelativePath(...)` 进行解析。原先的实现简单粗暴地过滤掉了路径中的 `.` 与 `..` 片段，未按照文件系统标准语义进行路径折叠，导致最终错误解析为 `docs/reports/assets/foo.png`，进而请求了一个并不存在的文件路径。
 
-**最终做法**：分两层修复。第一层，把 `PathNormalizer.normalize()` 改成 stack-based 路径折叠：普通 segment 入栈，`.` 跳过，`..` 出栈（如果栈非空）。这样 `docs/reports/../assets/foo.png` 会正确变成 `docs/assets/foo.png`，同时仍然阻止明显越过 workspace 根的路径穿越。第二层，`FileContentView` 的 markdown preview 不再依赖 `MarkdownUI` 默认网络图片加载器去猜相对路径，而是显式传入 `imageBaseURL` 和自定义 `WorkspaceMarkdownImageProvider`，由客户端通过 `state.loadFileContent` 读取 workspace 内图片并渲染。
+**最终做法**：从两层分别进行修复。第一层，将 `PathNormalizer.normalize()` 重构为基于栈（stack-based）的路径折叠算法：普通路径片段依次入栈，遇到 `.` 则跳过，遇到 `..` 则在栈非空时弹出栈顶元素。如此一来，`docs/reports/../assets/foo.png` 即可准确折叠为 `docs/assets/foo.png`，同时仍能有效防范越过 Workspace 根目录的路径穿越攻击。第二层，在 `FileContentView` 的 Markdown 预览层中，不再依赖 `MarkdownUI` 默认的网络图片加载器自行猜测相对路径，而是显式注入 `imageBaseURL` 与定制的 `WorkspaceMarkdownImageProvider`，统一通过 `state.loadFileContent` 读取 Workspace 内部的图片数据完成受控渲染。
 
-**Lesson**：相对路径安全处理不是“把危险段删掉”这么简单。对 `..` 的错误处理会破坏合法路径语义，尤其容易在 markdown 图片、patch 跳转、以及 repo 内部相对文件引用上制造隐蔽 bug。与此同时，Markdown 渲染器的默认图片加载策略往往假设 URL 已经是最终可访问地址；如果产品支持 repo 内相对图片，客户端必须自己提供 base URL 和受控的 image provider，不能把这个责任留给默认网络加载器。
+**Lesson**：相对路径的安全防范绝非简单“剔除危险字符”即可解决。对 `..` 的粗暴裁剪会直接破坏合法的相对路径层级，极易在文档图片渲染、Patch 关联跳转以及代码内相对引用等场景下引发隐蔽故障。此外，第三方 Markdown 渲染引擎默认的图片加载策略通常假定传入的是最终可用的网络 URL；若要可靠支持工程内部的相对路径资源，客户端就必须自主接管 Base URL 维护与定制化资源加载器，不能依赖默认网络加载器的隐式行为。
 
 ---
 
 ## 18. 流式 reasoning parser 是一次性状态机：thinking 里的字面结束标签会永久提前终止 reasoning
 
-**场景**：SGLang `--reasoning-parser qwen3` 这类流式 parser 是**一次性**状态机——reasoning 期内遇到的**第一个** `</think>`（任意位置、行内也算）永久关闭 reasoning，其后内容一律按普通文本透传。模型若在 thinking 里写出字面 `</think>`（例如正在讨论这些标签本身），reasoning 提前收尾，剩余 thinking 加真 `</think>` 全部泄漏进 content 流。
+**场景**：SGLang `--reasoning-parser qwen3` 等流式解析器本质上是**一次性**状态机——在思考输出阶段只要检测到**第一个** `</think>`（无论出现在行内何处），状态机便会永久关闭 reasoning 模式，此后的所有流式块均会被当作普通正文直接透传。如果模型在思考内容中输出了字面意义上的 `</think>` 字符串（例如正在分析和讨论该标签本身），会导致思考流提前意外终结，随后的未完思考内容与真实的 `</think>` 标签将全部泄漏到正文内容流中。
 
-**做法**：怀疑“thinking 泄漏进正文”时，先读 serving 层 parser 源码确认状态机语义（是否一次性、close 如何匹配），再用数据交叉验证：reasoning part 是否在句中截断、text part 是否从同一句后半句接续。
+**做法**：在排查“思考过程泄漏至正文”的问题时，优先查阅 Serving 层的解析器实现源码，确认状态机的工作机制（包括是否属于单向触发、结束标签的具体匹配规则等），随后结合日志数据进行交叉核验：检查 reasoning part 是否在句子中途被强行截断，以及 text part 是否恰好紧接着上半句的内容继续输出。
 
-**Lesson**：「把标签当文本」和「结束思考」的歧义 tokenizer 层无法区分，只能在客户端归一化层消化；定位前先搞清 serving 层 parser 的状态机语义，别在 server / 模型层瞎找。
+**Lesson**：分词器（Tokenizer）在底层无法分辨“将标签作为普通文本讨论”与“真正的思考结束标记”，这类歧义往往只能在客户端的归一化层统一消化。在着手排查前，必须先摸清 Serving 层 Parser 的状态机流转逻辑，避免在服务端业务层或模型训练层做无意义的排查。
 
 ---
 
 ## 19. 客户端归一化是模型输出怪癖的正确修复层，且必须 fence-aware
 
-**场景**：server 原样存储、原样返回模型输出（多余换行、泄漏标签都是模型形态，不是 server bug）；同一份数据 Web / Android 各自归一化后渲染正常。某端渲染异常时，问题通常在该端缺了归一化，不在 server / 模型。
+**场景**：服务端通常对模型的原始输出保持原样存储与原样透传（输出中包含的多余空行、泄漏的思考标签属于模型自身的生成特征，并非服务端缺陷）；同一套数据在 Web 端和 Android 端经过各自的展示归一化后均能正常呈现。当某一端出现渲染异常时，根因往往在于该端缺少针对性的数据归一化逻辑，而非服务端或模型存在问题。
 
-**做法**：在客户端渲染层对 text part 做归一化（trim、跳过纯空白、删除泄漏 thinking），且归一化必须 **fence-aware**——逐行识别代码围栏（``` / ~~~），围栏内（含围栏行本身）的标签一律不动，因为 server 侧 parser 对 code fence 零感知。只归一化 assistant text part，用户消息绝不改动（用户讨论标签时必须原样保留）。
+**做法**：在客户端的视图渲染层对 text part 统一进行归一化清洗（包括去除多余首尾空白、过滤纯空白分块、剔除泄漏的思考标签等），且该归一化必须具备**代码块围栏感知能力（fence-aware）**——逐行检测代码围栏语法（``` 与 ~~~），对于围栏内部（包含围栏标记行本身）的所有标签均不做清洗，因为服务端解析器对代码围栏完全无感知。此外，归一化处理仅针对 assistant 角色的 text part，对用户消息则严格保持原样（以确保用户输入中涉及标签讨论的内容不受影响）。
 
-**Lesson**：客户端归一化是幂等的（对没有这些怪癖的模型无副作用）、影响面最小、且与 Web / Android 行为对齐——修模型输出怪癖优先在客户端，不动 server / 模型。
+**Lesson**：客户端归一化具有天然的幂等性（对于输出规范的模型没有任何副作用），改动影响范围最小，且能与 Web / Android 端保持一致的行为标准。针对各类模型的输出特例与怪癖，优先在客户端渲染层进行防御性修复，尽量避免动摇服务端与模型链路。
 
 ---
 
 ## 20. 「session 特有 vs 系统性」：对照干净 session 的统计来区分
 
-**场景**：排查某模型输出异常时，容易把“当前 session 特有的 artifact”误判成“该模型的系统性问题”（本例 think 标签泄漏其实来自“正在讨论这些标签本身”的 session，干净 session 里 0 条）。
+**场景**：在定位某些模型输出异常的缺陷时，很容易将“仅在特定会话中产生的特殊现象（artifact）”误判为“该模型全局存在的系统性缺陷”（例如本次排查中遇到的 think 标签泄漏，实际上仅源自该会话正巧在讨论这些标签本身，而在其他常规会话中出现频次为 0）。
 
-**做法**：拿一个**干净 session**（不涉及该 artifact 主题、样本量足够大，如 219 条 text part）做对照统计，与当前 session 逐指标对比（前导/尾随换行、纯空白 part、含标签 part 占比等）。干净 session 为 0 而当前 session 显著非 0，是 session 特有；两者都高，才是系统性。
+**做法**：选取一个**干净会话（clean session）**（即完全不涉及该特定讨论主题且具备足够样本量，例如包含 219 条 text part 的常规会话）作为基准对照组，与问题会话逐项比对统计指标（如首尾多余换行、纯空白分块、包含特定标签的分块占比等）。若基准会话中异常统计为 0 而当前会话显著偏高，则说明纯属会话特有现象；只有当对照组同样呈现高频异常时，才能定性为系统性问题。
 
-**Lesson**：下“系统性 bug”结论前，先找一份不含该 artifact 的对照样本做统计；没有对照，“看起来很多”不等于“系统性”。
+**Lesson**：在将某一问题定性为“系统性缺陷”之前，必须引入不包含干扰因子的基准对照样本进行量化统计；缺乏严谨对照的情况下，单凭眼见“样本很多”并不能直接推导出“全局系统性”的结论。

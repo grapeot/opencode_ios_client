@@ -4,39 +4,39 @@ Status: proposal only, no implementation
 
 ## Bottom Line
 
-`/compact` is a client-side command, not a prompt sent to the model. The Web client recognizes it in the composer, invokes a session compaction API, and never submits the literal text as a user message.
+`/compact` 是一个纯客户端指令，而非发送给模型的 Prompt。Web 端在输入框（composer）中识别到该指令后，会调用会话压缩相关的 API，而绝不会将指令字面文本作为普通用户消息提交。
 
-The iOS client currently has no equivalent command layer. `sendMessage` forwards all composer text to `/session/:id/prompt_async`, so typing `/compact` sends those characters to the model. This is expected from the current implementation, not a server bug.
+iOS 客户端目前尚未建立对等的指令解析层。`sendMessage` 会将输入框中的所有文本无差别转发至 `/session/:id/prompt_async`，因此输入 `/compact` 会直接将该字符串发送给模型。这是当前客户端实现的预期行为，并非服务端缺陷。
 
-The recommended product shape is one session action with two entry points:
+建议的产品交互形态为统一抽象为一个会话级 Action，并提供两个触发入口：
 
-1. A visible `Compact Context` action in the session overflow menu and context-usage UI.
-2. A `/compact` slash-command shortcut in the composer for keyboard users.
+1. 在 Session 的操作菜单（`...`）和上下文使用量（context-usage）UI 中提供直观的 `Compact Context` 操作项。
+2. 在输入框中为键盘用户提供 `/compact` 斜杠指令（slash-command）快捷方式。
 
-Both entry points must call the same typed client action. Neither should create a normal user message.
+两个入口底层均调用同一个强类型的客户端 Action，且均不生成普通的用户文本消息。
 
 ## Current Mechanism
 
 ### Web Client
 
-The Web client registers a built-in command with:
+Web 端注册了一个内置指令，其定义包含：
 
-- command ID: `session.compact`
-- slash trigger: `compact`
-- action: call `client.session.summarize(...)`
+- command ID：`session.compact`
+- slash trigger：`compact`
+- action：调用 `client.session.summarize(...)`
 
-When the slash picker selects a built-in command, the composer clears the command text and calls the command registry. Custom slash commands follow a different path and remain editable prompt text.
+当用户在斜杠命令选择器中选中该内置指令时，输入框会清空指令文本并调用指令注册表分发。自定义斜杠指令则走另一套逻辑，保持为可编辑的 Prompt 文本。
 
-Relevant source:
+相关源码参考：
 
 - `opencode-official/packages/app/src/pages/session/use-session-commands.tsx`
 - `opencode-official/packages/app/src/components/prompt-input.tsx`
 
-This explains the observed Tab behavior. Tab selects a local autocomplete item; selection dispatches `session.compact`. It is not a model-side interpretation of `/compact`.
+这解释了之前观察到的 Tab 键交互行为：Tab 键用于选中本地自动补全候选，选中后触发 `session.compact` 的分发，而非模型端对 `/compact` 的语义理解。
 
 ### Current iOS Client
 
-The iOS path is currently:
+iOS 客户端目前的执行路径为：
 
 ```text
 composer text
@@ -46,9 +46,9 @@ composer text
   -> normal user message
 ```
 
-There is no built-in command registry or pre-send interception. `Part.type` can decode unknown part types as strings, but iOS has no dedicated compaction state or completion presentation.
+目前缺少内置指令注册表及发送前的拦截层。虽然 `Part.type` 可以将未知的 Part 类型解码为字符串，但 iOS 端尚未针对 Compaction 设计专用的状态机流转与完成态 UI 呈现。
 
-Relevant source:
+相关源码参考：
 
 - `OpenCodeClient/OpenCodeClient/AppState+Messages.swift`
 - `OpenCodeClient/OpenCodeClient/Services/APIClient.swift`
@@ -56,7 +56,7 @@ Relevant source:
 
 ## Backend Contract
 
-OpenCode currently has two API generations that should not be conflated.
+OpenCode 服务端目前存在两代 API 规范，在设计时不应混为一谈。
 
 ### Legacy API Used By The Current Web Client
 
@@ -71,20 +71,20 @@ Content-Type: application/json
 }
 ```
 
-The handler:
+接口处理逻辑：
 
-1. Cleans up an active revert state.
-2. Finds the active agent from recent history.
-3. Appends a synthetic user message containing a `compaction` part.
-4. Runs the normal session loop with the selected model.
-5. Generates a structured summary of older history, optionally incorporating the previous summary.
-6. Continues future turns from the compacted representation.
+1. 清理当前处于激活态的 Revert 状态。
+2. 从最近的历史消息中推导当前处于活跃态的 Agent。
+3. 构造并追加一条包含 `compaction` part 的合成用户消息（synthetic user message）。
+4. 使用当前选中的模型执行正常的会话推理循环。
+5. 针对较早的历史会话生成结构化摘要，若此前已有摘要则可选择性合并。
+6. 后续的会话轮次将基于该压缩后的表示继续推进。
 
-The operation consumes a model call. It is not a local string truncation algorithm.
+该操作会真实消耗一次模型调用额度，而非简单的本地字符串截断算法。
 
 ### V2 API Direction
 
-The V2 public design exposes:
+V2 版本的公开设计规范定义如下：
 
 ```http
 POST /api/session/:sessionID/compact
@@ -93,15 +93,15 @@ Content-Type: application/json
 {}
 ```
 
-Current V2 documentation describes this as asynchronous admission: the server accepts a compaction input, runs it at a safe session boundary, and reports progress/completion through session events. An optional request ID supports idempotent retry.
+当前的 V2 文档将其描述为异步准入（asynchronous admission）机制：服务端接收压缩请求后，在安全的会话轮次边界执行压缩，并通过 Session 事件流推送执行进度与完成通知。可选的 Request ID 支持幂等重试。
 
-The local July 14 checkout is transitional: the route exists, but its core implementation still returns `OperationUnavailableError`. Therefore the iOS client should not switch to V2 based only on route shape. It should use the legacy contract for the currently deployed server and migrate only after a capability check or coordinated server upgrade.
+本地 7 月 14 日的检出代码处于过渡期：该路由已存在，但其核心实现仍直接返回 `OperationUnavailableError`。因此 iOS 客户端不应仅因路由声明存在就直接切换至 V2，而应沿用当前已部署服务端的 Legacy 协议，待后续完成能力探测（capability check）或协同升级服务端后再行迁移。
 
 ### What Compaction Changes
 
-Compaction changes the model-visible representation of session history. It does not delete the original durable messages from storage.
+Compaction 改变的是模型可见的会话历史表示，并不会从底层存储中物理删除原始的持久化消息记录。
 
-Conceptually:
+概念示意如下：
 
 ```text
 Durable session history
@@ -114,25 +114,25 @@ Next model context
   + messages created after compaction
 ```
 
-The summary is lossy. Exact old details can disappear from future model context even though the original messages still exist in the session database.
+该摘要过程是存在信息损耗的（lossy）。尽管原始消息依然完整保留在会话数据库中，但旧会话中的精确细节可能会从后续模型的可见上下文（context）中消失。
 
-Automatic compaction is a separate trigger over the same underlying concern. Current legacy configuration uses `compaction.auto`, `compaction.prune`, and `compaction.reserved`; V2 is moving toward model-aware headroom and retained-tail settings. Manual compaction should work independently of whether automatic compaction is enabled.
+自动压缩（Automatic compaction）是针对相同底层机制的另一套独立触发策略。现有 Legacy 配置使用 `compaction.auto`、`compaction.prune` 和 `compaction.reserved`；V2 逐步演进为基于模型感知的裕量（headroom）与保留轮数（retained-tail）配置。手动压缩应支持独立触发，不受自动压缩开关状态的影响。
 
 ## Recommended UX
 
 ### Primary Entry Point
 
-Add `Compact Context` to the session `...` menu near `Interrupt Agent`, rename, and other session-level actions.
+在 Session 的 `...` 菜单中新增 `Compact Context` 操作项，位置与 `Interrupt Agent`、重命名等会话级操作并列。
 
-Display a concise explanation in the action row or first-use sheet:
+在操作行或首次引导 Sheet 中展示简明说明：
 
 > Summarize older conversation to free context space. Full history remains visible, but the agent may lose exact older details.
 
-This is more discoverable than requiring users to know a terminal-style command.
+相比强制用户记住终端式指令，这种方式更具可发现性。
 
 ### Context Usage Entry Point
 
-Make the existing context ring open a small detail sheet:
+点击现有的 Context 环形进度条可唤起轻量详情面板：
 
 ```text
 Context used                 78%
@@ -141,29 +141,29 @@ Older turns can be summarized to free space.
 [Compact Context]
 ```
 
-The action may become visually prominent above a product-defined threshold, but the user should be allowed to compact earlier. Do not auto-trigger manual compaction merely because the sheet opens.
+当使用量超过产品设定的阈值时，该操作按钮可在视觉上进行强调，但同样允许用户在较低水位下手动触发。单纯打开该详情面板不应自动触发压缩。
 
 ### Slash Command Entry Point
 
-When the composer begins with `/`, show a native command picker. Include:
+当输入框以 `/` 开头时，展示原生指令选择器，包含：
 
 ```text
 /compact       Compact context
 /summarize     Alias for /compact
 ```
 
-Selecting either command should invoke the typed action immediately or replace the composer with an action chip requiring Send. Immediate invocation matches Web behavior and is the smaller design.
+选择任一指令后，可直接立即触发该强类型 Action，或在输入框中替换为待发送的 Action Chip 并由用户点击 Send 发送。直接立即触发与 Web 端行为一致，整体交互设计更轻量。
 
-Safe parsing rules:
+安全解析规则：
 
-- Intercept only a recognized built-in command selected from the picker, or an exact trimmed `/compact` or `/summarize` submitted without attachments.
-- Do not interpret `/compact please`, embedded `/compact`, or an attachment plus `/compact` as compaction.
-- If text starts with a reserved built-in command but has invalid syntax, show a local syntax error rather than silently sending it to the model.
-- Preserve any pre-existing draft that was present before opening the slash picker.
+- 仅拦截从选择器中明确选中的内置指令，或用户手动输入、去除首尾空白后完全匹配且未附带附件的 `/compact` 与 `/summarize`。
+- 绝不将 `/compact please`、包含在句子中间的 `/compact` 或携带附件的 `/compact` 误识别为压缩操作。
+- 若输入文本以保留的内置指令开头但语法不合法，在本地展示语法错误提示，严禁将其静默发送给模型。
+- 唤起斜杠选择器之前输入框中已有的草稿内容必须予以妥善保留。
 
 ### Progress And Completion
 
-The UI state should be session-scoped:
+UI 状态应严格限定在 Session 作用域内：
 
 ```text
 idle -> requesting -> compacting -> completed
@@ -171,30 +171,30 @@ idle -> requesting -> compacting -> completed
                           -> failed
 ```
 
-Recommended presentation:
+推荐的视觉呈现策略：
 
-- While requesting/compacting: context ring shows subtle progress and the menu action reads `Compacting Context...`.
-- On completion: insert or reveal a quiet timeline divider, `Context compacted`, then refresh context usage.
-- On failure: show a retryable error without changing or discarding the composer draft.
-- Do not show a cancel button unless the backend gains a compaction-specific cancellation contract.
+- 请求中与压缩中（requesting/compacting）：Context 环形指示器展示平缓的加载动画，菜单中的操作项文案变为 `Compacting Context...`。
+- 压缩完成（completed）：在时间线中插入或渐显一条克制的分割标记 `Context compacted`，随后刷新 Context 使用量数据。
+- 压缩失败（failed）：展示可重试的错误提示，且不修改或丢弃输入框中的草稿。
+- 除非后端明确支持针对 Compaction 的取消协议，否则不展示取消按钮。
 
-For legacy `summarize`, the HTTP result can indicate completion, while SSE message and part updates refresh history. For V2, HTTP acceptance is not completion; the client must wait for the compaction event or a settled session state.
+针对 Legacy `summarize`，HTTP 响应成功可指示执行完成，随后通过 SSE 消息与 Part 更新刷新会话历史；针对 V2，HTTP 接收仅代表成功准入，客户端必须等待 Compaction 事件通知或会话进入稳定态。
 
 ### Busy Session Behavior
 
-For the legacy MVP, disable manual compaction while the session is busy. This avoids racing the existing prompt loop and gives the user a predictable contract.
+在 Legacy MVP 阶段，当会话处于 Busy 状态时禁用手动压缩。这可以避免与现有的 Prompt 循环发生并发竞态，为用户提供可预期的交互表现。
 
-After V2 safe-boundary admission is deployed, allow the action while busy and label it `Compact after current step`. The server, not iOS, should serialize it against prompts and coalesce duplicate requests.
+待 V2 安全边界准入机制部署后，允许在 Busy 状态下触发该操作，并显示文案 `Compact after current step`。由服务端负责对压缩请求与 Prompt 进行排队调度并合并重复请求，无需 iOS 客户端承担该调度职责。
 
 ### Confirmation Policy
 
-Do not require a confirmation dialog every time. The action is lossy for future model attention, but it does not delete durable history, and the official clients already expose it as a direct command.
+无需在每次触发时均弹出确认对话框。虽然该操作对模型后续的注意力存在信息损耗，但不会物理删除持久化历史，且官方客户端已将其作为直接指令开放。
 
-A one-time educational sheet or clear action subtitle is enough. Repeated modal confirmation would make the context ring shortcut unnecessarily heavy.
+提供一次性的教学引导 Sheet 或清晰的操作副标题即已足够。频繁弹出模态确认会严重加重视图交互的摩擦。
 
 ## Client Architecture
 
-Keep command parsing separate from API transport:
+将指令解析层与 API 传输层严格解耦：
 
 ```text
 Composer / Session Menu / Context Sheet
@@ -209,50 +209,50 @@ Composer / Session Menu / Context Sheet
  legacy summarize     V2 compact
 ```
 
-`AppState.compactCurrentSession()` should own eligibility, session-scoped progress, errors, completion refresh, and duplicate-tap suppression. UI surfaces should only invoke it.
+`AppState.compactCurrentSession()` 负责管理可用性校验、会话级进度状态、错误处理、完成后的状态刷新以及防重复点击抑制；各 UI 入口仅负责触发该方法。
 
-The transport adapter should make the API generation explicit. Avoid a fallback that blindly calls V2 and then legacy on every error, because a timeout can leave the first request admitted and produce duplicate model calls. Capability selection should come from server version/capability metadata or a stable host-profile setting.
+传输适配器层应显式区分 API 代际。应避免在发生任何错误时均盲目进行“先 V2 后 Legacy”的 Fallback 重试，因为超时可能导致首个请求已被服务端受理，进而引发重复的模型调用。具体协议代际的选择应基于服务端返回的版本/能力元数据，或通过 Host Profile 中的固定配置项决定。
 
 ## Delivery Slices
 
 ### Slice 1: Current Server MVP
 
-- Add legacy `summarize` API request.
-- Add one AppState compaction action and state.
-- Add `Compact Context` to the session menu.
-- Intercept exact `/compact` and `/summarize` locally.
-- Disable while busy or when the session has no user messages.
-- Refresh messages and context usage after success.
-- Add unit tests proving the command text never reaches `prompt_async`.
+- 接入 Legacy `summarize` API 请求。
+- 在 AppState 中新增单一的 Compaction Action 与对应状态。
+- 在 Session 菜单中新增 `Compact Context` 操作项。
+- 在本地精确拦截 `/compact` 与 `/summarize` 指令。
+- 在会话处于 Busy 态或尚无用户消息时置灰禁用。
+- 成功后自动刷新消息列表与 Context 使用量。
+- 补充单元测试，验证指令文本绝不会透传至 `prompt_async`。
 
-This requires no server change and is a small-to-medium iOS feature. The main risk is state/UX correctness, not backend complexity.
+该阶段无需改动服务端，属于中小规模的 iOS 功能改造，主要风险在于状态流转与交互细节的正确性，而非后端复杂度。
 
 ### Slice 2: Discoverability
 
-- Add the context-ring detail sheet.
-- Add slash-command autocomplete instead of exact-send interception alone.
-- Add a dedicated timeline marker and localized strings.
+- 新增 Context 环形指示器的详情弹出 Sheet。
+- 支持斜杠指令的自动补全选择器，替代单纯的发送时精确匹配拦截。
+- 新增时间线分割指示器与对应的本地化文案。
 
 ### Slice 3: V2 Migration
 
-- Select V2 through an explicit capability contract.
-- Submit an idempotent compact request.
-- Track admitted, running, completed, and failed events.
-- Permit queueing behind a busy turn.
-- Remove legacy transport only after all supported hosts expose the V2 behavior.
+- 基于显式的能力契约协商自动选择 V2 协议。
+- 提交具备幂等保障的 Compact 请求。
+- 监听并流转 Admitted、Running、Completed 与 Failed 事件。
+- 支持在 Busy 轮次后排队等待执行。
+- 仅当所有受支持的主机均具备 V2 能力后，再正式移除 Legacy 传输层。
 
 ## Acceptance Criteria
 
-1. Selecting `/compact` never creates a normal user text message.
-2. Menu, context ring, and slash command invoke one shared AppState action.
-3. A failed request leaves the session and composer draft intact.
-4. Duplicate taps cannot start duplicate compaction model calls.
-5. Completion refreshes messages and context usage.
-6. Durable pre-compaction history remains visible after completion.
-7. The UI states that old details may be summarized lossily.
-8. Legacy and V2 completion semantics are tested separately.
-9. The client does not retry through a second API generation after an ambiguous timeout.
+1. 选中 `/compact` 绝不生成普通用户文本消息。
+2. 菜单入口、Context 详情面板与斜杠指令均调用同一套 AppState Action。
+3. 请求失败时保持会话状态与输入框草稿完好无损。
+4. 重复点击无法触发重复的 Compaction 模型调用。
+5. 压缩完成后自动刷新消息流与 Context 使用率。
+6. 压缩完成后，此前的持久化历史消息依然正常可见。
+7. UI 文案明确提示旧会话细节存在摘要损耗。
+8. Legacy 与 V2 的完成语义具备独立测试覆盖。
+9. 在遇到不确定的超时错误后，客户端不会盲目通过第二代 API 进行二次重试。
 
 ## Recommendation
 
-Build Slice 1 first when implementation is authorized. It fixes the surprising iOS behavior and adds a discoverable session action without changing the server. Treat the V2 endpoint as a later protocol migration, not as a prerequisite for the feature.
+在获得实施授权后，优先推进 Slice 1 的交付。它能在不修改服务端的前提下，彻底修复 iOS 端令人意外的指令透传行为，并提供高可发现性的会话级操作。应将 V2 接口视为后续的协议演进，而非该功能落地的先决条件。

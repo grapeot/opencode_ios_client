@@ -17,7 +17,7 @@
 
 ## 摘要
 
-本 RFC 提出 OpenCode iOS Client 的技术实现方案，服务于 PRD 定义的产品目标。核心是：在 iOS 17+ 上构建一个轻量、以 SwiftUI 为主的原生客户端，通过 HTTP REST + SSE 与 OpenCode Server 通信，实现远程监控、消息发送、文档审查等能力。本文档聚焦技术选型、架构设计与关键实现细节，供实现前评审与共识。
+本 RFC 提出 OpenCode iOS Client 的技术实现方案，用于落地 PRD 定义的产品目标。方案核心是在 iOS 17+ 上构建一个轻量、以 SwiftUI 为主的原生客户端，通过 HTTP REST 与 SSE 配合 OpenCode Server 通信，提供远程监控、消息发送以及文档审查等能力。本文档重点阐述技术选型、架构设计与关键实现细节，供开发前评审与达成共识。
 
 ---
 
@@ -25,21 +25,21 @@
 
 ### 问题
 
-开发者使用 OpenCode 时，常需在电脑前等待 AI 完成耗时任务，或离开工位后无法及时了解进度、无法快速纠偏。现有 Web 客户端需在浏览器中使用，移动端体验不佳；TUI 绑定在终端，无法在手机上使用。
+开发者使用 OpenCode 时，经常需要在电脑前等待 AI 完成耗时较长的任务；一旦离开工位，便无法及时掌握进度或快速纠偏。现有的 Web 客户端依赖浏览器，在移动端体验欠佳；而 TUI 绑定在终端环境，无法在手机上直接使用。
 
 ### 目标
 
-提供原生 iOS 客户端，让用户可在手机/平板上：
+提供原生 iOS 客户端，让用户能够在手机或平板上完成以下操作：
 - 监控 AI 工作进度
 - 发送消息、切换模型
 - 以文档审查为主查看 Markdown diff
-- 必要时中止或排队新指令
+- 必要时中止任务或排队发送新指令
 
 ### 约束
 
-- 最低 iOS 17（使用 Observation 框架）
-- 不引入本地 AI 推理、文件系统或 shell 能力
-- 支持局域网直连、Tailscale MagicDNS 与 SSH tunnel 远程访问；公网（非 Tailscale）要求 HTTPS 或 SSH 转发。Tailscale（`*.ts.net`）豁免 ATS 例外，允许 HTTP；Settings 中 Tailscale + HTTP 时协议显示灰色，其他 WAN + HTTP 显示红色，info 图标悬停说明中英双语
+- 最低支持 iOS 17（采用 Observation 框架）
+- 客户端本身不引入本地 AI 推理、文件系统或 shell 执行能力
+- 支持局域网直连、Tailscale MagicDNS 与 SSH tunnel 远程访问；公网环境（非 Tailscale）要求使用 HTTPS 或 SSH 转发。Tailscale（`*.ts.net`）配置 ATS 例外豁免并允许 HTTP；在 Settings 中，Tailscale + HTTP 协议标签显示为灰色，其余 WAN + HTTP 显示为红色，info 图标悬停提示提供中英双语说明
 
 ---
 
@@ -67,25 +67,25 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-- **Views**：SwiftUI 视图，按 Chat / Files / Settings / Split View 模块划分
-- **State**：`@Observable` 管理连接、Session、消息、文件等
-- **Controllers / Services / Stores / Models / Utils**：事件控制、网络层、状态存储、数据模型与工具层解耦组织
+- **Views**：SwiftUI 视图层，按 Chat / Files / Settings / Split View 模块划分
+- **State**：基于 `@Observable` 管理连接、Session、消息、文件等状态
+- **Controllers / Services / Stores / Models / Utils**：将事件控制、网络层、状态存储、数据模型与工具层解耦组织
 
 ### 2. 技术选型
 
 | 层面 | 选择 | 理由 |
 |------|------|------|
-| UI | SwiftUI | 原生、声明式，与 iOS 17+ 适配最好 |
-| 状态 | Observation (@Observable) | 替代 ObservableObject，减少样板代码 |
-| 网络 | URLSession | 原生，无需 Alamofire；SSE 用 `URLSession` 的 `Delegate` 或 `AsyncSequence` |
-| SSH 库 | Citadel | 基于 Apple SwiftNIO SSH 封装，支持 Swift 5.10+，API 友好 |
-| Markdown | MarkdownUI + 自定义图片 provider / resolver | 支持代码块、链接、列表，以及 workspace 内相对图片 |
-| Diff | 自建 View（优先 iOS 原生能力） | 基于 `before`/`after` 做 unified diff 渲染，行级高亮 |
-| 持久化 | UserDefaults + Keychain | 连接信息、模型预设；密码存 Keychain |
+| UI | SwiftUI | 原生声明式框架，与 iOS 17+ 契合度最高 |
+| 状态 | Observation (@Observable) | 替代 ObservableObject，显著减少模板代码 |
+| 网络 | URLSession | 系统原生能力，无需引入 Alamofire；SSE 基于 `URLSession` 的 `Delegate` 或 `AsyncSequence` 实现 |
+| SSH 库 | Citadel | 基于 Apple SwiftNIO SSH 封装，支持 Swift 5.10+，API 设计更友好 |
+| Markdown | MarkdownUI + 自定义图片 provider / resolver | 完整支持代码块、链接、列表，并支持 workspace 内相对路径图片解析 |
+| Diff | 自建 View（优先 iOS 原生能力） | 基于 `before`/`after` 实现 unified diff 渲染与行级高亮 |
+| 持久化 | UserDefaults + Keychain | 保存连接配置与模型预设；敏感密码存入 Keychain |
 
 #### 2.1 SSH 库选型：Citadel
 
-用于实现 SSH 隧道远程访问功能。
+用于实现 SSH 隧道的远程访问能力。
 
 | 库 | 语言 | 维护状态 | Swift 版本 | 推荐度 |
 |----|------|----------|------------|--------|
@@ -95,11 +95,11 @@
 
 **选择 Citadel 的原因**：
 
-1. **无需升级 Swift 6.0**：支持 Swift 5.10+，避免 Swift 6 的并发安全 breaking changes
-2. **高级 API**：基于 Apple 的 SwiftNIO SSH 封装，比直接用 SwiftNIO SSH 简单
-3. **功能完整**：支持 Ed25519 密钥认证、DirectTCPIP 端口转发、SFTP
-4. **活跃维护**：44 个 release，支持 SSH direct-tcpip 端口转发
-5. **文档齐全**：有 README 示例 + [官方文档](https://swiftpackageindex.com/orlandos-nl/Citadel/0.12.0/documentation/citadel)
+1. **无需升级 Swift 6.0**：支持 Swift 5.10+，避免了 Swift 6 并发安全检查带来的破坏性变更（breaking changes）
+2. **高层 API**：在 Apple SwiftNIO SSH 之上进行了封装，调用体验比直接使用 SwiftNIO SSH 更简单直观
+3. **功能完整**：完整支持 Ed25519 密钥认证、DirectTCPIP 端口转发以及 SFTP
+4. **维护活跃**：已发布 44 个 release，稳定支持 SSH direct-tcpip 端口转发
+5. **文档完备**：提供清晰的 README 示例与[官方文档](https://swiftpackageindex.com/orlandos-nl/Citadel/0.12.0/documentation/citadel)
 
 **使用示例**：
 
@@ -128,67 +128,67 @@ let channel = try await client.createDirectTCPIPChannel(
 
 #### 3.1 REST API
 
-- 使用 `URLSession` 封装 `APIClient`
-- 统一 Base URL：`http://<ip>:<port>` 或 `https://<host>:<port>`，默认 `127.0.0.1:4096`，来自 Settings
-- 所有请求附加 Basic Auth header（若配置）
-- 推荐使用 `POST /session/:id/prompt_async` 发送消息，busy 时由服务端排队
+- 基于 `URLSession` 封装统一的 `APIClient`
+- 统一 Base URL 格式为 `http://<ip>:<port>` 或 `https://<host>:<port>`，默认值为 `127.0.0.1:4096`，读取自 Settings 配置
+- 若配置了 Basic Auth，所有请求均自动附加对应的认证请求头
+- 发送消息推荐使用 `POST /session/:id/prompt_async`，当 session 处于 busy 状态时由服务端负责排队
 
 #### 3.1.1 消息分页拉取（已实现）
 
-- `GET /session/:id/message` 使用 `limit` 参数分页拉取，默认加载最近 6 条 message（3 轮 user/assistant）
-- 用户在 Chat 顶部下拉触发“加载更多历史消息”后，`limit` 每次增加 6 并重新拉取
-- 目标是把弱网首屏时延从“全量历史”收敛到“最近可操作上下文”
-- 注意：`limit` 统计单位是 **message**，不是 tool 调用次数。一个 assistant message 可包含多个 tool/text/reasoning parts
+- 调用 `GET /session/:id/message` 时通过 `limit` 参数进行分页拉取，默认加载最近 6 条 message（对应 3 轮 user/assistant 对话）
+- 用户在 Chat 顶部下拉触发“加载更多历史消息”时，`limit` 每次递增 6 并重新发起拉取请求
+- 该设计的核心目标是将弱网环境下的首屏等待时间从拉取“全量历史”收敛至加载“最近可操作上下文”
+- 需要注意：`limit` 的统计单位是 **message**，而非 tool 调用次数；单个 assistant message 内可包含多个 tool/text/reasoning parts
 
 #### 3.1.2 Edit from here / message revert（已实现 MVP）
 
-iOS 客户端支持 Web 端同源的 message revert MVP，用于从某条 user message 回到历史位置、把原消息放回 composer，并让用户修改后重新发送。
+iOS 客户端支持与 Web 端同源的 message revert MVP 功能，允许用户从指定的某条 user message 回退到历史节点，将原消息内容重新填回 composer，以便修改后再次发送。
 
-- 数据模型：`Session` 解码 server 返回的 `revert` 字段，最小字段为 `messageID`、`partID`、`snapshot`、`diff`
-- API：`APIClient.revertSession(sessionID:messageID:partID:)` 调用 `POST /session/:id/revert`，body 为 `{ messageID, partID? }`，返回更新后的 `Session`
-- UI 入口：`MessageRowView` 的 user message 菜单新增 `Edit from here`；busy session 下禁用，避免和 server 的 `assertNotBusy` 冲突
-- 状态编排：`AppState.editFromMessage(messageID:)` 只接受 user message，拼接 text parts 写回 per-session draft，upsert 返回的 session，并刷新 messages / diff / file status
-- 消息可见性：`AppState.visibleMessages(_:revertMessageID:)` 按 OpenCode Web 语义隐藏 `message.id >= revert.messageID` 的已回滚消息；临时 optimistic message 保留
-- 非目标：MVP 不提供 `unrevert` / restore dock / part-level revert；这些行为留给后续需要时再补
+- 数据模型：`Session` 模型解析服务端返回的 `revert` 字段，其核心最小字段集包括 `messageID`、`partID`、`snapshot` 与 `diff`
+- API 交互：`APIClient.revertSession(sessionID:messageID:partID:)` 调用 `POST /session/:id/revert`，请求体为 `{ messageID, partID? }`，并返回更新后的 `Session` 对象
+- UI 入口：在 `MessageRowView` 的 user message 菜单中新增 `Edit from here` 选项；当 session 处于 busy 状态时自动禁用该操作，避免与服务端的 `assertNotBusy` 产生冲突
+- 状态编排：`AppState.editFromMessage(messageID:)` 仅处理 user message，将关联的 text parts 拼接后写回对应 session 的草稿箱（per-session draft），更新并插入返回的 session 实例，随后刷新 messages、diff 及 file status
+- 消息可见性：`AppState.visibleMessages(_:revertMessageID:)` 遵循 OpenCode Web 的展示语义，隐藏满足 `message.id >= revert.messageID` 的已回滚消息，同时保留临时的 optimistic message
+- 非目标：当前 MVP 暂不提供 `unrevert`、restore dock 以及 part-level revert 能力，后续按需演进
 
 #### 3.1.3 Image attachments（已实现 Phase 1/2）
 
-iOS 图片支持与 OpenCode Web 保持同构：图片作为 prompt 的 `file` part 发送，`url` 使用 `data:<mime>;base64,...`，不新增独立 upload endpoint。
+iOS 端的图片支持在设计上与 OpenCode Web 保持同构：图片作为 prompt 中的 `file` part 发送，`url` 字段直接携带 `data:<mime>;base64,...`，无需引入独立的文件上传接口。
 
-- 发送模型：`APIClient.promptAsync` 支持 mixed parts；文本生成 `type: "text"`，图片生成 `type: "file"`、`mime`、`filename`、`url`
-- Composer：`ChatTabView` 使用 `PhotosPicker` 选择图片，最多 4 张；本地转 JPEG data URL，最长边 2048，JPEG quality 0.82，压缩后单图上限 5MB
-- 失败恢复：发送失败时恢复文本和附件状态；optimistic user message 同时包含 text part 与 file part
-- 渲染模型：`Part` 解码 `mime`、`filename`、`url`、`source`；`MessageRowView` 对 `type == "file"` 渲染图片缩略图或 fallback file card
-- 图片预览：历史 image attachment 点击后复用现有 `ImageView` zoom/pan 预览
-- 非目标：本轮不做 Files app 文件选择、PDF/text 附件、跨重启附件草稿持久化、server-side upload 或大 payload 分片
+- 发送模型：`APIClient.promptAsync` 支持图文混合 parts；纯文本生成 `type: "text"`，图片则生成包含 `type: "file"`、`mime`、`filename` 与 `url` 的结构
+- 输入控制（Composer）：`ChatTabView` 集成 `PhotosPicker` 供用户挑选图片，单次最多选择 4 张；选中的图片在本地压缩转为 JPEG data URL（最长边限制为 2048 像素，JPEG quality 取 0.82），单张图片压缩后大小上限为 5MB
+- 失败恢复：若发送失败，自动还原输入框文本与待发送附件的状态；optimistic user message 会同步包含对应的 text part 与 file part
+- 渲染模型：`Part` 模型负责解析 `mime`、`filename`、`url` 和 `source` 字段；`MessageRowView` 针对 `type == "file"` 的条目渲染图片缩略图或兜底的 file card
+- 图片预览：点击历史消息中的 image attachment，复用现有的 `ImageView` 进行缩放与平移预览（zoom/pan）
+- 非目标：本阶段暂不涉及从 Files App 选取文件、PDF/文本附件支持、跨 App 重启的附件草稿持久化，以及服务端独立 upload 或大 payload 分片传输
 
 #### 3.2 SSE 连接
 
-- 连接 `GET /global/event`
-- 使用 `URLSession` 的 `dataTask` 或 `URLSession.AsyncBytes` 流式读取
-- 解析 `data:` 行，按行或按 `\n\n` 切分事件
-- 事件格式：`{ directory, payload: { type, properties } }`
+- 连接服务端事件流接口 `GET /global/event`
+- 基于 `URLSession` 的 `dataTask` 或 `URLSession.AsyncBytes` 进行流式读取
+- 解析以 `data:` 开头的行，按行或双换行符 `\n\n` 划分独立事件
+- 事件数据格式为：`{ directory, payload: { type, properties } }`
 
-**生命周期**：
-- 前台：建立/恢复连接
-- 后台：主动断开（iOS 限制）
-- 恢复：先 REST 全量拉取 (health, sessions, messages, status)，再重建 SSE
+**生命周期管理**：
+- 前台状态：建立或恢复 SSE 连接
+- 后台状态：主动断开连接以遵守 iOS 系统后台限制
+- 恢复流程：回到前台时，先通过 REST API 全量拉取最新数据（health、sessions、messages、status），随后重建 SSE 连接
 
 #### 3.3 错误与重连
 
-- 网络错误：展示 Toast，不 crash
-- SSE 断开：按指数退避重连，上限 30s
-- Server 不可达：Settings 显示 Disconnected，Chat/Files 显示占位提示
+- 网络异常：弹出 Toast 提示用户，严禁引发 App 崩溃（crash）
+- SSE 意外断开：采用指数退避算法（exponential backoff）尝试重连，重连间隔上限为 30s
+- 服务端不可达：Settings 页面状态标识为 Disconnected，Chat 和 Files 页面展示对应的占位提示
 
 #### 3.4 SSE 鲁棒性
 
-- 解析：API 使用单行 `data:`，当前实现已满足
-- 请求头：建议添加 `Accept: text/event-stream`、`Cache-Control: no-cache`
-- 重连：可选，现有轮询 + 前台恢复已覆盖主要场景
+- 数据解析：服务端 API 目前采用单行 `data:` 输出格式，现有解析逻辑已能满足需求
+- 请求头配置：建议在请求中明确指定 `Accept: text/event-stream` 与 `Cache-Control: no-cache`
+- 重连：可选——现有轮询与前台恢复已覆盖主要场景
 
 ### 3.5 Host Profiles 与 Transport 抽象
 
-多 host 支持把“连接哪个 OpenCode 环境”和“如何到达这个环境”分开。Host 指一个 OpenCode 环境；transport 指访问路径。Direct 覆盖 LAN、Tailscale / VPN、HTTPS public server。SSH Tunnel 覆盖通过 SSH gateway 和 assigned remote port 访问私有 OpenCode 容器。
+引入多 host 支持的目的是解耦“连接哪个 OpenCode 环境”与“通过何种路径到达该环境”。其中，Host 代表一个具体的 OpenCode 运行环境，Transport 则代表底层网络传输路径。Direct 传输模式覆盖局域网直连、Tailscale / VPN 以及公网 HTTPS 服务；SSH Tunnel 模式则用于通过 SSH gateway 及分配的 remote port 访问内网隔离的 OpenCode 容器。
 
 **数据模型（设计稿）**：
 
@@ -216,18 +216,18 @@ struct BasicAuthConfig: Codable, Equatable {
 
 **持久化边界**：
 
-- `HostProfile` 列表存 UserDefaults 或轻量 JSON store；密码只保存 Keychain reference，不进入 JSON。
-- SSH private key 默认是 device-level key，由现有 `SSHKeyManager` 管理，多个 SSH profiles 复用同一个 public key。后续如需高安全模式，再增加 per-profile key override。
-- TOFU known host 仍按 SSH gateway `host:port` 绑定，而不是按 profile name 绑定。多个 profiles 指向同一 gateway 时共享同一个 trusted host fingerprint。
+- `HostProfile` 列表保存在 UserDefaults 或轻量 JSON store 中；敏感密码仅存储 Keychain 引用标识（Keychain reference），不直接写入 JSON 数据。
+- SSH 私钥（private key）默认采用设备级密钥（device-level key），由现有的 `SSHKeyManager` 统一管理，多个 SSH profile 共享同一个公钥。未来若需要更高安全隔离级别，可在此基础上增加针对单 profile 的 key override 配置。
+- TOFU（Trust On First Use）的 known host 记录依然严格按 SSH gateway 的 `host:port` 进行绑定，而非绑定到 profile 名称。当多个 profile 指向同一个 gateway 时，它们将共享同一份受信任的 host 指纹信息。
 
 **切换流程**：
 
-1. 保存当前 profile 的 `lastUsedAt` 和必要 runtime 状态。
-2. 停止当前 SSE。
-3. 如果当前 profile 使用 SSH，断开当前 SSH tunnel。
-4. 应用新 profile 的 `serverURL`、Basic Auth 和 transport config。
-5. 清空当前 session selection，并按新 host 重新拉取 health / projects / sessions。
-6. 如果新 profile 是 SSH Tunnel，可尝试自动连接 tunnel；失败进入 `.error` 状态但不阻塞 Settings。
+1. 记录并保存当前 profile 的 `lastUsedAt` 及必要的运行时状态。
+2. 停止当前活跃的 SSE 事件流。
+3. 若当前 profile 启用了 SSH，主动断开现有的 SSH tunnel。
+4. 加载并应用目标 profile 的 `serverURL`、Basic Auth 认证信息与 transport 配置。
+5. 清空当前的 session 选择状态，并针对新 host 重新拉取 health、projects 及 sessions 数据。
+6. 若新 profile 属于 SSH Tunnel 模式，尝试自动建立 tunnel 连接；若建连失败则进入 `.error` 状态，但保持 Settings 界面可交互，不阻塞用户操作。
 
 **Import Host Config 格式（不含 secret）**：
 
@@ -257,11 +257,11 @@ Direct 示例：
 }
 ```
 
-Import 不包含 private key、provider token、Basic Auth password。SSH import 后仍要求用户复制本设备 public key 给管理员。
+Import 配置中不包含私钥（private key）、provider token 或 Basic Auth 密码。在完成 SSH 配置导入后，仍要求用户复制本设备的 public key 并提交给管理员。
 
 **Host Config 导出格式**：
 
-Host Config JSON 从已保存的 `HostProfile` 生成，`HostProfile` 仍是持久化 source of truth。客户端不把原始 import JSON 作为第二份状态保存。导出的 JSON 用于用户和管理员对照配置，但必须排除 secret 和 runtime-only 字段：Basic Auth password、Keychain password ID、SSH private key、`SSHTunnelConfig.isEnabled` 都不能进入导出结果。
+Host Config JSON 直接由已持久化的 `HostProfile` 动态生成，系统始终以 `HostProfile` 作为唯一的持久化单一事实来源（source of truth），客户端不会将原始导入的 JSON 留存为第二份状态副本。导出的 JSON 主要方便用户与管理员核对网络参数，因此必须严格剔除所有敏感密钥与运行时临时字段：Basic Auth 密码、Keychain password ID、SSH 私钥以及 `SSHTunnelConfig.isEnabled` 均不得包含在导出结果中。
 
 **Runtime 连接诊断**：
 
@@ -286,15 +286,15 @@ enum ConnectionPhase: String, Codable {
 }
 ```
 
-`ConnectionDiagnostic` 属于 app runtime 状态，不需要长期持久化。切换 host 时重置；`testConnection()` 和 refresh/bootstrap 流程负责更新 phase、message 和 recovery hint。UI 只展示用户可执行文案，不能直接暴露 `APIError error 0`、`NSURLErrorDomain -1004` 这类底层错误字符串。常见映射包括：Basic Auth 401/403 → 检查用户名密码；connection refused / cannot connect → 检查服务器地址、网络或本地 tunnel；SSH tunnel error → 检查 gateway、设备 public key 和 assigned remote port。
+`ConnectionDiagnostic` 属于纯粹的 App 运行时状态，不需要进行本地持久化。每次切换 host 时该状态会自动重置；后续由 `testConnection()` 测试流程以及整体的 refresh/bootstrap 初始化流程负责更新 phase、message 与 recovery hint。在 UI 呈现上，必须将底层错误转化为用户可理解且具备行动指导意义的操作提示，严禁直接展示类似 `APIError error 0` 或 `NSURLErrorDomain -1004` 等裸底层错误字符串。常见的映射规则包括：Basic Auth 401/403 映射为检查用户名与密码；connection refused / cannot connect 映射为检查服务器地址、当前网络连接或本地 tunnel 状态；SSH tunnel error 则映射为检查 gateway 状态、设备公钥配置及分配的 remote port。
 
 **Host Detail 交互契约**：
 
-Hosts list row 的主点击行为是打开 Host Detail，不是直接切换 host。切换 host 必须通过详情页里的 `Use This Host` 显式动作完成。Host Detail 读取当前 `HostProfile` 字段展示 Direct / SSH Tunnel 的完整关键配置，并提供 `Copy Host Config JSON`。SSH Tunnel profile 额外提供 `Copy This Device Public Key`。
+点击 Hosts 列表项的主交互行为是进入 Host Detail 详情页，而非直接触发 host 切换。切换 host 必须在详情页内通过点击 `Use This Host` 按钮显式完成。Host Detail 会根据当前 `HostProfile` 的配置，完整展示 Direct 或 SSH Tunnel 的各项关键参数，并提供 `Copy Host Config JSON` 复制功能；对于 SSH Tunnel profile，页面还会额外提供 `Copy This Device Public Key` 便捷入口。
 
 ### 3.6 SSH 隧道架构
 
-用于远程访问场景，通过 SSH gateway 中转到用户独立的 OpenCode 服务。
+主要用于远程访问场景，借助 SSH gateway 作为中间跳板，安全转发到用户独立的 OpenCode 实例。
 
 **网络拓扑**：
 
@@ -346,9 +346,9 @@ enum SSHKeyManager {
 
 **安全考虑**：
 
-1. **私钥保护**：使用 `kSecAttrAccessibleWhenUnlocked`，只在设备解锁时可访问
-2. **公钥传输**：用户手动复制，app 不通过网络传输公钥
-3. **TOFU**：首次连接自动信任并保存服务器 fingerprint（按 host:port 绑定），后续 mismatch 直接失败并提示 reset trusted host
+1. **私钥保护**：采用 `kSecAttrAccessibleWhenUnlocked` 策略存储，确保仅在设备处于解锁状态时才允许访问私钥
+2. **公钥传输**：采用用户手动复制粘贴的方式，App 不会通过任何网络接口主动上传公钥
+3. **TOFU**：首次连接自动信任并保存服务器指纹（按 host:port 绑定），后续 mismatch 直接失败并提示 reset trusted host
 4. **超时**：连接超时 30 秒，自动断开并提示
 
 **错误处理**：
@@ -360,24 +360,24 @@ enum SSHKeyManager {
 | 认证失败 | 私钥不匹配 | "认证失败，请确认公钥已正确添加" |
 
 **SSH UX 补充**：
-- 在 Settings 内显示 setup guide：复制设备公钥给管理员，并填写管理员返回的 assigned remote port
+- 在 Settings 页面内提供配置引导（setup guide）：指导用户将设备公钥复制给管理员，并填入管理员返回的 assigned remote port
 - 公钥复制入口常驻，不依赖 tunnel enable 状态
 - SSH Host Profile 的 `Test Connection` 先建立 SSH tunnel，并等本地 `127.0.0.1:4096` listener ready；只有 tunnel ready 后才请求 `/global/health`
 - tunnel 建立失败时把 SSH 错误写入 connection error，避免只显示 disconnected
 
 ### 3.7 Markdown 图片解析契约
 
-Markdown 文本里出现的图片分两类：
+Markdown 文本中引用的图片通常分为两类：
 
-1. **公网 URL**：`https://...`，可交给默认网络图片加载路径
-2. **workspace 内相对图片**：如 `../assets/timeline_40d.png`，必须由客户端自己解析
+1. **公网 URL**：以 `https://...` 开头，直接交给系统的标准网络图片加载链路处理即可
+2. **workspace 内相对图片**：例如 `../assets/timeline_40d.png`，这类图片必须由客户端自行完成路径解析与拉取
 
-对第二类，RFC 约束如下：
+针对第二类，RFC 约束如下：
 
 - Files 预览和 Chat 消息渲染都必须支持 repo 内相对图片，不允许出现“文件预览能看见、聊天里看不见”的双重语义
-- 相对图片路径解析必须同时考虑 `markdownFilePath` 和 `workspaceDirectory`
-- 解析后的最终文件请求必须是 **workspace-relative path**，再交给 `/file/content` API 获取内容
-- Chat 场景允许先把图片转换为 `data:` URI 再交给 MarkdownUI；但一旦采用这条路径，渲染端必须显式挂载能处理 `data:` URL 的 image provider
+- 解析相对图片路径时，必须综合结合当前文档路径 `markdownFilePath` 与工作区根目录 `workspaceDirectory` 进行计算
+- 路径归一化后的最终请求参数必须为 **workspace-relative path**，再交给 `/file/content` API 获取内容
+- Chat 渲染场景下，允许预先将图片内容转为 `data:` URI 后再传递给 MarkdownUI；但若采用该方案，渲染端必须显式挂载能处理 `data:` URL 的 image provider
 - Files 预览场景若使用 `imageBaseURL`，仍然需要在 image provider 中做 workspace-relative 归一化，避免绝对路径穿透到 API 层
 
 这条契约的目标是：无论同一份 Markdown 报告从 Files 打开，还是由 AI 在 Chat 中直接输出，都应该得到一致的图片结果。
@@ -406,9 +406,9 @@ final class AppState {
 }
 ```
 
-- 单一 `AppState` 持有全局状态，子 store 委托 session/message/file/todo 等
-- SSE 事件根据 `type` 分发，更新对应字段
-- View 通过 `@Environment` 或直接注入访问
+- 单一 `AppState` 持有全局状态，各业务子 store 分别接管 session/message/file/todo 等领域逻辑
+- SSE 事件根据 `type` 类型分发，实时更新关联状态字段
+- SwiftUI View 层可通过 `@Environment` 依赖注入或显式传参访问状态对象
 
 #### 4.1 Agent 数据模型
 
@@ -471,7 +471,7 @@ var customProjectPath: String = ""        // "Custom path" 时用户输入的路
 **流程**：
 1. 连接成功后调用 `GET /project` 填充 Picker
 2. 用户选择：从列表选 → `selectedProjectWorktree = project.worktree`；选 "Custom path" → 展开 TextField，`selectedProjectWorktree = customProjectPath`
-3. `loadSessions()` 时：若 `selectedProjectWorktree != nil`，请求 `GET /session?directory=xxx&limit=100`；否则 `GET /session`（无参数）
+3. `loadSessions()` 时：若 `selectedProjectWorktree != nil`，请求 `GET /session?directory=xxx&limit=100`；否则发起无参数的 `GET /session` 请求
 4. 持久化：`selectedProjectWorktree`、`customProjectPath` 存 UserDefaults
 
 #### 4.3.1 Session 创建仅限 Server default
