@@ -1,6 +1,6 @@
 # iOS 客户端能力协议
 
-> 最后核对：2026-08-24 · 对照 OpenCodeClient 当前实现
+> 最后核对：2026-08-23 · 对照 OpenCodeClient 当前实现
 
 ## 协议范围
 
@@ -32,7 +32,7 @@
 
 - 模型返回 health export action 后，`requestClientCapability` 判断权限：`allow_always` 直接 dispatch；否则写入 `pendingClientCapabilityRequest`，由 `ClientCapabilityPermissionView` 弹出，提供三选一：Allow once / Allow always / Cancel。
 - `dispatchClientCapability` 先 `createPending`（生成 `callbackID`、落 Pending），再通过 `UIApplication.shared.open` 打开 launch URL；launch 失败则删除 Pending 并抛 `launchFailed`。
-- 同一 capability 若已有未过期的 Pending 或 Outbox 记录，`createPending` 抛 `duplicateCapability`，UI 显示 "already running"，不会重复发起。
+- 同一 capability 若已有未过期的 Pending 或 Outbox 记录，`createPending` 抛 `duplicateCapability`，UI 提示该能力已在进行（L10n `capabilityAlreadyRunning`），不会重复发起。
 - 每条记录绑定发起时的 Host Profile：存 `hostProfileID` 与 `hostConfigurationSignature`（对 transport、serverURL、basic auth username、SSH 配置做 SHA-256）。
 
 ## Launch Contract
@@ -65,7 +65,7 @@ opencode://client-action-return/<callback-id>?status=success&sent=1240&upserted=
 | `failed` | 否 | `sleep,vitals,body,lifestyle,activity,workouts` 的无重复子集，逗号分隔 |
 | `error_code` | 否 | `category_failure`、`export_in_progress`、`invalid_server_url` |
 
-未知字段、重复字段、query 为空、userinfo、port、fragment、额外 path 段、非 canonical callback ID（percent-decoded 后须与自身一致）或非法枚举全部拒绝。现有 session deep link（`opencode://session/<id>`）仍禁止任何 query、fragment、userinfo、port，且 session ID 须以 `ses_` 开头、含 `[A-Za-z0-9_-]`。
+未知字段、重复字段、query 为空、userinfo、port、fragment、额外 path 段、非 canonical callback ID（percent-decoded 后须与自身一致）或非法枚举全部拒绝。现有 session deep link（`opencode://session/<id>`）仍禁止任何 query、fragment、userinfo、port，且 session ID 须以 `ses_` 开头、总长 5–256 字符、仅含 `[A-Za-z0-9_-]`。
 
 ## 本地持久化（2026-08 核对更新）
 
@@ -104,7 +104,7 @@ Pending 记录（`version: 1`）保存 `callbackID`、`capability`、`hostProfil
 - 若存在但 assistant 尚未完成 → 保留 Outbox，每 2 秒轮询一次，最多 15 次；仍未完成则标记 continuation 失败（Outbox 保留）。
 - 若 assistant 已完成 → 验收 structured response 并删除 Outbox。
 
-提交与验收都受 host/route 守卫约束：须 `isConnected`、`currentHostProfileID` 与记录一致、`hostConfigurationSignature` 与当前配置一致、且 `deepLinkRouteID` 代际未变；Host Profile 被删除或配置变更时删除 Outbox 并报 `continuationFailed`。
+提交与验收都受 host/route 守卫约束：须 `isConnected`、`currentHostProfileID` 与记录一致、`hostConfigurationSignature` 与当前配置一致、且 `deepLinkRouteID` 代际未变；Host Profile 被删除时静默删除 Outbox（不报错）；配置变更（signature 不匹配）时删除 Outbox 并报 `continuationFailed`。
 
 401、403、404 为 terminal failure（删除 Outbox 并标记失败），其余传输或 5xx 错误保留 Outbox 待重连或过期后重试。
 

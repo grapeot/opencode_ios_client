@@ -38,4 +38,4 @@ OpenCode iOS 可以把 Car Mode 的受限 structured action 交给当前 iPhone 
 - 永久授权可以撤销，取消和仅这次允许不会持久化。
 - Maps action 和 `opencode://session/<id>` 行为不回归。
 
-正式 URL、存储和 continuation 合同见 [`client_capabilities_protocol.md`](client_capabilities_protocol.md)，实现取舍见 [`client_capabilities_rfc.md`](client_capabilities_rfc.md)。
+正式 URL、存储和 continuation 合同见 [`protocol.md`](protocol.md)，实现取舍见 [`rfc.md`](rfc.md)。

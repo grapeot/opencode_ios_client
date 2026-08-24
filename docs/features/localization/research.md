@@ -69,7 +69,7 @@
   - `OpenCodeClient/OpenCodeClient/Views/Chat/ToolPartView.swift`
   - `OpenCodeClient/OpenCodeClient/Views/Chat/PatchPartView.swift`
   - `OpenCodeClient/OpenCodeClient/Views/Chat/ContextUsageView.swift`
-  - `OpenCodeClient/OpenCodeClient/Views/SplitSidebarView.swift`
+  - `OpenCodeClient/OpenCodeClient/ContentView.swift`（sidebar 部分，原 `SplitSidebarView.swift` 已并入）
   - `OpenCodeClient/OpenCodeClient/Views/FilesTabView.swift`
   - `OpenCodeClient/OpenCodeClient/Views/Chat/PermissionCardView.swift`
 - 错误相关路径目前是混合模式：
@@ -125,7 +125,6 @@
 
 - `OpenCodeClient/OpenCodeClient/Views/Chat/ChatTabView.swift`
 - `OpenCodeClient/OpenCodeClient/Views/SessionListView.swift`
-- `OpenCodeClient/OpenCodeClient/Views/SplitSidebarView.swift`
 - `OpenCodeClient/OpenCodeClient/Views/FilesTabView.swift`
 - `OpenCodeClient/OpenCodeClient/ContentView.swift`（Preview 空态）
 

@@ -8,7 +8,7 @@
 //  gatekeeper: markdown-it parses, Temml emits MathML, and DOMPurify sanitizes. No network at render
 //  time; all renderer assets ship in the app bundle.
 //
-//  See docs/Markdown_Web_Preview_RFC.md.
+//  See docs/archive/2026-06_markdown_web_preview_rfc.md.
 //
 
 import SwiftUI

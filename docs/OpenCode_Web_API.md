@@ -1,6 +1,6 @@
 # OpenCode Web API 技术文档
 
-> 最后核对：2026-08-24 · origin/dev @ 03bba464d
+> 最后核对：2026-08-23 · origin/dev @ 03bba464d
 
 > 本文档基于 OpenCode 官方文档 (opencode.ai/docs) 及 anomalyco/opencode 仓库源码整理，用于了解 OpenCode 的 Web 界面与 HTTP API 能力。
 
@@ -38,13 +38,13 @@ opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `--port` | 监听端口 | `0`（随机端口） |
+| `--port` | 监听端口 | `0`（自动：先试 4096，被占用则取随机空闲端口） |
 | `--hostname` | 监听地址 | `127.0.0.1` |
 | `--mdns` | 启用 mDNS 发现（自动绑定 `0.0.0.0`） | `false` |
 | `--mdns-domain` | mDNS 域名 | `opencode.local` |
 | `--cors` | 允许的 CORS 来源（可传多次） | `[]` |
 
-> 实际部署中常通过 config 的 `server.port` 固定为 `4096`。CLI 参数优先级高于 config。
+> 未指定端口时 server 先尝试 4096，被占用则取随机空闲端口（`startWithPortFallback` 逻辑）。可用 `--port` 或 config 的 `server.port` 显式指定，显式 `--port` 优先级最高；config 的 `server.port` 可选、无默认值。
 
 ### 2.2 Web 界面（API + 内置 Web UI）
 
@@ -52,7 +52,7 @@ opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
 opencode web
 ```
 
-- 默认在 `127.0.0.1` 随机端口启动
+- 默认在 `127.0.0.1` 启动，端口先试 4096、被占用则取随机空闲端口
 - 自动打开浏览器
 - 与 `opencode serve` 共享同一 API
 
@@ -192,7 +192,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 
 | Method | Path | 说明 | 响应 |
 |--------|------|------|------|
-| GET | `/find?pattern=<pat>` | 文本搜索（ripgrep） | Match 数组 |
+| GET | `/find?pattern=<pat>` | 文本搜索（ripgrep） | `LegacyMatch[]` |
 | GET | `/find/file?query=<q>` | 按名称查找文件/目录 | `string[]` |
 | GET | `/find/symbol?query=<q>` | 工作区符号搜索（LSP） | `Symbol[]` |
 | GET | `/file?path=<path>` | 列出文件/目录 | `FileNode[]` |
@@ -228,7 +228,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 | POST | `/experimental/worktree` | 创建 git worktree 并运行启动脚本 | `WorktreeInfo` |
 | DELETE | `/experimental/worktree` | 删除 worktree 及其分支 | `boolean` |
 | POST | `/experimental/worktree/reset` | 重置 worktree 分支到主分支 | `boolean` |
-| GET | `/experimental/session` | 跨项目列出所有会话（支持 `roots`, `start`, `cursor`, `search`, `limit`, `archived`） | `SessionGlobalInfo[]` |
+| GET | `/experimental/session` | 跨项目列出所有会话（支持 `roots`, `start`, `cursor`, `search`, `limit`, `archived`） | `GlobalSession[]` |
 | POST | `/experimental/session/:sessionID/background` | 将阻塞的 subagent 转入后台 | `boolean` |
 | GET | `/experimental/resource` | 获取所有 MCP resources | `{ [name]: MCPResource }` |
 
@@ -269,7 +269,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 | POST | `/experimental/workspace` | 创建 workspace | `WorkspaceInfo` |
 | POST | `/experimental/workspace/sync-list` | 注册 adapter 返回的缺失 workspace | `204 No Content` |
 | GET | `/experimental/workspace/status` | workspace 连接状态 | `WorkspaceConnectionStatus[]` |
-| DELETE | `/experimental/workspace/:id` | 删除 workspace | `WorkspaceInfo` |
+| DELETE | `/experimental/workspace/:id` | 删除 workspace | `WorkspaceInfo`（或空响应） |
 | POST | `/experimental/workspace/warp` | 将 session 同步历史移入/移出 workspace（body: `{ id, sessionID, copyChanges }`） | `204 No Content` |
 
 ### 4.17 Project Copy（实验性）
@@ -303,7 +303,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 | POST | `/tui/publish` | 发布 TUI 事件（union: promptAppend / commandExecute / toastShow / sessionSelect） | `boolean` |
 | POST | `/tui/select-session` | 导航 TUI 到指定 session | `boolean` |
 | GET | `/tui/control/next` | 等待下一个控制请求 | `TuiRequest` |
-| POST | `/tui/control/response` | 响应控制请求（body: `{ body }`） | `boolean` |
+| POST | `/tui/control/response` | 响应控制请求（body 为待响应的控制请求内容，服务端按 unknown 透传） | `boolean` |
 
 ### 4.20 Events
 
@@ -319,7 +319,7 @@ OPENCODE_SERVER_USERNAME=admin OPENCODE_SERVER_PASSWORD=secret opencode web
 
 ### 4.22 V2 API（`/api` 前缀）
 
-V2 API 由 `@opencode-ai/protocol` 包定义，面向 SDK 和跨 workspace 客户端。所有路径以 `/api` 为前缀。
+V2 API 由 `@opencode-ai/protocol` 包定义，面向 SDK 和跨 workspace 客户端。绝大多数路径以 `/api` 为前缀；project-copy 组例外，沿用 `/experimental/project/:projectID/copy` 路径。
 
 | Method | Path | 说明 |
 |--------|------|------|
@@ -429,10 +429,10 @@ curl "http://localhost:4096/file/content?path=src/main.go"
 # 列出 sessions
 curl "http://localhost:4096/api/session?limit=10&order=desc"
 
-# 发送 prompt
+# 发送 prompt（V2 用 prompt.text，不是 legacy 的 parts 形状）
 curl -X POST http://localhost:4096/api/session/:sessionID/prompt \
   -H "Content-Type: application/json" \
-  -d '{"parts":[{"type":"text","text":"Hello"}]}'
+  -d '{"prompt": {"text": "Hello"}}'
 ```
 
 ---
