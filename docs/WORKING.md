@@ -4,10 +4,19 @@
 
 ## 当前状态
 
-- **最后更新**：2026-08-14
-- **分支**：`feat/glm-5.3`
-- **编译/测试**：pending
-- **Phase**：GLM 5.2 → 5.3; Gemini 3.6 Flash → 3.7 Flash; Grok 4.5 → 4.6; remove GPT-5.6 Sol Fast preset
+- **最后更新**：2026-08-24
+- **分支**：`fix/send-failure-visibility`
+- **编译/测试**：build 通过；全套 OpenCodeClientTests 通过（含 8 个新测试）
+- **Phase**：确定性 ID 发送对账 + 行内发送失败可见性（supersedes #89, closes #81）
+
+### 2026-08-24 — 确定性 messageID + 行内发送失败横幅（supersedes #89，closes #81）
+
+- **背景**：issue #81 报告 OpenCode 1.15 `prompt_async` 因缺 `messageID` 触发 `SQLITE_CONSTRAINT_NOTNULL` 静默失败。上游已修复（`input.messageID ?? MessageID.ascending()`，实测 1.18.16 接受旧 payload），但两个问题仍在：optimistic 消息双 ID 对账靠文本/时间戳启发式；异步失败（204 后 turn 崩掉）UI 无限等待、零反馈。
+- **cherry-pick PR #89（guyq1997）并适配**：`promptAsync` 带 `messageID` + `directory` query；`createSession` 补 `directory`；`makeServerID(prefix:)` 生成 `msg_<uuid>`。偏离原 PR：砍掉 `partID`——client 不消费 part id，且 `part_` 前缀不符合现 server `PartID` schema（要求 `prt`）。
+- **确定性 ID 对账**：optimistic 行直接用发送给 server 的真实 `msg_` id；`loadMessages` 删除文本归一化/plugin 前缀 hasSuffix/60s 时间窗/`keepPending` busy 门控（~34 行），改为 `MessageStore.pendingOptimisticMessageIDs` 纯 ID 成员对账；server 落库后 pending 自动收敛，失败行保留文本供复制重发。
+- **行内失败横幅（不弹窗）**：同步失败（HTTP 抛错）保留 optimistic 行 + 行内红字横幅，替代旧 `sendError` 弹窗路径；异步失败（SSE `session.error`，此前落入 `default: break` 静默丢弃）命中当前 session 时标记 pending 行失败并 `loadMessages` 对账，reason 取 error.name + 首个非空行（截断 300 字符）。assistant 行级错误仍走既有行内横幅（`errorMessageForDisplay`），互补不重复。
+- **端到端验证**：本地 origin/dev 临时 server 实测——带确定性 messageID 的 payload 落库 id 与 client 一致；无 API key 场景 server 发出 `session.error`（`ProviderAuthError`）且 wire 形状与解码一致。
+- **测试**：新增 8 个（ID 去重/保留、确定性 ID 发送、同步失败横幅、session.error 命中/他 session 过滤/无 pending 行/undecodable 回退）；3 个启发式时代测试改写为 ID 语义；rollback 测试改为"保留行 + 行内失败"语义。
 
 ### 2026-08-14 — GLM 5.3 + Gemini 3.7 Flash + Grok 4.6 model preset upgrade
 
