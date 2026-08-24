@@ -147,9 +147,45 @@ extension AppState {
                let decoded = try? JSONDecoder().decode([TodoItem].self, from: todosData) {
                 sessionTodos[sessionID] = decoded
             }
+        case "session.error":
+            let eventSessionID = props["sessionID"]?.value as? String
+            if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
+                // prompt_async acknowledges with 204 before the turn runs, so
+                // an async failure only surfaces through this event. Mark the
+                // still-pending optimistic row as failed (inline banner, no
+                // alert) and reconcile; turns that already persisted an
+                // assistant row surface their error through that row instead.
+                let reason = Self.sessionErrorDisplayReason(properties: props)
+                if let pendingID = messageStore.pendingOptimisticMessageIDs.min() {
+                    messageStore.markSendFailed(messageID: pendingID, reason: reason)
+                    messageStore.untrackPendingOptimisticMessages([pendingID])
+                }
+                await loadMessages()
+            }
         default:
             break
         }
+    }
+
+    /// Builds a short inline-banner reason from a session.error payload
+    /// (`error: {name, data}`). Server causes can be long multi-line dumps;
+    /// keep the first meaningful line, bounded.
+    nonisolated static func sessionErrorDisplayReason(properties: [String: AnyCodable]) -> String {
+        let fallback = L10n.t(.errorOperationFailed)
+        guard let errorObject = properties["error"]?.value as? [String: Any],
+              JSONSerialization.isValidJSONObject(errorObject),
+              let jsonData = try? JSONSerialization.data(withJSONObject: errorObject),
+              let decoded = try? JSONDecoder().decode(Message.MessageError.self, from: jsonData) else {
+            return fallback
+        }
+        let raw = decoded.message ?? decoded.name
+        let firstLine = raw
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first(where: { !$0.isEmpty }) ?? raw
+        let prefix = decoded.name.isEmpty ? "" : "\(decoded.name): "
+        let text = prefix + firstLine
+        return String(text.prefix(300))
     }
 
     func updateSessionActivity(sessionID: String, previous: SessionStatus?, current: SessionStatus) {

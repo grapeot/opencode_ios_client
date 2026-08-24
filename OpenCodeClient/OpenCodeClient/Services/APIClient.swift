@@ -161,10 +161,16 @@ actor APIClient {
         return try JSONDecoder().decode(MessageWithParts.self, from: responseData)
     }
 
-    func createSession(title: String? = nil) async throws -> Session {
+    func createSession(title: String? = nil, directory: String? = nil) async throws -> Session {
         let body = title.map { ["title": $0] } ?? [:]
         let data = try JSONEncoder().encode(body)
-        let (responseData, _) = try await makeRequest(path: "/session", method: "POST", body: data)
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] }
+        let (responseData, _) = try await makeRequest(
+            path: "/session",
+            method: "POST",
+            queryItems: queryItems,
+            body: data
+        )
         return try JSONDecoder().decode(Session.self, from: responseData)
     }
 
@@ -302,8 +308,17 @@ actor APIClient {
         return try? decoder.decode(type, from: data)
     }
 
-    func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment] = [], agent: String = "build", model: Message.ModelInfo?) async throws {
+    func promptAsync(
+        sessionID: String,
+        messageID: String,
+        text: String,
+        attachments: [ComposerImageAttachment] = [],
+        agent: String = "build",
+        model: Message.ModelInfo?,
+        directory: String?
+    ) async throws {
         struct PromptBody: Encodable {
+            let messageID: String
             let parts: [PartInput]
             let agent: String
             let model: ModelInput?
@@ -334,12 +349,19 @@ actor APIClient {
         }
         parts.append(contentsOf: attachments.map { .file($0) })
         let body = PromptBody(
+            messageID: messageID,
             parts: parts,
             agent: agent,
             model: model.map { .init(providerID: $0.providerID, modelID: $0.modelID) }
         )
         let bodyData = try JSONEncoder().encode(body)
-        let (_, response) = try await makeRequest(path: "/session/\(sessionID)/prompt_async", method: "POST", body: bodyData)
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] }
+        let (_, response) = try await makeRequest(
+            path: "/session/\(sessionID)/prompt_async",
+            method: "POST",
+            queryItems: queryItems,
+            body: bodyData
+        )
         if let http = response as? HTTPURLResponse, http.statusCode != 204 {
             throw APIError.httpError(statusCode: http.statusCode, data: Data())
         }
@@ -723,12 +745,12 @@ protocol APIClientProtocol: Actor {
     func projectCurrent() async throws -> Project?
     func sessions(directory: String?, limit: Int) async throws -> [Session]
     func session(sessionID: String) async throws -> Session
-    func createSession(title: String?) async throws -> Session
+    func createSession(title: String?, directory: String?) async throws -> Session
     func updateSession(sessionID: String, title: String) async throws -> Session
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
-    func promptAsync(sessionID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?) async throws
+    func promptAsync(sessionID: String, messageID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?, directory: String?) async throws
     func promptStructured(sessionID: String, messageID: String?, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts
     func abort(sessionID: String) async throws
     func sessionStatus() async throws -> [String: SessionStatus]

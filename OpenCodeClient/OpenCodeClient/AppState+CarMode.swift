@@ -103,7 +103,7 @@ extension AppState {
         }
 
         guard canCreateSession else { throw CarModeError.selectedProjectUnsupported }
-        let session = try await apiClient.createSession(title: "Car Mode")
+        let session = try await apiClient.createSession(title: "Car Mode", directory: nil)
         carSessionsByContext[carContextKey] = CarSessionRecord(
             sessionID: session.id,
             lastHandledAssistantMessageID: nil,

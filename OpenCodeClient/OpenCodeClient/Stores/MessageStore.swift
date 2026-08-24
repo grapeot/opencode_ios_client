@@ -20,6 +20,39 @@ final class MessageStore {
     var streamingPartTexts: [String: String] = [:]
     var streamingReasoningPart: Part? = nil
     private var streamingDraftMessageIDs: Set<String> = []
+    /// Optimistic user rows whose server confirmation has not been observed yet.
+    /// Rows are keyed by the deterministic `msg_` id sent with the prompt, so
+    /// reconciliation against server data is pure id membership.
+    var pendingOptimisticMessageIDs: Set<String> = []
+    /// Send failures surfaced inline under the affected user row (no alert).
+    /// Keyed by message id; cleared when the row is confirmed or removed.
+    var failedSendReasonsByID: [String: String] = [:]
+
+    func isPendingOptimisticMessage(_ messageID: String) -> Bool {
+        pendingOptimisticMessageIDs.contains(messageID)
+    }
+
+    func trackPendingOptimisticMessage(_ messageID: String) {
+        pendingOptimisticMessageIDs.insert(messageID)
+    }
+
+    func untrackPendingOptimisticMessages(_ messageIDs: Set<String>) {
+        pendingOptimisticMessageIDs.subtract(messageIDs)
+    }
+
+    func markSendFailed(messageID: String, reason: String) {
+        failedSendReasonsByID[messageID] = reason
+    }
+
+    func clearSendFailure(messageID: String) {
+        failedSendReasonsByID.removeValue(forKey: messageID)
+    }
+
+    func pruneSendFailures(loadedMessageIDs: Set<String>) {
+        for id in failedSendReasonsByID.keys where loadedMessageIDs.contains(id) {
+            failedSendReasonsByID.removeValue(forKey: id)
+        }
+    }
 
     var hasActiveStreaming: Bool {
         streamingReasoningPart != nil || !streamingPartTexts.isEmpty || !streamingDraftMessageIDs.isEmpty
