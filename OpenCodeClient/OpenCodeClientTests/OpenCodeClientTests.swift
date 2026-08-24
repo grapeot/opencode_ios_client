@@ -1737,6 +1737,68 @@ struct MessageRenderingHeuristicTests {
         #expect(MessageRowView.hasMarkdownSyntax("```swift\nprint(1)\n```") == true)
     }
 
+    @Test func renderableTextRejectsWhitespaceOnlyParts() {
+        #expect(MessageRowView.isRenderableText("\n\n\n\n\n\n") == false)
+        #expect(MessageRowView.isRenderableText("   \n\t  ") == false)
+        #expect(MessageRowView.isRenderableText("") == false)
+        #expect(MessageRowView.isRenderableText(nil) == false)
+    }
+
+    @Test func renderableTextAcceptsContentWithSurroundingWhitespace() {
+        #expect(MessageRowView.isRenderableText("\n\nhello\n\n\n") == true)
+        #expect(MessageRowView.isRenderableText("real content") == true)
+        #expect(MessageRowView.isRenderableText("  padded  ") == true)
+    }
+
+    @Test func assistantBlocksSkipsWhitespaceOnlyTextParts() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"\\n\\n\\n\\n\\n\\n"}
+            """,
+            """
+            {"id":"p2","messageID":"m1","sessionID":"s1","type":"text","text":"\\n\\nreal content\\n\\n\\n"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.count == 1)
+        guard case .text(let part) = blocks[0] else {
+            Issue.record("expected a single text block")
+            return
+        }
+        #expect(part.id == "p2")
+    }
+
+    @Test func assistantBlocksMergesToolRunAcrossWhitespaceTextPart() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"t1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash"}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"\\n\\n"}
+            """,
+            """
+            {"id":"t2","messageID":"m1","sessionID":"s1","type":"tool","tool":"read"}
+            """,
+            """
+            {"id":"p2","messageID":"m1","sessionID":"s1","type":"text","text":"done"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.count == 2)
+        guard case .cards(let cards) = blocks[0] else {
+            Issue.record("expected a cards block")
+            return
+        }
+        #expect(cards.map(\.id) == ["t1", "t2"])
+        guard case .text(let part) = blocks[1] else {
+            Issue.record("expected a text block")
+            return
+        }
+        #expect(part.id == "p2")
+    }
+
     @Test func copyableMessageTextJoinsTextPartsAcrossMarkdownBlocks() throws {
         let json = """
         {
@@ -1793,6 +1855,123 @@ struct MessageRenderingHeuristicTests {
         #expect(text.count > 12_000)
         #expect(MessageRowView.isLargeMessage(text) == true)
         #expect(MessageRowView.largeMessagePreview(text).count == 12_000)
+    }
+}
+
+struct MessageThinkLeakNormalizationTests {
+
+    @Test func normalizedTextCutsLeakedTailToLastStandaloneClose() {
+        let input = "Let me start with the DB. First, check if the DB exists.\n"
+            + MessageRowView.thinkCloseTag + "\n\n"
+            + "Now let me check the actual data."
+        #expect(MessageRowView.normalizedText(input) == "Now let me check the actual data.")
+    }
+
+    @Test func normalizedTextRemovesPureThinkingTail() {
+        let input = "Still thinking about the schema...\n"
+            + MessageRowView.thinkCloseTag + "\n\n"
+        #expect(MessageRowView.normalizedText(input).isEmpty)
+    }
+
+    @Test func normalizedTextCutsTailEvenWhenTailQuotesATagPair() {
+        // The leaked tail itself quotes a full open/close example pair; the
+        // pair must not consume the real final close, or the leading tail text
+        // would survive into the response body.
+        let input = "Leaked thinking, quoting the markers: "
+            + MessageRowView.thinkOpenTag + "\n"
+            + "example thinking\n"
+            + MessageRowView.thinkCloseTag + "\n\n"
+            + MessageRowView.thinkCloseTag + "\n\n"
+            + "Real response."
+        #expect(MessageRowView.normalizedText(input) == "Real response.")
+    }
+
+    @Test func normalizedTextCutsDanglingOpenTagToTheEnd() {
+        let input = "Some real answer.\n"
+            + MessageRowView.thinkOpenTag + "\n"
+            + "truncated thinking..."
+        #expect(MessageRowView.normalizedText(input) == "Some real answer.")
+    }
+
+    @Test func normalizedTextLeavesInlineTagsUntouched() {
+        let input = "The markers are `\(MessageRowView.thinkOpenTag)` and `\(MessageRowView.thinkCloseTag)` inline."
+        #expect(MessageRowView.normalizedText(input) == input)
+    }
+
+    @Test func normalizedTextLeavesFencedTagsUntouched() {
+        let input = "```swift\n"
+            + MessageRowView.thinkOpenTag + "\n"
+            + "code content\n"
+            + MessageRowView.thinkCloseTag + "\n"
+            + "```\n"
+            + "Real response."
+        #expect(MessageRowView.normalizedText(input) == input)
+    }
+
+    @Test func normalizedTextTildeFenceIgnoresPartialFenceLines() {
+        // A line that merely starts with the fence char must not close the fence.
+        let input = "~~~\n"
+            + MessageRowView.thinkCloseTag + "\n"
+            + MessageRowView.thinkCloseTag + " info\n"
+            + "~~~\n"
+            + "After."
+        #expect(MessageRowView.normalizedText(input) == input)
+    }
+
+    @Test func copyableTextNormalizesAssistantAndKeepsUserVerbatim() throws {
+        let json = """
+        {
+          "info": { "id": "message-1", "sessionID": "session-1", "role": "assistant", "time": { "created": 1 } },
+          "parts": [
+            { "id": "part-1", "sessionID": "session-1", "messageID": "message-1", "type": "text", "text": "\\n\\n\\n" },
+            { "id": "part-2", "sessionID": "session-1", "messageID": "message-1", "type": "text", "text": "leaked tail\\n\\u003C/think\\u003E\\n\\n" },
+            { "id": "part-3", "sessionID": "session-1", "messageID": "message-1", "type": "text", "text": "Real answer." }
+          ]
+        }
+        """
+        let assistant = try JSONDecoder().decode(MessageWithParts.self, from: Data(json.utf8))
+        #expect(MessageRowView.copyableText(for: assistant) == "Real answer.")
+
+        let userJson = """
+        {
+          "info": { "id": "message-2", "sessionID": "session-1", "role": "user", "time": { "created": 2 } },
+          "parts": [
+            { "id": "part-4", "sessionID": "session-1", "messageID": "message-2", "type": "text", "text": "Discuss `\\u003C/think\\u003E` please\\n\\n\\n" }
+          ]
+        }
+        """
+        let user = try JSONDecoder().decode(MessageWithParts.self, from: Data(userJson.utf8))
+        #expect(MessageRowView.copyableText(for: user) == "Discuss `\u{3C}/think\u{3E}` please")
+    }
+
+    @Test func assistantBlocksSkipThinkingTailPartsAndKeepMerging() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"t1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash"}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"leaked tail\\n\\u003C/think\\u003E\\n\\n"}
+            """,
+            """
+            {"id":"t2","messageID":"m1","sessionID":"s1","type":"tool","tool":"read"}
+            """,
+            """
+            {"id":"p2","messageID":"m1","sessionID":"s1","type":"text","text":"done"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.count == 2)
+        guard case .cards(let cards) = blocks[0] else {
+            Issue.record("expected a cards block")
+            return
+        }
+        #expect(cards.map(\.id) == ["t1", "t2"])
+        guard case .text(let part) = blocks[1] else {
+            Issue.record("expected a text block")
+            return
+        }
+        #expect(part.id == "p2")
     }
 }
 
@@ -2492,11 +2671,11 @@ struct ModelSelectionPersistenceTests {
             #expect(state.modelPresets.contains(where: {
                 $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
             }))
-            #expect(state.modelPresets.last?.id == "xai/grok-4.6")
             #expect(state.modelPresets.contains(where: {
                 $0.id == "xai/grok-4.6" && $0.displayName == "Grok 4.6"
             }))
-            #expect(state.modelPresets.last?.displayName == "Grok 4.6")
+            #expect(state.modelPresets.last?.id == "qwen38/qwen3.8-27b")
+            #expect(state.modelPresets.last?.displayName == "Qwen 3.8 27B")
         }
     }
 }

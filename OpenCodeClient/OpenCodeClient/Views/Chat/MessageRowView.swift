@@ -31,7 +31,7 @@ struct MessageRowView: View {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
     }
 
-    private enum AssistantBlock: Identifiable {
+    enum AssistantBlock: Identifiable {
         case text(Part)
         case cards([Part])
         case attachment(Part)
@@ -59,7 +59,7 @@ struct MessageRowView: View {
         ToolCardClassifier.isFileOperation(part)
     }
 
-    private var assistantBlocks: [AssistantBlock] {
+    static func buildAssistantBlocks(parts: [Part]) -> [AssistantBlock] {
         var blocks: [AssistantBlock] = []
         var buffer: [Part] = []
 
@@ -69,7 +69,7 @@ struct MessageRowView: View {
             buffer.removeAll(keepingCapacity: true)
         }
 
-        for part in message.parts {
+        for part in parts {
             if part.isReasoning { continue }
             if part.isTool || part.isPatch {
                 buffer.append(part)
@@ -77,6 +77,7 @@ struct MessageRowView: View {
             }
             if part.isStepStart || part.isStepFinish { continue }
             if part.isText {
+                if normalizedText(part.text).isEmpty { continue }
                 flushBuffer()
                 blocks.append(.text(part))
             } else if part.isFile {
@@ -91,16 +92,25 @@ struct MessageRowView: View {
         return blocks
     }
 
+    private var assistantBlocks: [AssistantBlock] {
+        Self.buildAssistantBlocks(parts: message.parts)
+    }
+
     @ViewBuilder
     private func markdownText(_ text: String, isUser: Bool) -> some View {
+        let trimmed = isUser
+            ? text.trimmingCharacters(in: .whitespacesAndNewlines)
+            : Self.normalizedText(text)
         let font = isUser ? DesignTypography.bodyProminent : DesignTypography.body
-        if Self.isLargeMessage(text) {
-            LargeMessagePreview(text: text, preview: Self.largeMessagePreview(text))
+        if trimmed.isEmpty {
+            EmptyView()
+        } else if Self.isLargeMessage(trimmed) {
+            LargeMessagePreview(text: trimmed, preview: Self.largeMessagePreview(trimmed))
                 .font(font)
                 .textSelection(.enabled)
-        } else if shouldRenderMarkdown(text) {
+        } else if shouldRenderMarkdown(trimmed) {
             ResolvedMarkdownView(
-                text: text,
+                text: trimmed,
                 state: state,
                 workspaceDirectory: workspaceDirectory,
                 handlesWorkspaceLinks: !isUser,
@@ -109,7 +119,7 @@ struct MessageRowView: View {
                 .font(font)
                 .textSelection(.enabled)
         } else {
-            Text(text)
+            Text(trimmed)
                 .font(font)
                 .textSelection(.enabled)
         }
@@ -197,16 +207,102 @@ struct MessageRowView: View {
         return trimmed.contains("\n\n")
     }
 
+    static func isRenderableText(_ text: String?) -> Bool {
+        guard let text else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // qwen3-family reasoning delimiters. Built from unicode escapes so tooling
+    // that strips reasoning spans from source files cannot mangle the literals.
+    static let thinkOpenTag = "\u{3C}think\u{3E}"
+    static let thinkCloseTag = "\u{3C}/think\u{3E}"
+
+    /// Normalizes an assistant text part by removing leaked thinking content.
+    /// See docs/qwen38_rendering_fix.md (batch 2). Never apply to user text —
+    /// users may legitimately quote the tags.
+    ///
+    /// SGLang's one-shot qwen3 reasoning parser ends reasoning at the FIRST
+    /// think-close token it sees, anywhere (inline included, zero code-fence
+    /// awareness). When the model's own thinking quotes the tag, the remaining
+    /// thinking plus the real close token flow into the text part. The real
+    /// closing boundary is therefore the LAST standalone-line close token;
+    /// everything up to and including it is a leaked thinking tail and is cut.
+    /// A dangling standalone open line (stream truncated before the close) cuts
+    /// the rest of the part. Tags inside code fences and inline (mid-line) tags
+    /// are left untouched.
+    static func normalizedText(_ text: String?) -> String {
+        guard let text, !text.isEmpty else { return "" }
+        let lines = text.components(separatedBy: "\n")
+
+        // Pass 1: fence tracking. A fence opens on a line whose trimmed content
+        // starts with ``` or ~~~ (up to 3 leading spaces; the opening line may
+        // carry an info string) and closes only on a line made purely of the
+        // same fence character, at least as long as the opener. Lines inside a
+        // fence (including the fence lines) are never tag boundaries.
+        var protectedLines = [Bool](repeating: false, count: lines.count)
+        var inFence = false
+        var fenceChar: Character = " "
+        var fenceLength = 3
+        for index in lines.indices {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if inFence {
+                protectedLines[index] = true
+                let pureFence = !trimmed.isEmpty
+                    && trimmed.count >= fenceLength
+                    && trimmed.allSatisfy { $0 == fenceChar }
+                if pureFence { inFence = false }
+            } else if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                let char = trimmed[trimmed.startIndex]
+                let run = trimmed.prefix { $0 == char }.count
+                guard run >= 3 else { continue }
+                inFence = true
+                fenceChar = char
+                fenceLength = run
+                protectedLines[index] = true
+            }
+        }
+
+        func isStandaloneTag(_ index: Int, _ tag: String) -> Bool {
+            !protectedLines[index]
+                && lines[index].trimmingCharacters(in: .whitespaces) == tag
+        }
+
+        // Pass 2: leaked thinking tail — cut everything up to and including
+        // the last standalone close line. A real response, if any, follows it.
+        var keptStart = 0
+        for index in lines.indices.reversed() where isStandaloneTag(index, Self.thinkCloseTag) {
+            keptStart = index + 1
+            break
+        }
+
+        // Pass 3: dangling standalone open in the remainder (stream truncated
+        // before the close) — cut from that line to the end.
+        var keptEnd = lines.count
+        for index in keptStart..<lines.count where isStandaloneTag(index, Self.thinkOpenTag) {
+            keptEnd = index
+            break
+        }
+
+        return lines[keptStart..<keptEnd]
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func structuredSpeechFallback(for message: MessageWithParts) -> String? {
         guard !message.parts.contains(where: { $0.isText }) else { return nil }
         return message.info.structured?.speech
     }
 
     static func copyableText(for message: MessageWithParts) -> String {
+        let isAssistant = message.info.isAssistant
         let text = message.parts
             .filter(\.isText)
-            .compactMap(\.text)
-            .filter { !$0.isEmpty }
+            .compactMap { part -> String? in
+                let normalized = isAssistant
+                    ? normalizedText(part.text)
+                    : (part.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return normalized.isEmpty ? nil : normalized
+            }
             .joined(separator: "\n\n")
         if !text.isEmpty { return text }
         return structuredSpeechFallback(for: message) ?? ""
@@ -327,7 +423,7 @@ struct MessageRowView: View {
                     .frame(width: 4)
                 
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(message.parts.filter { $0.isText }, id: \.id) { part in
+                    ForEach(message.parts.filter { $0.isText && Self.isRenderableText($0.text) }, id: \.id) { part in
                         markdownText(part.text ?? "", isUser: true)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)

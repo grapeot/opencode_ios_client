@@ -19,6 +19,7 @@ struct ModelPreset: Codable, Identifiable {
         case "GPT-5.6 Terra Fast": return "GPT-TF"
         case "GPT-5.6 Luna": return "GPT-L"
         case "Grok 4.6": return "Grok"
+        case "Qwen 3.8 27B": return "Qwen"
         case let name where name.contains("Gemini"): return "Gemini"
         case let name where name.contains("GPT"): return "GPT"
         default: return displayName
