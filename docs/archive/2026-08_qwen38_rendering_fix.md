@@ -33,7 +33,7 @@
 | 含 `\n\n\n` 的 text part | 24% | 极少 |
 | 平均每条 text 换行数 | 12.15 | 2.5–3.2 |
 
-再用 live API（`GET /session/:id/message`，Basic auth `opencode:restart_Web@`；credential 在 workspace `.env` 的 `OPENCODE_PASSWORD`）复核：当前 session（`ses_fcfbd043bffe417xHHYrV0gw37`，活跃中、计数为移动目标）评审时点有 58 条 text part 含 think 标签；但对照干净 qwen38 session（`ses_fcfbff756ffe`：219 条 text、161 条纯空白、**0 条 think**）可知，当前 session 的 think 标签大多来自本次排查讨论标签本身，加少量 `<think> / </think>` 切分尾巴（SGLang 流式在 reasoning / content 边界切错位置）。所以 think 标签泄漏是 **session 特有 + 少量切分尾巴**，不是 qwen38 的系统性输出问题。
+再用 live API（`GET /session/:id/message`，Basic auth `opencode:<OPENCODE_PASSWORD>`；credential 在 workspace `.env` 的 `OPENCODE_PASSWORD`）复核：当前 session（`ses_fcfbd043bffe417xHHYrV0gw37`，活跃中、计数为移动目标）评审时点有 58 条 text part 含 think 标签；但对照干净 qwen38 session（`ses_fcfbff756ffe`：219 条 text、161 条纯空白、**0 条 think**）可知，当前 session 的 think 标签大多来自本次排查讨论标签本身，加少量 `<think> / </think>` 切分尾巴（SGLang 流式在 reasoning / content 边界切错位置）。所以 think 标签泄漏是 **session 特有 + 少量切分尾巴**，不是 qwen38 的系统性输出问题。
 
 server 只是原样存储、原样返回模型输出，不做归一化——归一化是客户端的职责。
 

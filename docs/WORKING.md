@@ -62,7 +62,7 @@
 - 首次调用显示本地授权 sheet，支持仅这次、以后自动允许和取消；Settings 可撤销 Health export 自动授权。
 - OpenCode 在打开 Health App 前写入 15 分钟 Pending；合法 callback 原子收敛到 6 小时 Outbox。重复、过期、损坏 callback 不产生第二条 continuation。
 - Callback 先本地验收，不依赖 server 连接；continuation 使用记录的 Host、Car context 和 session，以及确定性 message ID + query-before-retry，不读取当前 Chat selection。
-- 正式产品、实现和 wire contract 分别维护在 `client_capabilities_prd.md`、`client_capabilities_rfc.md` 和 `client_capabilities_protocol.md`；canonical agent 入口为 `skills/client_capabilities.md`。
+- 正式产品、实现和 wire contract 分别维护在 `docs/features/client_capabilities/prd.md`、`docs/features/client_capabilities/rfc.md` 和 `docs/features/client_capabilities/protocol.md`；canonical agent 入口为 `skills/client_capabilities.md`。
 - 验证覆盖严格 parser、canonical handoff URL、store lifecycle、allow-once、原 session continuation、callback 停止语义和 permission fixture UI。固定 iPhone simulator `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8` 的顺序 build 与全量 test 通过；352 个 Swift Testing tests 和 37 个 UI tests 通过，4 个 opt-in UI tests 按预期 skip。
 - 真机 E2E 验收后收敛两处 UX：授权页三个短按钮改为等宽横排，英文最多在按钮内折成两行；callback continuation 进入 Car Mode 原有 `waitingReply`，显示红色“停止响应”主按钮，取消时同时 abort session 并删除对应 Outbox，避免后台已提交但前台看起来无事发生。
 
@@ -134,7 +134,7 @@
   - "语义类必须用复合选择器"（dogfood 抓到的特异性坑）
   - "**真正指标是新概念引入速率而非字数**"（low cognitive burden 的根本框架）
   - "状态卡当百科条目写"被列为反模式，明确卡片/表格/`<details>` 的边界
-- **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md。
+- **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md（2026-08 移入 `docs/archive/`）。
 
 ### 2026-06-20 — Ollama Cloud GLM 5.2 model preset
 
@@ -226,7 +226,7 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 
 ### Markdown Web Preview（2026-06-14 启动）
 
-> 设计见 `docs/Markdown_Web_Preview_PRD.md` / `docs/Markdown_Web_Preview_RFC.md`。本轮交付 Phase 0/1/2。
+> 设计见 `docs/archive/2026-06_markdown_web_preview_prd.md` / `docs/archive/2026-06_markdown_web_preview_rfc.md`。本轮交付 Phase 0/1/2。
 > 决策：图片走 data URI 复用 `MarkdownImageResolver`；Web 非默认模式；编排见 RFC §12.5。
 > 编译/测试约束：`xcodebuild build` 与 `xcodebuild test` 必须串行（共享 `build.db`）。
 > 关键文件：`OpenCodeClient/OpenCodeClient/Views/FileContentView.swift`（mode 切换）、`Utils/MarkdownImageResolver.swift`（data URI 复用）。
@@ -553,7 +553,7 @@ inline SVG/wide table/安全过滤/相对链接全部验证。截图存 `outputs
 - [x] **Activity Row 提前 completed（二次）修复**：`running/completed` 判定改为“当前 turn + busy 状态优先”，不再依赖 `completedAt == nil`，避免仍在运行时误显示 completed
 - [x] **SSH UX 修复**：默认 Server Address 改为 `127.0.0.1:4096`；开启 SSH 后配置变更自动重连；View Public Key 在 enabled 场景不再空白；`Set Server Address` CTA 改为显式蓝色按钮
 - [x] **Settings 关闭按钮一致性**：sheet 右上角改为英文 `Close`，避免英文界面出现中文“关闭”
-- [x] **Localization 规划**：新增 `docs/dev_localization.md`，给出 en/zh-Hans 双语落地路线与分批迁移计划
+- [x] **Localization 规划**：新增 `docs/features/localization/research.md`（原 `docs/dev_localization.md`），给出 en/zh-Hans 双语落地路线与分批迁移计划
 - [x] **SSH 前后台自动恢复修复**：进入后台时主动断开 SSH/SSE；回前台恢复时若健康检查失败，强制重建一次 SSH tunnel 再 refresh
 - [x] **SSE 重连状态补偿**：SSE bootstrap 与 `server.connected` 事件时补拉 `/session/status`，避免仅补消息不补状态
 - [x] **Busy 卡死/Abort 无效感修复**：poll 合并时对“缺失于 poll 结果但本地仍 busy/retry”的会话降级为 idle，并同步清理 streaming；abort 后立即补拉状态+消息

@@ -3,7 +3,8 @@
 ## Folder structure
 
 - `OpenCodeClient/` — the only shipped app tree (Xcode project lives here).
-- `docs/` — PRD/RFC/working notes; not runtime code.
+- `docs/` — main living docs (PRD / RFC / WORKING / tests / design / API / lessons) plus `docs/features/` (per-feature docs) and `docs/archive/` (one-off work records, frozen). Not runtime code. Index: `docs/README.md`.
+- `skills/` — agent-facing operational skills (client capabilities, simulator operation, Tier 4 UI test tasks and prompts).
 - `scripts/` — small Python helpers; use `.venv/` locally (gitignored).
 - `opencode-official/` — optional upstream OpenCode server checkout for integration work (gitignored, not required to build the app).
 

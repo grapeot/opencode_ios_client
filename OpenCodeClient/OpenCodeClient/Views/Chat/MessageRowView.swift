@@ -218,7 +218,7 @@ struct MessageRowView: View {
     static let thinkCloseTag = "\u{3C}/think\u{3E}"
 
     /// Normalizes an assistant text part by removing leaked thinking content.
-    /// See docs/qwen38_rendering_fix.md (batch 2). Never apply to user text —
+    /// See docs/archive/2026-08_qwen38_rendering_fix.md (batch 2). Never apply to user text —
     /// users may legitimately quote the tags.
     ///
     /// SGLang's one-shot qwen3 reasoning parser ends reasoning at the FIRST
