@@ -928,7 +928,7 @@ enum L10n {
         Key.activityRunningCommands.rawValue: "Running commands",
         Key.activityGatheringThoughts.rawValue: "Gathering thoughts",
 
-        Key.configureTitle.rawValue: "Configure",
+        Key.configureTitle.rawValue: "Model & Agent",
         Key.configureModel.rawValue: "Model",
         Key.configureAgent.rawValue: "Agent",
         Key.configureNoAgents.rawValue: "No agents available",
@@ -1388,7 +1388,7 @@ enum L10n {
         Key.activityRunningCommands.rawValue: "执行命令",
         Key.activityGatheringThoughts.rawValue: "整理思路",
 
-        Key.configureTitle.rawValue: "配置",
+        Key.configureTitle.rawValue: "模型与智能体",
         Key.configureModel.rawValue: "模型",
         Key.configureAgent.rawValue: "智能体",
         Key.configureNoAgents.rawValue: "暂无可用智能体",
