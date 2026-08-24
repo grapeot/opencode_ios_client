@@ -132,13 +132,37 @@ struct ChatToolbarView: View {
         .sheet(isPresented: $showConfigSheet) {
             NavigationStack {
                 List {
-                    if !state.dynamicModelPresets.isEmpty {
+                    // Sections are built inline (not inside a custom view) so
+                    // List sees the section structure directly; wrapping
+                    // Sections in an intermediate View renders them as one
+                    // unstyled row (blank models, broken taps).
+                    if state.dynamicModelPresets.isEmpty {
+                        Section(L10n.t(.configureModel)) {
+                            ForEach(Array(state.pickerModelPresets.enumerated()), id: \.element.id) { index, preset in
+                                modelRow(index: index, preset: preset)
+                            }
+                        }
+                    } else {
                         Section {
                             TextField(L10n.t(.configureModelSearchPlaceholder), text: $modelSearchText)
                                 .autocorrectionDisabled()
                         }
+                        ForEach(modelGroups, id: \.providerID) { group in
+                            Section(
+                                header: Text(state.providerDisplayNames[group.providerID] ?? group.providerID)
+                            ) {
+                                ForEach(group.entries, id: \.preset.id) { entry in
+                                    modelRow(index: entry.index, preset: entry.preset)
+                                }
+                            }
+                        }
+                        if modelGroups.isEmpty {
+                            Section {
+                                Text(L10n.t(.configureModelNoMatches))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
-                    ModelPickerSection(state: state, searchText: $modelSearchText)
 
                     Section(L10n.t(.configureAgent)) {
                         if state.isLoadingAgents {
@@ -193,7 +217,52 @@ struct ChatToolbarView: View {
 
     // MARK: - Model Picker
 
-    // Model rows live in ModelPickerSection (shared with Settings).
+    /// Picker entries grouped by provider, each carrying its index into the
+    /// FULL pickerModelPresets array (not the filtered one), so selection
+    /// stays correct while a search filter is active.
+    private var modelGroups: [(providerID: String, entries: [(index: Int, preset: ModelPreset)])] {
+        let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // Enumerate the full list first, then filter — indices stay stable.
+        let filtered = state.pickerModelPresets.enumerated().filter { _, preset in
+            query.isEmpty
+                || preset.displayName.lowercased().contains(query)
+                || preset.modelID.lowercased().contains(query)
+                || preset.providerID.lowercased().contains(query)
+        }
+        var byProvider: [String: [(Int, ModelPreset)]] = [:]
+        var order: [String] = []
+        for (idx, preset) in filtered {
+            let pid = preset.providerID
+            if byProvider[pid] == nil { order.append(pid) }
+            byProvider[pid]?.append((idx, preset))
+        }
+        return order.map { ($0, byProvider[$0] ?? []) }
+    }
+
+    private func modelRow(index: Int, preset: ModelPreset) -> some View {
+        Button {
+            state.setSelectedModelIndex(index)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.displayName)
+                    if preset.displayName != preset.modelID {
+                        Text(preset.modelID)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                if state.selectedModelIndex == index {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(DesignColors.Brand.primary)
+                }
+            }
+        }
+        .foregroundColor(.primary)
+        .accessibilityIdentifier("model-picker-row-\(preset.providerID)-\(preset.modelID)")
+    }
 
     // MARK: - Todo Button & Panel
 
