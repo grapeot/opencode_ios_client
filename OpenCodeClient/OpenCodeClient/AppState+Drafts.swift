@@ -4,6 +4,16 @@ import Foundation
 /// State fields (`draftInputsBySessionID`, `selectedModelIDBySessionID`)
 /// stay on `AppState` so SwiftUI observation works; only behavior moves.
 extension AppState {
+    func persistDraftInputs() {
+        if draftInputsBySessionID.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
+            return
+        }
+        if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
+            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
+        }
+    }
+
     func persistSelectedModelMap() {
         if selectedModelIDBySessionID.isEmpty {
             UserDefaults.standard.removeObject(forKey: Self.selectedModelBySessionKey)
@@ -27,13 +37,6 @@ extension AppState {
         } else {
             draftInputsBySessionID[sessionID] = cleaned
         }
-
-        if draftInputsBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
-            return
-        }
-        if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
-        }
+        persistDraftInputs()
     }
 }

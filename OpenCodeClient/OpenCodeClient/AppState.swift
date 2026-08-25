@@ -270,11 +270,17 @@ final class AppState {
         }
     }
 
-    // Unsent composer drafts per session.
-    var draftInputsBySessionID: [String: String] = [:]
+    var sessionScope = SessionScopedState()
 
-    // Selected model (providerID/modelID) per session.
-    var selectedModelIDBySessionID: [String: String] = [:]
+    var draftInputsBySessionID: [String: String] {
+        get { sessionScope.draftInputs }
+        set { sessionScope.draftInputs = newValue }
+    }
+
+    var selectedModelIDBySessionID: [String: String] {
+        get { sessionScope.selectedModelIDs }
+        set { sessionScope.selectedModelIDs = newValue }
+    }
 
     var hostProfiles: [HostProfile] = [] {
         didSet { saveHostProfiles() }
@@ -395,15 +401,25 @@ final class AppState {
     var deepLinkError: String?
     var deepLinkRouteID = UUID()
 
-    // Session activity (rendered in transcript; session-scoped)
-    var sessionActivities: [String: SessionActivity] = [:]
+    var sessionActivities: [String: SessionActivity] {
+        get { sessionScope.activities }
+        set { sessionScope.activities = newValue }
+    }
 
-    // Track when a session status was last updated via SSE.
-    var sessionStatusUpdatedAt: [String: Date] = [:]
+    var sessionStatusUpdatedAt: [String: Date] {
+        get { sessionScope.statusUpdatedAt }
+        set { sessionScope.statusUpdatedAt = newValue }
+    }
 
-    // Debounce session activity text changes (avoid rapid flipping).
-    var activityTextLastChangeAt: [String: Date] = [:]
-    var activityTextPendingTask: [String: Task<Void, Never>] = [:]
+    var activityTextLastChangeAt: [String: Date] {
+        get { sessionScope.activityTextLastChangeAt }
+        set { sessionScope.activityTextLastChangeAt = newValue }
+    }
+
+    var activityTextPendingTask: [String: Task<Void, Never>] {
+        get { sessionScope.activityTextPendingTask }
+        set { sessionScope.activityTextPendingTask = newValue }
+    }
 
     var currentSessionActivity: SessionActivity? {
         guard let sid = currentSessionID else { return nil }
@@ -579,8 +595,15 @@ final class AppState {
     /// Sentinel value when user selects "Custom path" option
     static let customProjectSentinel = "__custom__"
 
-    var pendingPermissions: [PendingPermission] = []
-    var pendingQuestions: [QuestionRequest] = []
+    var pendingPermissions: [PendingPermission] {
+        get { sessionScope.pendingPermissions }
+        set { sessionScope.pendingPermissions = newValue }
+    }
+
+    var pendingQuestions: [QuestionRequest] {
+        get { sessionScope.pendingQuestions }
+        set { sessionScope.pendingQuestions = newValue }
+    }
 
     var themePreference: String = "auto"  // "auto" | "light" | "dark"
     var _languagePreference: L10n.LanguagePreference = .system
@@ -689,9 +712,20 @@ final class AppState {
 
     // WAN optimization: page message history in fixed-size message batches.
     nonisolated private static let messagePageSize = 20
-    var loadedMessageLimitBySessionID: [String: Int] = [:]
-    var hasMoreHistoryBySessionID: [String: Bool] = [:]
-    var loadingOlderMessagesSessionIDs: Set<String> = []
+    var loadedMessageLimitBySessionID: [String: Int] {
+        get { sessionScope.loadedMessageLimit }
+        set { sessionScope.loadedMessageLimit = newValue }
+    }
+
+    var hasMoreHistoryBySessionID: [String: Bool] {
+        get { sessionScope.hasMoreHistory }
+        set { sessionScope.hasMoreHistory = newValue }
+    }
+
+    var loadingOlderMessagesSessionIDs: Set<String> {
+        get { sessionScope.loadingOlderMessages }
+        set { sessionScope.loadingOlderMessages = newValue }
+    }
 
     var selectedModel: ModelPreset? {
         pickerModelPresets.indices.contains(selectedModelIndex) ? pickerModelPresets[selectedModelIndex] : nil

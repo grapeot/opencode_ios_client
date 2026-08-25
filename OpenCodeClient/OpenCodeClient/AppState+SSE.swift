@@ -311,28 +311,13 @@ extension AppState {
     func clearSessionScopedCaches(sessionID: String) {
         sessionStatuses[sessionID] = nil
         sessionTodos[sessionID] = nil
-        sessionActivities[sessionID] = nil
-        sessionStatusUpdatedAt[sessionID] = nil
-        activityTextLastChangeAt[sessionID] = nil
-        activityTextPendingTask[sessionID]?.cancel()
-        activityTextPendingTask[sessionID] = nil
-        loadedMessageLimitBySessionID[sessionID] = nil
-        hasMoreHistoryBySessionID[sessionID] = nil
-        loadingOlderMessagesSessionIDs.remove(sessionID)
-        pendingPermissions.removeAll { $0.sessionID == sessionID }
+        sessionScope.remove(sessionID: sessionID)
 
         if streamingReasoningPart?.sessionID == sessionID {
             messageStore.streamingReasoningPart = nil
         }
 
-        draftInputsBySessionID[sessionID] = nil
-        if draftInputsBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
-        } else if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
-        }
-
-        selectedModelIDBySessionID[sessionID] = nil
+        persistDraftInputs()
         persistSelectedModelMap()
     }
 

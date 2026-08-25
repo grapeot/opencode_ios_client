@@ -310,9 +310,11 @@ extension AppState {
         partsByMessage = [:]
         sessionDiffs = []
         fileTreeRoot = []
-        pendingPermissions = []
         sessionStatuses = [:]
         sessionTodos = [:]
+        sessionScope.resetAll()
+        persistDraftInputs()
+        persistSelectedModelMap()
     }
 
     nonisolated static func passwordKeychainID(for profileID: UUID) -> String {
