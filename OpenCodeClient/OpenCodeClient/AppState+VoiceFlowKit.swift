@@ -134,13 +134,13 @@ extension AppState {
             aiBuilderLastTestedAt = Date()
 
             let sig = Self.aiBuilderSignature(baseURL: base, token: token)
-            UserDefaults.standard.set(sig, forKey: Self.aiBuilderLastOKSignatureKey)
-            UserDefaults.standard.set(aiBuilderLastTestedAt?.timeIntervalSince1970, forKey: Self.aiBuilderLastOKTestedAtKey)
+            defaults.set(sig, forKey: Self.aiBuilderLastOKSignatureKey)
+            defaults.set(aiBuilderLastTestedAt?.timeIntervalSince1970, forKey: Self.aiBuilderLastOKTestedAtKey)
         } catch {
             aiBuilderLastTestedAt = Date()
             aiBuilderConnectionOK = false
-            UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
-            UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
+            defaults.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
+            defaults.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
             switch error {
             case VoiceFlowError.missingToken:
                 aiBuilderConnectionError = L10n.t(.errorAiBuilderTokenEmpty)

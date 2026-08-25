@@ -133,7 +133,7 @@ final class AppState {
         get { _serverURL }
         set {
             _serverURL = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.serverURLKey)
+            defaults.set(newValue, forKey: Self.serverURLKey)
         }
     }
 
@@ -142,7 +142,7 @@ final class AppState {
         get { _username }
         set {
             _username = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.usernameKey)
+            defaults.set(newValue, forKey: Self.usernameKey)
         }
     }
 
@@ -191,8 +191,11 @@ final class AppState {
         deepLinkSessionResolver: ((String) async throws -> Session)? = nil,
         deepLinkHydratesSelection: Bool = true,
         clientCapabilityStore: ClientCapabilityCallbackStore = .applicationSupport(),
-        clientCapabilityURLOpener: (@MainActor (URL) async -> Bool)? = nil
+        clientCapabilityURLOpener: (@MainActor (URL) async -> Bool)? = nil,
+        userDefaults: UserDefaults = .standard
     ) {
+        self.defaults = userDefaults
+        self.sessionStore = SessionStore(defaults: userDefaults)
         self.apiClient = apiClient
         self.sseClient = sseClient
         self.sshTunnelManager = sshTunnelManager ?? SSHTunnelManager()
@@ -208,63 +211,63 @@ final class AppState {
             return false
             #endif
         }
-        if let storedServer = UserDefaults.standard.string(forKey: Self.serverURLKey) {
+        if let storedServer = defaults.string(forKey: Self.serverURLKey) {
             if storedServer == APIConstants.legacyDefaultServer {
                 _serverURL = APIClient.defaultServer
-                UserDefaults.standard.set(APIClient.defaultServer, forKey: Self.serverURLKey)
+                defaults.set(APIClient.defaultServer, forKey: Self.serverURLKey)
             } else {
                 _serverURL = storedServer
             }
         } else {
             _serverURL = APIClient.defaultServer
         }
-        _username = UserDefaults.standard.string(forKey: Self.usernameKey) ?? ""
+        _username = defaults.string(forKey: Self.usernameKey) ?? ""
         _password = KeychainHelper.load(forKey: Self.passwordKeychainKey) ?? ""
         loadHostProfilesFromStorageOrLegacy()
         applyCurrentHostProfileToRuntime(persistLegacy: false)
 
-        _aiBuilderBaseURL = UserDefaults.standard.string(forKey: Self.aiBuilderBaseURLKey) ?? "https://space.ai-builders.com/backend"
+        _aiBuilderBaseURL = defaults.string(forKey: Self.aiBuilderBaseURLKey) ?? "https://space.ai-builders.com/backend"
         _aiBuilderToken = KeychainHelper.load(forKey: Self.aiBuilderTokenKeychainKey) ?? ""
-        _aiBuilderCustomPrompt = UserDefaults.standard.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
-        _aiBuilderTerminology = UserDefaults.standard.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
+        _aiBuilderCustomPrompt = defaults.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
+        _aiBuilderTerminology = defaults.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
         _aiBuilderRecordingStrategy = VoiceFlowRecordingStrategy(
-            rawValue: UserDefaults.standard.string(forKey: Self.aiBuilderRecordingStrategyKey) ?? ""
+            rawValue: defaults.string(forKey: Self.aiBuilderRecordingStrategyKey) ?? ""
         ) ?? .gptLiveTranscribe
-        _selectedProjectWorktree = UserDefaults.standard.string(forKey: Self.selectedProjectWorktreeKey)
-        _customProjectPath = UserDefaults.standard.string(forKey: Self.customProjectPathKey) ?? ""
+        _selectedProjectWorktree = defaults.string(forKey: Self.selectedProjectWorktreeKey)
+        _customProjectPath = defaults.string(forKey: Self.customProjectPathKey) ?? ""
         _languagePreference = L10n.languagePreference
-        _aiUsageDashboardURL = UserDefaults.standard.string(forKey: Self.aiUsageDashboardURLKey) ?? ""
-        isCarModeEnabled = UserDefaults.standard.bool(forKey: Self.carModeEnabledKey)
+        _aiUsageDashboardURL = defaults.string(forKey: Self.aiUsageDashboardURLKey) ?? ""
+        isCarModeEnabled = defaults.bool(forKey: Self.carModeEnabledKey)
         healthExportPermission = ClientCapabilityPermission(
-            rawValue: UserDefaults.standard.string(forKey: Self.healthExportPermissionKey) ?? ""
+            rawValue: defaults.string(forKey: Self.healthExportPermissionKey) ?? ""
         ) ?? .ask
 
         // Restore last known-good AI Builder connection state if token/baseURL unchanged.
-        let storedSig = UserDefaults.standard.string(forKey: Self.aiBuilderLastOKSignatureKey)
+        let storedSig = defaults.string(forKey: Self.aiBuilderLastOKSignatureKey)
         let currentSig = Self.aiBuilderSignature(baseURL: _aiBuilderBaseURL, token: _aiBuilderToken)
         if let storedSig, storedSig == currentSig, !currentSig.isEmpty {
             aiBuilderConnectionOK = true
-            if let ts = UserDefaults.standard.object(forKey: Self.aiBuilderLastOKTestedAtKey) as? Double {
+            if let ts = defaults.object(forKey: Self.aiBuilderLastOKTestedAtKey) as? Double {
                 aiBuilderLastTestedAt = Date(timeIntervalSince1970: ts)
             }
         }
 
-        if let data = UserDefaults.standard.data(forKey: Self.draftInputsBySessionKey),
+        if let data = defaults.data(forKey: Self.draftInputsBySessionKey),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             draftInputsBySessionID = decoded
         }
 
-        if let data = UserDefaults.standard.data(forKey: Self.selectedModelBySessionKey),
+        if let data = defaults.data(forKey: Self.selectedModelBySessionKey),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             selectedModelIDBySessionID = decoded
         }
 
-        if let data = UserDefaults.standard.data(forKey: Self.carSessionsByContextKey),
+        if let data = defaults.data(forKey: Self.carSessionsByContextKey),
            let decoded = try? JSONDecoder().decode([String: CarSessionRecord].self, from: data) {
             carSessionsByContext = decoded
         }
 
-        if let data = UserDefaults.standard.data(forKey: Self.modelShortlistKey),
+        if let data = defaults.data(forKey: Self.modelShortlistKey),
            let decoded = try? JSONDecoder().decode([ModelShortlistItem].self, from: data) {
             modelShortlist = decoded
         }
@@ -287,7 +290,7 @@ final class AppState {
     }
 
     var currentHostProfileID: UUID = UUID() {
-        didSet { UserDefaults.standard.set(currentHostProfileID.uuidString, forKey: Self.currentHostProfileIDKey) }
+        didSet { defaults.set(currentHostProfileID.uuidString, forKey: Self.currentHostProfileIDKey) }
     }
 
     var currentHostProfile: HostProfile? {
@@ -308,12 +311,12 @@ final class AppState {
         get { _aiBuilderBaseURL }
         set {
             _aiBuilderBaseURL = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.aiBuilderBaseURLKey)
+            defaults.set(newValue, forKey: Self.aiBuilderBaseURLKey)
             aiBuilderConnectionOK = false
             aiBuilderConnectionError = nil
             aiBuilderLastTestedAt = nil
-            UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
-            UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
+            defaults.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
+            defaults.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
         }
     }
 
@@ -330,8 +333,8 @@ final class AppState {
             aiBuilderConnectionOK = false
             aiBuilderConnectionError = nil
             aiBuilderLastTestedAt = nil
-            UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
-            UserDefaults.standard.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
+            defaults.removeObject(forKey: Self.aiBuilderLastOKSignatureKey)
+            defaults.removeObject(forKey: Self.aiBuilderLastOKTestedAtKey)
         }
     }
 
@@ -346,7 +349,7 @@ final class AppState {
         get { _aiBuilderCustomPrompt }
         set {
             _aiBuilderCustomPrompt = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.aiBuilderCustomPromptKey)
+            defaults.set(newValue, forKey: Self.aiBuilderCustomPromptKey)
         }
     }
 
@@ -355,7 +358,7 @@ final class AppState {
         get { _aiBuilderTerminology }
         set {
             _aiBuilderTerminology = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.aiBuilderTerminologyKey)
+            defaults.set(newValue, forKey: Self.aiBuilderTerminologyKey)
         }
     }
 
@@ -364,7 +367,7 @@ final class AppState {
         get { _aiBuilderRecordingStrategy }
         set {
             _aiBuilderRecordingStrategy = newValue
-            UserDefaults.standard.set(newValue.rawValue, forKey: Self.aiBuilderRecordingStrategyKey)
+            defaults.set(newValue.rawValue, forKey: Self.aiBuilderRecordingStrategyKey)
         }
     }
 
@@ -377,7 +380,7 @@ final class AppState {
         get { _aiUsageDashboardURL }
         set {
             _aiUsageDashboardURL = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.aiUsageDashboardURLKey)
+            defaults.set(newValue, forKey: Self.aiUsageDashboardURLKey)
             aiUsageQuotaState = .idle
             aiUsageQuotaTestOK = false
             aiUsageQuotaError = nil
@@ -388,7 +391,7 @@ final class AppState {
     var aiUsageQuotaTestOK = false
     var aiUsageQuotaError: String?
     var isCarModeEnabled = false {
-        didSet { UserDefaults.standard.set(isCarModeEnabled, forKey: Self.carModeEnabledKey) }
+        didSet { defaults.set(isCarModeEnabled, forKey: Self.carModeEnabledKey) }
     }
     var isConnected: Bool = false
     var serverVersion: String?
@@ -463,7 +466,8 @@ final class AppState {
         case send
     }
 
-    let sessionStore = SessionStore()
+    let defaults: UserDefaults
+    let sessionStore: SessionStore
     let messageStore = MessageStore()
     let fileStore = FileStore()
     let todoStore = TodoStore()
@@ -569,7 +573,7 @@ final class AppState {
         get { _selectedProjectWorktree }
         set {
             _selectedProjectWorktree = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.selectedProjectWorktreeKey)
+            defaults.set(newValue, forKey: Self.selectedProjectWorktreeKey)
         }
     }
     var _selectedProjectWorktree: String?
@@ -578,7 +582,7 @@ final class AppState {
         get { _customProjectPath }
         set {
             _customProjectPath = newValue
-            UserDefaults.standard.set(newValue, forKey: Self.customProjectPathKey)
+            defaults.set(newValue, forKey: Self.customProjectPathKey)
         }
     }
     var _customProjectPath: String = ""
@@ -691,9 +695,9 @@ final class AppState {
     var healthExportPermission: ClientCapabilityPermission = .ask {
         didSet {
             if healthExportPermission == .ask {
-                UserDefaults.standard.removeObject(forKey: Self.healthExportPermissionKey)
+                defaults.removeObject(forKey: Self.healthExportPermissionKey)
             } else {
-                UserDefaults.standard.set(healthExportPermission.rawValue, forKey: Self.healthExportPermissionKey)
+                defaults.set(healthExportPermission.rawValue, forKey: Self.healthExportPermissionKey)
             }
         }
     }
@@ -977,7 +981,7 @@ final class AppState {
 
     func persistModelShortlist() {
         if let data = try? JSONEncoder().encode(modelShortlist) {
-            UserDefaults.standard.set(data, forKey: Self.modelShortlistKey)
+            defaults.set(data, forKey: Self.modelShortlistKey)
         }
     }
 

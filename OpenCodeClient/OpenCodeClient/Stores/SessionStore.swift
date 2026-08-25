@@ -12,20 +12,20 @@ final class SessionStore {
     var sessionStatuses: [String: SessionStatus] = [:]
 
     private static let currentSessionIDKey = "currentSessionID"
+    let defaults: UserDefaults
 
     var currentSessionID: String? {
         didSet {
-            // Persist to UserDefaults whenever it changes
             if let id = currentSessionID {
-                UserDefaults.standard.set(id, forKey: Self.currentSessionIDKey)
+                defaults.set(id, forKey: Self.currentSessionIDKey)
             } else {
-                UserDefaults.standard.removeObject(forKey: Self.currentSessionIDKey)
+                defaults.removeObject(forKey: Self.currentSessionIDKey)
             }
         }
     }
 
-    init() {
-        // Restore persisted session ID on init
-        currentSessionID = UserDefaults.standard.string(forKey: Self.currentSessionIDKey)
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        currentSessionID = defaults.string(forKey: Self.currentSessionIDKey)
     }
 }

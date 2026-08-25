@@ -6,21 +6,21 @@ import Foundation
 extension AppState {
     func persistDraftInputs() {
         if draftInputsBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.draftInputsBySessionKey)
+            defaults.removeObject(forKey: Self.draftInputsBySessionKey)
             return
         }
         if let data = try? JSONEncoder().encode(draftInputsBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.draftInputsBySessionKey)
+            defaults.set(data, forKey: Self.draftInputsBySessionKey)
         }
     }
 
     func persistSelectedModelMap() {
         if selectedModelIDBySessionID.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.selectedModelBySessionKey)
+            defaults.removeObject(forKey: Self.selectedModelBySessionKey)
             return
         }
         if let data = try? JSONEncoder().encode(selectedModelIDBySessionID) {
-            UserDefaults.standard.set(data, forKey: Self.selectedModelBySessionKey)
+            defaults.set(data, forKey: Self.selectedModelBySessionKey)
         }
     }
 
