@@ -27,10 +27,8 @@ struct CarModeFlowTests {
 
         let api = MockAPIClient()
         let speech = MockCarSpeechOutput()
-        let state = AppState(
+        let state = makeIsolatedAppState(
             apiClient: api,
-            sseClient: MockSSEClient(),
-            sshTunnelManager: SSHTunnelManager(),
             carSpeechOutput: speech
         )
         state.isConnected = true
@@ -110,7 +108,7 @@ struct CarModeFlowTests {
         }
 
         let api = MockAPIClient()
-        let state = AppState(apiClient: api, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = makeIsolatedAppState(apiClient: api)
         state.isConnected = true
         state.serverCurrentProjectWorktree = "/workspace/server-default"
         state.selectedProjectWorktree = "/workspace/selected"
@@ -166,7 +164,7 @@ struct CarModeFlowTests {
     }
 
     @Test @MainActor func carSessionContextSeparatesHostsAndWorkspaces() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = makeIsolatedAppState()
         state.serverCurrentProjectWorktree = "/workspace/a"
         let first = state.carContextKey
         state.serverCurrentProjectWorktree = "/workspace/b"
@@ -185,7 +183,7 @@ struct CarModeFlowTests {
             else { UserDefaults.standard.removeObject(forKey: AppState.selectedProjectWorktreeKey) }
         }
         let api = MockAPIClient()
-        let state = AppState(apiClient: api, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = makeIsolatedAppState(apiClient: api)
         state.isConnected = true
         state.serverCurrentProjectWorktree = "/workspace/server-default"
         state.selectedProjectWorktree = "/workspace/selected"
@@ -209,10 +207,8 @@ struct CarModeFlowTests {
         }
         let api = MockAPIClient()
         let speech = MockCarSpeechOutput()
-        let state = AppState(
+        let state = makeIsolatedAppState(
             apiClient: api,
-            sseClient: MockSSEClient(),
-            sshTunnelManager: SSHTunnelManager(),
             carSpeechOutput: speech
         )
         state.isConnected = true
@@ -263,7 +259,7 @@ struct CarModeFlowTests {
 
     @Test @MainActor func cancellingWithoutActiveTurnDoesNotAbortSession() async {
         let api = MockAPIClient()
-        let state = AppState(apiClient: api, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = makeIsolatedAppState(apiClient: api)
 
         await state.cancelCarInteraction()
 

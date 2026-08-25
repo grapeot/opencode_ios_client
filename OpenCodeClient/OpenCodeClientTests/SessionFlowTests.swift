@@ -323,42 +323,24 @@ struct ActivityTrackerTests {
 @Suite(.serialized)
 struct ModelSelectionPersistenceTests {
     private let selectedModelDefaultsKey = "selectedModelBySession"
-    private let currentSessionDefaultsKey = "currentSessionID"
 
-    private func withIsolatedModelSelectionDefaults(_ body: () -> Void) {
-        let originalModelData = UserDefaults.standard.data(forKey: selectedModelDefaultsKey)
-        let originalSessionID = UserDefaults.standard.string(forKey: currentSessionDefaultsKey)
-
-        UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
-        UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
-        defer {
-            if let originalModelData {
-                UserDefaults.standard.set(originalModelData, forKey: selectedModelDefaultsKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
-            }
-
-            if let originalSessionID {
-                UserDefaults.standard.set(originalSessionID, forKey: currentSessionDefaultsKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
-            }
+    @MainActor
+    private func makeState(selectedModels: [String: String] = [:], seedShortlist: Bool = false) -> AppState {
+        let defaults = UserDefaults(suiteName: "opencode.tests.modelsel.\(UUID().uuidString)")!
+        if !selectedModels.isEmpty, let encoded = try? JSONEncoder().encode(selectedModels) {
+            defaults.set(encoded, forKey: selectedModelDefaultsKey)
         }
-
-        body()
+        let state = AppState(userDefaults: defaults)
+        if seedShortlist {
+            state.addModelsToShortlist(state.modelPresets)
+        }
+        return state
     }
 
     @Test @MainActor func legacyGLMSelectionMapsToCurrentGLM53Preset() {
-        withIsolatedModelSelectionDefaults {
-            for legacyID in ["zai-coding-plan/glm-5.1", "zai-coding-plan/glm-5.2", "zai-coding-plan/glm-5-turbo"] {
-                UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
-                UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
+        for legacyID in ["zai-coding-plan/glm-5.1", "zai-coding-plan/glm-5.2", "zai-coding-plan/glm-5-turbo"] {
                 let sessionID = "session-glm"
-                let legacySelection = [sessionID: legacyID]
-                let encoded = try! JSONEncoder().encode(legacySelection)
-                UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
-
-                let state = AppState()
+                let state = makeState(selectedModels: [sessionID: legacyID], seedShortlist: true)
                 let session = Session(
                     id: sessionID,
                     slug: sessionID,
@@ -377,51 +359,13 @@ struct ModelSelectionPersistenceTests {
                 #expect(state.selectedModelIndex == 0)
                 #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.3")
                 #expect(state.modelPresets[state.selectedModelIndex].id == "zai-coding-plan/glm-5.3")
-            }
         }
     }
 
     @Test @MainActor func legacyGPTSelectionMapsToCurrentGPT56SolPreset() {
-        withIsolatedModelSelectionDefaults {
-            let sessionID = "session-gpt"
-            for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5", "openai/gpt-5.6-sol-pro", "openai/gpt-5.6-sol-fast"] {
-                UserDefaults.standard.removeObject(forKey: selectedModelDefaultsKey)
-                UserDefaults.standard.removeObject(forKey: currentSessionDefaultsKey)
-                let legacySelection = [sessionID: legacyID]
-                let encoded = try! JSONEncoder().encode(legacySelection)
-                UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
-
-                let state = AppState()
-                let session = Session(
-                    id: sessionID,
-                    slug: sessionID,
-                    projectID: "p1",
-                    directory: "/tmp",
-                    parentID: nil,
-                    title: sessionID,
-                    version: "1",
-                    time: .init(created: 0, updated: 100, archived: nil),
-                    share: nil,
-                    summary: nil
-                )
-
-                state.selectSession(session)
-
-                #expect(state.selectedModelIndex == 1)
-                #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.6 Sol")
-                #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.6-sol")
-            }
-        }
-    }
-
-    @Test @MainActor func legacyKimiSelectionMapsToCurrentOllamaGLMPreset() {
-        withIsolatedModelSelectionDefaults {
-            let sessionID = "session-glm-ollama"
-            let legacySelection = [sessionID: "ollama-cloud/kimi-k2.6"]
-            let encoded = try! JSONEncoder().encode(legacySelection)
-            UserDefaults.standard.set(encoded, forKey: selectedModelDefaultsKey)
-
-            let state = AppState()
+        let sessionID = "session-gpt"
+        for legacyID in ["openai/gpt-5.4", "openai/gpt-5.5", "openai/gpt-5.6-sol-pro", "openai/gpt-5.6-sol-fast"] {
+            let state = makeState(selectedModels: [sessionID: legacyID], seedShortlist: true)
             let session = Session(
                 id: sessionID,
                 slug: sessionID,
@@ -437,49 +381,66 @@ struct ModelSelectionPersistenceTests {
 
             state.selectSession(session)
 
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Ollama GLM 5.2")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "ollama-cloud/glm-5.2")
+            #expect(state.selectedModelIndex == 1)
+            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.6 Sol")
+            #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.6-sol")
         }
+    }
+
+    @Test @MainActor func legacyKimiSelectionMapsToCurrentOllamaGLMPreset() {
+        let sessionID = "session-glm-ollama"
+        let state = makeState(selectedModels: [sessionID: "ollama-cloud/kimi-k2.6"], seedShortlist: true)
+        let session = Session(
+            id: sessionID,
+            slug: sessionID,
+            projectID: "p1",
+            directory: "/tmp",
+            parentID: nil,
+            title: sessionID,
+            version: "1",
+            time: .init(created: 0, updated: 100, archived: nil),
+            share: nil,
+            summary: nil
+        )
+
+        state.selectSession(session)
+
+        #expect(state.modelPresets[state.selectedModelIndex].displayName == "Ollama GLM 5.2")
+        #expect(state.modelPresets[state.selectedModelIndex].id == "ollama-cloud/glm-5.2")
     }
 
     @Test @MainActor func defaultSelectionUsesGemini37Flash() {
-        withIsolatedModelSelectionDefaults {
-            let state = AppState()
+        let state = makeState()
 
-            #expect(state.selectedModelIndex == 2)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.7 Flash")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.7-flash")
-        }
+        #expect(state.selectedModelIndex == 2)
+        #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.7 Flash")
+        #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.7-flash")
     }
 
     @Test @MainActor func defaultPresetsIncludeDeepSeekLocal() {
-        withIsolatedModelSelectionDefaults {
-            let state = AppState()
+        let state = makeState()
 
-            #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
-            let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
-            #expect(preset?.displayName == "DeepSeek Local")
-        }
+        #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
+        let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
+        #expect(preset?.displayName == "DeepSeek Local")
     }
 
     @Test @MainActor func defaultPresetsExcludeRemovedGPTVariants() {
-        withIsolatedModelSelectionDefaults {
-            let state = AppState()
+        let state = makeState()
 
-            #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-pro" }))
-            #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-fast" }))
-            #expect(state.modelPresets.contains(where: {
-                $0.id == "openai/gpt-5.6-terra-fast" && $0.displayName == "GPT-5.6 Terra Fast"
-            }))
-            #expect(state.modelPresets.contains(where: {
-                $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
-            }))
-            #expect(state.modelPresets.contains(where: {
-                $0.id == "xai/grok-4.6" && $0.displayName == "Grok 4.6"
-            }))
-            #expect(state.modelPresets.last?.id == "qwen38/qwen3.8-27b")
-            #expect(state.modelPresets.last?.displayName == "Qwen 3.8 27B")
-        }
+        #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-pro" }))
+        #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-fast" }))
+        #expect(state.modelPresets.contains(where: {
+            $0.id == "openai/gpt-5.6-terra-fast" && $0.displayName == "GPT-5.6 Terra Fast"
+        }))
+        #expect(state.modelPresets.contains(where: {
+            $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
+        }))
+        #expect(state.modelPresets.contains(where: {
+            $0.id == "xai/grok-4.6" && $0.displayName == "Grok 4.6"
+        }))
+        #expect(state.modelPresets.last?.id == "qwen38/qwen3.8-27b")
+        #expect(state.modelPresets.last?.displayName == "Qwen 3.8 27B")
     }
 }
 
@@ -1413,7 +1374,7 @@ struct AppStateFlowTests {
 
     @Test @MainActor func sessionErrorMarksPendingOptimisticRowAsFailedInline() async {
         let apiClient = MockAPIClient()
-        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = makeIsolatedAppState(apiClient: apiClient)
         state.currentSessionID = "s1"
 
         let pendingID = state.appendOptimisticUserMessage("hello", messageID: "msg_pending")

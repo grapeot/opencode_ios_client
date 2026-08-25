@@ -38,7 +38,10 @@ extension AppState {
             // persists, so reconciliation is pure id membership: rows whose id
             // has not appeared server-side yet stay visible, confirmed ids drop
             // out of the pending set, and the merge below dedupes by id.
-            let pendingMessages = messages.filter { messageStore.isPendingOptimisticMessage($0.info.id) }
+            let pendingMessages = messages.filter {
+                messageStore.isPendingOptimisticMessage($0.info.id)
+                    || messageStore.failedSendReasonsByID[$0.info.id] != nil
+            }
             messageStore.untrackPendingOptimisticMessages(loadedMessageIDs)
             messageStore.pruneSendFailures(loadedMessageIDs: loadedMessageIDs)
 

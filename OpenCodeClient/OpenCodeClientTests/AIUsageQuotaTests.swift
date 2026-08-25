@@ -63,7 +63,7 @@ struct AIUsageQuotaTests {
             else { UserDefaults.standard.removeObject(forKey: AppState.aiUsageDashboardURLKey) }
         }
         let mock = MockAIUsageQuotaClient(result: .success(.init(generatedAt: nil, quotas: [])))
-        let state = AppState(aiUsageQuotaClient: mock)
+        let state = makeIsolatedAppState(aiUsageQuotaClient: mock)
         state.aiUsageDashboardURL = ""
 
         await state.refreshAIUsageQuotas(force: true)
@@ -89,7 +89,8 @@ struct AIUsageQuotaTests {
             remaining: nil
         )
         let mock = MockAIUsageQuotaClient(result: .success(.init(generatedAt: "2026-07-12T09:00:00", quotas: [quota])))
-        let state = AppState(aiUsageQuotaClient: mock)
+        let state = makeIsolatedAppState(aiUsageQuotaClient: mock)
+        state.addModelsToShortlist(state.modelPresets)
         state.aiUsageDashboardURL = "https://usage.example.com"
         state.selectedModelIndex = 1
 
@@ -107,7 +108,7 @@ struct AIUsageQuotaTests {
             else { UserDefaults.standard.removeObject(forKey: AppState.aiUsageDashboardURLKey) }
         }
         let mock = MockAIUsageQuotaClient(result: .success(.init(generatedAt: nil, quotas: [])))
-        let state = AppState(aiUsageQuotaClient: mock)
+        let state = makeIsolatedAppState(aiUsageQuotaClient: mock)
         state.aiUsageDashboardURL = "https://usage.example.com"
 
         await state.refreshAIUsageDashboard()

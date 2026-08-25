@@ -6,6 +6,25 @@
 import Foundation
 @testable import OpenCodeClient
 
+@MainActor
+func makeIsolatedAppState(
+    apiClient: APIClientProtocol = MockAPIClient(),
+    sseClient: SSEClientProtocol = MockSSEClient(),
+    sshTunnelManager: SSHTunnelManager? = nil,
+    aiUsageQuotaClient: AIUsageQuotaClientProtocol? = nil,
+    carSpeechOutput: CarSpeechOutputProviding? = nil
+) -> AppState {
+    let defaults = UserDefaults(suiteName: "opencode.tests.\(UUID().uuidString)")!
+    return AppState(
+        apiClient: apiClient,
+        sseClient: sseClient,
+        sshTunnelManager: sshTunnelManager ?? SSHTunnelManager(),
+        aiUsageQuotaClient: aiUsageQuotaClient ?? AIUsageQuotaClient(),
+        carSpeechOutput: carSpeechOutput,
+        userDefaults: defaults
+    )
+}
+
 actor MockAPIClient: APIClientProtocol {
     var configuredBaseURL: String?
     var configuredUsername: String?
