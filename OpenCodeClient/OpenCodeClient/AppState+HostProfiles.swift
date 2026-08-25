@@ -2,11 +2,11 @@ import Foundation
 
 extension AppState {
     func loadHostProfilesFromStorageOrLegacy() {
-        if let data = UserDefaults.standard.data(forKey: Self.hostProfilesKey),
+        if let data = defaults.data(forKey: Self.hostProfilesKey),
            let decoded = try? JSONDecoder().decode([HostProfile].self, from: data),
            !decoded.isEmpty {
             hostProfiles = decoded
-            if let idString = UserDefaults.standard.string(forKey: Self.currentHostProfileIDKey),
+            if let idString = defaults.string(forKey: Self.currentHostProfileIDKey),
                let id = UUID(uuidString: idString),
                decoded.contains(where: { $0.id == id }) {
                 currentHostProfileID = id
@@ -42,7 +42,7 @@ extension AppState {
     func saveHostProfiles() {
         guard !hostProfiles.isEmpty,
               let data = try? JSONEncoder().encode(hostProfiles) else { return }
-        UserDefaults.standard.set(data, forKey: Self.hostProfilesKey)
+        defaults.set(data, forKey: Self.hostProfilesKey)
     }
 
     func trustPendingSSHHostKeyAndReconnect() async {
@@ -70,8 +70,8 @@ extension AppState {
         }
 
         if persistLegacy {
-            UserDefaults.standard.set(_serverURL, forKey: Self.serverURLKey)
-            UserDefaults.standard.set(_username, forKey: Self.usernameKey)
+            defaults.set(_serverURL, forKey: Self.serverURLKey)
+            defaults.set(_username, forKey: Self.usernameKey)
             if _password.isEmpty {
                 KeychainHelper.delete(Self.passwordKeychainKey)
             } else {

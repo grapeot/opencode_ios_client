@@ -31,12 +31,13 @@ struct ModelShortlistTests {
 
     @MainActor
     private static func isolatedShortlistState() -> AppState {
-        UserDefaults.standard.removeObject(forKey: AppState.modelShortlistKey)
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
-        if !state.modelShortlist.isEmpty {
-            state.modelShortlist = []
-        }
-        return state
+        let defaults = UserDefaults(suiteName: "opencode.tests.shortlist.\(UUID().uuidString)")!
+        return AppState(
+            apiClient: MockAPIClient(),
+            sseClient: MockSSEClient(),
+            sshTunnelManager: SSHTunnelManager(),
+            userDefaults: defaults
+        )
     }
 
     @Test @MainActor func dynamicPickerUsesConnectedProvidersAndFiltersNonChatModels() {

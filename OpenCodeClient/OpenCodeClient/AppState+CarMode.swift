@@ -177,9 +177,9 @@ extension AppState {
 
     func persistCarSessions() {
         if carSessionsByContext.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.carSessionsByContextKey)
+            defaults.removeObject(forKey: Self.carSessionsByContextKey)
         } else if let data = try? JSONEncoder().encode(carSessionsByContext) {
-            UserDefaults.standard.set(data, forKey: Self.carSessionsByContextKey)
+            defaults.set(data, forKey: Self.carSessionsByContextKey)
         }
     }
 }
