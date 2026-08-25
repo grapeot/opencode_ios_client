@@ -64,16 +64,16 @@ extension AppState {
         // connected anymore, or a dynamic model while the picker fell back
         // to presets). Surface it as an explicit ad-hoc entry so the
         // toolbar still shows what the session is actually running.
-        if let name = providerModelsIndex[modelID]?.name, pickerModelPresets.firstIndex(where: { $0.id == modelID }) == nil {
-            let adhoc = ModelPreset(displayName: name, providerID: info.providerID, modelID: info.modelID)
-            if dynamicModelPresets.indices.contains(selectedModelIndex) {
-                dynamicModelPresets[selectedModelIndex] = adhoc
-            } else {
-                dynamicModelPresets = [adhoc]
+        if pickerModelPresets.firstIndex(where: { $0.id == modelID }) == nil {
+            let name = providerModelsIndex[modelID]?.name ?? info.modelID
+            addModelsToShortlist([
+                ModelPreset(displayName: name, providerID: info.providerID, modelID: info.modelID)
+            ])
+            if let idx = pickerModelPresets.firstIndex(where: { $0.id == modelID }) {
+                selectedModelIndex = idx
+                selectedModelIDBySessionID[sessionID] = modelID
+                persistSelectedModelMap()
             }
-            selectedModelIndex = dynamicModelPresets.count - 1
-            selectedModelIDBySessionID[sessionID] = adhoc.id
-            persistSelectedModelMap()
             return
         }
         Self.logger.warning("syncModelFromMessageHistory: model \(info.providerID, privacy: .public)/\(info.modelID, privacy: .public) not in picker, keeping current selection")

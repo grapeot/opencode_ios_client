@@ -694,7 +694,15 @@ nonisolated struct ConfigProvider: Decodable {
             fixed.reserveCapacity(dict.count)
             for (key, value) in dict {
                 if value.id.isEmpty {
-                    fixed[key] = ProviderModel(id: key, name: value.name, providerID: value.providerID, limit: value.limit)
+                    fixed[key] = ProviderModel(
+                        id: key,
+                        name: value.name,
+                        providerID: value.providerID,
+                        limit: value.limit,
+                        capabilities: value.capabilities,
+                        family: value.family,
+                        releaseDate: value.releaseDate
+                    )
                 } else {
                     fixed[key] = value
                 }
@@ -725,6 +733,8 @@ nonisolated struct ProviderModel: Decodable {
     let providerID: String?
     let limit: ProviderModelLimit?
     let capabilities: ProviderModelCapabilities?
+    let family: String?
+    let releaseDate: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -733,14 +743,26 @@ nonisolated struct ProviderModel: Decodable {
         case providerId
         case limit
         case capabilities
+        case family
+        case releaseDate = "release_date"
     }
 
-    init(id: String, name: String?, providerID: String?, limit: ProviderModelLimit?, capabilities: ProviderModelCapabilities? = nil) {
+    init(
+        id: String,
+        name: String?,
+        providerID: String?,
+        limit: ProviderModelLimit?,
+        capabilities: ProviderModelCapabilities? = nil,
+        family: String? = nil,
+        releaseDate: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.providerID = providerID
         self.limit = limit
         self.capabilities = capabilities
+        self.family = family
+        self.releaseDate = releaseDate
     }
 
     init(from decoder: Decoder) throws {
@@ -750,6 +772,8 @@ nonisolated struct ProviderModel: Decodable {
         providerID = (try? c.decode(String.self, forKey: .providerID)) ?? (try? c.decode(String.self, forKey: .providerId))
         limit = try? c.decode(ProviderModelLimit.self, forKey: .limit)
         capabilities = try? c.decode(ProviderModelCapabilities.self, forKey: .capabilities)
+        family = try? c.decode(String.self, forKey: .family)
+        releaseDate = try? c.decode(String.self, forKey: .releaseDate)
     }
 }
 

@@ -132,12 +132,10 @@ struct OpenCodeClientTests {
 
         state.rebuildDynamicModelPresets(from: registry)
 
-        // Known curated presets (glm-5.3 is preset #1, grok-4.6 last) come
-        // first in curated order; unknown providers follow alphabetically.
-        #expect(state.dynamicModelPresets.map(\.id) == [
-            "zai-coding-plan/glm-5.3",
+        #expect(state.catalogModelPresets.map(\.id) == [
+            "aaa/zzz-model",
             "xai/grok-4.6",
-            "aaa/zzz-model"
+            "zai-coding-plan/glm-5.3"
         ])
     }
 
@@ -156,20 +154,98 @@ struct OpenCodeClientTests {
             connectedProviderIDs: ["ollama"]
         )
 
+        state.addModelsToShortlist([
+            ModelPreset(displayName: "Qwen3 VL 8B", providerID: "ollama", modelID: "qwen3-vl:8b")
+        ])
         state.rebuildDynamicModelPresets(from: registry)
 
-        // Selection follows the saved per-session model into the dynamic list.
         #expect(state.selectedModel?.id == "ollama/qwen3-vl:8b")
-        // Picker falls back to presets only while the dynamic list is empty.
         #expect(state.pickerModelPresets.map(\.id).contains("ollama/qwen3-vl:8b"))
     }
 
-    @Test @MainActor func dynamicPickerFallsBackToPresetsWhenRegistryMissing() {
+    @Test @MainActor func pickerUsesShortlistNotCatalogOrPresets() {
         let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
-        // Registry never loaded: picker shows the hardcoded presets.
-        #expect(state.dynamicModelPresets.isEmpty)
-        #expect(state.pickerModelPresets.count == state.modelPresets.count)
-        #expect(state.pickerModelPresets.map(\.id) == state.modelPresets.map(\.id))
+        #expect(state.catalogModelPresets.isEmpty)
+        #expect(state.pickerModelPresets.isEmpty)
+        state.addModelsToShortlist([
+            ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3")
+        ])
+        #expect(state.pickerModelPresets.map(\.id) == ["zai-coding-plan/glm-5.3"])
+    }
+
+    @Test @MainActor func shortlistAddIsDedupedAndRemoveUpdatesPicker() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let glm = ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3")
+        let flash = ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash")
+        state.addModelsToShortlist([glm, flash, glm])
+        #expect(state.modelShortlist.map(\.id) == [
+            "zai-coding-plan/glm-5.3",
+            "google/gemini-3.5-flash"
+        ])
+        state.removeShortlistItem(id: "google/gemini-3.5-flash")
+        #expect(state.pickerModelPresets.map(\.id) == ["zai-coding-plan/glm-5.3"])
+    }
+
+    @Test @MainActor func shortlistShortNameOverrideAndEmptyFallback() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.addModelsToShortlist([
+            ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash")
+        ])
+        #expect(state.selectedModel?.shortName == "Gemini")
+        state.updateShortlistShortName(id: "google/gemini-3.5-flash", shortName: "G35")
+        #expect(state.pickerModelPresets.first?.shortName == "G35")
+        state.updateShortlistShortName(id: "google/gemini-3.5-flash", shortName: "   ")
+        #expect(state.pickerModelPresets.first?.shortName == "Gemini")
+    }
+
+    @Test @MainActor func catalogRefreshUpdatesShortlistDisplayNames() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.addModelsToShortlist([
+            ModelPreset(displayName: "Old Name", providerID: "google", modelID: "gemini-3.5-flash")
+        ])
+        let registry = ProviderRegistryResponse(
+            providers: [
+                Self.makeRegistryProvider(
+                    id: "google",
+                    name: "Google",
+                    models: [("gemini-3.5-flash", "Gemini 3.5 Flash", true)]
+                )
+            ],
+            connectedProviderIDs: ["google"]
+        )
+        state.rebuildDynamicModelPresets(from: registry)
+        #expect(state.modelShortlist.first?.displayName == "Gemini 3.5 Flash")
+        #expect(state.catalogModelPresets.map(\.id) == ["google/gemini-3.5-flash"])
+    }
+
+    @Test @MainActor func shortlistReorderMatchesPickerOrder() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.addModelsToShortlist([
+            ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
+            ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash"),
+            ModelPreset(displayName: "Grok 4.6", providerID: "xai", modelID: "grok-4.6")
+        ])
+        state.moveShortlist(from: IndexSet(integer: 2), to: 0)
+        #expect(state.modelShortlist.map(\.id) == [
+            "xai/grok-4.6",
+            "zai-coding-plan/glm-5.3",
+            "google/gemini-3.5-flash"
+        ])
+        #expect(state.pickerModelPresets.map(\.id) == state.modelShortlist.map(\.id))
+        state.rebuildPickerModelItems(reason: "test")
+        let pickerIDs = state.pickerModelItems.compactMap { item -> String? in
+            if case .model(_, let preset) = item { return preset.id }
+            return nil
+        }
+        #expect(pickerIDs == state.modelShortlist.map(\.id))
+    }
+
+    @Test @MainActor func revealModelShortlistJumpsToSettingsFocus() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.selectedTab = RootTab.chat.rawValue
+        state.revealModelShortlistInSettings()
+        #expect(state.selectedTab == RootTab.settings.rawValue)
+        #expect(state.settingsFocus == .modelShortlist)
     }
 
     @Test @MainActor func syncModelFromMessageHistoryAddsAdHocEntryForUnknownModel() async {

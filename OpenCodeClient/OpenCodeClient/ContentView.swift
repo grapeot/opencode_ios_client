@@ -15,6 +15,10 @@ enum RootTab: Int {
     case settings
 }
 
+enum SettingsFocus: Equatable {
+    case modelShortlist
+}
+
 struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -76,6 +80,11 @@ struct ContentView: View {
         #else
         false
         #endif
+    }
+
+    private static var hasUITestModelShortlistFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_MODEL_SHORTLIST_FIXTURE")
+            || ProcessInfo.processInfo.arguments.contains("UITEST_MODEL_SHORTLIST_EMPTY_FIXTURE")
     }
 
     /// Which bundled fixture markdown to render in the web preview. Defaults to
@@ -164,6 +173,11 @@ struct ContentView: View {
 
         if hasUITestHostProfilesFixture {
             applyHostProfilesFixture(to: state)
+            return state
+        }
+
+        if hasUITestModelShortlistFixture {
+            applyModelShortlistFixture(to: state)
             return state
         }
 
@@ -382,6 +396,30 @@ struct ContentView: View {
                 AIUsageQuota(provider: "glm", label: "5h", usedPercentage: 8, remainingPercentage: 92, nextResetTimeMs: 1_783_860_000_000, nextResetISO: nil, usage: nil, remaining: nil),
             ]
         ))
+    }
+
+    private static func applyModelShortlistFixture(to state: AppState) {
+        state.isConnected = true
+        state.providerDisplayNames = [
+            "zai-coding-plan": "Z.AI Coding Plan",
+            "google": "Google"
+        ]
+        state.catalogModelPresets = [
+            ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
+            ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash"),
+            ModelPreset(displayName: "Gemini 3.5 Flash Lite", providerID: "google", modelID: "gemini-3.5-flash-lite")
+        ]
+        if !ProcessInfo.processInfo.arguments.contains("UITEST_MODEL_SHORTLIST_EMPTY_FIXTURE") {
+            state.modelShortlist = [
+                ModelShortlistItem(
+                    providerID: "zai-coding-plan",
+                    modelID: "glm-5.3",
+                    displayName: "GLM-5.3",
+                    shortName: "GLM"
+                )
+            ]
+        }
+        state.rebuildPickerModelItems(reason: "fixture")
     }
 
     private static func applyHostProfilesFixture(to state: AppState) {
@@ -639,7 +677,7 @@ struct ContentView: View {
     }
 
     private func restoreConnectionFlow() async {
-        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture || Self.hasUITestClientCapabilityFixture || Self.hasUITestDeepLinkFixture {
+        if Self.hasUITestSessionTreeFixture || Self.hasUITestToolCardsFixture || Self.hasUITestF3ComposerFixture || Self.hasUITestWebPreviewFixture || Self.hasUITestWebPreviewModeFixture || Self.hasUITestQuotaFixture || Self.hasUITestCarModeFixture || Self.hasUITestCarHistoryFixture || Self.hasUITestCarDisabledFixture || Self.hasUITestClientCapabilityFixture || Self.hasUITestDeepLinkFixture || Self.hasUITestModelShortlistFixture {
             return
         }
 
@@ -817,6 +855,12 @@ struct ContentView: View {
             Task { @MainActor in
                 await Task.yield()
                 selectedTab = newTab
+            }
+        }
+        .onChange(of: state.settingsFocus) { _, focus in
+            guard focus != nil else { return }
+            if useSplitLayout {
+                showTabletSettings = true
             }
         }
         .onChange(of: carModeEnabled) { _, isEnabled in

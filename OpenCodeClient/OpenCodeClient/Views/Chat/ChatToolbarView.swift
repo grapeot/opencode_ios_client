@@ -3,6 +3,7 @@
 //  OpenCodeClient
 //
 
+import os
 import SwiftUI
 
 struct ChatToolbarView: View {
@@ -18,7 +19,6 @@ struct ChatToolbarView: View {
     @State private var showCreateDisabledAlert = false
     @State private var showConfigSheet = false
     @State private var showTodoPanel = false
-    @State private var modelSearchText = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
     
     private var useCompactLabels: Bool {
@@ -112,6 +112,7 @@ struct ChatToolbarView: View {
     
     private var configButton: some View {
         Button {
+            state.rebuildPickerModelItems(reason: "open")
             showConfigSheet = true
         } label: {
             HStack(spacing: 4) {
@@ -130,138 +131,8 @@ struct ChatToolbarView: View {
         }
         .accessibilityIdentifier("chat-toolbar-model")
         .sheet(isPresented: $showConfigSheet) {
-            NavigationStack {
-                List {
-                    // Sections are built inline (not inside a custom view) so
-                    // List sees the section structure directly; wrapping
-                    // Sections in an intermediate View renders them as one
-                    // unstyled row (blank models, broken taps).
-                    if state.dynamicModelPresets.isEmpty {
-                        Section(L10n.t(.configureModel)) {
-                            ForEach(Array(state.pickerModelPresets.enumerated()), id: \.element.id) { index, preset in
-                                modelRow(index: index, preset: preset)
-                            }
-                        }
-                    } else {
-                        Section {
-                            TextField(L10n.t(.configureModelSearchPlaceholder), text: $modelSearchText)
-                                .autocorrectionDisabled()
-                        }
-                        ForEach(modelGroups, id: \.providerID) { group in
-                            Section(
-                                header: Text(state.providerDisplayNames[group.providerID] ?? group.providerID)
-                            ) {
-                                ForEach(group.entries, id: \.preset.id) { entry in
-                                    modelRow(index: entry.index, preset: entry.preset)
-                                }
-                            }
-                        }
-                        if modelGroups.isEmpty {
-                            Section {
-                                Text(L10n.t(.configureModelNoMatches))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Section(L10n.t(.configureAgent)) {
-                        if state.isLoadingAgents {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                Spacer()
-                            }
-                        } else if state.visibleAgents.isEmpty {
-                            Text(L10n.t(.configureNoAgents))
-                                .foregroundColor(.secondary)
-                        } else {
-                            ForEach(Array(state.visibleAgents.enumerated()), id: \.element.id) { index, agent in
-                                Button {
-                                    state.setSelectedAgentIndex(index)
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading) {
-                                            Text(agent.shortName)
-                                            if let desc = agent.description, !desc.isEmpty {
-                                                Text(desc)
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                        Spacer()
-                                        if state.selectedAgentIndex == index {
-                                            Image(systemName: "checkmark")
-                                                .foregroundColor(DesignColors.Brand.primary)
-                                        }
-                                    }
-                                }
-                                .foregroundColor(.primary)
-                            }
-                        }
-                    }
-                }
-                .navigationTitle(L10n.t(.configureTitle))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(L10n.t(.appDone)) {
-                            showConfigSheet = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
+            ModelConfigSheet(state: state, isPresented: $showConfigSheet)
         }
-    }
-
-    // MARK: - Model Picker
-
-    /// Picker entries grouped by provider, each carrying its index into the
-    /// FULL pickerModelPresets array (not the filtered one), so selection
-    /// stays correct while a search filter is active.
-    private var modelGroups: [(providerID: String, entries: [(index: Int, preset: ModelPreset)])] {
-        let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        // Enumerate the full list first, then filter — indices stay stable.
-        let filtered = state.pickerModelPresets.enumerated().filter { _, preset in
-            query.isEmpty
-                || preset.displayName.lowercased().contains(query)
-                || preset.modelID.lowercased().contains(query)
-                || preset.providerID.lowercased().contains(query)
-        }
-        var byProvider: [String: [(Int, ModelPreset)]] = [:]
-        var order: [String] = []
-        for (idx, preset) in filtered {
-            let pid = preset.providerID
-            if byProvider[pid] == nil { order.append(pid) }
-            byProvider[pid]?.append((idx, preset))
-        }
-        return order.map { ($0, byProvider[$0] ?? []) }
-    }
-
-    private func modelRow(index: Int, preset: ModelPreset) -> some View {
-        Button {
-            state.setSelectedModelIndex(index)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(preset.displayName)
-                    if preset.displayName != preset.modelID {
-                        Text(preset.modelID)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer()
-                if state.selectedModelIndex == index {
-                    Image(systemName: "checkmark")
-                        .foregroundColor(DesignColors.Brand.primary)
-                }
-            }
-        }
-        .foregroundColor(.primary)
-        .accessibilityIdentifier("model-picker-row-\(preset.providerID)-\(preset.modelID)")
     }
 
     // MARK: - Todo Button & Panel
@@ -315,5 +186,163 @@ struct ChatToolbarView: View {
 
     private var todoPanelContent: some View {
         TodoListPanel(todos: currentTodos)
+    }
+}
+
+private struct ModelConfigSheet: View {
+    @Bindable var state: AppState
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            List {
+                modelSections
+                agentSection
+            }
+            .navigationTitle(L10n.t(.configureTitle))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t(.appDone)) {
+                        isPresented = false
+                    }
+                }
+            }
+            .onAppear { state.rebuildPickerModelItems(reason: "appear") }
+            .onChange(of: state.modelSearchText) { _, _ in
+                state.rebuildPickerModelItems(reason: "search")
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var modelSections: some View {
+        if state.modelShortlist.isEmpty {
+            Section(L10n.t(.configureModel)) {
+                Button {
+                    isPresented = false
+                    state.revealModelShortlistInSettings()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                        Text(L10n.t(.configureModelEmptyShortlist))
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 8)
+                        Image(systemName: "arrow.forward.circle.fill")
+                            .font(.title2)
+                    }
+                    .foregroundStyle(DesignColors.Brand.primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("configure-empty-shortlist")
+            }
+        } else {
+            Section {
+                TextField(L10n.t(.configureModelSearchPlaceholder), text: $state.modelSearchText)
+                    .autocorrectionDisabled()
+            }
+            Section(L10n.t(.configureModel)) {
+                ForEach(state.pickerModelItems) { item in
+                    pickerItemRow(item)
+                }
+            }
+            if state.pickerModelItems.isEmpty {
+                Section {
+                    Text(L10n.t(.configureModelNoMatches))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var agentSection: some View {
+        Section(L10n.t(.configureAgent)) {
+            if state.isLoadingAgents {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            } else if state.visibleAgents.isEmpty {
+                Text(L10n.t(.configureNoAgents))
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(Array(state.visibleAgents.enumerated()), id: \.element.id) { index, agent in
+                    agentRow(index: index, agent: agent)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pickerItemRow(_ item: ModelPickerItem) -> some View {
+        switch item {
+        case .providerHeader(let providerID):
+            providerHeaderRow(providerID)
+        case .model(let index, let preset):
+            modelRow(index: index, preset: preset)
+        }
+    }
+
+    private func providerHeaderRow(_ providerID: String) -> some View {
+        let _ = AppState.logger.notice("DIAG render-header=\(providerID, privacy: .public)")
+        return Text(state.providerDisplayNames[providerID] ?? providerID)
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(.secondary)
+            .padding(.top, 4)
+            .accessibilityIdentifier("model-picker-header-\(providerID)")
+    }
+
+    private func modelRow(index: Int, preset: ModelPreset) -> some View {
+        Button {
+            state.setSelectedModelIndex(index)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.displayName)
+                    Text("\(state.providerDisplayNames[preset.providerID] ?? preset.providerID) / \(preset.modelID)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if state.selectedModelIndex == index {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(DesignColors.Brand.primary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.primary)
+        .accessibilityIdentifier("model-picker-row-\(preset.providerID)-\(preset.modelID)")
+    }
+
+    private func agentRow(index: Int, agent: AgentInfo) -> some View {
+        Button {
+            state.setSelectedAgentIndex(index)
+        } label: {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(agent.shortName)
+                    if let desc = agent.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                if state.selectedAgentIndex == index {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(DesignColors.Brand.primary)
+                }
+            }
+        }
+        .foregroundColor(.primary)
     }
 }

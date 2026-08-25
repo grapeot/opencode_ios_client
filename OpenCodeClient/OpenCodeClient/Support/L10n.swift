@@ -119,6 +119,18 @@ enum L10n {
         case settingsServerVersion
         case settingsExperimentalFeatures
         case settingsCarMode
+        case settingsModelShortlist
+        case settingsModelShortlistFooter
+        case settingsModelShortlistEmpty
+        case settingsModelShortlistAdd
+        case settingsModelShortlistSearch
+        case settingsModelShortlistEditName
+        case settingsModelShortlistShortName
+        case settingsModelShortlistAddSelected
+        case settingsModelShortlistCatalogEmpty
+        case settingsModelShortlistHint
+        case settingsModelShortlistSearchClear
+        case settingsModelShortlistReorder
         case settingsAIUsageDashboard
         case settingsAIUsageDashboardURL
         case settingsAIUsageDashboardFooter
@@ -474,6 +486,7 @@ enum L10n {
         case configureNoAgents
         case configureModelSearchPlaceholder
         case configureModelNoMatches
+        case configureModelEmptyShortlist
 
         case todoButtonLabel
         case todoPanelTitle
@@ -580,6 +593,18 @@ enum L10n {
         Key.settingsServerVersion.rawValue: "Server Version",
         Key.settingsExperimentalFeatures.rawValue: "Experimental Features",
         Key.settingsCarMode.rawValue: "Car Mode",
+        Key.settingsModelShortlist.rawValue: "Models",
+        Key.settingsModelShortlistFooter.rawValue: "The chat picker only shows this shortlist. Add models from the connected server.",
+        Key.settingsModelShortlistEmpty.rawValue: "No models yet. Tap + to search and add.",
+        Key.settingsModelShortlistAdd.rawValue: "Add Models",
+        Key.settingsModelShortlistSearch.rawValue: "Search catalog",
+        Key.settingsModelShortlistEditName.rawValue: "Short Name",
+        Key.settingsModelShortlistShortName.rawValue: "Toolbar label",
+        Key.settingsModelShortlistAddSelected.rawValue: "Add",
+        Key.settingsModelShortlistCatalogEmpty.rawValue: "Connect to a server to load the model catalog.",
+        Key.settingsModelShortlistHint.rawValue: "This is what the chat toolbar can switch between, in this order. Add and rearrange here; they show up the same way in the main chat picker.",
+        Key.settingsModelShortlistSearchClear.rawValue: "Clear search",
+        Key.settingsModelShortlistReorder.rawValue: "Reorder",
         Key.settingsAIUsageDashboard.rawValue: "AI Usage Dashboard",
         Key.settingsAIUsageDashboardURL.rawValue: "Dashboard URL (optional)",
         Key.settingsAIUsageDashboardFooter.rawValue: "Leave blank for no quota UI. Enter the dashboard base URL or the full /api/v1/quotas endpoint.",
@@ -934,6 +959,7 @@ enum L10n {
         Key.configureNoAgents.rawValue: "No agents available",
         Key.configureModelSearchPlaceholder.rawValue: "Search models",
         Key.configureModelNoMatches.rawValue: "No matching models",
+        Key.configureModelEmptyShortlist.rawValue: "Add models in Settings → Models.",
 
         Key.todoButtonLabel.rawValue: "Todo",
         Key.todoPanelTitle.rawValue: "Todo",
@@ -1040,6 +1066,18 @@ enum L10n {
         Key.settingsServerVersion.rawValue: "服务器版本",
         Key.settingsExperimentalFeatures.rawValue: "实验性功能",
         Key.settingsCarMode.rawValue: "车载模式",
+        Key.settingsModelShortlist.rawValue: "模型",
+        Key.settingsModelShortlistFooter.rawValue: "聊天栏只显示这份短名单。从已连接的 server 目录里搜索添加。",
+        Key.settingsModelShortlistEmpty.rawValue: "还没有模型。点右上角 + 搜索添加。",
+        Key.settingsModelShortlistAdd.rawValue: "添加模型",
+        Key.settingsModelShortlistSearch.rawValue: "搜索目录",
+        Key.settingsModelShortlistEditName.rawValue: "短名称",
+        Key.settingsModelShortlistShortName.rawValue: "工具栏显示名",
+        Key.settingsModelShortlistAddSelected.rawValue: "添加",
+        Key.settingsModelShortlistCatalogEmpty.rawValue: "先连接 server 才能加载模型目录。",
+        Key.settingsModelShortlistHint.rawValue: "聊天页工具栏只能按这份名单的顺序切换。在这里添加和排序，回到主聊天界面就能看见。",
+        Key.settingsModelShortlistSearchClear.rawValue: "清空搜索",
+        Key.settingsModelShortlistReorder.rawValue: "排序",
         Key.settingsAIUsageDashboard.rawValue: "AI 用量面板",
         Key.settingsAIUsageDashboardURL.rawValue: "面板地址（可选）",
         Key.settingsAIUsageDashboardFooter.rawValue: "留空时不显示任何 quota 界面。可填写面板根地址或完整的 /api/v1/quotas 地址。",
@@ -1394,6 +1432,7 @@ enum L10n {
         Key.configureNoAgents.rawValue: "暂无可用智能体",
         Key.configureModelSearchPlaceholder.rawValue: "搜索模型",
         Key.configureModelNoMatches.rawValue: "没有匹配的模型",
+        Key.configureModelEmptyShortlist.rawValue: "请到设置 → 模型 添加。",
 
         Key.todoButtonLabel.rawValue: "任务",
         Key.todoPanelTitle.rawValue: "任务",
