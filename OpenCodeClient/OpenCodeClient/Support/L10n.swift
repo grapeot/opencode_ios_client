@@ -131,6 +131,7 @@ enum L10n {
         case settingsModelShortlistHint
         case settingsModelShortlistSearchClear
         case settingsModelShortlistReorder
+        case settingsModelShortlistCatalogHint
         case settingsAIUsageDashboard
         case settingsAIUsageDashboardURL
         case settingsAIUsageDashboardFooter
@@ -487,6 +488,7 @@ enum L10n {
         case configureModelSearchPlaceholder
         case configureModelNoMatches
         case configureModelEmptyShortlist
+        case configureModelEditShortlist
 
         case todoButtonLabel
         case todoPanelTitle
@@ -602,9 +604,10 @@ enum L10n {
         Key.settingsModelShortlistShortName.rawValue: "Toolbar label",
         Key.settingsModelShortlistAddSelected.rawValue: "Add",
         Key.settingsModelShortlistCatalogEmpty.rawValue: "Connect to a server to load the model catalog.",
-        Key.settingsModelShortlistHint.rawValue: "This is what the chat toolbar can switch between, in this order. Add and rearrange here; they show up the same way in the main chat picker.",
+        Key.settingsModelShortlistHint.rawValue: "The chat picker shows this list, in this order. Drag to rearrange, swipe left to delete. Tap + to add models.",
         Key.settingsModelShortlistSearchClear.rawValue: "Clear search",
         Key.settingsModelShortlistReorder.rawValue: "Reorder",
+        Key.settingsModelShortlistCatalogHint.rawValue: "Search and tap to select. Add puts the checked models on your list. To remove one, go back and swipe it away.",
         Key.settingsAIUsageDashboard.rawValue: "AI Usage Dashboard",
         Key.settingsAIUsageDashboardURL.rawValue: "Dashboard URL (optional)",
         Key.settingsAIUsageDashboardFooter.rawValue: "Leave blank for no quota UI. Enter the dashboard base URL or the full /api/v1/quotas endpoint.",
@@ -960,6 +963,7 @@ enum L10n {
         Key.configureModelSearchPlaceholder.rawValue: "Search models",
         Key.configureModelNoMatches.rawValue: "No matching models",
         Key.configureModelEmptyShortlist.rawValue: "Add models in Settings → Models.",
+        Key.configureModelEditShortlist.rawValue: "Add, remove, or reorder in Settings",
 
         Key.todoButtonLabel.rawValue: "Todo",
         Key.todoPanelTitle.rawValue: "Todo",
@@ -1075,9 +1079,10 @@ enum L10n {
         Key.settingsModelShortlistShortName.rawValue: "工具栏显示名",
         Key.settingsModelShortlistAddSelected.rawValue: "添加",
         Key.settingsModelShortlistCatalogEmpty.rawValue: "先连接 server 才能加载模型目录。",
-        Key.settingsModelShortlistHint.rawValue: "聊天页工具栏只能按这份名单的顺序切换。在这里添加和排序，回到主聊天界面就能看见。",
+        Key.settingsModelShortlistHint.rawValue: "聊天栏按这份名单的顺序切换。按左边手柄排序，左滑删除。要添加，点右上角加号。",
         Key.settingsModelShortlistSearchClear.rawValue: "清空搜索",
         Key.settingsModelShortlistReorder.rawValue: "排序",
+        Key.settingsModelShortlistCatalogHint.rawValue: "可以搜索，点选模型，再点添加写入名单。要删除，请回到上一页左滑。",
         Key.settingsAIUsageDashboard.rawValue: "AI 用量面板",
         Key.settingsAIUsageDashboardURL.rawValue: "面板地址（可选）",
         Key.settingsAIUsageDashboardFooter.rawValue: "留空时不显示任何 quota 界面。可填写面板根地址或完整的 /api/v1/quotas 地址。",
@@ -1433,6 +1438,7 @@ enum L10n {
         Key.configureModelSearchPlaceholder.rawValue: "搜索模型",
         Key.configureModelNoMatches.rawValue: "没有匹配的模型",
         Key.configureModelEmptyShortlist.rawValue: "请到设置 → 模型 添加。",
+        Key.configureModelEditShortlist.rawValue: "到设置里添加、删除或排序",
 
         Key.todoButtonLabel.rawValue: "任务",
         Key.todoPanelTitle.rawValue: "任务",

@@ -3,7 +3,6 @@
 //  OpenCodeClient
 //
 
-import os
 import SwiftUI
 
 struct ChatToolbarView: View {
@@ -220,23 +219,11 @@ private struct ModelConfigSheet: View {
     private var modelSections: some View {
         if state.modelShortlist.isEmpty {
             Section(L10n.t(.configureModel)) {
-                Button {
-                    isPresented = false
-                    state.revealModelShortlistInSettings()
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                        Text(L10n.t(.configureModelEmptyShortlist))
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 8)
-                        Image(systemName: "arrow.forward.circle.fill")
-                            .font(.title2)
-                    }
-                    .foregroundStyle(DesignColors.Brand.primary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("configure-empty-shortlist")
+                settingsJumpRow(
+                    title: L10n.t(.configureModelEmptyShortlist),
+                    systemImage: "plus.circle.fill",
+                    identifier: "configure-empty-shortlist"
+                )
             }
         } else {
             Section {
@@ -254,7 +241,34 @@ private struct ModelConfigSheet: View {
                         .foregroundColor(.secondary)
                 }
             }
+            Section {
+                settingsJumpRow(
+                    title: L10n.t(.configureModelEditShortlist),
+                    systemImage: "list.bullet.rectangle",
+                    identifier: "configure-edit-shortlist"
+                )
+            }
         }
+    }
+
+    private func settingsJumpRow(title: String, systemImage: String, identifier: String) -> some View {
+        Button {
+            isPresented = false
+            state.revealModelShortlistInSettings()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                Text(title)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.forward.circle.fill")
+                    .font(.title2)
+            }
+            .foregroundStyle(DesignColors.Brand.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder
@@ -288,8 +302,7 @@ private struct ModelConfigSheet: View {
     }
 
     private func providerHeaderRow(_ providerID: String) -> some View {
-        let _ = AppState.logger.notice("DIAG render-header=\(providerID, privacy: .public)")
-        return Text(state.providerDisplayNames[providerID] ?? providerID)
+        Text(state.providerDisplayNames[providerID] ?? providerID)
             .font(.footnote.weight(.semibold))
             .foregroundColor(.secondary)
             .padding(.top, 4)

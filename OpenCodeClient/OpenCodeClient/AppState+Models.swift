@@ -42,9 +42,15 @@ extension AppState {
             selectedModelIDBySessionID[sessionID] = canonicalSaved
             persistSelectedModelMap()
         }
-        // Search the dynamic list first; presets are the offline fallback.
         if let idx = pickerModelPresets.firstIndex(where: { $0.id == canonicalSaved }) {
             selectedModelIndex = idx
+            return
+        }
+        if let catalog = catalogModelPresets.first(where: { $0.id == canonicalSaved }) {
+            addModelsToShortlist([catalog])
+            if let idx = pickerModelPresets.firstIndex(where: { $0.id == canonicalSaved }) {
+                selectedModelIndex = idx
+            }
         }
     }
 

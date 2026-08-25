@@ -70,6 +70,16 @@ struct OpenCodeClientTests {
         return ConfigProvider(id: id, name: name, models: modelDict)
     }
 
+    @MainActor
+    private static func isolatedShortlistState() -> AppState {
+        UserDefaults.standard.removeObject(forKey: AppState.modelShortlistKey)
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        if !state.modelShortlist.isEmpty {
+            state.modelShortlist = []
+        }
+        return state
+    }
+
     @Test @MainActor func dynamicPickerUsesConnectedProvidersAndFiltersNonChatModels() {
         let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         let registry = ProviderRegistryResponse(
@@ -140,7 +150,7 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func dynamicPickerReanchorsSelectionAndKeepsSessionModel() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         state.currentSessionID = "s1"
         state.selectedModelIDBySessionID["s1"] = "ollama/qwen3-vl:8b"
         let registry = ProviderRegistryResponse(
@@ -164,7 +174,7 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func pickerUsesShortlistNotCatalogOrPresets() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         #expect(state.catalogModelPresets.isEmpty)
         #expect(state.pickerModelPresets.isEmpty)
         state.addModelsToShortlist([
@@ -174,7 +184,7 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func shortlistAddIsDedupedAndRemoveUpdatesPicker() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         let glm = ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3")
         let flash = ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash")
         state.addModelsToShortlist([glm, flash, glm])
@@ -187,7 +197,7 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func shortlistShortNameOverrideAndEmptyFallback() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         state.addModelsToShortlist([
             ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash")
         ])
@@ -199,7 +209,7 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func catalogRefreshUpdatesShortlistDisplayNames() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         state.addModelsToShortlist([
             ModelPreset(displayName: "Old Name", providerID: "google", modelID: "gemini-3.5-flash")
         ])
@@ -219,7 +229,7 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func shortlistReorderMatchesPickerOrder() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         state.addModelsToShortlist([
             ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
             ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash"),
@@ -241,16 +251,38 @@ struct OpenCodeClientTests {
     }
 
     @Test @MainActor func revealModelShortlistJumpsToSettingsFocus() {
-        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = Self.isolatedShortlistState()
         state.selectedTab = RootTab.chat.rawValue
         state.revealModelShortlistInSettings()
         #expect(state.selectedTab == RootTab.settings.rawValue)
         #expect(state.settingsFocus == .modelShortlist)
     }
 
+    @Test @MainActor func applySavedModelAddsCatalogEntryToShortlist() {
+        let state = Self.isolatedShortlistState()
+        state.currentSessionID = "s1"
+        state.selectedModelIDBySessionID["s1"] = "google/gemini-3.5-flash"
+        state.rebuildDynamicModelPresets(from: ProviderRegistryResponse(
+            providers: [
+                Self.makeRegistryProvider(
+                    id: "google",
+                    name: "Google",
+                    models: [("gemini-3.5-flash", "Gemini 3.5 Flash", true)]
+                )
+            ],
+            connectedProviderIDs: ["google"]
+        ))
+        #expect(state.modelShortlist.isEmpty)
+        state.applySavedModelForCurrentSession()
+        #expect(state.pickerModelPresets.map(\.id) == ["google/gemini-3.5-flash"])
+        #expect(state.selectedModel?.id == "google/gemini-3.5-flash")
+    }
+
     @Test @MainActor func syncModelFromMessageHistoryAddsAdHocEntryForUnknownModel() async {
         let apiClient = MockAPIClient()
+        UserDefaults.standard.removeObject(forKey: AppState.modelShortlistKey)
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        if !state.modelShortlist.isEmpty { state.modelShortlist = [] }
         state.currentSessionID = "s1"
         // Session was created elsewhere with a model not in any picker list,
         // but the provider config index knows its display name.

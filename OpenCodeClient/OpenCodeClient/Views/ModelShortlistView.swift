@@ -146,43 +146,47 @@ struct ModelCatalogPickerView: View {
                         }
                     }
                 }
-                if state.catalogModelPresets.isEmpty {
-                    Text(L10n.t(.settingsModelShortlistCatalogEmpty))
-                        .foregroundStyle(.secondary)
-                } else if filteredCatalog.isEmpty {
-                    Text(L10n.t(.configureModelNoMatches))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(filteredCatalog) { preset in
-                        Button {
-                            if selectedIDs.contains(preset.id) {
-                                selectedIDs.remove(preset.id)
-                            } else {
-                                selectedIDs.insert(preset.id)
-                            }
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(preset.displayName)
-                                        .foregroundStyle(.primary)
-                                    Text("\(state.providerDisplayNames[preset.providerID] ?? preset.providerID)/\(preset.modelID)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
+                Section {
+                    if state.catalogModelPresets.isEmpty {
+                        Text(L10n.t(.settingsModelShortlistCatalogEmpty))
+                            .foregroundStyle(.secondary)
+                    } else if filteredCatalog.isEmpty {
+                        Text(L10n.t(.configureModelNoMatches))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredCatalog) { preset in
+                            Button {
                                 if selectedIDs.contains(preset.id) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(DesignColors.Brand.primary)
+                                    selectedIDs.remove(preset.id)
+                                } else {
+                                    selectedIDs.insert(preset.id)
                                 }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(preset.displayName)
+                                            .foregroundStyle(.primary)
+                                        Text("\(state.providerDisplayNames[preset.providerID] ?? preset.providerID) / \(preset.modelID)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    if selectedIDs.contains(preset.id) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(DesignColors.Brand.primary)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.primary)
+                            .accessibilityIdentifier("model-catalog-row-\(preset.providerID)-\(preset.modelID)")
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.primary)
-                        .accessibilityIdentifier("model-catalog-row-\(preset.providerID)-\(preset.modelID)")
                     }
+                } footer: {
+                    Text(L10n.t(.settingsModelShortlistCatalogHint))
                 }
             }
             .navigationTitle(L10n.t(.settingsModelShortlistAdd))

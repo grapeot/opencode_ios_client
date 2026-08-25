@@ -880,7 +880,6 @@ final class AppState {
         // Diagnostics: build stamp + registry summary. One line per launch,
         // enough to identify which binary is running and what the server
         // returned, without dumping the whole payload.
-        Self.logger.notice("DIAG build=da3e705-pdiag6 picker-branch=feat/dynamic-model-picker")
         do {
             let resp = try await apiClient.providers()
             providersResponse = resp
@@ -901,7 +900,6 @@ final class AppState {
         // providers are connected (incl. keyless local ones like Ollama),
         // so the picker shows only models the user can actually run.
         if let registry = try? await apiClient.providerRegistry() {
-            Self.logger.notice("DIAG registry providers=\(registry.providers.count) connected=\(registry.connectedProviderIDs.count) [\(registry.connectedProviderIDs.joined(separator: ","))]")
             rebuildDynamicModelPresets(from: registry)
         } else if catalogModelPresets.isEmpty {
             Self.logger.warning("loadProvidersConfig: /provider registry unavailable, catalog unchanged")
@@ -934,7 +932,6 @@ final class AppState {
         catalogModelPresets = presets
         providerDisplayNames = names
         refreshShortlistDisplayNames(from: presets)
-        Self.logger.notice("DIAG catalog total=\(presets.count) shortlist=\(self.modelShortlist.count)")
         reanchorSelectedModelIndex()
         rebuildPickerModelItems(reason: "catalog")
     }
@@ -1014,9 +1011,6 @@ final class AppState {
         }
         pickerModelItems = filtered.map { ModelPickerItem.model(index: $0.offset, preset: $0.element) }
         pickerModelGen += 1
-        let inputCount = self.pickerModelPresets.count
-        let cachedCount = self.pickerModelItems.count
-        Self.logger.notice("DIAG flat gen=\(self.pickerModelGen) reason=\(reason, privacy: .public) query=\(query, privacy: .public) input=\(inputCount) filtered=\(filtered.count) items=\(cachedCount)")
     }
 
     /// After the picker list is rebuilt, point `selectedModelIndex` at the
