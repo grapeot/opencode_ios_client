@@ -27,7 +27,6 @@ enum L10n {
         case appNoContent
         case appError
         case appSearchFiles
-        case appSearchFilesTitle
         case deepLinkOpening
         case deepLinkInvalid
         case deepLinkSessionUnavailable
@@ -56,43 +55,17 @@ enum L10n {
         case carTab
         case navFiles
         case navSettings
-        case navPreview
-        case navWorkspace
-        case navSessions
         case sidebarHideSessions
         case sidebarShowSessions
 
-        case contentPreviewUnavailableTitle
-        case contentPreviewUnavailableDescription
         case contentRefreshHelp
 
         case settingsTitle
-        case settingsServerConnection
-        case settingsAddress
         case settingsUsername
         case settingsPassword
-        case settingsScheme
-        case settingsStatus
         case settingsConnected
         case settingsDisconnected
         case settingsTestConnection
-        case settingsConnectionTip
-        case settingsEnableSshTunnel
-        case settingsAfterEnableSshTip
-        case settingsVpsHost
-        case settingsSshPort
-        case settingsVpsPort
-        case settingsAssignedRemotePort
-        case settingsSetServerAddress
-        case settingsKnownHost
-        case settingsResetTrustedHost
-        case settingsCopyPublicKey
-        case settingsViewPublicKey
-        case settingsReverseTunnelCommand
-        case settingsNoTunnelCommand
-        case settingsSshTunnel
-        case settingsSshTunnelHelp
-        case settingsSshSetupGuide
         case settingsSshSetupGuideTitle
         case settingsSshSetupGuideBody
         case settingsAutoTheme
@@ -113,7 +86,6 @@ enum L10n {
         case settingsCustomPrompt
         case settingsTerminology
         case settingsTesting
-        case settingsTested
         case settingsTestConnectionScope
         case settingsAbout
         case settingsServerVersion
@@ -144,15 +116,11 @@ enum L10n {
         case settingsPublicKeyCopyFailed
         case settingsPublicKeyRotate
         case settingsPublicKeyErrorTitle
-        case settingsCopyCommand
-        case settingsCommandCopied
-        case settingsUntrusted
         case settingsRotate
         case settingsTrustHostKeyTitle
         case settingsTrustHostKeyMessage
         case settingsTrustHostKeyConfirm
 
-        case settingsConnecting
         case settingsProject
         case settingsProjectServerDefault
         case settingsProjectCustomPath
@@ -271,9 +239,6 @@ enum L10n {
         case chatSelectSessionFirst
         case chatSessionBusyMessage
         case chatNoMessages
-        case chatSessionBusy
-        case chatSessionRetrying
-        case chatSessionIdle
         case chatTurnCompleted
         case chatSpeechTokenMissing
         case chatSpeechTesting
@@ -332,7 +297,6 @@ enum L10n {
         case attachmentImageReadFailed
         case attachmentImageTooLargeAfterCompression
 
-        case permissionRequired
         case permissionAllowOnce
         case permissionAllowAlways
         case permissionReject
@@ -423,16 +387,9 @@ enum L10n {
         case sessionsLoadMore
         case sessionsActionFailedTitle
         case sessionsDelete
-        case sessionsDeleteConfirmTitle
-        case sessionsDeleteConfirmMessage
-        case sessionsDeleteFailedTitle
 
-        case fileLoading
-        case fileError
         case fileBinary
         case fileNoContent
-        case fileMarkdown
-        case filePreview
         case filePreviewMode
         case fileNativePreview
         case fileWebPreview
@@ -490,7 +447,6 @@ enum L10n {
         case configureModelEmptyShortlist
         case configureModelEditShortlist
 
-        case todoButtonLabel
         case todoPanelTitle
         case todoPanelCompleted
         case todoPanelEmpty
@@ -505,7 +461,6 @@ enum L10n {
         Key.appNoContent.rawValue: "No content",
         Key.appError.rawValue: "Error",
         Key.appSearchFiles.rawValue: "Search files",
-        Key.appSearchFilesTitle.rawValue: "Search files",
         Key.deepLinkOpening.rawValue: "Opening session...",
         Key.deepLinkInvalid.rawValue: "This OpenCode session link is invalid.",
         Key.deepLinkSessionUnavailable.rawValue: "This session is not available on the current host. It may belong to another host or exist only in offline history.",
@@ -532,43 +487,17 @@ enum L10n {
         Key.carTab.rawValue: "Car",
         Key.navFiles.rawValue: "Files",
         Key.navSettings.rawValue: "Settings",
-        Key.navPreview.rawValue: "Preview",
-        Key.navWorkspace.rawValue: "Workspace",
-        Key.navSessions.rawValue: "Sessions",
         Key.sidebarHideSessions.rawValue: "Hide sessions",
         Key.sidebarShowSessions.rawValue: "Show sessions",
-        Key.contentPreviewUnavailableTitle.rawValue: "Select file to preview",
-        Key.contentPreviewUnavailableDescription.rawValue: "Choose file from Workspace, or use Open File in the Chat tool/patch cards.",
         Key.contentRefreshHelp.rawValue: "Refresh preview",
 
         Key.settingsTitle.rawValue: "Settings",
-        Key.settingsServerConnection.rawValue: "Server Connection",
-        Key.settingsAddress.rawValue: "Address",
         Key.settingsUsername.rawValue: "Username",
         Key.settingsPassword.rawValue: "Password",
-        Key.settingsScheme.rawValue: "Scheme",
-        Key.settingsStatus.rawValue: "Status",
         Key.settingsConnected.rawValue: "Connected",
         Key.settingsDisconnected.rawValue: "Disconnected",
         Key.settingsTestConnection.rawValue: "Test Connection",
-        Key.settingsConnectionTip.rawValue: "AI Builder Base URL",
-        Key.settingsEnableSshTunnel.rawValue: "Enable SSH Tunnel",
-        Key.settingsAfterEnableSshTip.rawValue: "After enabling SSH Tunnel, tap Test Connection in Server Connection above.",
-        Key.settingsVpsHost.rawValue: "VPS Host",
-        Key.settingsSshPort.rawValue: "SSH Port",
-        Key.settingsVpsPort.rawValue: "Remote Port",
-        Key.settingsAssignedRemotePort.rawValue: "Assigned Remote Port",
-        Key.settingsSetServerAddress.rawValue: "Set Server Address to 127.0.0.1:4096",
-        Key.settingsKnownHost.rawValue: "Known Host",
-        Key.settingsResetTrustedHost.rawValue: "Reset Trusted Host",
-        Key.settingsCopyPublicKey.rawValue: "Copy Public Key",
         Key.settingsPublicKeyCopied.rawValue: "Public Key Copied",
-        Key.settingsViewPublicKey.rawValue: "View Public Key",
-        Key.settingsReverseTunnelCommand.rawValue: "SSH Tunnel Command",
-        Key.settingsNoTunnelCommand.rawValue: "Fill Host, SSH Port, Username, and Assigned Remote Port.",
-        Key.settingsSshTunnel.rawValue: "SSH Tunnel",
-        Key.settingsSshTunnelHelp.rawValue: "Connects local 127.0.0.1:4096 through SSH to the assigned OpenCode remote port. Copy this device's public key to the server admin before connecting.",
-        Key.settingsSshSetupGuide.rawValue: "Setup Guide",
         Key.settingsSshSetupGuideTitle.rawValue: "SSH Gateway Setup",
         Key.settingsSshSetupGuideBody.rawValue: "1. Tap Copy Public Key and send it to the server admin.\n\n2. The admin adds this device key to your user and gives you Host, SSH Port, Username, and Assigned Remote Port. For opencode-private-host, Username is usually opencode, SSH Port is usually 8006, and the first user's Remote Port is usually 19001.\n\n3. Fill those values here, enable SSH Tunnel, then tap Set Server Address to 127.0.0.1:4096.\n\n4. Tap Test Connection. The app will connect to local 127.0.0.1:4096; the SSH tunnel forwards it to your private OpenCode container.\n\n5. If provider auth is not configured yet, ask the admin to complete the first provider login in the OpenCode Web UI.",
         Key.settingsAutoTheme.rawValue: "Auto",
@@ -589,7 +518,6 @@ enum L10n {
         Key.settingsCustomPrompt.rawValue: "Custom Prompt",
         Key.settingsTerminology.rawValue: "Terminology (comma-separated)",
         Key.settingsTesting.rawValue: "Testing...",
-        Key.settingsTested.rawValue: "OK",
         Key.settingsTestConnectionScope.rawValue: "Test Connection checks endpoint and token access only. It does not validate the selected transcription strategy.",
         Key.settingsAbout.rawValue: "About",
         Key.settingsServerVersion.rawValue: "Server Version",
@@ -619,14 +547,10 @@ enum L10n {
         Key.settingsPublicKeyCopyFailed.rawValue: "Unable to load SSH public key.",
         Key.settingsPublicKeyRotate.rawValue: "Rotate Key",
         Key.settingsPublicKeyErrorTitle.rawValue: "Public Key Error",
-        Key.settingsCopyCommand.rawValue: "Copy Command",
-        Key.settingsCommandCopied.rawValue: "Command Copied",
-        Key.settingsUntrusted.rawValue: "Untrusted",
         Key.settingsRotate.rawValue: "Rotate",
         Key.settingsTrustHostKeyTitle.rawValue: "Trust New SSH Host Key?",
         Key.settingsTrustHostKeyMessage.rawValue: "%@:%d presented a different host key.\n\nPrevious: %@\nNew: %@\n\nTrust it only if you expected the server to be rebuilt or reinstalled.",
         Key.settingsTrustHostKeyConfirm.rawValue: "Trust and Reconnect",
-        Key.settingsConnecting.rawValue: "Connecting...",
         Key.settingsProject.rawValue: "Project (Workspace)",
         Key.settingsProjectServerDefault.rawValue: "Server default",
         Key.settingsProjectCustomPath.rawValue: "Custom path",
@@ -745,9 +669,6 @@ enum L10n {
         Key.chatSelectSessionFirst.rawValue: "Please pick a session first",
         Key.chatSessionBusyMessage.rawValue: "Session is running, messages are not visible yet, refreshing...",
         Key.chatNoMessages.rawValue: "No messages yet",
-        Key.chatSessionBusy.rawValue: "Busy",
-        Key.chatSessionRetrying.rawValue: "Retrying...",
-        Key.chatSessionIdle.rawValue: "Idle",
         Key.chatTurnCompleted.rawValue: "Completed",
         Key.chatSpeechTokenMissing.rawValue: "Speech recognition is not configured. Set AI Builder Token in Settings → Speech Recognition and tap Test Connection.",
         Key.chatSpeechTesting.rawValue: "AI Builder connection is being tested, please wait.",
@@ -806,7 +727,6 @@ enum L10n {
         Key.attachmentImageReadFailed.rawValue: "Could not read the selected image.",
         Key.attachmentImageTooLargeAfterCompression.rawValue: "Image is too large after compression (%@ MB). Please choose a smaller image.",
 
-        Key.permissionRequired.rawValue: "Permission Required",
         Key.permissionAllowOnce.rawValue: "Allow Once",
         Key.permissionAllowAlways.rawValue: "Allow Always",
         Key.permissionReject.rawValue: "Reject",
@@ -897,16 +817,9 @@ enum L10n {
         Key.sessionsLoadMore.rawValue: "Load more sessions",
         Key.sessionsActionFailedTitle.rawValue: "Session Action Failed",
         Key.sessionsDelete.rawValue: "Delete",
-        Key.sessionsDeleteConfirmTitle.rawValue: "Delete Session",
-        Key.sessionsDeleteConfirmMessage.rawValue: "Delete this session and all its messages? This cannot be undone.",
-        Key.sessionsDeleteFailedTitle.rawValue: "Delete Failed",
 
-        Key.fileLoading.rawValue: "Loading...",
-        Key.fileError.rawValue: "Error",
         Key.fileBinary.rawValue: "Binary file",
         Key.fileNoContent.rawValue: "No content",
-        Key.fileMarkdown.rawValue: "Markdown",
-        Key.filePreview.rawValue: "Preview",
         Key.filePreviewMode.rawValue: "Preview Mode",
         Key.fileNativePreview.rawValue: "Native Preview",
         Key.fileWebPreview.rawValue: "Web Preview",
@@ -965,7 +878,6 @@ enum L10n {
         Key.configureModelEmptyShortlist.rawValue: "Add models in Settings → Models.",
         Key.configureModelEditShortlist.rawValue: "Add, remove, or reorder in Settings",
 
-        Key.todoButtonLabel.rawValue: "Todo",
         Key.todoPanelTitle.rawValue: "Todo",
         Key.todoPanelCompleted.rawValue: "%d/%d completed",
         Key.todoPanelEmpty.rawValue: "No todos yet",
@@ -980,7 +892,6 @@ enum L10n {
         Key.appNoContent.rawValue: "暂无内容",
         Key.appError.rawValue: "错误",
         Key.appSearchFiles.rawValue: "搜索文件",
-        Key.appSearchFilesTitle.rawValue: "搜索文件",
         Key.deepLinkOpening.rawValue: "正在打开会话…",
         Key.deepLinkInvalid.rawValue: "这个 OpenCode 会话链接无效。",
         Key.deepLinkSessionUnavailable.rawValue: "当前主机上找不到这个会话。它可能属于其他主机，或只存在于离线历史中。",
@@ -1007,43 +918,17 @@ enum L10n {
         Key.carTab.rawValue: "驾驶",
         Key.navFiles.rawValue: "文件",
         Key.navSettings.rawValue: "设置",
-        Key.navPreview.rawValue: "预览",
-        Key.navWorkspace.rawValue: "工作区",
-        Key.navSessions.rawValue: "会话",
         Key.sidebarHideSessions.rawValue: "隐藏会话栏",
         Key.sidebarShowSessions.rawValue: "显示会话栏",
-        Key.contentPreviewUnavailableTitle.rawValue: "选择文件预览",
-        Key.contentPreviewUnavailableDescription.rawValue: "在左侧工作区选择文件，或在聊天里的工具/补丁卡片中点“打开文件”。",
         Key.contentRefreshHelp.rawValue: "刷新预览",
 
         Key.settingsTitle.rawValue: "设置",
-        Key.settingsServerConnection.rawValue: "服务器连接",
-        Key.settingsAddress.rawValue: "地址",
         Key.settingsUsername.rawValue: "用户名",
         Key.settingsPassword.rawValue: "密码",
-        Key.settingsScheme.rawValue: "协议",
-        Key.settingsStatus.rawValue: "状态",
         Key.settingsConnected.rawValue: "已连接",
         Key.settingsDisconnected.rawValue: "未连接",
         Key.settingsTestConnection.rawValue: "测试连接",
-        Key.settingsConnectionTip.rawValue: "AI Builder 服务地址",
-        Key.settingsEnableSshTunnel.rawValue: "启用 SSH 隧道",
-        Key.settingsAfterEnableSshTip.rawValue: "开启 SSH 隧道后，请在上方服务器连接中点击“测试连接”。",
-        Key.settingsVpsHost.rawValue: "VPS 地址",
-        Key.settingsSshPort.rawValue: "SSH 端口",
-        Key.settingsVpsPort.rawValue: "远端端口",
-        Key.settingsAssignedRemotePort.rawValue: "分配的远端端口",
-        Key.settingsSetServerAddress.rawValue: "将服务器地址设置为 127.0.0.1:4096",
-        Key.settingsKnownHost.rawValue: "已知主机",
-        Key.settingsResetTrustedHost.rawValue: "重置已信任主机",
-        Key.settingsCopyPublicKey.rawValue: "复制公钥",
         Key.settingsPublicKeyCopied.rawValue: "公钥已复制",
-        Key.settingsViewPublicKey.rawValue: "查看公钥",
-        Key.settingsReverseTunnelCommand.rawValue: "SSH 隧道命令",
-        Key.settingsNoTunnelCommand.rawValue: "请先填写主机地址、SSH 端口、用户名和分配的远端端口。",
-        Key.settingsSshTunnel.rawValue: "SSH 隧道",
-        Key.settingsSshTunnelHelp.rawValue: "通过 SSH 把本机 127.0.0.1:4096 连到服务器分配的 OpenCode 远端端口。连接前先把本设备公钥发给管理员添加。",
-        Key.settingsSshSetupGuide.rawValue: "设置说明",
         Key.settingsSshSetupGuideTitle.rawValue: "SSH 网关设置",
         Key.settingsSshSetupGuideBody.rawValue: "1. 点击复制公钥，把它发给服务器管理员。\n\n2. 管理员把这台设备的 key 加到你的用户下面，并给你 Host、SSH Port、Username 和分配的 Remote Port。opencode-private-host 默认 Username 通常是 opencode，SSH Port 通常是 8006，第一个用户的 Remote Port 通常是 19001。\n\n3. 在这里填入这些值，开启 SSH Tunnel，然后点击“将服务器地址设置为 127.0.0.1:4096”。\n\n4. 点击测试连接。App 会访问本机 127.0.0.1:4096，SSH 隧道会把它转发到你的私有 OpenCode 容器。\n\n5. 如果 provider auth 还没配置，请让管理员先在 OpenCode Web UI 里完成第一次 provider 登录。",
         Key.settingsAutoTheme.rawValue: "自动",
@@ -1064,7 +949,6 @@ enum L10n {
         Key.settingsCustomPrompt.rawValue: "自定义提示词",
         Key.settingsTerminology.rawValue: "术语（逗号分隔）",
         Key.settingsTesting.rawValue: "测试中...",
-        Key.settingsTested.rawValue: "可用",
         Key.settingsTestConnectionScope.rawValue: "测试连接只检查服务地址和令牌是否可用，不验证当前选择的转写策略。",
         Key.settingsAbout.rawValue: "关于",
         Key.settingsServerVersion.rawValue: "服务器版本",
@@ -1094,9 +978,6 @@ enum L10n {
         Key.settingsPublicKeyCopyFailed.rawValue: "无法加载 SSH 公钥。",
         Key.settingsPublicKeyRotate.rawValue: "更换密钥",
         Key.settingsPublicKeyErrorTitle.rawValue: "公钥错误",
-        Key.settingsCopyCommand.rawValue: "复制命令",
-        Key.settingsCommandCopied.rawValue: "命令已复制",
-        Key.settingsUntrusted.rawValue: "未信任",
         Key.settingsRotate.rawValue: "更换",
         Key.settingsTrustHostKeyTitle.rawValue: "信任新的 SSH Host Key？",
         Key.settingsTrustHostKeyMessage.rawValue: "%@:%d 返回了不同的 host key。\n\n之前：%@\n新的：%@\n\n只有在你确认服务器刚重建或重装时，才信任这个新 key。",
@@ -1104,7 +985,6 @@ enum L10n {
         Key.errorServerAddressEmpty.rawValue: "服务器地址不能为空",
         Key.errorWanRequiresHttps.rawValue: "WAN 地址必须使用 HTTPS",
         Key.errorUsingLanHttp.rawValue: "正在使用 LAN HTTP",
-        Key.settingsConnecting.rawValue: "连接中...",
         Key.settingsProject.rawValue: "项目（工作区）",
         Key.settingsProjectServerDefault.rawValue: "服务器默认",
         Key.settingsProjectCustomPath.rawValue: "自定义路径",
@@ -1223,9 +1103,6 @@ enum L10n {
         Key.chatSelectSessionFirst.rawValue: "请选择一个会话",
         Key.chatSessionBusyMessage.rawValue: "会话正在运行中，消息尚未可见，正在刷新中…",
         Key.chatNoMessages.rawValue: "暂无消息",
-        Key.chatSessionBusy.rawValue: "忙碌",
-        Key.chatSessionRetrying.rawValue: "重试中",
-        Key.chatSessionIdle.rawValue: "空闲",
         Key.chatTurnCompleted.rawValue: "已完成",
         Key.chatSpeechTokenMissing.rawValue: "语音识别未配置：请先到“设置 > 语音识别”填写 AI Builder 访问令牌，并点击“测试连接”。",
         Key.chatSpeechTesting.rawValue: "AI Builder 正在测试连接，请稍候。",
@@ -1284,7 +1161,6 @@ enum L10n {
         Key.attachmentImageReadFailed.rawValue: "无法读取所选图片。",
         Key.attachmentImageTooLargeAfterCompression.rawValue: "图片压缩后仍过大（%@ MB）。请选择更小的图片。",
 
-        Key.permissionRequired.rawValue: "需要授权",
         Key.permissionAllowOnce.rawValue: "允许一次",
         Key.permissionAllowAlways.rawValue: "始终允许",
         Key.permissionReject.rawValue: "拒绝",
@@ -1375,16 +1251,9 @@ enum L10n {
         Key.sessionsLoadMore.rawValue: "加载更多会话",
         Key.sessionsActionFailedTitle.rawValue: "会话操作失败",
         Key.sessionsDelete.rawValue: "删除",
-        Key.sessionsDeleteConfirmTitle.rawValue: "删除会话",
-        Key.sessionsDeleteConfirmMessage.rawValue: "确认删除这个会话及其全部消息吗？此操作无法撤销。",
-        Key.sessionsDeleteFailedTitle.rawValue: "删除失败",
 
-        Key.fileLoading.rawValue: "加载中...",
-        Key.fileError.rawValue: "错误",
         Key.fileBinary.rawValue: "二进制文件",
         Key.fileNoContent.rawValue: "无内容",
-        Key.fileMarkdown.rawValue: "Markdown",
-        Key.filePreview.rawValue: "预览",
         Key.filePreviewMode.rawValue: "预览方式",
         Key.fileNativePreview.rawValue: "原生预览",
         Key.fileWebPreview.rawValue: "Web 预览",
@@ -1440,7 +1309,6 @@ enum L10n {
         Key.configureModelEmptyShortlist.rawValue: "请到设置 → 模型 添加。",
         Key.configureModelEditShortlist.rawValue: "到设置里添加、删除或排序",
 
-        Key.todoButtonLabel.rawValue: "任务",
         Key.todoPanelTitle.rawValue: "任务",
         Key.todoPanelCompleted.rawValue: "%d/%d 已完成",
         Key.todoPanelEmpty.rawValue: "暂无任务",
