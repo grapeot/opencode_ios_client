@@ -22,7 +22,7 @@
 | `context_compaction/` | 手动 Context Compaction | `design.md` | proposal only，未实现 |
 | `session_finder/` | Session Finder 智能会话检索 | `design.md` | 设计草案 |
 | `push_notifications/` | 后台推送通知方案 | `research.md` | 调研 |
-| `localization/` | en/zh-Hans 双语本地化 | `research.md` | 规划 |
+| `localization/` | en/zh-Hans 双语本地化 | `research.md` | Settings 已有 en/zh；research 文档偏旧 |
 
 ## archive/ — 一次性工作记录与冻结决策（只进不改）
 

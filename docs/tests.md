@@ -34,8 +34,12 @@
 - `OpenCodeClient/OpenCodeClientTests/OpenCodeClientTests.swift`
 - `OpenCodeClient/OpenCodeClientTests/ReadToolCardIntegrationTests.swift`
 - `OpenCodeClient/OpenCodeClientTests/ToolCardClassifierTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/ClientCapabilityTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/OpenCodeDeepLinkTests.swift`
 - `OpenCodeClient/OpenCodeClientUITests/OpenCodeClientUITests.swift`
 - `OpenCodeClient/OpenCodeClientUITests/ToolCardsUITests.swift`
+- `OpenCodeClient/OpenCodeClientUITests/ModelShortlistUITests.swift`
+- `OpenCodeClient/OpenCodeClientUITests/CarModeUITests.swift`
 - `OpenCodeClient/OpenCodeClientUITests/OpenCodeClientUITestsLaunchTests.swift`
 - `ui_driver/`
 - `skills/operate_ios_simulator.md`
