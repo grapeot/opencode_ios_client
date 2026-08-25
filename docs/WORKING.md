@@ -5,9 +5,16 @@
 ## 当前状态
 
 - **最后更新**：2026-08-24
-- **分支**：`fix/send-failure-visibility`
-- **编译/测试**：build 通过；全套 OpenCodeClientTests 通过（含 8 个新测试）
-- **Phase**：确定性 ID 发送对账 + 行内发送失败可见性（supersedes #89, closes #81）
+- **分支**：`master` @ `b420f9d`（PR #149）
+- **编译/测试**：build 通过；shortlist 单测与 `ModelShortlistUITests` 通过
+- **Phase**：聊天栏模型选择改为设备本地 shortlist（Settings → Models）
+
+### 2026-08-24 — 本地 model shortlist（PR #149，related #99 / #144）
+
+- 官方 picker 的可见性在桌面 persist，`/provider` 与 `/config/providers` 都是完整目录。iOS 在本机做 shortlist：Settings → Models 从已连接 chat-capable catalog 搜索添加，左滑删除，左边手柄排序，点行改 toolbar short name。
+- 聊天栏 Model & Agent 只渲染这份名单、同一顺序。空名单和「到设置里编辑」都会跳到 Settings 并高亮 Models。
+- 已连接的自定义/本地 provider（如 `ollama`）会出现在 catalog 里；不再靠写死 preset 发版。
+- Add Models 页只负责批量加入（Cancel / Add）。删除回 shortlist 左滑。
 
 ### 2026-08-24 — 确定性 messageID + 行内发送失败横幅（supersedes #89，closes #81）
 
@@ -233,7 +240,9 @@ OPENCODE_SERVER_PASSWORD="restart_Web@" \
 
 ## 进行中
 
-### Markdown Web Preview（2026-06-14 启动）
+无。Markdown Web Preview Phase 0/1/2 已交付，记录见下方「已完成」。
+
+### Markdown Web Preview（2026-06-14 启动，已交付）
 
 > 设计见 `docs/archive/2026-06_markdown_web_preview_prd.md` / `docs/archive/2026-06_markdown_web_preview_rfc.md`。本轮交付 Phase 0/1/2。
 > 决策：图片走 data URI 复用 `MarkdownImageResolver`；Web 非默认模式；编排见 RFC §12.5。
@@ -279,8 +288,8 @@ inline SVG/wide table/安全过滤/相对链接全部验证。截图存 `outputs
 已知 fixture 细节：html_cards 的 per-status 颜色未完全还原（卡片成形但配色偏中性），
 非阻塞，后续可调 fixture CSS 选择器或 DOMPurify style 处理。
 
-- [ ] **PR 合并** — `design-redesign` 分支所有改动已完成并通过测试，待创建 PR 合并到 master
-- [ ] **Model 列表更新 — 删除 Opus/Sonnet，添加 DeepSeek（2026-04-23）**：删除 `anthropic/claude-opus-4-6` 和 `anthropic/claude-sonnet-4-6`，新增 `deepseek/deepseek-v4-pro`
+- [x] **PR 合并** — design-redesign / Web Preview 已在 master
+- [x] **Model 列表** — 不再维护写死 preset 表；改走 PR #149 shortlist
 
 ## 已完成（近期）
 
