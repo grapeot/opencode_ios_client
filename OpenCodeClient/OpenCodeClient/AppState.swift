@@ -180,6 +180,7 @@ final class AppState {
     static let languagePreferenceKey = L10n.languagePreferenceUserDefaultsKey
     static let carSessionsByContextKey = "carSessionsByContext.v1"
     static let healthExportPermissionKey = "clientCapability.healthExportAll.permission.v1"
+    static let modelShortlistKey = "modelShortlist.v1"
 
     init(
         apiClient: APIClientProtocol = APIClient(),
@@ -261,6 +262,11 @@ final class AppState {
         if let data = UserDefaults.standard.data(forKey: Self.carSessionsByContextKey),
            let decoded = try? JSONDecoder().decode([String: CarSessionRecord].self, from: data) {
             carSessionsByContext = decoded
+        }
+
+        if let data = UserDefaults.standard.data(forKey: Self.modelShortlistKey),
+           let decoded = try? JSONDecoder().decode([ModelShortlistItem].self, from: data) {
+            modelShortlist = decoded
         }
     }
 
@@ -589,6 +595,8 @@ final class AppState {
     var sessionDiffs: [FileDiff] { get { fileStore.sessionDiffs } set { fileStore.sessionDiffs = newValue } }
     var selectedDiffFile: String? { get { fileStore.selectedDiffFile } set { fileStore.selectedDiffFile = newValue } }
     var selectedTab: Int = RootTab.chat.rawValue
+    /// When set, Settings should open and pulse the matching row.
+    var settingsFocus: SettingsFocus?
     var fileToOpenInFilesTab: String?  // 从 Chat 中 tool 点击跳转时设置，Files tab 或 sheet 展示
     var fileToOpenInFilesTabWorkspaceDirectory: String?
 
@@ -605,10 +613,36 @@ final class AppState {
     var fileSearchQuery: String { get { fileStore.fileSearchQuery } set { fileStore.fileSearchQuery = newValue } }
     var fileSearchResults: [String] { get { fileStore.fileSearchResults } set { fileStore.fileSearchResults = newValue } }
 
-    // Provider config cache (for context usage ring)
+    // Provider config cache (for context usage ring + dynamic model picker)
     var providersResponse: ProvidersResponse? = nil
     var providerModelsIndex: [String: ProviderModel] = [:]
     var providerConfigError: String? = nil
+    /// Full chat-capable catalog from connected providers. Settings search
+    /// uses this; the chat picker does not.
+    var catalogModelPresets: [ModelPreset] = []
+    /// Device-local picker membership. Persisted separately from the desktop
+    /// manage-models store, which the server API does not expose.
+    var modelShortlist: [ModelShortlistItem] = [] {
+        didSet {
+            persistModelShortlist()
+            rebuildPickerModelItems(reason: "shortlist")
+        }
+    }
+    /// Catalog alias for existing tests and diagnostics.
+    var dynamicModelPresets: [ModelPreset] { catalogModelPresets }
+    /// Provider display names for grouping the dynamic picker
+    /// (providerID -> human name, e.g. "ollama" -> "Ollama (local)").
+    var providerDisplayNames: [String: String] = [:]
+    /// Model picker search text. Lives in AppState (not view @State) because
+    /// the iOS 26 sheet content closure does not track the presenting view's
+    /// @State updates — device log pdiag3: cached=18 groups but the sheet's
+    /// List evaluated modelGroups as empty and dropped the agent section.
+    var modelSearchText: String = ""
+    /// Flat picker rows (provider header rows + model rows) rendered as one
+    /// Section. Flat because iOS 26 List mis-diffs ForEach-generated dynamic
+    /// Sections (pdiag1: false duplicate-ID warnings; pdiag2/3: zero rendered).
+    var pickerModelItems: [ModelPickerItem] = []
+    var pickerModelGen = 0
 
     let apiClient: APIClientProtocol
     let sseClient: SSEClientProtocol
@@ -660,8 +694,12 @@ final class AppState {
     var loadingOlderMessagesSessionIDs: Set<String> = []
 
     var selectedModel: ModelPreset? {
-        guard modelPresets.indices.contains(selectedModelIndex) else { return nil }
-        return modelPresets[selectedModelIndex]
+        pickerModelPresets.indices.contains(selectedModelIndex) ? pickerModelPresets[selectedModelIndex] : nil
+    }
+
+    /// Chat picker source: only the local shortlist.
+    var pickerModelPresets: [ModelPreset] {
+        modelShortlist.map { $0.asPreset() }
     }
     
     var selectedAgent: AgentInfo? {
@@ -839,6 +877,9 @@ final class AppState {
     }
 
     func loadProvidersConfig() async {
+        // Diagnostics: build stamp + registry summary. One line per launch,
+        // enough to identify which binary is running and what the server
+        // returned, without dumping the whole payload.
         do {
             let resp = try await apiClient.providers()
             providersResponse = resp
@@ -853,6 +894,137 @@ final class AppState {
             providerModelsIndex = idx
         } catch {
             providerConfigError = error.localizedDescription
+        }
+
+        // The dynamic picker prefers the /provider registry: it knows which
+        // providers are connected (incl. keyless local ones like Ollama),
+        // so the picker shows only models the user can actually run.
+        if let registry = try? await apiClient.providerRegistry() {
+            rebuildDynamicModelPresets(from: registry)
+        } else if catalogModelPresets.isEmpty {
+            Self.logger.warning("loadProvidersConfig: /provider registry unavailable, catalog unchanged")
+        }
+    }
+
+    /// Builds the Settings catalog from connected chat-capable models.
+    /// The chat picker reads `modelShortlist`, not this list.
+    func rebuildDynamicModelPresets(from registry: ProviderRegistryResponse) {
+        let connected = Set(registry.connectedProviderIDs)
+        var names: [String: String] = [:]
+        var presets: [ModelPreset] = []
+        for provider in registry.providers where connected.contains(provider.id) {
+            if let n = provider.name, !n.isEmpty { names[provider.id] = n }
+            for (modelID, model) in provider.models.sorted(by: { $0.key < $1.key }) {
+                guard model.capabilities?.isChatCapable ?? true else { continue }
+                presets.append(
+                    ModelPreset(
+                        displayName: model.name ?? modelID,
+                        providerID: provider.id,
+                        modelID: modelID
+                    )
+                )
+            }
+        }
+        presets.sort { a, b in
+            if a.providerID != b.providerID { return a.providerID < b.providerID }
+            return a.displayName < b.displayName
+        }
+        catalogModelPresets = presets
+        providerDisplayNames = names
+        refreshShortlistDisplayNames(from: presets)
+        reanchorSelectedModelIndex()
+        rebuildPickerModelItems(reason: "catalog")
+    }
+
+    func revealModelShortlistInSettings() {
+        settingsFocus = .modelShortlist
+        selectedTab = RootTab.settings.rawValue
+    }
+
+    func persistModelShortlist() {
+        if let data = try? JSONEncoder().encode(modelShortlist) {
+            UserDefaults.standard.set(data, forKey: Self.modelShortlistKey)
+        }
+    }
+
+    func addModelsToShortlist(_ presets: [ModelPreset]) {
+        var existing = Set(modelShortlist.map(\.id))
+        var next = modelShortlist
+        for preset in presets where !existing.contains(preset.id) {
+            next.append(ModelShortlistItem.from(preset))
+            existing.insert(preset.id)
+        }
+        guard next.count != modelShortlist.count else { return }
+        modelShortlist = next
+        reanchorSelectedModelIndex()
+    }
+
+    func removeShortlistItem(id: String) {
+        modelShortlist.removeAll { $0.id == id }
+        reanchorSelectedModelIndex()
+    }
+
+    func moveShortlist(from source: IndexSet, to destination: Int) {
+        var next = modelShortlist
+        let moving = source.sorted().map { next[$0] }
+        for index in source.sorted().reversed() {
+            next.remove(at: index)
+        }
+        let dest = min(max(destination - source.filter { $0 < destination }.count, 0), next.count)
+        next.insert(contentsOf: moving, at: dest)
+        modelShortlist = next
+        reanchorSelectedModelIndex()
+    }
+
+    func updateShortlistShortName(id: String, shortName: String) {
+        guard let idx = modelShortlist.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = shortName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var item = modelShortlist[idx]
+        item.shortName = trimmed.isEmpty ? ModelPreset.suggestedShortName(for: item.displayName) : trimmed
+        modelShortlist[idx] = item
+    }
+
+    private func refreshShortlistDisplayNames(from catalog: [ModelPreset]) {
+        guard !modelShortlist.isEmpty else { return }
+        let names = Dictionary(uniqueKeysWithValues: catalog.map { ($0.id, $0.displayName) })
+        var changed = false
+        var next = modelShortlist
+        for i in next.indices {
+            if let name = names[next[i].id], name != next[i].displayName {
+                next[i].displayName = name
+                changed = true
+            }
+        }
+        if changed { modelShortlist = next }
+    }
+
+    /// Rebuilds the flat picker rows (provider header + models) from the
+    /// current picker source list and search text. AppState-backed so the
+    /// sheet observes it directly.
+    func rebuildPickerModelItems(reason: String) {
+        let query = modelSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let filtered = pickerModelPresets.enumerated().filter { _, preset in
+            query.isEmpty
+                || preset.displayName.lowercased().contains(query)
+                || preset.modelID.lowercased().contains(query)
+                || preset.providerID.lowercased().contains(query)
+        }
+        pickerModelItems = filtered.map { ModelPickerItem.model(index: $0.offset, preset: $0.element) }
+        pickerModelGen += 1
+    }
+
+    /// After the picker list is rebuilt, point `selectedModelIndex` at the
+    /// same model in the new list (or the canonical successor for aged ids).
+    private func reanchorSelectedModelIndex() {
+        let savedID = currentSessionID.flatMap { selectedModelIDBySessionID[$0] }
+            ?? selectedModel.map { $0.id }
+            ?? pickerModelPresets.first?.id
+        guard let savedID else { return }
+        let canonical = canonicalModelPresetID(for: savedID)
+        if let idx = pickerModelPresets.firstIndex(where: { $0.id == canonical }) {
+            selectedModelIndex = idx
+        } else if !pickerModelPresets.isEmpty {
+            selectedModelIndex = 0
         }
     }
 

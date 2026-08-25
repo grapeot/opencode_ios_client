@@ -111,6 +111,7 @@ struct ChatToolbarView: View {
     
     private var configButton: some View {
         Button {
+            state.rebuildPickerModelItems(reason: "open")
             showConfigSheet = true
         } label: {
             HStack(spacing: 4) {
@@ -129,74 +130,7 @@ struct ChatToolbarView: View {
         }
         .accessibilityIdentifier("chat-toolbar-model")
         .sheet(isPresented: $showConfigSheet) {
-            NavigationStack {
-                List {
-                    Section(L10n.t(.configureModel)) {
-                        ForEach(Array(state.modelPresets.enumerated()), id: \.element.id) { index, preset in
-                            Button {
-                                state.setSelectedModelIndex(index)
-                            } label: {
-                                HStack {
-                                    Text(preset.displayName)
-                                    Spacer()
-                                    if state.selectedModelIndex == index {
-                                        Image(systemName: "checkmark")
-                                            .foregroundColor(DesignColors.Brand.primary)
-                                    }
-                                }
-                            }
-                            .foregroundColor(.primary)
-                        }
-                    }
-                    
-                    Section(L10n.t(.configureAgent)) {
-                        if state.isLoadingAgents {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                Spacer()
-                            }
-                        } else if state.visibleAgents.isEmpty {
-                            Text(L10n.t(.configureNoAgents))
-                                .foregroundColor(.secondary)
-                        } else {
-                            ForEach(Array(state.visibleAgents.enumerated()), id: \.element.id) { index, agent in
-                                Button {
-                                    state.setSelectedAgentIndex(index)
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading) {
-                                            Text(agent.shortName)
-                                            if let desc = agent.description, !desc.isEmpty {
-                                                Text(desc)
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                        Spacer()
-                                        if state.selectedAgentIndex == index {
-                                            Image(systemName: "checkmark")
-                                                .foregroundColor(DesignColors.Brand.primary)
-                                        }
-                                    }
-                                }
-                                .foregroundColor(.primary)
-                            }
-                        }
-                    }
-                }
-                .navigationTitle(L10n.t(.configureTitle))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(L10n.t(.appDone)) {
-                            showConfigSheet = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
+            ModelConfigSheet(state: state, isPresented: $showConfigSheet)
         }
     }
 
@@ -251,5 +185,177 @@ struct ChatToolbarView: View {
 
     private var todoPanelContent: some View {
         TodoListPanel(todos: currentTodos)
+    }
+}
+
+private struct ModelConfigSheet: View {
+    @Bindable var state: AppState
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            List {
+                modelSections
+                agentSection
+            }
+            .navigationTitle(L10n.t(.configureTitle))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t(.appDone)) {
+                        isPresented = false
+                    }
+                }
+            }
+            .onAppear { state.rebuildPickerModelItems(reason: "appear") }
+            .onChange(of: state.modelSearchText) { _, _ in
+                state.rebuildPickerModelItems(reason: "search")
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var modelSections: some View {
+        if state.modelShortlist.isEmpty {
+            Section(L10n.t(.configureModel)) {
+                settingsJumpRow(
+                    title: L10n.t(.configureModelEmptyShortlist),
+                    systemImage: "plus.circle.fill",
+                    identifier: "configure-empty-shortlist"
+                )
+            }
+        } else {
+            Section {
+                TextField(L10n.t(.configureModelSearchPlaceholder), text: $state.modelSearchText)
+                    .autocorrectionDisabled()
+            }
+            Section(L10n.t(.configureModel)) {
+                ForEach(state.pickerModelItems) { item in
+                    pickerItemRow(item)
+                }
+            }
+            if state.pickerModelItems.isEmpty {
+                Section {
+                    Text(L10n.t(.configureModelNoMatches))
+                        .foregroundColor(.secondary)
+                }
+            }
+            Section {
+                settingsJumpRow(
+                    title: L10n.t(.configureModelEditShortlist),
+                    systemImage: "list.bullet.rectangle",
+                    identifier: "configure-edit-shortlist"
+                )
+            }
+        }
+    }
+
+    private func settingsJumpRow(title: String, systemImage: String, identifier: String) -> some View {
+        Button {
+            isPresented = false
+            state.revealModelShortlistInSettings()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                Text(title)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.forward.circle.fill")
+                    .font(.title2)
+            }
+            .foregroundStyle(DesignColors.Brand.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder
+    private var agentSection: some View {
+        Section(L10n.t(.configureAgent)) {
+            if state.isLoadingAgents {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            } else if state.visibleAgents.isEmpty {
+                Text(L10n.t(.configureNoAgents))
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(Array(state.visibleAgents.enumerated()), id: \.element.id) { index, agent in
+                    agentRow(index: index, agent: agent)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pickerItemRow(_ item: ModelPickerItem) -> some View {
+        switch item {
+        case .providerHeader(let providerID):
+            providerHeaderRow(providerID)
+        case .model(let index, let preset):
+            modelRow(index: index, preset: preset)
+        }
+    }
+
+    private func providerHeaderRow(_ providerID: String) -> some View {
+        Text(state.providerDisplayNames[providerID] ?? providerID)
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(.secondary)
+            .padding(.top, 4)
+            .accessibilityIdentifier("model-picker-header-\(providerID)")
+    }
+
+    private func modelRow(index: Int, preset: ModelPreset) -> some View {
+        Button {
+            state.setSelectedModelIndex(index)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.displayName)
+                    Text("\(state.providerDisplayNames[preset.providerID] ?? preset.providerID) / \(preset.modelID)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if state.selectedModelIndex == index {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(DesignColors.Brand.primary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.primary)
+        .accessibilityIdentifier("model-picker-row-\(preset.providerID)-\(preset.modelID)")
+    }
+
+    private func agentRow(index: Int, agent: AgentInfo) -> some View {
+        Button {
+            state.setSelectedAgentIndex(index)
+        } label: {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(agent.shortName)
+                    if let desc = agent.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                if state.selectedAgentIndex == index {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(DesignColors.Brand.primary)
+                }
+            }
+        }
+        .foregroundColor(.primary)
     }
 }

@@ -20,6 +20,7 @@ struct SettingsTabView: View {
     @State private var publicKeyForSheet = ""
     @State private var showStrategyHelp = false
     @State private var publicKeyLoadError: String?
+    @State private var highlightModelShortlist = false
 
     private var supportsCarMode: Bool {
         #if os(iOS)
@@ -31,6 +32,7 @@ struct SettingsTabView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             Form {
                 Section {
                     NavigationLink {
@@ -90,6 +92,28 @@ struct SettingsTabView: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
+                }
+
+                Section {
+                    NavigationLink {
+                        ModelShortlistView(state: state)
+                    } label: {
+                        HStack {
+                            Text(L10n.t(.settingsModelShortlist))
+                            Spacer()
+                            Text("\(state.modelShortlist.count)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("settings-model-shortlist")
+                    .listRowBackground(
+                        highlightModelShortlist
+                            ? DesignColors.Brand.primary.opacity(0.22)
+                            : Color.clear
+                    )
+                    .id("settings-model-shortlist-row")
+                } footer: {
+                    Text(L10n.t(.settingsModelShortlistFooter))
                 }
 
                 Section(L10n.t(.settingsAppearance)) {
@@ -268,6 +292,10 @@ struct SettingsTabView: View {
                 #if !os(visionOS)
                 _ = try? state.sshTunnelManager.generateOrGetPublicKey()
                 #endif
+                pulseModelShortlistIfNeeded(proxy: proxy)
+            }
+            .onChange(of: state.settingsFocus) { _, _ in
+                pulseModelShortlistIfNeeded(proxy: proxy)
             }
             .sheet(isPresented: $showPublicKeySheet) {
                 PublicKeySheet(
@@ -324,6 +352,28 @@ struct SettingsTabView: View {
                     mismatch.expectedFingerprint,
                     mismatch.presentedFingerprint
                 ))
+            }
+            }
+        }
+    }
+
+    private func pulseModelShortlistIfNeeded(proxy: ScrollViewProxy) {
+        guard state.settingsFocus == .modelShortlist else { return }
+        DispatchQueue.main.async {
+            withAnimation {
+                proxy.scrollTo("settings-model-shortlist-row", anchor: .center)
+            }
+            withAnimation(.easeInOut(duration: 0.28).repeatCount(4, autoreverses: true)) {
+                highlightModelShortlist = true
+            }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.4))
+            withAnimation(.easeOut(duration: 0.25)) {
+                highlightModelShortlist = false
+            }
+            if state.settingsFocus == .modelShortlist {
+                state.settingsFocus = nil
             }
         }
     }

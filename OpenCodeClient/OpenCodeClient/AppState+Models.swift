@@ -8,10 +8,10 @@ import os
 /// current preset slot.
 extension AppState {
     func setSelectedModelIndex(_ index: Int) {
-        guard modelPresets.indices.contains(index) else { return }
+        guard pickerModelPresets.indices.contains(index) else { return }
         selectedModelIndex = index
         guard let sessionID = currentSessionID else { return }
-        selectedModelIDBySessionID[sessionID] = modelPresets[index].id
+        selectedModelIDBySessionID[sessionID] = pickerModelPresets[index].id
         persistSelectedModelMap()
     }
 
@@ -42,22 +42,46 @@ extension AppState {
             selectedModelIDBySessionID[sessionID] = canonicalSaved
             persistSelectedModelMap()
         }
-        guard let idx = modelPresets.firstIndex(where: { $0.id == canonicalSaved }) else { return }
-        selectedModelIndex = idx
+        if let idx = pickerModelPresets.firstIndex(where: { $0.id == canonicalSaved }) {
+            selectedModelIndex = idx
+            return
+        }
+        if let catalog = catalogModelPresets.first(where: { $0.id == canonicalSaved }) {
+            addModelsToShortlist([catalog])
+            if let idx = pickerModelPresets.firstIndex(where: { $0.id == canonicalSaved }) {
+                selectedModelIndex = idx
+            }
+        }
     }
 
     func syncModelFromMessageHistory() {
         guard let sessionID = currentSessionID else { return }
 
         guard let info = messages.reversed().compactMap({ $0.info.resolvedModel }).first else { return }
-        let canonicalModelID = canonicalModelPresetID(for: "\(info.providerID)/\(info.modelID)")
-        guard let idx = modelPresets.firstIndex(where: { $0.id == canonicalModelID }) else {
-            Self.logger.warning("syncModelFromMessageHistory: model \(info.providerID, privacy: .public)/\(info.modelID, privacy: .public) not in presets, keeping current selection")
+        let modelID = "\(info.providerID)/\(info.modelID)"
+
+        if let idx = pickerModelPresets.firstIndex(where: { $0.id == modelID }) {
+            selectedModelIndex = idx
+            selectedModelIDBySessionID[sessionID] = pickerModelPresets[idx].id
+            persistSelectedModelMap()
             return
         }
-
-        selectedModelIndex = idx
-        selectedModelIDBySessionID[sessionID] = modelPresets[idx].id
-        persistSelectedModelMap()
+        // The session used a model outside the picker (e.g. provider not
+        // connected anymore, or a dynamic model while the picker fell back
+        // to presets). Surface it as an explicit ad-hoc entry so the
+        // toolbar still shows what the session is actually running.
+        if pickerModelPresets.firstIndex(where: { $0.id == modelID }) == nil {
+            let name = providerModelsIndex[modelID]?.name ?? info.modelID
+            addModelsToShortlist([
+                ModelPreset(displayName: name, providerID: info.providerID, modelID: info.modelID)
+            ])
+            if let idx = pickerModelPresets.firstIndex(where: { $0.id == modelID }) {
+                selectedModelIndex = idx
+                selectedModelIDBySessionID[sessionID] = modelID
+                persistSelectedModelMap()
+            }
+            return
+        }
+        Self.logger.warning("syncModelFromMessageHistory: model \(info.providerID, privacy: .public)/\(info.modelID, privacy: .public) not in picker, keeping current selection")
     }
 }
