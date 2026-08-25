@@ -32,6 +32,16 @@
 主要文件：
 
 - `OpenCodeClient/OpenCodeClientTests/OpenCodeClientTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/ModelsTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/ConnectionTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/SessionFlowTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/CarModeTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/AIBuilderVoiceTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/RenderingTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/TestDoubles.swift`
+- `OpenCodeClient/OpenCodeClientTests/ModelShortlistTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/SessionScopedStateTests.swift`
+- `OpenCodeClient/OpenCodeClientTests/UserDefaultsIsolationTests.swift`
 - `OpenCodeClient/OpenCodeClientTests/ReadToolCardIntegrationTests.swift`
 - `OpenCodeClient/OpenCodeClientTests/ToolCardClassifierTests.swift`
 - `OpenCodeClient/OpenCodeClientTests/ClientCapabilityTests.swift`
