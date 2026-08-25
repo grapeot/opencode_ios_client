@@ -54,10 +54,12 @@ final class ModelShortlistUITests: XCTestCase {
         chip.tap()
 
         let empty = app.descendants(matching: .any)["configure-empty-shortlist"]
-        XCTAssertTrue(empty.waitForExistence(timeout: 6))
+        XCTAssertTrue(empty.waitForExistence(timeout: 6), "empty shortlist should show the Settings jump row")
         empty.tap()
+        XCTAssertTrue(empty.waitForNonExistence(timeout: 4), "model sheet should dismiss after jump")
 
-        XCTAssertTrue(app.descendants(matching: .any)["settings-model-shortlist"].waitForExistence(timeout: 8))
+        let modelsRow = app.descendants(matching: .any)["settings-model-shortlist"]
+        XCTAssertTrue(modelsRow.waitForExistence(timeout: 8), "Settings → Models row should be visible after jump")
     }
 
     private func openSettings(in app: XCUIApplication) {

@@ -400,7 +400,9 @@ enum UITestFixtures {
             ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash"),
             ModelPreset(displayName: "Gemini 3.5 Flash Lite", providerID: "google", modelID: "gemini-3.5-flash-lite")
         ]
-        if !ProcessInfo.processInfo.arguments.contains("UITEST_MODEL_SHORTLIST_EMPTY_FIXTURE") {
+        if ProcessInfo.processInfo.arguments.contains("UITEST_MODEL_SHORTLIST_EMPTY_FIXTURE") {
+            state.modelShortlist = []
+        } else {
             state.modelShortlist = [
                 ModelShortlistItem(
                     providerID: "zai-coding-plan",
