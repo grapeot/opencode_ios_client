@@ -87,6 +87,8 @@ struct ChatTabView: View {
     @State private var imageAttachments: [ComposerImageAttachment] = []
     @State private var attachmentError: String?
     @State private var isLoadingAttachment = false
+    @State private var inlinePreviewPath: String?
+    @State private var inlinePreviewWorkspaceDirectory: String?
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
@@ -530,18 +532,35 @@ struct ChatTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ChatToolbarView(
-                    state: state,
-                    showSessionList: $showSessionList,
-                    showRenameAlert: $showRenameAlert,
-                    renameText: $renameText,
-                    showSettingsInToolbar: showSettingsInToolbar,
-                    showSessionListInToolbar: showSessionListInToolbar,
-                    showCreateSessionInToolbar: showCreateSessionInToolbar,
-                    onSettingsTap: onSettingsTap
-                )
+                // Docked file preview (iPhone): fills the whole screen except the
+                // composer strip at the bottom, which stays interactive so voice
+                // recording and typing keep working while the file is open.
+                if let previewPath = inlinePreviewPath {
+                    ChatInlineFilePreview(
+                        state: state,
+                        filePath: previewPath,
+                        workspaceDirectory: inlinePreviewWorkspaceDirectory,
+                        onClose: {
+                            withAnimation(DesignAnimation.spring) {
+                                inlinePreviewPath = nil
+                                inlinePreviewWorkspaceDirectory = nil
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    ChatToolbarView(
+                        state: state,
+                        showSessionList: $showSessionList,
+                        showRenameAlert: $showRenameAlert,
+                        renameText: $renameText,
+                        showSettingsInToolbar: showSettingsInToolbar,
+                        showSessionListInToolbar: showSessionListInToolbar,
+                        showCreateSessionInToolbar: showCreateSessionInToolbar,
+                        onSettingsTap: onSettingsTap
+                    )
 
-                ScrollViewReader { proxy in
+                    ScrollViewReader { proxy in
                     GeometryReader { scrollGeometry in
                         ScrollView {
                             VStack(alignment: .leading, spacing: DesignSpacing.messageVertical) {
@@ -714,10 +733,9 @@ struct ChatTabView: View {
                             }
                         }
                     }
+                    }
                 }
 
-                 Divider()
-                    .opacity(0.5)
                  VStack(spacing: 0) {
                     if shouldShowComposerStatus {
                         quietComposerStatus
@@ -858,6 +876,12 @@ struct ChatTabView: View {
                 isNearBottom = true
                 pendingBottomVisibilityTask?.cancel()
                 pendingBottomVisibilityTask = nil
+                if inlinePreviewPath != nil {
+                    withAnimation(DesignAnimation.spring) {
+                        inlinePreviewPath = nil
+                        inlinePreviewWorkspaceDirectory = nil
+                    }
+                }
                 Task { @MainActor in
                     await stopSpeechForNavigation()
                 }
@@ -879,6 +903,15 @@ struct ChatTabView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 guard newPhase == .background else { return }
                 Task { await stopSpeechForBackground() }
+            }
+            .onChange(of: sizeClass) { _, newValue in
+                // Docked preview is chat-local; migrate it to the iPad middle
+                // column when the layout switches to regular width.
+                guard newValue == .regular, let path = inlinePreviewPath else { return }
+                state.previewFilePath = path
+                state.previewFileWorkspaceDirectory = inlinePreviewWorkspaceDirectory
+                inlinePreviewPath = nil
+                inlinePreviewWorkspaceDirectory = nil
             }
         }
     }
@@ -1080,9 +1113,15 @@ struct ChatTabView: View {
             state.fileToOpenInFilesTab = nil
             state.fileToOpenInFilesTabWorkspaceDirectory = nil
         } else {
-            state.fileToOpenInFilesTab = resolvedPath
-            state.fileToOpenInFilesTabWorkspaceDirectory = workspaceDirectory
-            state.selectedTab = RootTab.files.rawValue
+            // iPhone: dock the preview inside chat instead of jumping to the
+            // Files tab — keeps the composer (mic / waveform / text box)
+            // interactive while the file is open.
+            withAnimation(DesignAnimation.spring) {
+                inlinePreviewPath = resolvedPath
+                inlinePreviewWorkspaceDirectory = workspaceDirectory
+            }
+            state.fileToOpenInFilesTab = nil
+            state.fileToOpenInFilesTabWorkspaceDirectory = nil
         }
     }
 
@@ -1194,6 +1233,42 @@ private extension View {
         #else
         self.scrollDismissesKeyboard(.immediately)
         #endif
+    }
+}
+
+/// Docked file preview panel for iPhone chat. Fills the whole screen except
+/// the composer strip at the bottom so the composer (mic, waveform, text box)
+/// stays fully interactive while a file is open — no modal sheet covering it.
+/// Reuses `FileContentView` for rendering; lifecycle (open/close) is owned by
+/// `ChatTabView` via `inlinePreviewPath`.
+private struct ChatInlineFilePreview: View {
+    @Bindable var state: AppState
+    let filePath: String
+    let workspaceDirectory: String?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            FileContentView(
+                state: state,
+                filePath: filePath,
+                workspaceDirectory: workspaceDirectory
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityIdentifier("inline-preview-close")
+                    .accessibilityLabel(L10n.t(.appClose))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("chat-inline-file-preview")
     }
 }
 

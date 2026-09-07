@@ -131,6 +131,7 @@ struct FileContentView: View {
         .navigationTitle(fileName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
+        .toolbarBackground(.visible, for: .navigationBar)
         .onAppear {
             loadContent()
         }
