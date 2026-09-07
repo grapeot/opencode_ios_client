@@ -532,18 +532,35 @@ struct ChatTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ChatToolbarView(
-                    state: state,
-                    showSessionList: $showSessionList,
-                    showRenameAlert: $showRenameAlert,
-                    renameText: $renameText,
-                    showSettingsInToolbar: showSettingsInToolbar,
-                    showSessionListInToolbar: showSessionListInToolbar,
-                    showCreateSessionInToolbar: showCreateSessionInToolbar,
-                    onSettingsTap: onSettingsTap
-                )
+                // Docked file preview (iPhone): fills the whole screen except the
+                // composer strip at the bottom, which stays interactive so voice
+                // recording and typing keep working while the file is open.
+                if let previewPath = inlinePreviewPath {
+                    ChatInlineFilePreview(
+                        state: state,
+                        filePath: previewPath,
+                        workspaceDirectory: inlinePreviewWorkspaceDirectory,
+                        onClose: {
+                            withAnimation(DesignAnimation.spring) {
+                                inlinePreviewPath = nil
+                                inlinePreviewWorkspaceDirectory = nil
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    ChatToolbarView(
+                        state: state,
+                        showSessionList: $showSessionList,
+                        showRenameAlert: $showRenameAlert,
+                        renameText: $renameText,
+                        showSettingsInToolbar: showSettingsInToolbar,
+                        showSessionListInToolbar: showSessionListInToolbar,
+                        showCreateSessionInToolbar: showCreateSessionInToolbar,
+                        onSettingsTap: onSettingsTap
+                    )
 
-                ScrollViewReader { proxy in
+                    ScrollViewReader { proxy in
                     GeometryReader { scrollGeometry in
                         ScrollView {
                             VStack(alignment: .leading, spacing: DesignSpacing.messageVertical) {
@@ -716,28 +733,8 @@ struct ChatTabView: View {
                             }
                         }
                     }
+                    }
                 }
-
-                 Divider()
-                    .opacity(0.5)
-
-                 // Docked file preview: keeps the composer (mic / waveform /
-                 // text box) interactive while a file is open. iPhone replaces
-                 // the tab-switch + modal sheet with this panel.
-                 if let previewPath = inlinePreviewPath {
-                     ChatInlineFilePreview(
-                         state: state,
-                         filePath: previewPath,
-                         workspaceDirectory: inlinePreviewWorkspaceDirectory,
-                         onClose: {
-                             withAnimation(DesignAnimation.spring) {
-                                 inlinePreviewPath = nil
-                                 inlinePreviewWorkspaceDirectory = nil
-                             }
-                         }
-                     )
-                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                 }
 
                  VStack(spacing: 0) {
                     if shouldShowComposerStatus {
@@ -1239,9 +1236,9 @@ private extension View {
     }
 }
 
-/// Docked file preview panel for iPhone chat. Sits between the message list
-/// and the composer so the composer (mic, waveform, text box) stays fully
-/// interactive while a file is open — no modal sheet covering it.
+/// Docked file preview panel for iPhone chat. Fills the whole screen except
+/// the composer strip at the bottom so the composer (mic, waveform, text box)
+/// stays fully interactive while a file is open — no modal sheet covering it.
 /// Reuses `FileContentView` for rendering; lifecycle (open/close) is owned by
 /// `ChatTabView` via `inlinePreviewPath`.
 private struct ChatInlineFilePreview: View {
@@ -1254,7 +1251,7 @@ private struct ChatInlineFilePreview: View {
         VStack(spacing: 0) {
             HStack(spacing: DesignSpacing.sm) {
                 Image(systemName: "doc.text")
-                    .font(DesignTypography.micro)
+                    .font(DesignTypography.meta)
                     .foregroundStyle(DesignColors.Brand.primary)
                 Text(filePath.split(separator: "/").last.map(String.init) ?? filePath)
                     .font(DesignTypography.meta)
@@ -1268,7 +1265,7 @@ private struct ChatInlineFilePreview: View {
                     Image(systemName: "xmark")
                         .font(DesignTypography.meta.weight(.semibold))
                         .foregroundStyle(DesignColors.Neutral.textSecondary)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1276,19 +1273,19 @@ private struct ChatInlineFilePreview: View {
                 .accessibilityLabel(L10n.t(.appClose))
             }
             .padding(.horizontal, DesignSpacing.md)
-            .padding(.vertical, DesignSpacing.xs)
-            .background(DesignColors.Neutral.text.opacity(0.06))
+            .padding(.vertical, DesignSpacing.sm)
+
+            Divider()
 
             FileContentView(
                 state: state,
                 filePath: filePath,
                 workspaceDirectory: workspaceDirectory
             )
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxHeight: 420)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DesignColors.Neutral.text.opacity(0.04))
-        .overlay(alignment: .top) { Divider() }
         .accessibilityIdentifier("chat-inline-file-preview")
     }
 }
