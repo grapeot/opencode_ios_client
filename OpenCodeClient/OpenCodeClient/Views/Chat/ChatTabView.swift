@@ -1249,43 +1249,26 @@ private struct ChatInlineFilePreview: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: DesignSpacing.sm) {
-                Image(systemName: "doc.text")
-                    .font(DesignTypography.meta)
-                    .foregroundStyle(DesignColors.Brand.primary)
-                Text(filePath.split(separator: "/").last.map(String.init) ?? filePath)
-                    .font(DesignTypography.meta)
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 0)
-                Button {
-                    onClose()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(DesignTypography.meta.weight(.semibold))
-                        .foregroundStyle(DesignColors.Neutral.textSecondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("inline-preview-close")
-                .accessibilityLabel(L10n.t(.appClose))
-            }
-            .padding(.horizontal, DesignSpacing.md)
-            .padding(.vertical, DesignSpacing.sm)
-
-            Divider()
-
             FileContentView(
                 state: state,
                 filePath: filePath,
-                workspaceDirectory: workspaceDirectory
+                workspaceDirectory: workspaceDirectory,
+                ownsNavigationTitle: false
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityIdentifier("inline-preview-close")
+                    .accessibilityLabel(L10n.t(.appClose))
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesignColors.Neutral.text.opacity(0.04))
         .accessibilityIdentifier("chat-inline-file-preview")
     }
 }
