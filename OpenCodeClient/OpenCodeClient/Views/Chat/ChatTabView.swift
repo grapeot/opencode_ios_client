@@ -1252,8 +1252,7 @@ private struct ChatInlineFilePreview: View {
             FileContentView(
                 state: state,
                 filePath: filePath,
-                workspaceDirectory: workspaceDirectory,
-                ownsNavigationTitle: false
+                workspaceDirectory: workspaceDirectory
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .toolbar {

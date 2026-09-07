@@ -46,10 +46,6 @@ struct FileContentView: View {
     @Bindable var state: AppState
     let filePath: String
     var workspaceDirectory: String? = nil
-    /// Inline embeds (e.g. the chat docked preview) pass `false` so the
-    /// enclosing context keeps owning the navigation title (session title)
-    /// instead of the filename. Toolbar items are kept either way.
-    var ownsNavigationTitle: Bool = true
     @State private var content: String?
     @State private var imageData: Data?
     @State private var isLoading = false
@@ -132,10 +128,10 @@ struct FileContentView: View {
                 ContentUnavailableView(L10n.t(.appNoContent), systemImage: "doc.text")
             }
         }
-        .navigationTitle(ownsNavigationTitle ? fileName : "")
+        .navigationTitle(fileName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .toolbarBackground(ownsNavigationTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .onAppear {
             loadContent()
         }
