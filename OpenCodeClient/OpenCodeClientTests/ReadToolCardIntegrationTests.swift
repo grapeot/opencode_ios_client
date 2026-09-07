@@ -38,7 +38,7 @@ struct ReadToolCardIntegrationTests {
             try await client.promptAsync(
                 sessionID: sessionID,
                 messageID: AppState.makeServerID(prefix: "msg"),
-                text: "Read the file AGENTS.md and reply with only its first line. Do not create, edit, or write any file.",
+                text: "Use the read tool to read AGENTS.md. Do not answer from context, do not create, edit, or write any file. After reading, reply with only its first line.",
                 agent: agent,
                 model: model,
                 directory: directory
