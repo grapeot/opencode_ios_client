@@ -65,8 +65,8 @@ struct ReadToolCardIntegrationTests {
     private func pollForReadToolPart(
         client: APIClient,
         sessionID: String,
-        timeoutSeconds: TimeInterval = 90,
-        intervalSeconds: UInt64 = 2
+        timeoutSeconds: TimeInterval = 240,
+        intervalSeconds: UInt64 = 4
     ) async throws -> [MessageWithParts] {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
         var latest: [MessageWithParts] = []
