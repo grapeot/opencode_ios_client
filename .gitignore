@@ -36,7 +36,9 @@ Pods/
 *.xcworkspace
 !default.xcworkspace
 !**/*.xcodeproj/project.xcworkspace/
-!**/*.xcodeproj/project.xcworkspace/**
+!**/*.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+!**/*.xcodeproj/project.xcworkspace/xcshareddata/
+!**/*.xcodeproj/project.xcworkspace/xcshareddata/**
 
 # macOS
 .DS_Store
