@@ -217,7 +217,7 @@ struct BasicAuthConfig: Codable, Equatable {
 **持久化边界**：
 
 - `HostProfile` 列表保存在 UserDefaults 或轻量 JSON store 中；敏感密码仅存储 Keychain 引用标识（Keychain reference），不直接写入 JSON 数据。
-- SSH 私钥（private key）默认采用设备级密钥（device-level key），由现有的 `SSHKeyManager` 统一管理，多个 SSH profile 共享同一个公钥。未来若需要更高安全隔离级别，可在此基础上增加针对单 profile 的 key override 配置。
+- SSH 私钥（private key）默认采用设备级密钥（device-level key），由现有的 `SSHKeyManager` 统一管理，多个 SSH profile 共享同一个公钥。私钥为长期设备身份：仅首次引导（Keychain 条目确实缺失时）与用户显式 Rotate 才生成；读取路径 fail-closed，Keychain 暂不可读时报错而不重新生成，公钥缓存由私钥派生校验。未来若需要更高安全隔离级别，可在此基础上增加针对单 profile 的 key override 配置。
 - TOFU（Trust On First Use）的 known host 记录依然严格按 SSH gateway 的 `host:port` 进行绑定，而非绑定到 profile 名称。当多个 profile 指向同一个 gateway 时，它们将共享同一份受信任的 host 指纹信息。
 
 **切换流程**：
@@ -332,21 +332,29 @@ enum SSHKeyManager {
     // 生成 Ed25519 密钥对
     static func generateKeyPair() throws -> (privateKey: Data, publicKey: String)
     
-    // 私钥存 Keychain
-    static func savePrivateKey(_ key: Data)
-    static func loadPrivateKey() -> Data?
+    // 私钥存 Keychain（读写均传播 OSStatus；loadData 仅在 errSecItemNotFound 时返回 nil）
+    static func savePrivateKey(_ key: Data) throws
+    static func loadPrivateKey() throws -> Data?
     
-    // 公钥用于显示/复制
+    // 公钥用于显示/复制（只读，不生成；先做一致性校验）
     static func getPublicKey() -> String?
     
-    // 密钥轮换
+    // 只读获取：校验缓存公钥确由私钥派生，不匹配时以私钥为准修复缓存；
+    // Keychain 暂不可读抛 SSHError.keyUnavailable，私钥不存在抛 SSHError.keyNotFound
+    static func getKeyPair() throws -> String
+
+    // 引导：仅当私钥条目确实缺失（errSecItemNotFound）时生成新密钥对；
+    // 其他 Keychain 错误抛 SSHError.keyUnavailable，不触碰已存密钥
+    static func ensureKeyPair() throws -> String
+
+    // 密钥轮换（唯一由用户显式触发的生成路径）
     static func rotateKey() throws -> String  // 返回新公钥
 }
 ```
 
 **安全考虑**：
 
-1. **私钥保护**：采用 `kSecAttrAccessibleWhenUnlocked` 策略存储，确保仅在设备处于解锁状态时才允许访问私钥
+1. **私钥保护**：采用 `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` 策略存储，首次解锁后（含锁屏状态）即可读取，支持重启后的后台连接，且不随 iCloud Keychain 迁移到其他设备；`KeychainHelper` 的 save/load 传播 OSStatus，写失败不再被静默吞掉
 2. **公钥传输**：采用用户手动复制粘贴的方式，App 不会通过任何网络接口主动上传公钥
 3. **TOFU**：首次连接自动信任并保存服务器指纹（按 host:port 绑定），后续 mismatch 直接失败并提示 reset trusted host
 4. **超时**：连接超时 30 秒，自动断开并提示
@@ -358,6 +366,7 @@ enum SSHKeyManager {
 | 密钥未授权 | 公钥未添加到 VPS | "请先添加公钥到服务器的 authorized_keys" |
 | 连接超时 | 网络问题或地址错误 | "连接超时，请检查网络和服务器地址" |
 | 认证失败 | 私钥不匹配 | "认证失败，请确认公钥已正确添加" |
+| 密钥暂不可用 | Keychain 暂不可读（如设备锁定期间） | "SSH 密钥暂时不可用。请解锁设备后重试" |
 
 **SSH UX 补充**：
 - 在 Settings 页面内提供配置引导（setup guide）：指导用户将设备公钥复制给管理员，并填入管理员返回的 assigned remote port

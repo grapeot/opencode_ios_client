@@ -9,6 +9,16 @@
 - **编译/测试**：build 通过；shortlist 单测与 `ModelShortlistUITests` 通过
 - **Phase**：聊天栏模型选择改为设备本地 shortlist（Settings → Models）
 
+### 2026-09-07 — SSH 密钥 fail-closed（issue #161）
+
+- **背景**：issue #161 报告设备 Ed25519 密钥对会被静默重新生成：私钥 Keychain 读取瞬时失败（设备未解锁时的 `errSecInteractionNotAllowed`）会让 `ensureKeyPair()` fail-open，烧掉旧身份并覆盖公钥缓存，服务端 authorized_keys 随之失效；加剧因素包括 `KeychainHelper` 未设 `kSecAttrAccessible`（默认 WhenUnlocked）、save/load 忽略 OSStatus、连接与视图热路径调用会生成的函数。
+- **修复（read/create 分离）**：新增只读 `getKeyPair()`——永不生成，先从私钥派生公钥校验缓存一致性（不匹配以私钥为准修复缓存），Keychain 暂不可读抛新错误 `SSHError.keyUnavailable`，私钥确实不存在抛 `.keyNotFound`；`ensureKeyPair()` 收窄为仅引导使用，仅在 Keychain 返回 `errSecItemNotFound`（条目真正缺失）时生成，其余错误抛 `.keyUnavailable` 且不触碰已存密钥；`rotateKey()` 保留生成权限（用户显式触发）。
+- **调用点改写**：`connect()` 的 `_ = try? ensureKeyPair()` 改为 do/catch 显式传播，密钥错误时 disconnect 并进入 `.error`（fail closed）；视图侧 `generateOrGetPublicKey()` 更名为 `readPublicKey()` 并改走 `getKeyPair()`（Settings onAppear 预取、公钥 sheet、三处 Copy 公钥），瞬时失败复用既有错误 UI 提示解锁设备。
+- **Keychain 加固**：Keychain 条目统一设置 `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`（私钥与密码/token 共用同一写入路径；首次解锁后锁屏也可读，支持重启后后台连接，且不随 iCloud Keychain 迁移）；`KeychainHelper.save/load/delete` 全部传播 OSStatus，`loadData` 仅在 `errSecItemNotFound` 时返回 nil（区分"不存在"与"读取失败"）；`save` 改为 update-then-add 且仅在私钥写入校验通过后才写 UserDefaults 公钥缓存。
+- **Rotate 加固（review 后补充）**：`rotateKey()` 不再先删后生成，改为先生成新密钥并用 update-then-add `savePrivateKey` 原地覆盖，保存成功后才更新公钥缓存——保存失败时旧身份保持不变；Settings Rotate 回调的错误改为写入 `publicKeyLoadError` 提示用户，不再静默吞掉。
+- **测试隔离**：`SSHKeyManagerTests` 标注 `@Suite(.serialized)`（与同文件 `HostProfileTests` 一致），避免多条测试并发修改共享 Keychain/UserDefaults 状态造成 flake。
+- **验证**：build 通过（xcodebuild build，指定 simulator destination）；`SSHKeyManagerTests` 定向 7/7 通过（2 既有 + 5 新增：getKeyPair 不铸造、bootstrap 幂等、派生修复过期缓存、KeychainHelper update-in-place/delete、hasKeyPair 生命周期）；全量 451 个测试 443 通过 / 4 失败 / 4 跳过，失败全部为 UI fixture 测试（CarMode/AIUsageQuota/SpeechStrategies/ToolCards），在干净基线上复跑同样失败，属本机环境预存 flake，与本次改动无关。注意：本机跑 Keychain 相关测试必须去掉 `CODE_SIGNING_ALLOWED=NO`（未签名宿主 app 无 Keychain entitlement，报 -34018）。
+
 ### 2026-08-24 — 本地 model shortlist（PR #149，related #99 / #144）
 
 - 官方 picker 的可见性在桌面 persist，`/provider` 与 `/config/providers` 都是完整目录。iOS 在本机做 shortlist：Settings → Models 从已连接 chat-capable catalog 搜索添加，左滑删除，左边手柄排序，点行改 toolbar short name。

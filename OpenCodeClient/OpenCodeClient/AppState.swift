@@ -152,9 +152,9 @@ final class AppState {
         set {
             _password = newValue
             if newValue.isEmpty {
-                KeychainHelper.delete(Self.passwordKeychainKey)
+                try? KeychainHelper.delete(Self.passwordKeychainKey)
             } else {
-                KeychainHelper.save(newValue, forKey: Self.passwordKeychainKey)
+                try? KeychainHelper.save(newValue, forKey: Self.passwordKeychainKey)
             }
         }
     }
@@ -222,12 +222,12 @@ final class AppState {
             _serverURL = APIClient.defaultServer
         }
         _username = defaults.string(forKey: Self.usernameKey) ?? ""
-        _password = KeychainHelper.load(forKey: Self.passwordKeychainKey) ?? ""
+        _password = (try? KeychainHelper.load(forKey: Self.passwordKeychainKey)) ?? ""
         loadHostProfilesFromStorageOrLegacy()
         applyCurrentHostProfileToRuntime(persistLegacy: false)
 
         _aiBuilderBaseURL = defaults.string(forKey: Self.aiBuilderBaseURLKey) ?? "https://space.ai-builders.com/backend"
-        _aiBuilderToken = KeychainHelper.load(forKey: Self.aiBuilderTokenKeychainKey) ?? ""
+        _aiBuilderToken = (try? KeychainHelper.load(forKey: Self.aiBuilderTokenKeychainKey)) ?? ""
         _aiBuilderCustomPrompt = defaults.string(forKey: Self.aiBuilderCustomPromptKey) ?? Self.defaultAIBuilderCustomPrompt
         _aiBuilderTerminology = defaults.string(forKey: Self.aiBuilderTerminologyKey) ?? Self.defaultAIBuilderTerminology
         _aiBuilderRecordingStrategy = VoiceFlowRecordingStrategy(
@@ -326,9 +326,9 @@ final class AppState {
         set {
             _aiBuilderToken = newValue
             if newValue.isEmpty {
-                KeychainHelper.delete(Self.aiBuilderTokenKeychainKey)
+                try? KeychainHelper.delete(Self.aiBuilderTokenKeychainKey)
             } else {
-                KeychainHelper.save(newValue, forKey: Self.aiBuilderTokenKeychainKey)
+                try? KeychainHelper.save(newValue, forKey: Self.aiBuilderTokenKeychainKey)
             }
             aiBuilderConnectionOK = false
             aiBuilderConnectionError = nil

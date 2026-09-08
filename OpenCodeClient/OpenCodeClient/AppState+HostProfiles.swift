@@ -20,7 +20,7 @@ extension AppState {
         if !_username.isEmpty || !_password.isEmpty {
             let passwordID = Self.passwordKeychainID(for: profile.id)
             if !_password.isEmpty {
-                KeychainHelper.save(_password, forKey: passwordID)
+                try? KeychainHelper.save(_password, forKey: passwordID)
             }
             profile.basicAuth = BasicAuthConfig(username: _username, keychainPasswordID: passwordID)
         }
@@ -64,7 +64,7 @@ extension AppState {
         _serverURL = profile.serverURL
         _username = profile.basicAuth?.username ?? ""
         if let passwordID = profile.basicAuth?.keychainPasswordID {
-            _password = KeychainHelper.load(forKey: passwordID) ?? ""
+            _password = (try? KeychainHelper.load(forKey: passwordID)) ?? ""
         } else {
             _password = ""
         }
@@ -73,9 +73,9 @@ extension AppState {
             defaults.set(_serverURL, forKey: Self.serverURLKey)
             defaults.set(_username, forKey: Self.usernameKey)
             if _password.isEmpty {
-                KeychainHelper.delete(Self.passwordKeychainKey)
+                try? KeychainHelper.delete(Self.passwordKeychainKey)
             } else {
-                KeychainHelper.save(_password, forKey: Self.passwordKeychainKey)
+                try? KeychainHelper.save(_password, forKey: Self.passwordKeychainKey)
             }
         }
 
@@ -102,15 +102,15 @@ extension AppState {
 
         if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && password.isEmpty {
             if let oldID = profile.basicAuth?.keychainPasswordID {
-                KeychainHelper.delete(oldID)
+                try? KeychainHelper.delete(oldID)
             }
             profile.basicAuth = nil
         } else {
             let passwordID = profile.basicAuth?.keychainPasswordID ?? Self.passwordKeychainID(for: profile.id)
             if password.isEmpty {
-                KeychainHelper.delete(passwordID)
+                try? KeychainHelper.delete(passwordID)
             } else {
-                KeychainHelper.save(password, forKey: passwordID)
+                try? KeychainHelper.save(password, forKey: passwordID)
             }
             profile.basicAuth = BasicAuthConfig(username: username, keychainPasswordID: passwordID)
         }
@@ -140,9 +140,9 @@ extension AppState {
             } else {
                 let passwordID = profile.basicAuth?.keychainPasswordID ?? Self.passwordKeychainID(for: profile.id)
                 if password.isEmpty {
-                    KeychainHelper.delete(passwordID)
+                    try? KeychainHelper.delete(passwordID)
                 } else {
-                    KeychainHelper.save(password, forKey: passwordID)
+                    try? KeychainHelper.save(password, forKey: passwordID)
                 }
                 saved.basicAuth = BasicAuthConfig(username: username, keychainPasswordID: passwordID)
             }
@@ -182,7 +182,7 @@ extension AppState {
         guard hostProfiles.count > 1 else { throw HostProfileError.cannotDeleteOnlyHost }
         let wasCurrent = profile.id == currentHostProfileID
         if let passwordID = profile.basicAuth?.keychainPasswordID {
-            KeychainHelper.delete(passwordID)
+            try? KeychainHelper.delete(passwordID)
         }
         hostProfiles.removeAll { $0.id == profile.id }
         if wasCurrent, let first = hostProfiles.first {
@@ -200,8 +200,8 @@ extension AppState {
         copy.lastUsedAt = nil
         if let auth = profile.basicAuth {
             let newPasswordID = Self.passwordKeychainID(for: copy.id)
-            if let password = KeychainHelper.load(forKey: auth.keychainPasswordID) {
-                KeychainHelper.save(password, forKey: newPasswordID)
+            if let password = try? KeychainHelper.load(forKey: auth.keychainPasswordID) {
+                try? KeychainHelper.save(password, forKey: newPasswordID)
             }
             copy.basicAuth = BasicAuthConfig(username: auth.username, keychainPasswordID: newPasswordID)
         }

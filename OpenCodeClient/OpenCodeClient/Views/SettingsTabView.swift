@@ -290,7 +290,7 @@ struct SettingsTabView: View {
             .navigationTitle(L10n.t(.settingsTitle))
             .onAppear {
                 #if !os(visionOS)
-                _ = try? state.sshTunnelManager.generateOrGetPublicKey()
+                _ = try? state.sshTunnelManager.readPublicKey()
                 #endif
                 pulseModelShortlistIfNeeded(proxy: proxy)
             }
@@ -314,7 +314,7 @@ struct SettingsTabView: View {
                         UIPasteboard.general.string = newKey
                         copiedPublicKey = true
                     } catch {
-                        // Error handled by manager
+                        publicKeyLoadError = error.localizedDescription
                     }
                 }
             } message: {
@@ -405,10 +405,7 @@ struct SettingsTabView: View {
 
     private func loadPublicKeyForSheet() {
         do {
-            let key = try state.sshTunnelManager.generateOrGetPublicKey().trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty else {
-                throw SSHError.keyNotFound
-            }
+            let key = try state.sshTunnelManager.readPublicKey()
             publicKeyForSheet = key
             showPublicKeySheet = true
         } catch {

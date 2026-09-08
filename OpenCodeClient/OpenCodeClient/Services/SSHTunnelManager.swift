@@ -221,8 +221,8 @@ final class SSHTunnelManager: ObservableObject {
         SSHKeyManager.getPublicKey()
     }
 
-    func generateOrGetPublicKey() throws -> String {
-        try SSHKeyManager.ensureKeyPair()
+    func readPublicKey() throws -> String {
+        try SSHKeyManager.getKeyPair()
     }
 
     func rotateKey() throws -> String {
@@ -285,11 +285,23 @@ final class SSHTunnelManager: ObservableObject {
             return
         }
 
-        // Ensure key pair exists (first run auto-generates).
-        _ = try? SSHKeyManager.ensureKeyPair()
+        do {
+            _ = try SSHKeyManager.ensureKeyPair()
+        } catch {
+            disconnect()
+            status = .error(error.localizedDescription)
+            return
+        }
 
-        guard let privateKeyData = SSHKeyManager.loadPrivateKey() else {
-            status = .error(L10n.t(.sshErrorKeyNotFound))
+        let privateKeyData: Data
+        do {
+            guard let data = try SSHKeyManager.loadPrivateKey() else {
+                throw SSHError.keyNotFound
+            }
+            privateKeyData = data
+        } catch {
+            disconnect()
+            status = .error(error.localizedDescription)
             return
         }
         
@@ -474,10 +486,10 @@ final class SSHTunnelManager: ObservableObject {
         SSHKeyManager.getPublicKey()
     }
     
-    func generateOrGetPublicKey() throws -> String {
-        try SSHKeyManager.ensureKeyPair()
+    func readPublicKey() throws -> String {
+        try SSHKeyManager.getKeyPair()
     }
-    
+
     func rotateKey() throws -> String {
         try SSHKeyManager.rotateKey()
     }
@@ -552,10 +564,11 @@ enum SSHError: LocalizedError {
     case connectionFailed(String)
     case authenticationFailed
     case keyNotFound
+    case keyUnavailable
     case invalidKeyFormat
     case tunnelFailed(String)
     case hostKeyMismatch(expected: String, got: String, presentedOpenSSHKey: String)
-    
+
     var errorDescription: String? {
         switch self {
         case .connectionFailed(let reason):
@@ -564,6 +577,8 @@ enum SSHError: LocalizedError {
             return L10n.t(.sshErrorAuthenticationFailed)
         case .keyNotFound:
             return L10n.t(.sshErrorKeyNotFound)
+        case .keyUnavailable:
+            return L10n.t(.sshErrorKeyUnavailable)
         case .invalidKeyFormat:
             return L10n.t(.sshErrorInvalidKeyFormat)
         case .tunnelFailed(let reason):

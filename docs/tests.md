@@ -68,6 +68,7 @@ Tier 1 专注于纯逻辑与数据契约测试，既不需要依赖真实 server
 - URL 修正、scheme 补全、路径规范化、文件路径提取。
 - Client capability action/callback decoding、Pending/Outbox expiration 与幂等、权限和原 session continuation。
 - `ToolCardClassifier`：哪些 part 进入 file-card grid，哪些折叠进 merged tool calls row；目录 read 的识别和 entries parsing。
+- `SSHKeyManager` 密钥生命周期：read/create 分离（`getKeyPair()` 只读不生成）、仅条目缺失（`errSecItemNotFound`）时引导生成、Keychain 暂不可读 fail-closed 抛 `keyUnavailable` 而非重新生成、缓存公钥由私钥派生一致性校验与修复。
 
 这一层主要验证 client 针对已知输入格式与纯规则的处理是否正确。但它并不能证明真实 server 当前仍在发送符合该契约的数据格式；这一问题交由 Tier 3 验证。
 

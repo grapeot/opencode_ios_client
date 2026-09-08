@@ -14,7 +14,7 @@ enum SSHKeyManager {
     private static let privateKeyKeychainKey = "sshPrivateKey.ed25519"
     private static let publicKeyUserDefaultsKey = "sshPublicKey.ed25519"
     private static let keyComment = "opencode-ios"
-    
+
     static func generateKeyPair() throws -> (privateKey: Data, publicKey: String) {
         let privateKey = Curve25519.Signing.PrivateKey()
 
@@ -25,18 +25,18 @@ enum SSHKeyManager {
         return (privateKeyData, publicKeyLine)
     }
 
-    static func savePrivateKey(_ key: Data) {
-        KeychainHelper.save(key, forKey: privateKeyKeychainKey)
+    static func savePrivateKey(_ key: Data) throws {
+        try KeychainHelper.save(key, forKey: privateKeyKeychainKey)
     }
-    
-    static func loadPrivateKey() -> Data? {
-        KeychainHelper.loadData(forKey: privateKeyKeychainKey)
+
+    static func loadPrivateKey() throws -> Data? {
+        try KeychainHelper.loadData(forKey: privateKeyKeychainKey)
     }
-    
+
     static func savePublicKey(_ publicKey: String) {
         UserDefaults.standard.set(publicKey, forKey: publicKeyUserDefaultsKey)
     }
-    
+
     static func getPublicKey() -> String? {
         guard let raw = UserDefaults.standard.string(forKey: publicKeyUserDefaultsKey) else {
             return nil
@@ -44,36 +44,69 @@ enum SSHKeyManager {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-    
+
     static func deleteKeyPair() {
-        KeychainHelper.delete(privateKeyKeychainKey)
+        try? KeychainHelper.delete(privateKeyKeychainKey)
         UserDefaults.standard.removeObject(forKey: publicKeyUserDefaultsKey)
     }
-    
+
     static func hasKeyPair() -> Bool {
-        loadPrivateKey() != nil && getPublicKey() != nil
+        (try? loadPrivateKey())?.isEmpty == false && getPublicKey() != nil
     }
 
+    /// Read-only: never generates. Returns the cached public key after
+    /// verifying it derives from the stored private key. Throws
+    /// `SSHError.keyUnavailable` when the Keychain is transiently unreadable
+    /// and `SSHError.keyNotFound` when no private key exists.
+    static func getKeyPair() throws -> String {
+        let privateKeyData: Data?
+        do {
+            privateKeyData = try loadPrivateKey()
+        } catch {
+            throw SSHError.keyUnavailable
+        }
+        guard let privateKeyData else {
+            throw SSHError.keyNotFound
+        }
+        let derivedPublicKey = try publicKeyLine(fromPrivateKeyData: privateKeyData)
+        if let cached = getPublicKey(), cached == derivedPublicKey {
+            return cached
+        }
+        savePublicKey(derivedPublicKey)
+        return derivedPublicKey
+    }
+
+    /// Generate authority is restricted to bootstrap: only generates when the
+    /// private-key item is truly absent (`loadPrivateKey()` returns nil, i.e.
+    /// `errSecItemNotFound`). Any other Keychain failure throws
+    /// `SSHError.keyUnavailable` without touching stored keys.
     static func ensureKeyPair() throws -> String {
-        if let existing = getPublicKey(), loadPrivateKey() != nil {
-            return existing
+        let privateKeyData: Data?
+        do {
+            privateKeyData = try loadPrivateKey()
+        } catch {
+            throw SSHError.keyUnavailable
         }
 
-        if let privateKeyData = loadPrivateKey() {
-            let repairedPublicKey = try publicKeyLine(fromPrivateKeyData: privateKeyData)
-            savePublicKey(repairedPublicKey)
-            return repairedPublicKey
+        if let privateKeyData {
+            let derivedPublicKey = try publicKeyLine(fromPrivateKeyData: privateKeyData)
+            if getPublicKey() != derivedPublicKey {
+                savePublicKey(derivedPublicKey)
+            }
+            return derivedPublicKey
         }
-        
-        let (privateKey, publicKey) = try generateKeyPair()
-        savePrivateKey(privateKey)
+
+        let (newPrivateKey, publicKey) = try generateKeyPair()
+        try savePrivateKey(newPrivateKey)
         savePublicKey(publicKey)
         return publicKey
     }
-    
+
     static func rotateKey() throws -> String {
-        deleteKeyPair()
-        return try ensureKeyPair()
+        let (newPrivateKey, newPublicKey) = try generateKeyPair()
+        try savePrivateKey(newPrivateKey)
+        savePublicKey(newPublicKey)
+        return newPublicKey
     }
 
     // OpenSSH public key format (base64 of SSH wire encoding):

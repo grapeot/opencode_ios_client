@@ -477,7 +477,8 @@ iOS App → SSH Gateway (:8006) → Assigned Remote Port (:19001) → OpenCode (
 **密钥管理规范**：
 
 - App 在首次使用时自动生成 Ed25519 密钥对
-- 私钥安全存放在 iOS Keychain（设置访问控制属性为 `kSecAttrAccessibleWhenUnlocked`）
+- 私钥安全存放在 iOS Keychain（设置访问控制属性为 `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`）
+- 密钥对为长期设备身份：仅在首次使用（Keychain 条目确实缺失）或用户显式轮换时生成；Keychain 暂不可读（如设备锁定期间）时报错提示解锁设备重试，不静默重新生成
 - 公钥展示在 Settings 界面中，支持一键复制到剪贴板
 - 提供密钥轮换入口（支持重新生成全新密钥对）
 
