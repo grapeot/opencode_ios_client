@@ -348,6 +348,7 @@ struct SSHTunnelTests {
 
 // MARK: - SSH Key Manager Tests
 
+@Suite(.serialized)
 struct SSHKeyManagerTests {
 
     @Test func sshKeyGenerationProducesValidKeys() throws {
@@ -364,7 +365,7 @@ struct SSHKeyManagerTests {
         defer { SSHKeyManager.deleteKeyPair() }
 
         let (privateKey, _) = try SSHKeyManager.generateKeyPair()
-        SSHKeyManager.savePrivateKey(privateKey)
+        try SSHKeyManager.savePrivateKey(privateKey)
         SSHKeyManager.savePublicKey("   ")
 
         let repaired = try SSHKeyManager.ensureKeyPair()
@@ -372,6 +373,93 @@ struct SSHKeyManagerTests {
         #expect(!repaired.isEmpty)
         #expect(repaired.hasPrefix("ssh-ed25519 "))
         #expect(SSHKeyManager.getPublicKey() == repaired)
+    }
+
+    @Test func getKeyPairNeverGeneratesWhenKeyMissing() throws {
+        SSHKeyManager.deleteKeyPair()
+        defer { SSHKeyManager.deleteKeyPair() }
+
+        do {
+            _ = try SSHKeyManager.getKeyPair()
+            Issue.record("getKeyPair() should throw SSHError.keyNotFound when no key exists")
+        } catch {
+            guard case SSHError.keyNotFound = error else {
+                Issue.record("unexpected error: \(error)")
+                return
+            }
+        }
+
+        #expect(try SSHKeyManager.loadPrivateKey() == nil)
+        #expect(SSHKeyManager.getPublicKey() == nil)
+    }
+
+    @Test func ensureKeyPairBootstrapsOnceAndIsIdempotent() throws {
+        SSHKeyManager.deleteKeyPair()
+        defer { SSHKeyManager.deleteKeyPair() }
+
+        let first = try SSHKeyManager.ensureKeyPair()
+        #expect(first.hasPrefix("ssh-ed25519 "))
+        guard let privateKeyAfterFirst = try SSHKeyManager.loadPrivateKey() else {
+            Issue.record("private key should exist after ensureKeyPair()")
+            return
+        }
+        #expect(!privateKeyAfterFirst.isEmpty)
+
+        let second = try SSHKeyManager.ensureKeyPair()
+        guard let privateKeyAfterSecond = try SSHKeyManager.loadPrivateKey() else {
+            Issue.record("private key should exist after second ensureKeyPair()")
+            return
+        }
+
+        #expect(second == first)
+        #expect(privateKeyAfterSecond == privateKeyAfterFirst)
+    }
+
+    @Test func getKeyPairDerivesPublicKeyAndRepairsStaleCache() throws {
+        SSHKeyManager.deleteKeyPair()
+        defer { SSHKeyManager.deleteKeyPair() }
+
+        let (_, stalePublicKey) = try SSHKeyManager.generateKeyPair()
+        let (privateKey, _) = try SSHKeyManager.generateKeyPair()
+        try SSHKeyManager.savePrivateKey(privateKey)
+        SSHKeyManager.savePublicKey(stalePublicKey)
+        #expect(SSHKeyManager.getPublicKey() == stalePublicKey)
+
+        let returned = try SSHKeyManager.getKeyPair()
+
+        #expect(returned.hasPrefix("ssh-ed25519 "))
+        #expect(returned != stalePublicKey)
+        #expect(SSHKeyManager.getPublicKey() == returned)
+        #expect(SSHKeyManager.getPublicKey() != stalePublicKey)
+    }
+
+    @Test func keychainHelperSaveUpdatesInPlaceAndDeleteRemoves() throws {
+        let key = "unitTest.keychainHelper"
+        defer { try? KeychainHelper.delete(key) }
+
+        try KeychainHelper.save("first-value", forKey: key)
+        #expect(try KeychainHelper.load(forKey: key) == "first-value")
+
+        try KeychainHelper.save("second-value", forKey: key)
+        #expect(try KeychainHelper.load(forKey: key) == "second-value")
+
+        try KeychainHelper.delete(key)
+        #expect(try KeychainHelper.loadData(forKey: key) == nil)
+    }
+
+    @Test func hasKeyPairReflectsPairLifecycle() throws {
+        SSHKeyManager.deleteKeyPair()
+        defer { SSHKeyManager.deleteKeyPair() }
+
+        #expect(SSHKeyManager.hasKeyPair() == false)
+
+        let (privateKey, publicKey) = try SSHKeyManager.generateKeyPair()
+        try SSHKeyManager.savePrivateKey(privateKey)
+        SSHKeyManager.savePublicKey(publicKey)
+        #expect(SSHKeyManager.hasKeyPair() == true)
+
+        SSHKeyManager.deleteKeyPair()
+        #expect(SSHKeyManager.hasKeyPair() == false)
     }
 
 }

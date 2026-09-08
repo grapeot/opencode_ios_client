@@ -220,6 +220,8 @@ enum L10n {
         case sshErrorInvalidKeyFormat
         case sshErrorTunnelFailed
         case sshErrorHostKeyMismatch
+        case sshErrorKeyUnavailable
+        case keychainErrorUnhandledStatus
 
         case connectionPhaseIdle
         case connectionPhaseSSHGateway
@@ -650,6 +652,8 @@ enum L10n {
         Key.sshErrorInvalidKeyFormat.rawValue: "Invalid SSH key format.",
         Key.sshErrorTunnelFailed.rawValue: "Tunnel failed: %@",
         Key.sshErrorHostKeyMismatch.rawValue: "Host key mismatch. Expected %@, got %@. This may be a MITM attack or a reinstalled server. Reset trusted host and verify fingerprint before reconnecting.",
+        Key.sshErrorKeyUnavailable.rawValue: "SSH key is unavailable right now. Unlock the device and try again.",
+        Key.keychainErrorUnhandledStatus.rawValue: "Keychain operation failed (OSStatus %d).",
 
         Key.connectionPhaseIdle.rawValue: "Idle",
         Key.connectionPhaseSSHGateway.rawValue: "Connecting to SSH gateway",
@@ -1084,6 +1088,8 @@ enum L10n {
         Key.sshErrorInvalidKeyFormat.rawValue: "SSH 密钥格式无效。",
         Key.sshErrorTunnelFailed.rawValue: "隧道失败：%@",
         Key.sshErrorHostKeyMismatch.rawValue: "Host key 不匹配。预期 %@，实际 %@。这可能是中间人攻击，也可能是服务器重装。请重置信任主机，并核对 fingerprint 后再连接。",
+        Key.sshErrorKeyUnavailable.rawValue: "SSH 密钥暂时不可用。请解锁设备后重试。",
+        Key.keychainErrorUnhandledStatus.rawValue: "Keychain 操作失败（OSStatus %d）。",
 
         Key.connectionPhaseIdle.rawValue: "空闲",
         Key.connectionPhaseSSHGateway.rawValue: "正在连接 SSH 网关",

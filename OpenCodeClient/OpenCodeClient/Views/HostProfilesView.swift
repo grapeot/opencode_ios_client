@@ -170,7 +170,7 @@ struct HostProfilesView: View {
     private func copyPublicKey() {
         #if !os(visionOS)
         do {
-            let key = try state.sshTunnelManager.generateOrGetPublicKey()
+            let key = try state.sshTunnelManager.readPublicKey()
             UIPasteboard.general.string = key
             publicKeyCopied = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { publicKeyCopied = false }
@@ -417,7 +417,7 @@ private struct HostProfileDetailView: View {
     private func copyPublicKey() {
         #if !os(visionOS)
         do {
-            UIPasteboard.general.string = try state.sshTunnelManager.generateOrGetPublicKey()
+            UIPasteboard.general.string = try state.sshTunnelManager.readPublicKey()
             copiedPublicKey = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedPublicKey = false }
         } catch {
@@ -479,7 +479,7 @@ struct HostProfileEditorView: View {
             initial = profile
         }
         _profile = State(initialValue: initial)
-        _password = State(initialValue: initial.basicAuth.flatMap { KeychainHelper.load(forKey: $0.keychainPasswordID) } ?? "")
+        _password = State(initialValue: initial.basicAuth.flatMap { try? KeychainHelper.load(forKey: $0.keychainPasswordID) } ?? "")
         _importText = State(initialValue: Self.uiTestImportJSON)
     }
 
@@ -704,7 +704,7 @@ struct HostProfileEditorView: View {
     private func copyPublicKey() {
         #if !os(visionOS)
         do {
-            let key = try state.sshTunnelManager.generateOrGetPublicKey()
+            let key = try state.sshTunnelManager.readPublicKey()
             UIPasteboard.general.string = key
             publicKeyCopied = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { publicKeyCopied = false }
