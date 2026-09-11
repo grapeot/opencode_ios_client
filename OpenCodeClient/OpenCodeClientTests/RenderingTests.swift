@@ -509,6 +509,45 @@ struct SessionListEdgeSwipeBehaviorTests {
     }
 }
 
+struct FilePreviewEdgeSwipeBehaviorTests {
+
+    @Test func closesForLeftEdgeSwipeWithStrongHorizontalTravel() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 12, y: 180),
+                translation: CGSize(width: 120, height: 18)
+            ) == true
+        )
+    }
+
+    @Test func ignoresSwipeThatStartsAwayFromLeftEdge() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 60, y: 180),
+                translation: CGSize(width: 120, height: 12)
+            ) == false
+        )
+    }
+
+    @Test func ignoresMostlyVerticalDrag() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 8, y: 180),
+                translation: CGSize(width: 110, height: 90)
+            ) == false
+        )
+    }
+
+    @Test func ignoresShortRightwardTravel() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 12, y: 180),
+                translation: CGSize(width: 40, height: 8)
+            ) == false
+        )
+    }
+}
+
 // MARK: - Design Tokens Tests
 
 @MainActor

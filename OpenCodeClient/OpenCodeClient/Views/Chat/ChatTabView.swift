@@ -1246,6 +1246,7 @@ private struct ChatInlineFilePreview: View {
     let filePath: String
     let workspaceDirectory: String?
     let onClose: () -> Void
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1268,7 +1269,29 @@ private struct ChatInlineFilePreview: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .leading) {
+            if sizeClass != .regular {
+                Color.clear
+                    .frame(width: FilePreviewEdgeSwipeBehavior.edgeThreshold)
+                    .contentShape(Rectangle())
+                    .gesture(filePreviewEdgeSwipeGesture)
+                    .accessibilityHidden(true)
+                    .ignoresSafeArea(.container, edges: .horizontal)
+            }
+        }
         .accessibilityIdentifier("chat-inline-file-preview")
+    }
+
+    private var filePreviewEdgeSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onEnded { value in
+                guard sizeClass != .regular else { return }
+                guard FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                    startLocation: value.startLocation,
+                    translation: value.translation
+                ) else { return }
+                onClose()
+            }
     }
 }
 
