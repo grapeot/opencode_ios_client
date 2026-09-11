@@ -16,17 +16,67 @@ enum ChatScrollBehavior {
     }
 }
 
-/// Edge-swipe gesture for opening the session list. We only accept
-/// horizontal swipes starting near the left edge — keeps the chat
-/// pan / scroll gestures responsive in the rest of the view.
-enum SessionListEdgeSwipeBehavior {
+/// Why a leading-edge swipe was accepted or rejected. Used by the preview
+/// close logger so a no-op swipe is diagnosable from console output.
+enum EdgeSwipeDecision: String, Equatable {
+    case accept
+    case startTooFarFromEdge
+    case swipedWrongDirection
+    case horizontalTooShort
+    case verticalDriftTooLarge
+}
+
+/// Shared geometry for leading-edge horizontal swipes (session list open,
+/// file preview close). Keep a single source of thresholds so the two
+/// behaviors cannot drift.
+enum EdgeSwipeGeometry {
     static let edgeThreshold: CGFloat = 32
     static let minimumHorizontalTranslation: CGFloat = 72
     static let maximumVerticalTranslation: CGFloat = 56
 
+    static func decision(startLocation: CGPoint, translation: CGSize) -> EdgeSwipeDecision {
+        if startLocation.x > edgeThreshold { return .startTooFarFromEdge }
+        // iOS back-edge is rightward. A leftward flick from the edge is
+        // the opposite of dismiss and must not close the preview.
+        if translation.width < 0 { return .swipedWrongDirection }
+        if translation.width < minimumHorizontalTranslation { return .horizontalTooShort }
+        if abs(translation.height) > maximumVerticalTranslation { return .verticalDriftTooLarge }
+        return .accept
+    }
+
+    static func shouldAcceptLeadingEdgeSwipe(startLocation: CGPoint, translation: CGSize) -> Bool {
+        decision(startLocation: startLocation, translation: translation) == .accept
+    }
+}
+
+/// Edge-swipe gesture for opening the session list. We only accept
+/// horizontal swipes starting near the left edge — keeps the chat
+/// pan / scroll gestures responsive in the rest of the view.
+enum SessionListEdgeSwipeBehavior {
+    static let edgeThreshold: CGFloat = EdgeSwipeGeometry.edgeThreshold
+    static let minimumHorizontalTranslation: CGFloat = EdgeSwipeGeometry.minimumHorizontalTranslation
+    static let maximumVerticalTranslation: CGFloat = EdgeSwipeGeometry.maximumVerticalTranslation
+
     static func shouldOpenSessionList(startLocation: CGPoint, translation: CGSize) -> Bool {
-        guard startLocation.x <= edgeThreshold else { return false }
-        guard translation.width >= minimumHorizontalTranslation else { return false }
-        return abs(translation.height) <= maximumVerticalTranslation
+        EdgeSwipeGeometry.shouldAcceptLeadingEdgeSwipe(
+            startLocation: startLocation,
+            translation: translation
+        )
+    }
+}
+
+/// Edge-swipe gesture for dismissing the iPhone docked file preview.
+/// Same geometry as opening the session list: start at the far-left
+/// edge and translate rightward with limited vertical drift.
+enum FilePreviewEdgeSwipeBehavior {
+    static let edgeThreshold: CGFloat = EdgeSwipeGeometry.edgeThreshold
+    static let minimumHorizontalTranslation: CGFloat = EdgeSwipeGeometry.minimumHorizontalTranslation
+    static let maximumVerticalTranslation: CGFloat = EdgeSwipeGeometry.maximumVerticalTranslation
+
+    static func shouldClosePreview(startLocation: CGPoint, translation: CGSize) -> Bool {
+        EdgeSwipeGeometry.shouldAcceptLeadingEdgeSwipe(
+            startLocation: startLocation,
+            translation: translation
+        )
     }
 }

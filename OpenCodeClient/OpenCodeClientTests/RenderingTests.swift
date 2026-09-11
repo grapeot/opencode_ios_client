@@ -509,6 +509,72 @@ struct SessionListEdgeSwipeBehaviorTests {
     }
 }
 
+struct FilePreviewEdgeSwipeBehaviorTests {
+
+    @Test func closesForLeftEdgeSwipeWithStrongHorizontalTravel() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 12, y: 180),
+                translation: CGSize(width: 120, height: 18)
+            ) == true
+        )
+    }
+
+    @Test func ignoresSwipeThatStartsAwayFromLeftEdge() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 60, y: 180),
+                translation: CGSize(width: 120, height: 12)
+            ) == false
+        )
+    }
+
+    @Test func ignoresMostlyVerticalDrag() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 8, y: 180),
+                translation: CGSize(width: 110, height: 90)
+            ) == false
+        )
+    }
+
+    @Test func ignoresShortRightwardTravel() {
+        #expect(
+            FilePreviewEdgeSwipeBehavior.shouldClosePreview(
+                startLocation: CGPoint(x: 12, y: 180),
+                translation: CGSize(width: 40, height: 8)
+            ) == false
+        )
+    }
+
+    @Test func decisionExplainsWrongDirectionLeftwardFlick() {
+        #expect(
+            EdgeSwipeGeometry.decision(
+                startLocation: CGPoint(x: 8, y: 200),
+                translation: CGSize(width: -90, height: 6)
+            ) == .swipedWrongDirection
+        )
+    }
+
+    @Test func decisionExplainsStartTooFarFromEdge() {
+        #expect(
+            EdgeSwipeGeometry.decision(
+                startLocation: CGPoint(x: 60, y: 180),
+                translation: CGSize(width: 120, height: 12)
+            ) == .startTooFarFromEdge
+        )
+    }
+
+    @Test func decisionAcceptsCanonicalBackEdgeSwipe() {
+        #expect(
+            EdgeSwipeGeometry.decision(
+                startLocation: CGPoint(x: 12, y: 180),
+                translation: CGSize(width: 120, height: 18)
+            ) == .accept
+        )
+    }
+}
+
 // MARK: - Design Tokens Tests
 
 @MainActor

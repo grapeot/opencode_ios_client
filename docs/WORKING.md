@@ -9,6 +9,16 @@
 - **编译/测试**：build 通过；shortlist 单测与 `ModelShortlistUITests` 通过
 - **Phase**：聊天栏模型选择改为设备本地 shortlist（Settings → Models）
 
+### 2026-09-10 — iPhone 文件预览左缘右滑关闭
+
+- compact-width Chat 里，点文件 tool call 打开的 docked `ChatInlineFilePreview` 除 toolbar `xmark` 外，可用标准 iOS 返回手势关闭：从屏幕物理左缘起手、向右拖够距离。
+- 几何与 session list 打开手势共用 `EdgeSwipeGeometry`（左缘 32pt、横向 ≥ 72pt、纵向漂移 ≤ 56pt），`FilePreviewEdgeSwipeBehavior` / `SessionListEdgeSwipeBehavior` 两个入口；regular/iPad 中间栏预览不启用。
+- 手势条叠在预览内容区（导航栏 xmark 与底部 composer 不覆盖）；条本身 `.ignoresSafeArea(.container, edges: .horizontal)`，意图是横屏刘海侧也从物理左缘起手，而不是从安全区 inset 后的内容左缘起手。竖屏已真机确认；横屏尚未验证，若失效则补一层 flexible leading frame 再 ignoresSafeArea。
+- Markdown Web Preview 的 `WKWebView` 会吃掉 SwiftUI `Color.clear` overlay 的 hit-testing，左缘 `DragGesture` 根本收不到 began。关闭条改为 UIKit `UIView` 抢左侧 32pt，并打 `FilePreviewSwipe` 日志（appear / touchBegan / began / changed / ended+decision / xmark）。关闭方向是**从左缘向右滑**，向左滑会记 `swipedWrongDirection`。
+- 真机 log：`touchBegan x=7` 已在 32pt 条内，但 `UIPanGestureRecognizer` 的 `.began` 发生在手指已右移到 `startX=73` 时，用这个点做左缘判定会得到 `startTooFarFromEdge`。改成按下坐标做 origin，位移用当前点减按下点。
+- 代价：最左侧约 32pt 是关闭手势保留区，该条内的代码横向滚动 / 图片平移不可达，这是有意为之。
+- 测试：`FilePreviewEdgeSwipeBehaviorTests`（合法右滑、非左缘、过大纵向、过短横向、反方向左滑 decision）。
+
 ### 2026-09-07 — SSH 密钥 fail-closed（issue #161）
 
 - **背景**：issue #161 报告设备 Ed25519 密钥对会被静默重新生成：私钥 Keychain 读取瞬时失败（设备未解锁时的 `errSecInteractionNotAllowed`）会让 `ensureKeyPair()` fail-open，烧掉旧身份并覆盖公钥缓存，服务端 authorized_keys 随之失效；加剧因素包括 `KeychainHelper` 未设 `kSecAttrAccessible`（默认 WhenUnlocked）、save/load 忽略 OSStatus、连接与视图热路径调用会生成的函数。
