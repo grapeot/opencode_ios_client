@@ -16,6 +16,16 @@ enum ChatScrollBehavior {
     }
 }
 
+/// Why a leading-edge swipe was accepted or rejected. Used by the preview
+/// close logger so a no-op swipe is diagnosable from console output.
+enum EdgeSwipeDecision: String, Equatable {
+    case accept
+    case startTooFarFromEdge
+    case swipedWrongDirection
+    case horizontalTooShort
+    case verticalDriftTooLarge
+}
+
 /// Shared geometry for leading-edge horizontal swipes (session list open,
 /// file preview close). Keep a single source of thresholds so the two
 /// behaviors cannot drift.
@@ -24,10 +34,18 @@ enum EdgeSwipeGeometry {
     static let minimumHorizontalTranslation: CGFloat = 72
     static let maximumVerticalTranslation: CGFloat = 56
 
+    static func decision(startLocation: CGPoint, translation: CGSize) -> EdgeSwipeDecision {
+        if startLocation.x > edgeThreshold { return .startTooFarFromEdge }
+        // iOS back-edge is rightward. A leftward flick from the edge is
+        // the opposite of dismiss and must not close the preview.
+        if translation.width < 0 { return .swipedWrongDirection }
+        if translation.width < minimumHorizontalTranslation { return .horizontalTooShort }
+        if abs(translation.height) > maximumVerticalTranslation { return .verticalDriftTooLarge }
+        return .accept
+    }
+
     static func shouldAcceptLeadingEdgeSwipe(startLocation: CGPoint, translation: CGSize) -> Bool {
-        guard startLocation.x <= edgeThreshold else { return false }
-        guard translation.width >= minimumHorizontalTranslation else { return false }
-        return abs(translation.height) <= maximumVerticalTranslation
+        decision(startLocation: startLocation, translation: translation) == .accept
     }
 }
 

@@ -546,6 +546,33 @@ struct FilePreviewEdgeSwipeBehaviorTests {
             ) == false
         )
     }
+
+    @Test func decisionExplainsWrongDirectionLeftwardFlick() {
+        #expect(
+            EdgeSwipeGeometry.decision(
+                startLocation: CGPoint(x: 8, y: 200),
+                translation: CGSize(width: -90, height: 6)
+            ) == .swipedWrongDirection
+        )
+    }
+
+    @Test func decisionExplainsStartTooFarFromEdge() {
+        #expect(
+            EdgeSwipeGeometry.decision(
+                startLocation: CGPoint(x: 60, y: 180),
+                translation: CGSize(width: 120, height: 12)
+            ) == .startTooFarFromEdge
+        )
+    }
+
+    @Test func decisionAcceptsCanonicalBackEdgeSwipe() {
+        #expect(
+            EdgeSwipeGeometry.decision(
+                startLocation: CGPoint(x: 12, y: 180),
+                translation: CGSize(width: 120, height: 18)
+            ) == .accept
+        )
+    }
 }
 
 // MARK: - Design Tokens Tests

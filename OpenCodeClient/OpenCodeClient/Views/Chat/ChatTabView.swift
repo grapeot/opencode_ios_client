@@ -1242,11 +1242,18 @@ private extension View {
 /// Reuses `FileContentView` for rendering; lifecycle (open/close) is owned by
 /// `ChatTabView` via `inlinePreviewPath`.
 private struct ChatInlineFilePreview: View {
+    static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "OpenCodeClient",
+        category: "FilePreviewSwipe"
+    )
+
     @Bindable var state: AppState
     let filePath: String
     let workspaceDirectory: String?
     let onClose: () -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var overlayEnabled: Bool { sizeClass != .regular }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1259,6 +1266,7 @@ private struct ChatInlineFilePreview: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
+                        ChatInlineFilePreview.logger.info("filePreviewSwipe close via toolbar xmark")
                         onClose()
                     } label: {
                         Image(systemName: "xmark")
@@ -1270,28 +1278,167 @@ private struct ChatInlineFilePreview: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .leading) {
-            if sizeClass != .regular {
-                Color.clear
-                    .frame(width: FilePreviewEdgeSwipeBehavior.edgeThreshold)
-                    .contentShape(Rectangle())
-                    .gesture(filePreviewEdgeSwipeGesture)
-                    .accessibilityHidden(true)
-                    .ignoresSafeArea(.container, edges: .horizontal)
-            }
+            LeadingEdgeSwipeCatcher(
+                isEnabled: overlayEnabled,
+                onEvent: { event in
+                    ChatInlineFilePreview.logger.info("\(event, privacy: .public)")
+                },
+                onClose: {
+                    ChatInlineFilePreview.logger.info("filePreviewSwipe close via edge swipe")
+                    onClose()
+                }
+            )
+            .frame(width: FilePreviewEdgeSwipeBehavior.edgeThreshold)
+            .frame(maxHeight: .infinity)
+            .accessibilityHidden(true)
+            .ignoresSafeArea(.container, edges: .horizontal)
+        }
+        .onAppear {
+            ChatInlineFilePreview.logger.info(
+                "filePreviewSwipe appear path=\(filePath, privacy: .public) sizeClass=\(String(describing: sizeClass), privacy: .public) overlay=\(overlayEnabled, privacy: .public)"
+            )
+        }
+        .onChange(of: sizeClass) { _, newValue in
+            ChatInlineFilePreview.logger.info(
+                "filePreviewSwipe sizeClass=\(String(describing: newValue), privacy: .public) overlay=\(newValue != .regular, privacy: .public)"
+            )
         }
         .accessibilityIdentifier("chat-inline-file-preview")
     }
+}
 
-    private var filePreviewEdgeSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-            .onEnded { value in
-                guard sizeClass != .regular else { return }
-                guard FilePreviewEdgeSwipeBehavior.shouldClosePreview(
-                    startLocation: value.startLocation,
-                    translation: value.translation
-                ) else { return }
-                onClose()
+/// UIKit hit target for the left-edge dismiss strip. SwiftUI `Color.clear`
+/// overlays do not reliably win hit-testing over `WKWebView`, so the
+/// preview close gesture never even starts. A real `UIView` claims the
+/// leftmost 32pt and keeps tracking after the finger leaves that strip.
+private struct LeadingEdgeSwipeCatcher: UIViewRepresentable {
+    var isEnabled: Bool
+    var onEvent: (String) -> Void
+    var onClose: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isEnabled: isEnabled, onEvent: onEvent, onClose: onClose)
+    }
+
+    func makeUIView(context: Context) -> FilePreviewEdgeSwipeHitView {
+        let view = FilePreviewEdgeSwipeHitView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = isEnabled
+        view.onTouchBegan = { point in
+            context.coordinator.noteTouchBegan(point)
+        }
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+        pan.maximumNumberOfTouches = 1
+        pan.cancelsTouchesInView = true
+        pan.delaysTouchesBegan = false
+        view.addGestureRecognizer(pan)
+        context.coordinator.pan = pan
+        return view
+    }
+
+    func updateUIView(_ uiView: FilePreviewEdgeSwipeHitView, context: Context) {
+        context.coordinator.isEnabled = isEnabled
+        context.coordinator.onEvent = onEvent
+        context.coordinator.onClose = onClose
+        uiView.isUserInteractionEnabled = isEnabled
+    }
+
+    private static func fmt(_ value: CGFloat) -> String {
+        String(format: "%.1f", value)
+    }
+
+    final class Coordinator: NSObject {
+        var isEnabled: Bool
+        var onEvent: (String) -> Void
+        var onClose: () -> Void
+        weak var pan: UIPanGestureRecognizer?
+        private var touchStart: CGPoint?
+        private var lastLoggedStep = -1
+
+        init(isEnabled: Bool, onEvent: @escaping (String) -> Void, onClose: @escaping () -> Void) {
+            self.isEnabled = isEnabled
+            self.onEvent = onEvent
+            self.onClose = onClose
+        }
+
+        func emit(_ message: String) {
+            onEvent(message)
+        }
+
+        func noteTouchBegan(_ point: CGPoint) {
+            touchStart = point
+            emit(
+                "filePreviewSwipe touchBegan x=\(LeadingEdgeSwipeCatcher.fmt(point.x)) y=\(LeadingEdgeSwipeCatcher.fmt(point.y)) enabled=\(isEnabled)"
+            )
+        }
+
+        /// Pan `.began` fires after the finger has already moved. Using that
+        /// location as the edge origin falsely rejects real left-edge starts
+        /// (`touchBegan x=7` then `began startX=73`). Measure from touch-down.
+        private func swipeState(in view: UIView, gesture: UIPanGestureRecognizer) -> (start: CGPoint, translation: CGSize) {
+            let current = gesture.location(in: view)
+            let start = touchStart ?? current
+            return (
+                start,
+                CGSize(width: current.x - start.x, height: current.y - start.y)
+            )
+        }
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            guard let view = gesture.view else { return }
+            let state = swipeState(in: view, gesture: gesture)
+            switch gesture.state {
+            case .began:
+                lastLoggedStep = 0
+                let panX = gesture.location(in: view).x
+                emit(
+                    "filePreviewSwipe began startX=\(LeadingEdgeSwipeCatcher.fmt(state.start.x)) panX=\(LeadingEdgeSwipeCatcher.fmt(panX)) enabled=\(isEnabled)"
+                )
+            case .changed:
+                let step = Int(abs(state.translation.width) / 36)
+                guard step != lastLoggedStep else { return }
+                lastLoggedStep = step
+                let decision = EdgeSwipeGeometry.decision(
+                    startLocation: state.start,
+                    translation: state.translation
+                )
+                emit(
+                    "filePreviewSwipe changed startX=\(LeadingEdgeSwipeCatcher.fmt(state.start.x)) dx=\(LeadingEdgeSwipeCatcher.fmt(state.translation.width)) dy=\(LeadingEdgeSwipeCatcher.fmt(state.translation.height)) decision=\(decision.rawValue)"
+                )
+            case .ended, .cancelled, .failed:
+                let decision = EdgeSwipeGeometry.decision(
+                    startLocation: state.start,
+                    translation: state.translation
+                )
+                emit(
+                    "filePreviewSwipe \(gesture.state == .ended ? "ended" : "cancelled") startX=\(LeadingEdgeSwipeCatcher.fmt(state.start.x)) dx=\(LeadingEdgeSwipeCatcher.fmt(state.translation.width)) dy=\(LeadingEdgeSwipeCatcher.fmt(state.translation.height)) decision=\(decision.rawValue) enabled=\(isEnabled)"
+                )
+                if gesture.state == .ended, isEnabled, decision == .accept {
+                    onClose()
+                }
+                touchStart = nil
+            default:
+                break
             }
+        }
+    }
+}
+
+private final class FilePreviewEdgeSwipeHitView: UIView {
+    var onTouchBegan: ((CGPoint) -> Void)?
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, bounds.contains(point) else {
+            return nil
+        }
+        return self
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let point = touches.first?.location(in: self) {
+            onTouchBegan?(point)
+        }
+        super.touchesBegan(touches, with: event)
     }
 }
 
