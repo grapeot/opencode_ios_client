@@ -36,6 +36,14 @@ final class MessageStore {
     /// including the step's own start/finish); pruned on session-scoped clears.
     var stepTimings: [String: StepTiming] = [:]
 
+    /// partID -> part type, keyed by "\(sessionID):\(partID)". Populated from
+    /// `message.part.updated` (which carries the part's `type`) before any of
+    /// that part's `message.part.delta` events arrive. The delta event carries
+    /// only `field`, which the server sets to "text" for BOTH reasoning and
+    /// text parts, so this map is what lets us stamp first-text only for
+    /// genuine text parts. First write wins: a part's type never changes.
+    private var partTypes: [String: String] = [:]
+
     struct StepTiming {
         let sessionID: String
         /// Client time the step's assistant message was first seen (step start).
@@ -79,19 +87,17 @@ final class MessageStore {
         stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
     }
 
+    /// Stamps the first visible text token. No-op unless the step start was
+    /// already observed: if the client joined mid-step there is no entry, so a
+    /// truncated window never yields a fabricated TTFT/decoding number.
     func recordFirstText(_ messageID: String, sessionID: String) {
-        if stepTimings[messageID] == nil {
-            stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
-        }
         if stepTimings[messageID]?.firstTextAt == nil {
             stepTimings[messageID]?.firstTextAt = Date()
         }
     }
 
+    /// No-op unless the step start was already observed (see `recordFirstText`).
     func recordStepFinish(_ messageID: String, sessionID: String, outputTokens: Int?) {
-        if stepTimings[messageID] == nil {
-            stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
-        }
         stepTimings[messageID]?.finishAt = Date()
         if let out = outputTokens {
             stepTimings[messageID]?.outputTokens = out
@@ -102,6 +108,27 @@ final class MessageStore {
         for (id, timing) in stepTimings where timing.sessionID == sessionID {
             stepTimings[id] = nil
         }
+    }
+
+    func recordPartType(sessionID: String, partID: String, type: String) {
+        let key = "\(sessionID):\(partID)"
+        if partTypes[key] == nil {
+            partTypes[key] = type
+        }
+    }
+
+    func partType(for partID: String, inSession sessionID: String) -> String? {
+        partTypes["\(sessionID):\(partID)"]
+    }
+
+    func removePartTypes(forSession sessionID: String) {
+        for key in partTypes.keys where key.hasPrefix("\(sessionID):") {
+            partTypes[key] = nil
+        }
+    }
+
+    func clearPartTypes() {
+        partTypes = [:]
     }
 
     func isPendingOptimisticMessage(_ messageID: String) -> Bool {
@@ -252,6 +279,7 @@ final class MessageStore {
         }
 
         let partType = (partObject["type"] as? String) ?? "text"
+        recordPartType(sessionID: sessionID, partID: partID, type: partType)
 
         if let delta = properties["delta"]?.value as? String,
            !delta.isEmpty {

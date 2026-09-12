@@ -113,19 +113,25 @@ extension AppState {
             if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
                 if let infoObj = props["info"]?.value as? [String: Any],
                    infoObj["role"] as? String == "assistant",
-                   let assistantID = infoObj["id"] as? String {
-                    messageStore.recordStepStart(assistantID, sessionID: eventSessionID ?? "")
+                   let assistantID = infoObj["id"] as? String,
+                   let sessionID = eventSessionID {
+                    messageStore.recordStepStart(assistantID, sessionID: sessionID)
                 }
                 messageStore.resetStreaming()
                 await loadMessages()
                 await loadSessionDiff()
             }
         case "message.part.delta":
+            // `field` is "text" for both reasoning and text parts, so it cannot
+            // discriminate; the part's `type` (tracked by partID from the
+            // `message.part.updated` that precedes each part's deltas) can.
             if let sessionID = props["sessionID"]?.value as? String,
                sessionID == currentSessionID,
                props["field"]?.value as? String == "text",
                let delta = props["delta"]?.value as? String, !delta.isEmpty,
-               let messageID = props["messageID"]?.value as? String {
+               let messageID = props["messageID"]?.value as? String,
+               let partID = props["partID"]?.value as? String,
+               messageStore.partType(for: partID, inSession: sessionID) == "text" {
                 messageStore.recordFirstText(messageID, sessionID: sessionID)
             }
         case "message.part.updated":
@@ -324,6 +330,7 @@ extension AppState {
         sessionLoadingID = UUID()
         messageStore.resetStreaming()
         messageStore.stepTimings = [:]
+        messageStore.clearPartTypes()
         messages = []
         partsByMessage = [:]
         sessionDiffs = []
@@ -334,6 +341,7 @@ extension AppState {
         sessionTodos[sessionID] = nil
         sessionScope.remove(sessionID: sessionID)
         messageStore.removeTimings(forSession: sessionID)
+        messageStore.removePartTypes(forSession: sessionID)
 
         if streamingReasoningPart?.sessionID == sessionID {
             messageStore.streamingReasoningPart = nil

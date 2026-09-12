@@ -1649,13 +1649,29 @@ struct AppStateFlowTests {
         #expect(state.stepTimings["m1"]?.sessionID == "s1")
         #expect(state.stepTimings["m1"]?.firstTextAt == nil)
 
-        // A reasoning delta must not count as the first visible text token.
+        // Wire shape: the server emits `message.part.delta` with `field:"text"`
+        // for BOTH reasoning and text parts (see processor.ts reasoning-delta /
+        // text-delta). The part's `type` is carried by the `message.part.updated`
+        // that precedes each part's deltas, so the client tracks partID -> type.
+        // Reasoning part created first.
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p-reason","field":"reasoning","delta":"think"}}}
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-reason","messageID":"m1","sessionID":"s1","type":"reasoning"}}}}
+        """))
+
+        // A reasoning delta (field "text", part type "reasoning") must NOT count
+        // as the first visible text token.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p-reason","field":"text","delta":"think"}}}
         """))
         #expect(state.stepTimings["m1"]?.firstTextAt == nil)
 
-        // First text token.
+        // Text part created.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
+        """))
+        #expect(state.stepTimings["m1"]?.firstTextAt == nil)
+
+        // First text token (field "text", part type "text").
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
         {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"H"}}}
         """))
@@ -1668,9 +1684,9 @@ struct AppStateFlowTests {
         """))
         #expect(state.stepTimings["m1"]?.firstTextAt == first)
 
-        // Step finish carries the output token count.
+        // Step finish (its own part id) carries the output token count.
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"step-finish","reason":"stop","tokens":{"output":100,"reasoning":0}}}}}
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-fin","messageID":"m1","sessionID":"s1","type":"step-finish","reason":"stop","tokens":{"output":100,"reasoning":0}}}}}
         """))
         #expect(state.stepTimings["m1"]?.outputTokens == 100)
         #expect(state.stepTimings["m1"]?.finishAt != nil)
@@ -1682,6 +1698,11 @@ struct AppStateFlowTests {
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
 
+        // A full step for a NON-current session: part created + text delta.
+        // Both are session-guarded, so nothing is recorded for it.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s2","part":{"id":"p9","messageID":"m9","sessionID":"s2","type":"text"}}}}
+        """))
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
         {"payload":{"type":"message.part.delta","properties":{"sessionID":"s2","messageID":"m9","partID":"p9","field":"text","delta":"x"}}}
         """))
