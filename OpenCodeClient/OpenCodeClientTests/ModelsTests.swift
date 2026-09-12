@@ -172,6 +172,70 @@ struct ContextUsageThroughputTests {
     }
 }
 
+// MARK: - StepTiming (SSE-derived TTFT + decoding) Tests
+
+struct StepTimingTests {
+
+    private func timing(
+        _ start: TimeInterval,
+        _ first: TimeInterval?,
+        _ finish: TimeInterval?,
+        _ output: Int?
+    ) -> MessageStore.StepTiming {
+        MessageStore.StepTiming(
+            sessionID: "s1",
+            stepStart: Date(timeIntervalSinceReferenceDate: start),
+            firstTextAt: first.map { Date(timeIntervalSinceReferenceDate: $0) },
+            finishAt: finish.map { Date(timeIntervalSinceReferenceDate: $0) },
+            outputTokens: output
+        )
+    }
+
+    @Test func ttftFromStepStartToFirstText() {
+        let t = timing(0, 3.2, nil, nil)
+        #expect(abs((t.ttft ?? -1) - 3.2) < 0.001)
+        #expect(t.ttftLabel == "3.2s")
+    }
+
+    @Test func ttftNilWithoutFirstText() {
+        let t = timing(0, nil, nil, nil)
+        #expect(t.ttft == nil)
+        #expect(t.ttftLabel == nil)
+    }
+
+    @Test func ttftNilWhenFirstTextNotAfterStart() {
+        // first token stamped before step start (bad data) -> no negative TTFT
+        let t = timing(5, 2, nil, nil)
+        #expect(t.ttft == nil)
+    }
+
+    @Test func decodeOverFirstTextToFinishWindow() {
+        // 100 output tokens over (4.7 - 3.2) = 1.5s -> 66.67 t/s
+        let t = timing(0, 3.2, 4.7, 100)
+        #expect(abs((t.decode ?? -1) - (100.0 / 1.5)) < 0.01)
+        #expect(t.decodeLabel == "67 t/s decoding")
+    }
+
+    @Test func decodeLabelDecimalBelowTen() {
+        // 15 output over 3.0s -> 5.0 t/s -> one decimal
+        let t = timing(0, 0, 3.0, 15)
+        #expect(t.decodeLabel == "5.0 t/s decoding")
+    }
+
+    @Test func decodeNilMissingFinishOrTokens() {
+        #expect(timing(0, 3.2, nil, 100).decode == nil)
+        #expect(timing(0, 3.2, 4.7, nil).decode == nil)
+        #expect(timing(0, 3.2, 4.7, 0).decode == nil)
+        #expect(timing(0, nil, 4.7, 100).decode == nil)
+    }
+
+    @Test func decodeNilOnNonPositiveWindow() {
+        // finish before or equal to first text -> no window
+        #expect(timing(0, 3.2, 3.2, 100).decode == nil)
+        #expect(timing(0, 3.2, 3.1, 100).decode == nil)
+    }
+}
+
 // MARK: - ModelPreset Tests
 
 struct ModelPresetTests {

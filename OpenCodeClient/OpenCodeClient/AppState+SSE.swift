@@ -111,11 +111,31 @@ extension AppState {
         case "message.updated":
             let eventSessionID = props["sessionID"]?.value as? String
             if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
+                if let infoObj = props["info"]?.value as? [String: Any],
+                   infoObj["role"] as? String == "assistant",
+                   let assistantID = infoObj["id"] as? String {
+                    messageStore.recordStepStart(assistantID, sessionID: eventSessionID ?? "")
+                }
                 messageStore.resetStreaming()
                 await loadMessages()
                 await loadSessionDiff()
             }
+        case "message.part.delta":
+            if let sessionID = props["sessionID"]?.value as? String,
+               sessionID == currentSessionID,
+               props["field"]?.value as? String == "text",
+               let delta = props["delta"]?.value as? String, !delta.isEmpty,
+               let messageID = props["messageID"]?.value as? String {
+                messageStore.recordFirstText(messageID, sessionID: sessionID)
+            }
         case "message.part.updated":
+            if let partObj = props["part"]?.value as? [String: Any],
+               partObj["type"] as? String == "step-finish",
+               props["sessionID"]?.value as? String == currentSessionID,
+               let messageID = partObj["messageID"] as? String {
+                let tokensObj = partObj["tokens"] as? [String: Any]
+                messageStore.recordStepFinish(messageID, sessionID: currentSessionID ?? "", outputTokens: tokensObj?["output"] as? Int)
+            }
             switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {
             case .ignored:
                 break
@@ -303,6 +323,7 @@ extension AppState {
     func clearCurrentSessionViewState() {
         sessionLoadingID = UUID()
         messageStore.resetStreaming()
+        messageStore.stepTimings = [:]
         messages = []
         partsByMessage = [:]
         sessionDiffs = []
@@ -312,6 +333,7 @@ extension AppState {
         sessionStatuses[sessionID] = nil
         sessionTodos[sessionID] = nil
         sessionScope.remove(sessionID: sessionID)
+        messageStore.removeTimings(forSession: sessionID)
 
         if streamingReasoningPart?.sessionID == sessionID {
             messageStore.streamingReasoningPart = nil

@@ -20,6 +20,14 @@
   - L10n 新增 5 个 key（en/zh）。
 - **测试**：新增 12 个单测——`MessageThroughputTests` 10 个（basic / 含 reasoning / 生成中 nil / 零窗口 nil / 无 token nil / 缺 tokens 字段 nil / 负窗口 nil / label 整数 / label 小数 / label nil）+ `ContextUsageThroughputTests` 2 个（session 聚合并排除生成中 / 无已完成 step 时 nil）全过；全量单测回归 427/427（signed build）。
 - **Review**：GLM-5.3 subagent 一审 approve-with-nits，无 correctness 问题；据 review 收敛两处：throughput 数字格式抽成 `Message.throughputText` 单一实现（footer 与 sheet 共用，避免漂移）；sheet 的 "Output tokens" 标签改为 "Generated tokens"（因口径是 output+reasoning，避免与 Tokens section 的 Output 行混淆）。
+- **SSE 扩展：best-effort TTFT + decoding（2026-09-12 追加）**：
+  - 背景：单一 general throughput 把 prefill 和 decode 揉在一起（分母 `created→completed` 含 prefill）。标准 LLM 测量要拆成 TTFT（首个可见 text token）+ decoding（纯文本生成速率）。
+  - 数据源：server **不持久化 first-token 时间**（`message-updater` 只写 `created`/`completed`），所以历史消息算不出 TTFT/decoding；但实时 SSE 流有 `message.part.delta`（逐 token，`field`/`messageID`，无 server 时间戳）和 `message.part.updated`（step-finish，带 `tokens.output`）。
+  - **best-effort 口径**：只看"是否观察到 SSE"。观察到就分开，没观察到（翻历史 / 重启 / 纯 REST 加载）就不分开，footer 只留 general。
+  - **时钟**：全部用 client 接收时间（stepStart=首个 assistant `message.updated` 到达、firstText=首个 `field==text` delta 到达、finish=step-finish part 到达），避免 server/client 时钟 skew（SSH 远端场景）。TTFT = firstText - stepStart；decoding = `tokens.output` / (finish - firstText)（分子只算 output，窗口从首个 text token 起，prefill 与 reasoning 都落在 firstText 之前被排除）。
+  - 实现：`MessageStore.StepTiming`（per assistant messageID，`stepStart`/`firstTextAt`/`finishAt`/`outputTokens` + `ttft`/`decode` + 两个 label）；`handleSSEEvent` 新增 `message.part.delta` case、`message.updated` 记 stepStart、`message.part.updated` step-finish 记 finish+tokens；`stepTimings` **不**随 `resetStreaming()` 清空（那在每条 message 更新都会触发，含本 step 自身），改为 session-scoped clear（`clearCurrentSessionViewState` / `removeTimings(forSession:)`）时清理。footer（`MessageRowView`）：`provider/model | <general> t/s | TTFT: 3.2s | 128 t/s decoding`，后两段仅在 SSE 观察到时出现。
+  - 测试：新增 `StepTimingTests`（ttft/decode 计算与 label、各 nil 边界）+ SessionFlow 两条（SSE 流捕获：reasoning delta 不算首 token、首 token 只记一次、step-finish 带 tokens；非当前 session 忽略）。
+  - **已知边界**：TTFT/decoding 仅当前 app 会话内、观察到流的那一步有效；重启或纯历史消息回退为 general only。若需历史回溯 TTFT/decoding，必须 patch server 给 assistant 消息加 first-token 时间戳并落库。
 - **已知边界**：tool 耗时本次不做（用户明确不感兴趣）；实时 SSE 带 tool 时间戳，但持久化 history 的 V1 message list 不存 tool `time`，故历史无法回溯 tool 耗时——后续如需再 patch server。
 - **分支**：`feat/llm-throughput`（PR 待 review，未 merge）。
 

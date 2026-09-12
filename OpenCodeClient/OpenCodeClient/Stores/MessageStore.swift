@@ -28,6 +28,82 @@ final class MessageStore {
     /// Keyed by message id; cleared when the row is confirmed or removed.
     var failedSendReasonsByID: [String: String] = [:]
 
+    /// Per-step timing captured from the live SSE stream, keyed by assistant
+    /// message id. Only populated while the client observed the stream for that
+    /// step (best-effort): a restart or a message loaded purely from REST has no
+    /// entry, so the footer falls back to the general (persisted) throughput.
+    /// Not cleared by `resetStreaming()` (that fires on every message update,
+    /// including the step's own start/finish); pruned on session-scoped clears.
+    var stepTimings: [String: StepTiming] = [:]
+
+    struct StepTiming {
+        let sessionID: String
+        /// Client time the step's assistant message was first seen (step start).
+        let stepStart: Date
+        /// Client time the first visible text token arrived (nil until it does).
+        var firstTextAt: Date?
+        /// Client time the step-finish part was observed.
+        var finishAt: Date?
+        /// Output tokens reported by the step-finish part.
+        var outputTokens: Int?
+
+        /// Time to first (visible text) token, in seconds, from step start.
+        var ttft: Double? {
+            guard let first = firstTextAt else { return nil }
+            let value = first.timeIntervalSince(stepStart)
+            return value > 0 ? value : nil
+        }
+
+        /// Decoding throughput: output tokens over the (first-text -> finish)
+        /// window. Excludes prefill and reasoning, which sit before first text.
+        var decode: Double? {
+            guard let first = firstTextAt, let fin = finishAt, let out = outputTokens, out > 0 else { return nil }
+            let window = fin.timeIntervalSince(first)
+            guard window > 0 else { return nil }
+            return Double(out) / window
+        }
+
+        var ttftLabel: String? {
+            ttft.map { String(format: "%.1fs", $0) }
+        }
+
+        var decodeLabel: String? {
+            guard let d = decode else { return nil }
+            let text = d >= 10 ? String(Int(d.rounded())) : String(format: "%.1f", d)
+            return "\(text) t/s decoding"
+        }
+    }
+
+    func recordStepStart(_ messageID: String, sessionID: String) {
+        guard stepTimings[messageID] == nil else { return }
+        stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
+    }
+
+    func recordFirstText(_ messageID: String, sessionID: String) {
+        if stepTimings[messageID] == nil {
+            stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
+        }
+        if stepTimings[messageID]?.firstTextAt == nil {
+            stepTimings[messageID]?.firstTextAt = Date()
+        }
+    }
+
+    func recordStepFinish(_ messageID: String, sessionID: String, outputTokens: Int?) {
+        if stepTimings[messageID] == nil {
+            stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
+        }
+        stepTimings[messageID]?.finishAt = Date()
+        if let out = outputTokens {
+            stepTimings[messageID]?.outputTokens = out
+        }
+    }
+
+    func removeTimings(forSession sessionID: String) {
+        for (id, timing) in stepTimings where timing.sessionID == sessionID {
+            stepTimings[id] = nil
+        }
+    }
+
     func isPendingOptimisticMessage(_ messageID: String) -> Bool {
         pendingOptimisticMessageIDs.contains(messageID)
     }

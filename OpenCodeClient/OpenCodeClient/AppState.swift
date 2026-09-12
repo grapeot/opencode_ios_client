@@ -492,6 +492,7 @@ final class AppState {
     var partsByMessage: [String: [Part]] { get { messageStore.partsByMessage } set { messageStore.partsByMessage = newValue } }
     var streamingPartTexts: [String: String] { get { messageStore.streamingPartTexts } set { messageStore.streamingPartTexts = newValue } }
     var streamingReasoningPart: Part? { get { messageStore.streamingReasoningPart } set { messageStore.streamingReasoningPart = newValue } }
+    var stepTimings: [String: MessageStore.StepTiming] { get { messageStore.stepTimings } set { messageStore.stepTimings = newValue } }
 
     var modelPresets: [ModelPreset] = [
         ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
