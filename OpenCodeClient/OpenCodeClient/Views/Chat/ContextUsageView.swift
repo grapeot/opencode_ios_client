@@ -15,6 +15,9 @@ struct ContextUsageSnapshot: Identifiable {
     let tokens: Message.TokenInfo
     let latestMessageCost: Double?
     let totalSessionCost: Double?
+    let totalOutputTokens: Int
+    let totalGenerationSeconds: Double?
+    let averageThroughput: Double?
 }
 
 extension AppState {
@@ -42,6 +45,24 @@ extension AppState {
         let sumCost = messages.compactMap { $0.info.cost }.reduce(0.0, +)
         let totalCost: Double? = sumCost > 0 ? sumCost : nil
 
+        // Session-level LLM throughput: sum emitted tokens over the total LLM
+        // step time. Each step's window excludes tool execution, so this is a
+        // clean generation rate across the whole conversation.
+        var totalOutput = 0
+        var totalSeconds = 0.0
+        for m in messages where m.info.isAssistant {
+            guard let completed = m.info.time.completed else { continue }
+            let ms = completed - m.info.time.created
+            guard ms > 0 else { continue }
+            let gen = m.info.generatedTokens
+            guard gen > 0 else { continue }
+            totalOutput += gen
+            totalSeconds += Double(ms) / 1000.0
+        }
+        let avgThroughput: Double? = (totalSeconds > 0 && totalOutput > 0)
+            ? Double(totalOutput) / totalSeconds
+            : nil
+
         return ContextUsageSnapshot(
             sessionID: sessionID,
             sessionTitle: session.title,
@@ -50,7 +71,10 @@ extension AppState {
             contextLimit: contextLimit,
             tokens: tokens,
             latestMessageCost: last.info.cost,
-            totalSessionCost: totalCost
+            totalSessionCost: totalCost,
+            totalOutputTokens: totalOutput,
+            totalGenerationSeconds: totalSeconds > 0 ? totalSeconds : nil,
+            averageThroughput: avgThroughput
         )
     }
 }
@@ -158,6 +182,19 @@ private struct ContextUsageDetailView: View {
                     LabeledContent(L10n.t(.contextUsageLimitLabel), value: String(s.contextLimit))
                 }
 
+                Section(L10n.t(.contextUsageSectionThroughput)) {
+                    if let avg = s.averageThroughput {
+                        LabeledContent(L10n.t(.contextUsageThroughputAvg), value: Message.throughputText(avg))
+                        LabeledContent(L10n.t(.contextUsageThroughputTokens), value: String(s.totalOutputTokens))
+                        if let sec = s.totalGenerationSeconds {
+                            LabeledContent(L10n.t(.contextUsageThroughputTime), value: formatSeconds(sec))
+                        }
+                    } else {
+                        Text(L10n.t(.contextUsageThroughputNoData))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(L10n.t(.contextUsageSectionTokens)) {
                     LabeledContent(L10n.t(.contextUsageTotalLabel), value: String(s.tokens.total))
                     LabeledContent(L10n.t(.contextUsageInputLabel), value: String(s.tokens.input))
@@ -195,4 +232,12 @@ private struct ContextUsageDetailView: View {
         .navigationTitle(L10n.t(.contextUsageTitle))
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// "1m 5s" / "48.2s" for the session's total LLM generation time.
+private func formatSeconds(_ seconds: Double) -> String {
+    if seconds < 60 { return String(format: "%.1fs", seconds) }
+    let minutes = Int(seconds / 60)
+    let remainder = Int(seconds.truncatingRemainder(dividingBy: 60))
+    return "\(minutes)m \(remainder)s"
 }

@@ -193,6 +193,41 @@ nonisolated struct Message: Codable, Identifiable {
         let trimmed = error?.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
+
+    /// Tokens the model actually emitted during this step: visible `output`
+    /// plus `reasoning` (thinking). Prefill (`input`) and cache read/write are
+    /// excluded because they are not generated tokens.
+    var generatedTokens: Int {
+        (tokens?.output ?? 0) + (tokens?.reasoning ?? 0)
+    }
+
+    /// Generation throughput in tokens/second over the step's wall-clock
+    /// window (`time.created` -> `time.completed`). The window is the LLM step
+    /// only: tool execution happens between steps, so it is not counted here.
+    /// Returns nil while the step is still running (no `completed`), when the
+    /// window is zero, or when no tokens were emitted.
+    var throughput: Double? {
+        guard let completed = time.completed else { return nil }
+        let ms = completed - time.created
+        guard ms > 0 else { return nil }
+        let tokens = generatedTokens
+        guard tokens > 0 else { return nil }
+        return Double(tokens) / (Double(ms) / 1000.0)
+    }
+
+    /// Short display form of `throughput`, e.g. "146 t/s" or "8.3 t/s".
+    /// Integer when >= 10, one decimal below that; nil when unavailable.
+    var throughputLabel: String? {
+        throughput.map(Self.throughputText)
+    }
+
+    /// Shared tokens/second formatter: integer when >= 10, one decimal below
+    /// that. Used by both the per-message footer and the Context sheet so the
+    /// two can never drift.
+    static func throughputText(_ value: Double) -> String {
+        let text = value >= 10 ? String(Int(value.rounded())) : String(format: "%.1f", value)
+        return "\(text) t/s"
+    }
 }
 
 nonisolated struct MessageWithParts: Codable {

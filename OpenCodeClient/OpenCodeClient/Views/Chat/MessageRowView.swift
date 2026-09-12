@@ -31,6 +31,15 @@ struct MessageRowView: View {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
     }
 
+    /// Assistant footer line: "provider/model", plus " | X t/s" when the step
+    /// finished and emitted tokens. The model alone is shown while a step is
+    /// still generating (no `completed` timestamp yet).
+    private static func modelFooter(model: Message.ModelInfo, throughput: String?) -> String {
+        let base = "\(model.providerID)/\(model.modelID)"
+        guard let throughput else { return base }
+        return "\(base) | \(throughput)"
+    }
+
     enum AssistantBlock: Identifiable {
         case text(Part)
         case cards([Part])
@@ -493,7 +502,7 @@ struct MessageRowView: View {
             if message.info.resolvedModel != nil || !copyableText.isEmpty {
                 HStack {
                     if let model = message.info.resolvedModel {
-                        Text("\(model.providerID)/\(model.modelID)")
+                        Text(Self.modelFooter(model: model, throughput: message.info.throughputLabel))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }

@@ -9,6 +9,20 @@
 - **编译/测试**：build 通过；shortlist 单测与 `ModelShortlistUITests` 通过
 - **Phase**：聊天栏模型选择改为设备本地 shortlist（Settings → Models）
 
+### 2026-09-12 — LLM throughput 显示（per-message 脚注 + Context sheet）
+
+- **动机**：想看 LLM 工作时的真实生成速率（"x 秒生成 y 个 token"）。在 live server（4096）上实测确认：每条 assistant 消息（= 一个 LLM step）已带 `time.created` / `time.completed` / `tokens`，且相邻 step 间隔仅 1–3ms、单步耗时跟随 output token 数而非 tool 数量——说明该窗口是干净的 LLM 生成时间（tool 执行落在 step 之间，不计入）。纯客户端可算，server 零改动。
+- **口径**：分母 = step 的 wall-clock（`completed - created`，含 prefill + 生成，不含 tool 执行）；分子 = `output + reasoning`（模型实际吐出的 token，不含 input/prefill，也不含 cache read/write）。`completed` 为 nil（生成中）、窗口为 0 或 token 为 0 时不出数。
+- **实现**：
+  - `Message.generatedTokens` / `Message.throughput` / `Message.throughputLabel`（`Models/Message.swift`）：核心计算；label "≥10 取整、<10 一位小数"。
+  - 每条 assistant 消息 footer（`MessageRowView`）：`provider/model` 后追加 ` | X t/s`；生成中只显示 model（无 completed 时间戳）。
+  - Context sheet（`ContextUsageView`）顶部新增 Throughput section：session 级平均速率（总 token / 总 LLM 时长）、生成 token 数（output+reasoning）、生成总耗时。
+  - L10n 新增 5 个 key（en/zh）。
+- **测试**：新增 12 个单测——`MessageThroughputTests` 10 个（basic / 含 reasoning / 生成中 nil / 零窗口 nil / 无 token nil / 缺 tokens 字段 nil / 负窗口 nil / label 整数 / label 小数 / label nil）+ `ContextUsageThroughputTests` 2 个（session 聚合并排除生成中 / 无已完成 step 时 nil）全过；全量单测回归 427/427（signed build）。
+- **Review**：GLM-5.3 subagent 一审 approve-with-nits，无 correctness 问题；据 review 收敛两处：throughput 数字格式抽成 `Message.throughputText` 单一实现（footer 与 sheet 共用，避免漂移）；sheet 的 "Output tokens" 标签改为 "Generated tokens"（因口径是 output+reasoning，避免与 Tokens section 的 Output 行混淆）。
+- **已知边界**：tool 耗时本次不做（用户明确不感兴趣）；实时 SSE 带 tool 时间戳，但持久化 history 的 V1 message list 不存 tool `time`，故历史无法回溯 tool 耗时——后续如需再 patch server。
+- **分支**：`feat/llm-throughput`（PR 待 review，未 merge）。
+
 ### 2026-09-10 — iPhone 文件预览左缘右滑关闭
 
 - compact-width Chat 里，点文件 tool call 打开的 docked `ChatInlineFilePreview` 除 toolbar `xmark` 外，可用标准 iOS 返回手势关闭：从屏幕物理左缘起手、向右拖够距离。

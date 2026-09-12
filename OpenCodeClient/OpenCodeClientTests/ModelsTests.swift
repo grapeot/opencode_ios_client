@@ -33,6 +33,145 @@ struct MessageRoleTests {
     }
 }
 
+// MARK: - Message Throughput Tests
+
+struct MessageThroughputTests {
+
+    private func makeMessage(_ extra: String) throws -> Message {
+        let json = """
+        {"id":"m1","sessionID":"s1","role":"assistant","parentID":null,"model":{"providerID":"openai","modelID":"gpt-4"},\(extra)}
+        """
+        return try JSONDecoder().decode(Message.self, from: json.data(using: .utf8)!)
+    }
+
+    @Test func throughputBasic() throws {
+        // 2000ms window, 200 output tokens -> 100 t/s
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":3000},\"tokens\":{\"output\":200,\"reasoning\":0}")
+        #expect(m.throughput == 100.0)
+    }
+
+    @Test func throughputIncludesReasoning() throws {
+        // 3000ms window, 200 output + 100 reasoning = 300 tokens -> 100 t/s
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":4000},\"tokens\":{\"output\":200,\"reasoning\":100}")
+        #expect(m.generatedTokens == 300)
+        #expect(m.throughput == 100.0)
+    }
+
+    @Test func throughputNilWhileRunning() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":null},\"tokens\":{\"output\":200}")
+        #expect(m.throughput == nil)
+    }
+
+    @Test func throughputNilZeroWindow() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":1000},\"tokens\":{\"output\":200}")
+        #expect(m.throughput == nil)
+    }
+
+    @Test func throughputNilNoTokens() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":3000},\"tokens\":{\"output\":0,\"reasoning\":0}")
+        #expect(m.generatedTokens == 0)
+        #expect(m.throughput == nil)
+    }
+
+    @Test func throughputLabelInteger() throws {
+        // 1460 tokens / 10s = 146 t/s -> "146 t/s"
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":11000},\"tokens\":{\"output\":1460}")
+        #expect(m.throughputLabel == "146 t/s")
+    }
+
+    @Test func throughputLabelDecimal() throws {
+        // 83 tokens / 10s = 8.3 t/s -> "8.3 t/s"
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":11000},\"tokens\":{\"output\":83}")
+        #expect(m.throughputLabel == "8.3 t/s")
+    }
+
+    @Test func throughputLabelNilWhenUncomputed() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":null}")
+        #expect(m.throughputLabel == nil)
+    }
+
+    @Test func throughputNilWhenTokensMissing() throws {
+        // Valid 2s window but no tokens field at all -> generatedTokens 0 -> nil
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":3000}")
+        #expect(m.generatedTokens == 0)
+        #expect(m.throughput == nil)
+    }
+
+    @Test func throughputNilNegativeWindow() throws {
+        // completed before created (bad data) -> nil, never a negative rate
+        let m = try makeMessage("\"time\":{\"created\":3000,\"completed\":1000},\"tokens\":{\"output\":200}")
+        #expect(m.throughput == nil)
+    }
+}
+
+// MARK: - ContextUsage Throughput Aggregation Tests
+
+struct ContextUsageThroughputTests {
+
+    private func message(
+        _ id: String,
+        _ role: String,
+        _ created: Int,
+        _ completed: String,
+        _ output: Int,
+        _ reasoning: Int = 0
+    ) throws -> MessageWithParts {
+        let json = """
+        {"info":{"id":"\(id)","sessionID":"ses_x","role":"\(role)","model":{"providerID":"openai","modelID":"gpt-4"},"time":{"created":\(created),"completed":\(completed)},"tokens":{"output":\(output),"reasoning":\(reasoning)}},"parts":[]}
+        """
+        return try JSONDecoder().decode(MessageWithParts.self, from: json.data(using: .utf8)!)
+    }
+
+    @Test @MainActor
+    func aggregatesThroughputAndExcludesRunning() async throws {
+        let state = AppState()
+        let session = try JSONDecoder().decode(Session.self, from: """
+        {"id":"ses_x","slug":"ses_x","projectID":"p1","directory":"/workspace","title":"S","version":"1","time":{"created":1,"updated":2}}
+        """.data(using: .utf8)!)
+        state.sessions = [session]
+        state.currentSessionID = "ses_x"
+        state.providerModelsIndex["openai/gpt-4"] = ProviderModel(
+            id: "gpt-4", name: "G", providerID: "openai",
+            limit: ProviderModelLimit(context: 100_000, input: nil, output: nil)
+        )
+
+        // user (ignored) + A (2s, 200 out) + B (3s, 300 out + 100 reasoning)
+        // + C (still running, no completed -> excluded).
+        state.messages = [
+            try message("mU", "user", 9000, "null", 0, 0),
+            try message("mA", "assistant", 1000, "3000", 200, 0),
+            try message("mB", "assistant", 4000, "7000", 300, 100),
+            try message("mC", "assistant", 8000, "null", 500, 0),
+        ]
+
+        let snap = state.contextUsageSnapshot
+        #expect(snap != nil)
+        #expect(snap?.totalOutputTokens == 600)
+        #expect(snap?.totalGenerationSeconds == 5.0)
+        #expect(snap?.averageThroughput == 120.0)
+    }
+
+    @Test @MainActor
+    func snapshotNilWithoutAnyCompletedStep() async throws {
+        let state = AppState()
+        let session = try JSONDecoder().decode(Session.self, from: """
+        {"id":"ses_x","slug":"ses_x","projectID":"p1","directory":"/workspace","title":"S","version":"1","time":{"created":1,"updated":2}}
+        """.data(using: .utf8)!)
+        state.sessions = [session]
+        state.currentSessionID = "ses_x"
+        state.providerModelsIndex["openai/gpt-4"] = ProviderModel(
+            id: "gpt-4", name: "G", providerID: "openai",
+            limit: ProviderModelLimit(context: 100_000, input: nil, output: nil)
+        )
+        // Only an in-flight assistant (no completed) -> no LLM time to divide by.
+        state.messages = [try message("mA", "assistant", 1000, "null", 200, 0)]
+
+        let snap = state.contextUsageSnapshot
+        #expect(snap?.averageThroughput == nil)
+        #expect(snap?.totalGenerationSeconds == nil)
+    }
+}
+
 // MARK: - ModelPreset Tests
 
 struct ModelPresetTests {

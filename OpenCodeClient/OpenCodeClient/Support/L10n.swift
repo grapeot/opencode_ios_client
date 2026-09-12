@@ -354,6 +354,11 @@ enum L10n {
         case contextUsageLoadingConfig
         case contextUsageNoUsageData
         case contextUsageConfigNotLoaded
+        case contextUsageSectionThroughput
+        case contextUsageThroughputAvg
+        case contextUsageThroughputTime
+        case contextUsageThroughputTokens
+        case contextUsageThroughputNoData
         case quotaTitle
         case quotaDataSource
         case quotaNotLoaded
@@ -786,6 +791,11 @@ enum L10n {
         Key.contextUsageLoadingConfig.rawValue: "Loading provider config...",
         Key.contextUsageNoUsageData.rawValue: "No usage data",
         Key.contextUsageConfigNotLoaded.rawValue: "Provider config not loaded",
+        Key.contextUsageSectionThroughput.rawValue: "Throughput",
+        Key.contextUsageThroughputAvg.rawValue: "Avg throughput",
+        Key.contextUsageThroughputTime.rawValue: "Generation time",
+        Key.contextUsageThroughputTokens.rawValue: "Generated tokens",
+        Key.contextUsageThroughputNoData.rawValue: "No throughput data",
         Key.quotaTitle.rawValue: "Usage & Limits",
         Key.quotaDataSource.rawValue: "Data Source",
         Key.quotaNotLoaded.rawValue: "Quota data has not been loaded.",
@@ -1222,6 +1232,11 @@ enum L10n {
         Key.contextUsageLoadingConfig.rawValue: "正在加载服务商配置...",
         Key.contextUsageNoUsageData.rawValue: "无使用数据",
         Key.contextUsageConfigNotLoaded.rawValue: "未加载服务商配置",
+        Key.contextUsageSectionThroughput.rawValue: "生成速率",
+        Key.contextUsageThroughputAvg.rawValue: "平均速率",
+        Key.contextUsageThroughputTime.rawValue: "生成耗时",
+        Key.contextUsageThroughputTokens.rawValue: "生成令牌",
+        Key.contextUsageThroughputNoData.rawValue: "无速率数据",
         Key.quotaTitle.rawValue: "用量与限额",
         Key.quotaDataSource.rawValue: "数据来源",
         Key.quotaNotLoaded.rawValue: "尚未加载 quota 数据。",
