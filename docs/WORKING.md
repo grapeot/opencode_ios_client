@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- **最后更新**：2026-08-24
-- **分支**：`master` @ `b420f9d`（PR #149）
-- **编译/测试**：build 通过；shortlist 单测与 `ModelShortlistUITests` 通过
-- **Phase**：聊天栏模型选择改为设备本地 shortlist（Settings → Models）
+- **最后更新**：2026-09-13
+- **分支**：`master`（PR #165 合并）
+- **编译/测试**：build 通过；throughput 相关 5 个 suite 29 条单测通过（Xcode 27 beta / iOS 27.0 模拟器）
+- **Phase**：LLM throughput 显示（per-message 脚注 + Context sheet）；分母已扣除 tool 执行时间，TTFT 已删
 
 ### 2026-09-12 — LLM throughput 显示（per-message 脚注 + Context sheet）
 
@@ -30,7 +30,7 @@
   - 测试：SessionFlow 三条（SSE 流捕获：reasoning delta 不进可见窗口、tool-input delta 建立窗口且 step-finish 不移动窗口右端、非当前 session 忽略）+ `StepTimingTests`（decode 计算与 label、窗口两端/宽度为 0/token 缺失各 nil 边界）。
   - **已知边界**：decoding 仅当前 app 会话内、观察到流的那一步有效；重启或纯历史消息回退为 general only。若需历史回溯纯 decode，必须 patch server 给 assistant 消息加 first-token 时间戳并落库。
 - **已知边界**：~~tool 耗时本次不做（用户明确不感兴趣）；实时 SSE 带 tool 时间戳，但持久化 history 的 V1 message list 不存 tool `time`，故历史无法回溯 tool 耗时~~ → **2026-09-13 更正：tool part 的 `state.time` 在持久化 payload 里存在（本地 DB 全量 2 万+ tool part 均有 start/end），且必须从分母里扣掉，见下方修正段**。
-- **分支**：`feat/llm-throughput`（PR 待 review，未 merge）。
+- **合并**：PR #165（分支 `feat/llm-throughput`）。
 
 #### 2026-09-13 修正：tool 执行时间在 step 窗口内，必须从分母扣除
 
