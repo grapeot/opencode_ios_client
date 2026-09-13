@@ -4,10 +4,47 @@
 
 ## 当前状态
 
-- **最后更新**：2026-08-24
-- **分支**：`master` @ `b420f9d`（PR #149）
-- **编译/测试**：build 通过；shortlist 单测与 `ModelShortlistUITests` 通过
-- **Phase**：聊天栏模型选择改为设备本地 shortlist（Settings → Models）
+- **最后更新**：2026-09-13
+- **分支**：`master`（PR #165 合并）
+- **编译/测试**：build 通过；throughput 相关 5 个 suite 29 条单测通过（Xcode 27 beta / iOS 27.0 模拟器）
+- **Phase**：LLM throughput 显示（per-message 脚注 + Context sheet）；分母已扣除 tool 执行时间，TTFT 已删
+
+### 2026-09-12 — LLM throughput 显示（per-message 脚注 + Context sheet）
+
+- **动机**：想看 LLM 工作时的真实生成速率（"x 秒生成 y 个 token"）。在 live server（4096）上实测确认：每条 assistant 消息（= 一个 LLM step）已带 `time.created` / `time.completed` / `tokens`。纯客户端可算，server 零改动。~~相邻 step 间隔仅 1–3ms、单步耗时跟随 output token 数而非 tool 数量——说明该窗口是干净的 LLM 生成时间（tool 执行落在 step 之间，不计入）~~ → **该判断 2026-09-13 证伪，见下方修正段**。
+- **口径**：分母 = step 的 wall-clock（`completed - created`，含 prefill + 生成 + **tool 执行**）；分子 = `output + reasoning`（模型实际吐出的 token，不含 input/prefill，也不含 cache read/write）。`completed` 为 nil（生成中）、窗口为 0 或 token 为 0 时不出数。
+- **实现**：
+  - `Message.generatedTokens` / `Message.throughput` / `Message.throughputLabel`（`Models/Message.swift`）：核心计算；label "≥10 取整、<10 一位小数"。
+  - 每条 assistant 消息 footer（`MessageRowView`）：`provider/model` 后追加 ` | X t/s`；生成中只显示 model（无 completed 时间戳）。
+  - Context sheet（`ContextUsageView`）顶部新增 Throughput section：session 级平均速率（总 token / 总 LLM 时长）、生成 token 数（output+reasoning）、生成总耗时。
+  - L10n 新增 5 个 key（en/zh）。
+- **测试**：新增 12 个单测——`MessageThroughputTests` 10 个（basic / 含 reasoning / 生成中 nil / 零窗口 nil / 无 token nil / 缺 tokens 字段 nil / 负窗口 nil / label 整数 / label 小数 / label nil）+ `ContextUsageThroughputTests` 2 个（session 聚合并排除生成中 / 无已完成 step 时 nil）全过；全量单测回归 427/427（signed build）。
+- **Review**：GLM-5.3 subagent 一审 approve-with-nits，无 correctness 问题；据 review 收敛两处：throughput 数字格式抽成 `Message.throughputText` 单一实现（footer 与 sheet 共用，避免漂移）；sheet 的 "Output tokens" 标签改为 "Generated tokens"（因口径是 output+reasoning，避免与 Tokens section 的 Output 行混淆）。
+- **SSE 扩展：best-effort decoding（2026-09-12 追加，2026-09-13 收敛为 decoding-only）**：
+  - 背景：单一 general throughput 把 prefill 和 decode 揉在一起（分母 `created→completed` 含 prefill）。目标是拆出一个纯生成速率。
+  - 数据源：server **不持久化 first-token 时间**（`message-updater` 只写 `created`/`completed`），所以历史消息算不出纯 decode；但实时 SSE 流有逐 token 的 `message.part.delta`（`field`/`messageID`，无 server 时间戳）和 `message.part.updated`（part 创建/收尾、step-finish 带 `tokens.output`）。
+  - **best-effort 口径**：只看"是否观察到 SSE"。观察到就给 decoding，没观察到（翻历史 / 重启 / 纯 REST 加载）就不给，footer 只留 general。
+  - **时钟**：全部用 client 接收时间（firstVisible=首个可见 token 到达、lastVisible=最后一个可见 token 到达），避免 server/client 时钟 skew（SSH 远端场景）。decoding = `tokens.output` / (lastVisible - firstVisible)；分子只算 output，prefill 与 reasoning 都落在窗口之前被排除，tool 执行落在窗口之后被排除。step-finish 的到达时间**不**参与窗口（它在 tool 跑完之后才到），只提供 `tokens.output`；只观测到一个可见 token（窗口宽度为 0）时不出数，不编造。
+  - 实现：`MessageStore.StepTiming`（per assistant messageID，`firstVisibleAt`/`lastVisibleAt`/`outputTokens` + `decode`/`decodeLabel`）；`handleSSEEvent` 新增 `message.part.delta` case、`message.updated` 建 step 条目、`message.part.updated` 收 delta 与 step-finish；`stepTimings` **不**随 `resetStreaming()` 清空（那在每条 message 更新都会触发，含本 step 自身），改为 session-scoped clear（`clearCurrentSessionViewState` / `removeTimings(forSession:)`）时清理。footer（`MessageRowView`）：`provider/model | <general> t/s | <decode> t/s decoding`，最后一段仅在 SSE 观察到时出现。
+  - **TTFT 已删除（2026-09-13）**：原设计在 footer 里带 `TTFT: 3.2s`（firstVisible - stepStart）。实机跑下来这条几乎从不出现（客户端看到 assistant `message.updated` 与首个 token 到达之间的窗口不可靠，且它不影响使用者要的"真实生成速率"），按"没用的东西不留"删掉：`StepTiming` 去掉 `stepStart` / `ttft` / `ttftLabel`，footer 去掉该段，相关单测一并删除。`recordStepStart` 保留，作用改为"标记这个 step 从开头就被观察到"，仍是 decoding 窗口的前置条件。
+  - 测试：SessionFlow 三条（SSE 流捕获：reasoning delta 不进可见窗口、tool-input delta 建立窗口且 step-finish 不移动窗口右端、非当前 session 忽略）+ `StepTimingTests`（decode 计算与 label、窗口两端/宽度为 0/token 缺失各 nil 边界）。
+  - **已知边界**：decoding 仅当前 app 会话内、观察到流的那一步有效；重启或纯历史消息回退为 general only。若需历史回溯纯 decode，必须 patch server 给 assistant 消息加 first-token 时间戳并落库。
+- **已知边界**：~~tool 耗时本次不做（用户明确不感兴趣）；实时 SSE 带 tool 时间戳，但持久化 history 的 V1 message list 不存 tool `time`，故历史无法回溯 tool 耗时~~ → **2026-09-13 更正：tool part 的 `state.time` 在持久化 payload 里存在（本地 DB 全量 2 万+ tool part 均有 start/end），且必须从分母里扣掉，见下方修正段**。
+- **合并**：PR #165（分支 `feat/llm-throughput`）。
+
+#### 2026-09-13 修正：tool 执行时间在 step 窗口内，必须从分母扣除
+
+- **触发**：实机跑出"LLM 输出了一个很大的 write tool call，但 throughput 特别低"。
+- **结论：分子没问题，tool call 的 token 一直在算。** `output` = provider 的 output tokens − reasoning，模型为 tool call 生成的 JSON 参数属于 output tokens。用本地 OpenCode DB（`~/.local/share/opencode/opencode.db`）复核：910 个 tool part 中 901 个的所属 step `tokens.output` 与 tool input 体量一致（其余 9 个是 `shell`/synthetic 路径，output 恒为 0）；write 类最大样本 5426 字符 input 对应 2748 output tokens。所以"没算 tool token"是误诊。
+- **真因**：分母 `created → completed` **包含 tool 的执行时间**。两个 server 路径都如此：legacy processor 在 stream 内执行 tool、`completed` 在 tool 结束后才写；V2 runner 先 `awaitToolFibers` 再发 `SessionEvent.Step.Ended`。实测证据：`msg_085d6384a001` 的 bash tool 跑了 417,204ms，step 窗口 419,309ms，output 63 tokens → 显示 0.1 t/s；`msg_dbd74d5d0001` 的 write tool 跑 48,345ms，step 窗口 56,157ms，529 tokens → 显示 9.4 t/s（扣掉 tool 时间应为 67.7 t/s）。
+- **修复（客户端，仍零 server 改动）**：
+  - `PartStateBridge` 解析 `state.time.start/end`，`Part.toolRunSeconds` / `MessageWithParts.toolRunSeconds` 汇总；`Message.throughputExcludingToolSeconds` = `generatedTokens / (stepSeconds - toolRunSeconds)`（tool 时间 ≥ 窗口时回退原始窗口，不产生负分母）。
+  - footer 与 Context sheet 的 general 数字都改用扣 tool 后的口径；sheet 的 session 平均同样逐 step 扣除。
+  - SSE decoding 窗口的右端点从"step-finish part 到达"改为"最后一个可见 delta 到达"（step-finish 在 tool 跑完之后才到，用它收尾等于把 tool 时间加回 decode）；同时 tool-input delta 记入可见 token，使"只输出 tool call、没有正文"的 step 也能算出 decoding，而不是只剩被 tool 时间污染的 general。
+  - `StepTiming.firstTextAt` 更名 `firstVisibleAt`，新增 `lastVisibleAt`；TTFT 相关字段（`stepStart`/`ttft`/`ttftLabel`）随后删除，见上节。
+- **残留边界**：persisted 口径仍含 prefill（历史数据无法拆出首 token 时间），SSE 观察到的 step 才能给出纯 decode 速率；Context sheet 的 session 平均只覆盖当前已加载的消息（分页外的历史不计）；tool 时间缺失（running、老 payload）时回退原始窗口。
+- **测试**：`MessageThroughputTests` +3（扣 tool / tool 时间超窗口回退 / 运行中 nil）、新增 `MessageToolTimingTests` 3 条（state.time 汇总、缺 timing 为 0、running 无 end 不计）、`ContextUsageThroughputTests` +1（聚合扣 tool）、`StepTimingTests` +2（decode 用 lastVisibleAt 收尾、tool-only step 有窗口）、`AppStateFlowTests` +1 并改写既有 1 条（tool-input delta 建立窗口、step-finish 不移动窗口右端）。**聚焦 5 个 suite 29 条全过**（Xcode 27 beta + iOS 27.0 模拟器，`test-without-building`）。
+- **测试环境坑**：`/Applications/Xcode.app`（26.6）缺 iOS platform 组件，iOS 模拟器 destination 全部不可用；Xcode 27 beta 能跑，但 `AIUsageQuotaTests.swift` 与 beta 的默认 isolation 不兼容（actor 无法 conform 被推断为 global-actor-isolated 的 protocol），跑测试时临时移出该文件、跑完复原，未改动其内容。
 
 ### 2026-09-10 — iPhone 文件预览左缘右滑关闭
 

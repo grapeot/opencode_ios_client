@@ -111,11 +111,46 @@ extension AppState {
         case "message.updated":
             let eventSessionID = props["sessionID"]?.value as? String
             if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
+                if let infoObj = props["info"]?.value as? [String: Any],
+                   infoObj["role"] as? String == "assistant",
+                   let assistantID = infoObj["id"] as? String,
+                   let sessionID = eventSessionID {
+                    messageStore.recordStepStart(assistantID, sessionID: sessionID)
+                }
                 messageStore.resetStreaming()
                 await loadMessages()
                 await loadSessionDiff()
             }
+        case "message.part.delta":
+            // `field` is "text" for both reasoning and text parts, so it cannot
+            // discriminate; the part's `type` (tracked by partID from the
+            // `message.part.updated` that precedes each part's deltas) can.
+            if let sessionID = props["sessionID"]?.value as? String,
+               sessionID == currentSessionID,
+               props["field"]?.value as? String == "text",
+               let delta = props["delta"]?.value as? String, !delta.isEmpty,
+               let messageID = props["messageID"]?.value as? String,
+               let partID = props["partID"]?.value as? String,
+               messageStore.partType(for: partID, inSession: sessionID) == "text" {
+                messageStore.recordVisibleToken(messageID, sessionID: sessionID)
+            }
         case "message.part.updated":
+            if let sessionID = props["sessionID"]?.value as? String,
+               sessionID == currentSessionID,
+               let partObj = props["part"]?.value as? [String: Any],
+               let messageID = partObj["messageID"] as? String {
+                // Tool-call input streams as deltas on the tool part, so it also
+                // counts as visible output; a step whose only output is a tool
+                // call would otherwise have no decoding window at all.
+                if let partType = partObj["type"] as? String, partType == "tool" || partType == "text",
+                   let delta = props["delta"]?.value as? String, !delta.isEmpty {
+                    messageStore.recordVisibleToken(messageID, sessionID: sessionID)
+                }
+                if partObj["type"] as? String == "step-finish" {
+                    let tokensObj = partObj["tokens"] as? [String: Any]
+                    messageStore.recordStepFinish(messageID, sessionID: sessionID, outputTokens: tokensObj?["output"] as? Int)
+                }
+            }
             switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {
             case .ignored:
                 break
@@ -303,6 +338,8 @@ extension AppState {
     func clearCurrentSessionViewState() {
         sessionLoadingID = UUID()
         messageStore.resetStreaming()
+        messageStore.stepTimings = [:]
+        messageStore.clearPartTypes()
         messages = []
         partsByMessage = [:]
         sessionDiffs = []
@@ -312,6 +349,8 @@ extension AppState {
         sessionStatuses[sessionID] = nil
         sessionTodos[sessionID] = nil
         sessionScope.remove(sessionID: sessionID)
+        messageStore.removeTimings(forSession: sessionID)
+        messageStore.removePartTypes(forSession: sessionID)
 
         if streamingReasoningPart?.sessionID == sessionID {
             messageStore.streamingReasoningPart = nil

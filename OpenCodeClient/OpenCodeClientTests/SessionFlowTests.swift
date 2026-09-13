@@ -1636,6 +1636,118 @@ struct AppStateFlowTests {
         #expect(state.streamingPartTexts.isEmpty)
     }
 
+    @Test @MainActor func sseStreamCapturesStepTimingForCurrentSession() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        // Step start: assistant message.created.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","role":"assistant","time":{"created":1000,"completed":null},"tokens":{"output":0,"reasoning":0}}}}}
+        """))
+        #expect(state.stepTimings["m1"] != nil)
+        #expect(state.stepTimings["m1"]?.sessionID == "s1")
+        #expect(state.stepTimings["m1"]?.firstVisibleAt == nil)
+
+        // Wire shape: the server emits `message.part.delta` with `field:"text"`
+        // for BOTH reasoning and text parts (see processor.ts reasoning-delta /
+        // text-delta). The part's `type` is carried by the `message.part.updated`
+        // that precedes each part's deltas, so the client tracks partID -> type.
+        // Reasoning part created first.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-reason","messageID":"m1","sessionID":"s1","type":"reasoning"}}}}
+        """))
+
+        // A reasoning delta (field "text", part type "reasoning") must NOT count
+        // as the first visible text token.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p-reason","field":"text","delta":"think"}}}
+        """))
+        #expect(state.stepTimings["m1"]?.firstVisibleAt == nil)
+
+        // Text part created.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
+        """))
+        #expect(state.stepTimings["m1"]?.firstVisibleAt == nil)
+
+        // First text token (field "text", part type "text").
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"H"}}}
+        """))
+        let first = state.stepTimings["m1"]?.firstVisibleAt
+        #expect(first != nil)
+
+        // Subsequent text deltas do not move the first-token stamp.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"i"}}}
+        """))
+        #expect(state.stepTimings["m1"]?.firstVisibleAt == first)
+
+        // Step finish (its own part id) carries the output token count, and
+        // must not move the decoding window's end.
+        let last = state.stepTimings["m1"]?.lastVisibleAt
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-fin","messageID":"m1","sessionID":"s1","type":"step-finish","reason":"stop","tokens":{"output":100,"reasoning":0}}}}}
+        """))
+        #expect(state.stepTimings["m1"]?.outputTokens == 100)
+        #expect(state.stepTimings["m1"]?.lastVisibleAt == last)
+    }
+
+    @Test @MainActor func sseToolCallOnlyStepGetsDecodingWindow() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","role":"assistant","time":{"created":1000,"completed":null},"tokens":{"output":0,"reasoning":0}}}}}
+        """))
+
+        // A step whose only output is a tool call: the tool part carries its JSON
+        // input as deltas on `message.part.updated`, which must count as visible
+        // output or the step has no decoding window at all.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-tool","messageID":"m1","sessionID":"s1","type":"tool","tool":"write"}}}}
+        """))
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":"{\\"path\\":\\"a","part":{"id":"p-tool","messageID":"m1","sessionID":"s1","type":"tool","tool":"write"}}}}
+        """))
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":"\\",\\"content\\":\\"x\\"}","part":{"id":"p-tool","messageID":"m1","sessionID":"s1","type":"tool","tool":"write"}}}}
+        """))
+        let first = state.stepTimings["m1"]?.firstVisibleAt
+        let last = state.stepTimings["m1"]?.lastVisibleAt
+        if let first, let last {
+            #expect(last >= first)
+        } else {
+            Issue.record("tool-input deltas did not stamp the visible window")
+        }
+
+        // Step finish arrives only after the tool ran; it carries the token
+        // count but must not stretch the decoding window to itself.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-fin","messageID":"m1","sessionID":"s1","type":"step-finish","reason":"tool-calls","tokens":{"output":2048,"reasoning":0}}}}}
+        """))
+        #expect(state.stepTimings["m1"]?.outputTokens == 2048)
+        #expect(state.stepTimings["m1"]?.lastVisibleAt == last)
+    }
+
+    @Test @MainActor func sseStepTimingIgnoresNonCurrentSession() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        // A full step for a NON-current session: part created + text delta.
+        // Both are session-guarded, so nothing is recorded for it.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s2","part":{"id":"p9","messageID":"m9","sessionID":"s2","type":"text"}}}}
+        """))
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.delta","properties":{"sessionID":"s2","messageID":"m9","partID":"p9","field":"text","delta":"x"}}}
+        """))
+        #expect(state.stepTimings.isEmpty)
+    }
+
     @Test @MainActor func deleteCurrentSessionSelectsNextMostRecentSession() async throws {
         let apiClient = MockAPIClient()
         await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m-next", sessionID: "next", text: "next")])

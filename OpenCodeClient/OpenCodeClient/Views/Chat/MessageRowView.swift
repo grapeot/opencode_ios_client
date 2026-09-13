@@ -31,6 +31,23 @@ struct MessageRowView: View {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
     }
 
+    /// Assistant footer line: "provider/model", then the general (persisted)
+    /// throughput when present, then the best-effort SSE-derived "decoding"
+    /// throughput when the client observed the live stream for this step. Each
+    /// optional segment is omitted when nil, so a message loaded purely from REST
+    /// (no SSE) shows only the model plus general throughput.
+    ///
+    /// The general segment excludes the step's tool wall-clock: the step window
+    /// (`created` -> `completed`) contains tool execution on both server
+    /// lineages, which otherwise collapses a 2000-token write call whose tool
+    /// ran 48s into single-digit t/s.
+    private static func modelFooter(model: Message.ModelInfo, general: String?, decode: String?) -> String {
+        var parts: [String] = ["\(model.providerID)/\(model.modelID)"]
+        if let general { parts.append(general) }
+        if let decode { parts.append(decode) }
+        return parts.joined(separator: " | ")
+    }
+
     enum AssistantBlock: Identifiable {
         case text(Part)
         case cards([Part])
@@ -493,7 +510,14 @@ struct MessageRowView: View {
             if message.info.resolvedModel != nil || !copyableText.isEmpty {
                 HStack {
                     if let model = message.info.resolvedModel {
-                        Text("\(model.providerID)/\(model.modelID)")
+                        let timing = state.stepTimings[message.info.id]
+                        Text(
+                            Self.modelFooter(
+                                model: model,
+                                general: message.info.throughputLabelExcludingToolSeconds(message.toolRunSeconds),
+                                decode: timing?.decodeLabel
+                            )
+                        )
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }

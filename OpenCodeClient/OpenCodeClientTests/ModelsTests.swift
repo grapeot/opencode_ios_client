@@ -33,6 +33,302 @@ struct MessageRoleTests {
     }
 }
 
+// MARK: - Message Throughput Tests
+
+struct MessageThroughputTests {
+
+    private func makeMessage(_ extra: String) throws -> Message {
+        let json = """
+        {"id":"m1","sessionID":"s1","role":"assistant","parentID":null,"model":{"providerID":"openai","modelID":"gpt-4"},\(extra)}
+        """
+        return try JSONDecoder().decode(Message.self, from: json.data(using: .utf8)!)
+    }
+
+    @Test func throughputBasic() throws {
+        // 2000ms window, 200 output tokens -> 100 t/s
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":3000},\"tokens\":{\"output\":200,\"reasoning\":0}")
+        #expect(m.throughputExcludingToolSeconds(0) == 100.0)
+    }
+
+    @Test func throughputIncludesReasoning() throws {
+        // 3000ms window, 200 output + 100 reasoning = 300 tokens -> 100 t/s
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":4000},\"tokens\":{\"output\":200,\"reasoning\":100}")
+        #expect(m.generatedTokens == 300)
+        #expect(m.throughputExcludingToolSeconds(0) == 100.0)
+    }
+
+    @Test func throughputNilWhileRunning() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":null},\"tokens\":{\"output\":200}")
+        #expect(m.throughputExcludingToolSeconds(0) == nil)
+    }
+
+    @Test func throughputNilZeroWindow() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":1000},\"tokens\":{\"output\":200}")
+        #expect(m.throughputExcludingToolSeconds(0) == nil)
+    }
+
+    @Test func throughputNilNoTokens() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":3000},\"tokens\":{\"output\":0,\"reasoning\":0}")
+        #expect(m.generatedTokens == 0)
+        #expect(m.throughputExcludingToolSeconds(0) == nil)
+    }
+
+    @Test func throughputLabelInteger() throws {
+        // 1460 tokens / 10s = 146 t/s -> "146 t/s"
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":11000},\"tokens\":{\"output\":1460}")
+        #expect(m.throughputLabelExcludingToolSeconds(0) == "146 t/s")
+    }
+
+    @Test func throughputLabelDecimal() throws {
+        // 83 tokens / 10s = 8.3 t/s -> "8.3 t/s"
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":11000},\"tokens\":{\"output\":83}")
+        #expect(m.throughputLabelExcludingToolSeconds(0) == "8.3 t/s")
+    }
+
+    @Test func throughputLabelNilWhenUncomputed() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":null}")
+        #expect(m.throughputLabelExcludingToolSeconds(0) == nil)
+    }
+
+    @Test func throughputNilWhenTokensMissing() throws {
+        // Valid 2s window but no tokens field at all -> generatedTokens 0 -> nil
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":3000}")
+        #expect(m.generatedTokens == 0)
+        #expect(m.throughputExcludingToolSeconds(0) == nil)
+    }
+
+    @Test func throughputNilNegativeWindow() throws {
+        // completed before created (bad data) -> nil, never a negative rate
+        let m = try makeMessage("\"time\":{\"created\":3000,\"completed\":1000},\"tokens\":{\"output\":200}")
+        #expect(m.throughputExcludingToolSeconds(0) == nil)
+    }
+
+    @Test func throughputExcludesToolSeconds() throws {
+        // Real case: 529 tokens, 56.157s step window of which a write tool ran
+        // 48.345s -> 67.7 t/s instead of 9.4 t/s.
+        let m = try makeMessage("\"time\":{\"created\":0,\"completed\":56157},\"tokens\":{\"output\":529}")
+        let value = m.throughputExcludingToolSeconds(48.345)
+        #expect(abs((value ?? -1) - 67.72) < 0.05)
+        // Zero tool time is the raw step window: 529 / 56.157s = 9.42 t/s.
+        #expect(abs((m.throughputExcludingToolSeconds(0) ?? -1) - 9.42) < 0.01)
+    }
+
+    @Test func throughputFallsBackWhenToolTimeExceedsWindow() throws {
+        // Clock skew can make tool time swallow the window; never divide by a
+        // non-positive window, fall back to the raw step window.
+        let m = try makeMessage("\"time\":{\"created\":0,\"completed\":5000},\"tokens\":{\"output\":500}")
+        #expect(m.throughputExcludingToolSeconds(9.0) == 100.0)
+    }
+
+    @Test func throughputExcludingToolSecondsNilWhileRunning() throws {
+        let m = try makeMessage("\"time\":{\"created\":1000,\"completed\":null},\"tokens\":{\"output\":200}")
+        #expect(m.throughputExcludingToolSeconds(1.0) == nil)
+    }
+
+    @Test func throughputLabelExcludesToolSeconds() throws {
+        let m = try makeMessage("\"time\":{\"created\":0,\"completed\":56157},\"tokens\":{\"output\":529}")
+        #expect(m.throughputLabelExcludingToolSeconds(48.345) == "68 t/s")
+    }
+}
+
+// MARK: - Tool timing extraction tests
+
+struct MessageToolTimingTests {
+
+    private func messageWithParts(_ parts: String) throws -> MessageWithParts {
+        let json = """
+        {"info":{"id":"m1","sessionID":"s1","role":"assistant","time":{"created":0,"completed":60000},"tokens":{"output":600}},"parts":[\(parts)]}
+        """
+        return try JSONDecoder().decode(MessageWithParts.self, from: json.data(using: .utf8)!)
+    }
+
+    @Test func sumsToolStateTime() throws {
+        // Two completed tools: 48s + 5s = 53s. Step window 60s -> 7s of
+        // generation, so 600 tokens / 7s = 85.7 t/s.
+        let m = try messageWithParts("""
+        {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","tool":"write","state":{"status":"completed","time":{"start":1000,"end":49000},"input":{"path":"a"},"output":"ok"}},
+        {"id":"p2","messageID":"m1","sessionID":"s1","type":"tool","tool":"read","state":{"status":"completed","time":{"start":50000,"end":55000}}}
+        """)
+        #expect(abs(m.toolRunSeconds - 53.0) < 0.001)
+        #expect(abs((m.info.throughputExcludingToolSeconds(m.toolRunSeconds) ?? -1) - (600.0 / 7.0)) < 0.01)
+    }
+
+    @Test func toolRunSecondsZeroWithoutStateTime() throws {
+        // Older payloads carry no state.time; the correction must degrade to the
+        // raw step window instead of dropping tool time it cannot see.
+        let m = try messageWithParts("""
+        {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","tool":"write","state":{"status":"completed","input":{"path":"a"},"output":"ok"}},
+        {"id":"p2","messageID":"m1","sessionID":"s1","type":"text","text":"hi"}
+        """)
+        #expect(m.toolRunSeconds == 0)
+        #expect(m.info.throughputExcludingToolSeconds(m.toolRunSeconds) == 10.0)
+    }
+
+    @Test func runningToolWithoutEndDoesNotCount() throws {
+        // start but no end -> still running -> no measurable tool time yet.
+        let m = try messageWithParts("""
+        {"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"running","time":{"start":1000},"input":{"command":"sleep 60"}}}
+        """)
+        #expect(m.toolRunSeconds == 0)
+    }
+}
+
+// MARK: - ContextUsage Throughput Aggregation Tests
+
+struct ContextUsageThroughputTests {
+
+    private func message(
+        _ id: String,
+        _ role: String,
+        _ created: Int,
+        _ completed: String,
+        _ output: Int,
+        _ reasoning: Int = 0
+    ) throws -> MessageWithParts {
+        let json = """
+        {"info":{"id":"\(id)","sessionID":"ses_x","role":"\(role)","model":{"providerID":"openai","modelID":"gpt-4"},"time":{"created":\(created),"completed":\(completed)},"tokens":{"output":\(output),"reasoning":\(reasoning)}},"parts":[]}
+        """
+        return try JSONDecoder().decode(MessageWithParts.self, from: json.data(using: .utf8)!)
+    }
+
+    @Test @MainActor
+    func aggregatesThroughputAndExcludesRunning() async throws {
+        let state = AppState()
+        let session = try JSONDecoder().decode(Session.self, from: """
+        {"id":"ses_x","slug":"ses_x","projectID":"p1","directory":"/workspace","title":"S","version":"1","time":{"created":1,"updated":2}}
+        """.data(using: .utf8)!)
+        state.sessions = [session]
+        state.currentSessionID = "ses_x"
+        state.providerModelsIndex["openai/gpt-4"] = ProviderModel(
+            id: "gpt-4", name: "G", providerID: "openai",
+            limit: ProviderModelLimit(context: 100_000, input: nil, output: nil)
+        )
+
+        // user (ignored) + A (2s, 200 out) + B (3s, 300 out + 100 reasoning)
+        // + C (still running, no completed -> excluded).
+        state.messages = [
+            try message("mU", "user", 9000, "null", 0, 0),
+            try message("mA", "assistant", 1000, "3000", 200, 0),
+            try message("mB", "assistant", 4000, "7000", 300, 100),
+            try message("mC", "assistant", 8000, "null", 500, 0),
+        ]
+
+        let snap = state.contextUsageSnapshot
+        #expect(snap != nil)
+        #expect(snap?.totalOutputTokens == 600)
+        #expect(snap?.totalGenerationSeconds == 5.0)
+        #expect(snap?.averageThroughput == 120.0)
+    }
+
+    @Test @MainActor
+    func excludesToolTimeFromAggregate() async throws {
+        let state = AppState()
+        let session = try JSONDecoder().decode(Session.self, from: """
+        {"id":"ses_x","slug":"ses_x","projectID":"p1","directory":"/workspace","title":"S","version":"1","time":{"created":1,"updated":2}}
+        """.data(using: .utf8)!)
+        state.sessions = [session]
+        state.currentSessionID = "ses_x"
+        state.providerModelsIndex["openai/gpt-4"] = ProviderModel(
+            id: "gpt-4", name: "G", providerID: "openai",
+            limit: ProviderModelLimit(context: 100_000, input: nil, output: nil)
+        )
+
+        // A: 2s step, 200 out, no tools. B: 60s step, 600 out, 53s inside tools.
+        // Generation time = 2 + 7 = 9s, tokens = 800 -> 88.9 t/s. Counting the
+        // raw step windows would report 12.9 t/s.
+        let withTool = try JSONDecoder().decode(MessageWithParts.self, from: """
+        {"info":{"id":"mB","sessionID":"ses_x","role":"assistant","model":{"providerID":"openai","modelID":"gpt-4"},"time":{"created":0,"completed":60000},"tokens":{"output":600,"reasoning":0}},"parts":[{"id":"p1","messageID":"mB","sessionID":"ses_x","type":"tool","tool":"write","state":{"status":"completed","time":{"start":1000,"end":54000},"input":{"path":"a"}}}]}
+        """.data(using: .utf8)!)
+        state.messages = [
+            try message("mA", "assistant", 1000, "3000", 200, 0),
+            withTool,
+        ]
+
+        let snap = state.contextUsageSnapshot
+        #expect(snap?.totalOutputTokens == 800)
+        #expect(abs((snap?.totalGenerationSeconds ?? -1) - 9.0) < 0.001)
+        #expect(abs((snap?.averageThroughput ?? -1) - (800.0 / 9.0)) < 0.01)
+    }
+
+    @Test @MainActor
+    func snapshotNilWithoutAnyCompletedStep() async throws {
+        let state = AppState()
+        let session = try JSONDecoder().decode(Session.self, from: """
+        {"id":"ses_x","slug":"ses_x","projectID":"p1","directory":"/workspace","title":"S","version":"1","time":{"created":1,"updated":2}}
+        """.data(using: .utf8)!)
+        state.sessions = [session]
+        state.currentSessionID = "ses_x"
+        state.providerModelsIndex["openai/gpt-4"] = ProviderModel(
+            id: "gpt-4", name: "G", providerID: "openai",
+            limit: ProviderModelLimit(context: 100_000, input: nil, output: nil)
+        )
+        // Only an in-flight assistant (no completed) -> no LLM time to divide by.
+        state.messages = [try message("mA", "assistant", 1000, "null", 200, 0)]
+
+        let snap = state.contextUsageSnapshot
+        #expect(snap?.averageThroughput == nil)
+        #expect(snap?.totalGenerationSeconds == nil)
+    }
+}
+
+// MARK: - StepTiming (SSE-derived decoding) Tests
+
+struct StepTimingTests {
+
+    private func timing(
+        _ first: TimeInterval?,
+        _ last: TimeInterval?,
+        _ output: Int?
+    ) -> MessageStore.StepTiming {
+        MessageStore.StepTiming(
+            sessionID: "s1",
+            firstVisibleAt: first.map { Date(timeIntervalSinceReferenceDate: $0) },
+            lastVisibleAt: last.map { Date(timeIntervalSinceReferenceDate: $0) },
+            outputTokens: output
+        )
+    }
+
+    @Test func decodeOverVisibleWindow() {
+        // 100 output tokens over (4.7 - 3.2) = 1.5s.
+        let t = timing(3.2, 4.7, 100)
+        #expect(abs((t.decode ?? -1) - (100.0 / 1.5)) < 0.01)
+        #expect(t.decodeLabel == "67 t/s decoding")
+    }
+
+    @Test func decodeEndsAtLastVisibleTokenNotStepFinish() {
+        // Generated tokens stopped at 4.0s; the step-finish part only arrived
+        // after the step's tool ran. The window must end at the last token.
+        let t = timing(3.2, 4.0, 100)
+        #expect(abs((t.decode ?? -1) - 125.0) < 0.01)
+    }
+
+    @Test func decodeCoversToolCallOnlyStep() {
+        // No text at all: the visible window is the tool-call JSON input stream.
+        let t = timing(1.0, 3.0, 200)
+        #expect(abs((t.decode ?? -1) - 100.0) < 0.01)
+    }
+
+    @Test func decodeLabelDecimalBelowTen() {
+        // 15 output over 3.0s -> 5.0 t/s -> one decimal
+        let t = timing(0, 3.0, 15)
+        #expect(t.decodeLabel == "5.0 t/s decoding")
+    }
+
+    @Test func decodeNilMissingEitherEndOrTokens() {
+        #expect(timing(3.2, 4.7, nil).decode == nil)
+        #expect(timing(3.2, 4.7, 0).decode == nil)
+        #expect(timing(nil, 4.7, 100).decode == nil)
+        // Only one visible token: no measurable window, so no number.
+        #expect(timing(3.2, nil, 100).decode == nil)
+    }
+
+    @Test func decodeNilOnNonPositiveWindow() {
+        // end before or equal to the first visible token -> no window
+        #expect(timing(3.2, 3.2, 100).decode == nil)
+        #expect(timing(3.2, 3.1, 100).decode == nil)
+    }
+}
+
 // MARK: - ModelPreset Tests
 
 struct ModelPresetTests {

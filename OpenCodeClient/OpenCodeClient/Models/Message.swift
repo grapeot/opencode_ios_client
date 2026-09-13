@@ -193,11 +193,74 @@ nonisolated struct Message: Codable, Identifiable {
         let trimmed = error?.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
+
+    /// Tokens the model actually emitted during this step: visible `output`
+    /// plus `reasoning` (thinking). Prefill (`input`) and cache read/write are
+    /// excluded because they are not generated tokens.
+    var generatedTokens: Int {
+        (tokens?.output ?? 0) + (tokens?.reasoning ?? 0)
+    }
+
+    /// Raw step wall-clock in seconds (`time.created` -> `time.completed`).
+    /// This window spans the whole step, which on live servers includes the
+    /// step's tool execution: `Step.Ended` / `step-finish` is published only
+    /// after the tools have run (`awaitToolFibers` in the V2 runner, and the
+    /// same ordering in the legacy processor). Prefer
+    /// `throughputExcludingToolSeconds` for display.
+    var stepSeconds: Double? {
+        guard let completed = time.completed else { return nil }
+        let ms = completed - time.created
+        guard ms > 0 else { return nil }
+        return Double(ms) / 1000.0
+    }
+
+    /// Throughput with the step's tool execution removed from the denominator.
+    ///
+    /// The numerator is unchanged, so tool-call argument tokens stay counted;
+    /// only the wait for the tool is dropped. A write tool that ran 48s inside
+    /// a 56s step reads as 68 t/s instead of 9 t/s. Falls back to the raw
+    /// window when the server recorded no tool timing, or when subtracting the
+    /// tool time would leave nothing positive. This is the only rate the UI
+    /// shows, so the footer and the Context sheet cannot drift.
+    func throughputExcludingToolSeconds(_ toolSeconds: Double) -> Double? {
+        guard let window = stepSeconds else { return nil }
+        let adjusted = window - max(0, toolSeconds)
+        return throughput(overSeconds: adjusted > 0 ? adjusted : window)
+    }
+
+    private func throughput(overSeconds seconds: Double?) -> Double? {
+        guard let seconds, seconds > 0 else { return nil }
+        let tokens = generatedTokens
+        guard tokens > 0 else { return nil }
+        return Double(tokens) / seconds
+    }
+
+    /// Short display form of `throughputExcludingToolSeconds`, e.g. "146 t/s" or
+    /// "8.3 t/s". Integer when >= 10, one decimal below that; nil when
+    /// unavailable.
+    func throughputLabelExcludingToolSeconds(_ toolSeconds: Double) -> String? {
+        throughputExcludingToolSeconds(toolSeconds).map(Self.throughputText)
+    }
+
+    /// Shared tokens/second formatter: integer when >= 10, one decimal below
+    /// that. Used by both the per-message footer and the Context sheet so the
+    /// two can never drift.
+    static func throughputText(_ value: Double) -> String {
+        let text = value >= 10 ? String(Int(value.rounded())) : String(format: "%.1f", value)
+        return "\(text) t/s"
+    }
 }
 
 nonisolated struct MessageWithParts: Codable {
     let info: Message
     let parts: [Part]
+
+    /// Wall-clock this step spent inside its tools (sum of `state.time`). Zero
+    /// when the server recorded no tool timing, e.g. a step that called no
+    /// tools or an older payload without `state.time`.
+    var toolRunSeconds: Double {
+        parts.compactMap(\.toolRunSeconds).reduce(0, +)
+    }
 }
 
 struct ComposerImageAttachment: Identifiable, Equatable {
@@ -221,6 +284,11 @@ struct PartStateBridge: Codable {
     /// 文件路径，来自 state.input.path/file_path/filePath 或 patchText 中的 *** Add File: / *** Update File:
     let pathFromInput: String?
 
+    /// Tool execution bounds from state.time, in epoch milliseconds. Present
+    /// for running and completed tools; nil when the server did not record it.
+    let runStartMillis: Double?
+    let runEndMillis: Double?
+
     /// For todowrite: updated todo list (if present)
     let todos: [TodoItem]?
 
@@ -241,12 +309,23 @@ struct PartStateBridge: Codable {
             return try? JSONDecoder().decode([TodoItem].self, from: data)
         }
 
+        /// state.time values arrive as JSON numbers; Int and Double both occur
+        /// depending on the server's encoder.
+        func millis(_ value: Any?) -> Double? {
+            if let double = value as? Double { return double }
+            if let int = value as? Int { return Double(int) }
+            if let number = value as? NSNumber { return number.doubleValue }
+            return nil
+        }
+
         if let str = try? container.decode(String.self) {
             displayString = str
             title = nil
             inputSummary = nil
             output = nil
             pathFromInput = nil
+            runStartMillis = nil
+            runEndMillis = nil
             todos = nil
         } else if let dict = try? container.decode([String: AnyCodable].self) {
             if let status = dict["status"]?.value as? String {
@@ -322,13 +401,21 @@ struct PartStateBridge: Codable {
                 todoList = decodeTodosFromJSONText(out)
             }
 
+            let timeObj: [String: Any]? =
+                (dict["time"]?.value as? [String: Any])
+                ?? (dict["time"]?.value as? [String: AnyCodable]).map { $0.mapValues { $0.value } }
+
             pathFromInput = pathInp
             title = tit
             inputSummary = inp
             output = out
+            runStartMillis = millis(timeObj?["start"])
+            runEndMillis = millis(timeObj?["end"])
             todos = todoList
         } else {
             pathFromInput = nil
+            runStartMillis = nil
+            runEndMillis = nil
             todos = nil
             throw DecodingError.typeMismatch(PartStateBridge.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Part.state must be String or object"))
         }
@@ -369,6 +456,16 @@ nonisolated struct Part: Codable, Identifiable {
     var toolOutput: String? { state?.output }
     var toolOutputForDisplay: String? {
         toolOutput.map(DisplayTextDecoder.decodeJSONUnicodeEscapes)
+    }
+
+    /// Wall-clock this tool itself ran, from `state.time`. Nil while running or
+    /// when the server recorded no timing. Kept separate from the step window
+    /// so tool execution can be removed from throughput denominators.
+    var toolRunSeconds: Double? {
+        guard let start = state?.runStartMillis,
+              let end = state?.runEndMillis,
+              end > start else { return nil }
+        return (end - start) / 1000.0
     }
 
     var toolTodos: [TodoItem] {
