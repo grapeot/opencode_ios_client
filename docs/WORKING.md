@@ -9,6 +9,12 @@
 - **编译/测试**：build 通过；throughput 相关 5 个 suite 29 条单测通过（Xcode 27 beta / iOS 27.0 模拟器）
 - **Phase**：LLM throughput 显示（per-message 脚注 + Context sheet）；分母已扣除 tool 执行时间，TTFT 已删
 
+### 2026-09-13 — 文档归档落位：Markdown Web Preview 子文档
+
+- **问题**：`.gitignore`（第 67–70 行）、`docs/README.md` 的 archive 索引、主 PRD §4.3.5、主 RFC §7.5 都指向 `docs/archive/2026-06_markdown_web_preview_prd.md` / `_rfc.md`，但两份子文档实际还留在旧路径 `docs/Markdown_Web_Preview_PRD.md` / `_RFC.md`。旧路径不匹配 ignore 规则，所以它们既没进 git、也没被忽略，长期以 untracked 形式挂在 `docs/` 根下。2026-08 那次只做了「合并进主 PRD/RFC + 写 ignore 规则 + 写文档说明」，文件移动没执行，`docs/archive/` 里其实没有这两个文件。
+- **处理**：把两份文件移到文档指定的归档路径，正文零改动（mtime 仍为 2026-06-14）。落位后 `git status` 干净，上面几处引用全部指向真实存在的文件。
+- **含义**：两份文件仍按既定策略 untracked + gitignored，**不随仓库分发**。canonical 决策在主 PRD §4.3.5 / 主 RFC §7.5，决策过程在本文件 2026-06-14 条目。
+
 ### 2026-09-12 — LLM throughput 显示（per-message 脚注 + Context sheet）
 
 - **动机**：想看 LLM 工作时的真实生成速率（"x 秒生成 y 个 token"）。在 live server（4096）上实测确认：每条 assistant 消息（= 一个 LLM step）已带 `time.created` / `time.completed` / `tokens`。纯客户端可算，server 零改动。~~相邻 step 间隔仅 1–3ms、单步耗时跟随 output token 数而非 tool 数量——说明该窗口是干净的 LLM 生成时间（tool 执行落在 step 之间，不计入）~~ → **该判断 2026-09-13 证伪，见下方修正段**。
@@ -207,7 +213,7 @@
   - "语义类必须用复合选择器"（dogfood 抓到的特异性坑）
   - "**真正指标是新概念引入速率而非字数**"（low cognitive burden 的根本框架）
   - "状态卡当百科条目写"被列为反模式，明确卡片/表格/`<details>` 的边界
-- **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md（2026-08 移入 `docs/archive/`）。
+- **文档合并**：`Markdown_Web_Preview_PRD.md` / `Markdown_Web_Preview_RFC.md` 的最终决策状态合并进主 PRD §4.3.5 / 主 RFC §7.5（用 visual 表格 + `<details>` 形式，本身就是 dogfood）。两份子文档保留在磁盘但 `git rm --cached` 移除跟踪并加进 `.gitignore`，决策过程在此 WORKING.md（归档落位时间见 2026-09-13 条目）。
 
 ### 2026-06-20 — Ollama Cloud GLM 5.2 model preset
 

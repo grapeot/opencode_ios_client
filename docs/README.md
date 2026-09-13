@@ -1,6 +1,6 @@
 # OpenCode iOS Client — Docs 索引
 
-> 最后更新：2026-08-24（docs canonical 结构重整）。查阅与检索任何文档请先参考本索引。
+> 最后更新：2026-09-13（Markdown Web Preview 子文档归档落位）。查阅与检索任何文档请先参考本索引。
 
 ## 顶层主文档（living）
 
@@ -28,7 +28,7 @@
 
 | 文件 | 内容 |
 |---|---|
-| `2026-06_markdown_web_preview_prd.md` / `_rfc.md` | Markdown Web Preview 子项目设计；决策已并入主 PRD §4.3.5 / 主 RFC §7.5（untracked，gitignored） |
+| `2026-06_markdown_web_preview_prd.md` / `_rfc.md` | Markdown Web Preview 子项目设计；决策已并入主 PRD §4.3.5 / 主 RFC §7.5。文件在 `docs/archive/` 本地保留，untracked + gitignored，**不随仓库分发** |
 | `2026-06_visual_writing_weapon_system.md` | 视觉与写作风格讨论稿 |
 | `2026-07_yage_fix_work.md` | opencode-official fork 修复记录 |
 | `2026-08_qwen38_rendering_fix.md` | qwen38 渲染修复记录（PR #145） |
