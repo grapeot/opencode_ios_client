@@ -46,33 +46,28 @@ final class MessageStore {
 
     struct StepTiming {
         let sessionID: String
-        /// Client time the step's assistant message was first seen (step start).
-        let stepStart: Date
-        /// Client time the first visible text token arrived (nil until it does).
-        var firstTextAt: Date?
-        /// Client time the step-finish part was observed.
-        var finishAt: Date?
+        /// Client time the first visible output token arrived (text or a tool
+        /// call's JSON input; reasoning is excluded because `outputTokens`
+        /// excludes it too). Nil until one does.
+        var firstVisibleAt: Date?
+        /// Client time the most recent visible output token arrived. Together
+        /// with `firstVisibleAt` this forms the decoding window.
+        var lastVisibleAt: Date?
         /// Output tokens reported by the step-finish part.
         var outputTokens: Int?
 
-        /// Time to first (visible text) token, in seconds, from step start.
-        var ttft: Double? {
-            guard let first = firstTextAt else { return nil }
-            let value = first.timeIntervalSince(stepStart)
-            return value > 0 ? value : nil
-        }
-
-        /// Decoding throughput: output tokens over the (first-text -> finish)
-        /// window. Excludes prefill and reasoning, which sit before first text.
+        /// Decoding throughput: output tokens over the visible streaming window
+        /// (first token -> last token). Excludes prefill, which sits before the
+        /// first token, and tool execution, which sits after the last one (the
+        /// step-finish part only arrives once the step's tools have run, so it
+        /// is never used as a window end). Nil unless both ends were observed
+        /// and the step reported its output tokens.
         var decode: Double? {
-            guard let first = firstTextAt, let fin = finishAt, let out = outputTokens, out > 0 else { return nil }
-            let window = fin.timeIntervalSince(first)
+            guard let first = firstVisibleAt, let last = lastVisibleAt,
+                  let out = outputTokens, out > 0 else { return nil }
+            let window = last.timeIntervalSince(first)
             guard window > 0 else { return nil }
             return Double(out) / window
-        }
-
-        var ttftLabel: String? {
-            ttft.map { String(format: "%.1fs", $0) }
         }
 
         var decodeLabel: String? {
@@ -82,23 +77,28 @@ final class MessageStore {
         }
     }
 
+    /// Marks that the step's assistant message was observed before any of its
+    /// tokens arrived. Only steps with an entry get a decoding window: if the
+    /// client joined mid-step, a truncated window would fabricate a number.
     func recordStepStart(_ messageID: String, sessionID: String) {
         guard stepTimings[messageID] == nil else { return }
-        stepTimings[messageID] = StepTiming(sessionID: sessionID, stepStart: Date())
+        stepTimings[messageID] = StepTiming(sessionID: sessionID)
     }
 
-    /// Stamps the first visible text token. No-op unless the step start was
-    /// already observed: if the client joined mid-step there is no entry, so a
-    /// truncated window never yields a fabricated TTFT/decoding number.
-    func recordFirstText(_ messageID: String, sessionID: String) {
-        if stepTimings[messageID]?.firstTextAt == nil {
-            stepTimings[messageID]?.firstTextAt = Date()
+    /// Stamps one visible output token (text or tool-call input): the first
+    /// sighting opens the decoding window, every sighting moves its end. No-op
+    /// unless the step start was already observed; see `recordStepStart`.
+    func recordVisibleToken(_ messageID: String, sessionID: String) {
+        let now = Date()
+        if stepTimings[messageID]?.firstVisibleAt == nil {
+            stepTimings[messageID]?.firstVisibleAt = now
         }
+        stepTimings[messageID]?.lastVisibleAt = now
     }
 
-    /// No-op unless the step start was already observed (see `recordFirstText`).
+    /// No-op unless the step start was already observed (see
+    /// `recordVisibleToken`).
     func recordStepFinish(_ messageID: String, sessionID: String, outputTokens: Int?) {
-        stepTimings[messageID]?.finishAt = Date()
         if let out = outputTokens {
             stepTimings[messageID]?.outputTokens = out
         }

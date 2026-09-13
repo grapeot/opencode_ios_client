@@ -32,14 +32,18 @@ struct MessageRowView: View {
     }
 
     /// Assistant footer line: "provider/model", then the general (persisted)
-    /// throughput when present, then best-effort SSE-derived "TTFT" and "decoding"
+    /// throughput when present, then the best-effort SSE-derived "decoding"
     /// throughput when the client observed the live stream for this step. Each
     /// optional segment is omitted when nil, so a message loaded purely from REST
     /// (no SSE) shows only the model plus general throughput.
-    private static func modelFooter(model: Message.ModelInfo, general: String?, ttft: String?, decode: String?) -> String {
+    ///
+    /// The general segment excludes the step's tool wall-clock: the step window
+    /// (`created` -> `completed`) contains tool execution on both server
+    /// lineages, which otherwise collapses a 2000-token write call whose tool
+    /// ran 48s into single-digit t/s.
+    private static func modelFooter(model: Message.ModelInfo, general: String?, decode: String?) -> String {
         var parts: [String] = ["\(model.providerID)/\(model.modelID)"]
         if let general { parts.append(general) }
-        if let ttft { parts.append("TTFT: \(ttft)") }
         if let decode { parts.append(decode) }
         return parts.joined(separator: " | ")
     }
@@ -510,8 +514,7 @@ struct MessageRowView: View {
                         Text(
                             Self.modelFooter(
                                 model: model,
-                                general: message.info.throughputLabel,
-                                ttft: timing?.ttftLabel,
+                                general: message.info.throughputLabelExcludingToolSeconds(message.toolRunSeconds),
                                 decode: timing?.decodeLabel
                             )
                         )

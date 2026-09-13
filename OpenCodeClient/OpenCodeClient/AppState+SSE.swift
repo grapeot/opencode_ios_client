@@ -132,15 +132,24 @@ extension AppState {
                let messageID = props["messageID"]?.value as? String,
                let partID = props["partID"]?.value as? String,
                messageStore.partType(for: partID, inSession: sessionID) == "text" {
-                messageStore.recordFirstText(messageID, sessionID: sessionID)
+                messageStore.recordVisibleToken(messageID, sessionID: sessionID)
             }
         case "message.part.updated":
-            if let partObj = props["part"]?.value as? [String: Any],
-               partObj["type"] as? String == "step-finish",
-               props["sessionID"]?.value as? String == currentSessionID,
+            if let sessionID = props["sessionID"]?.value as? String,
+               sessionID == currentSessionID,
+               let partObj = props["part"]?.value as? [String: Any],
                let messageID = partObj["messageID"] as? String {
-                let tokensObj = partObj["tokens"] as? [String: Any]
-                messageStore.recordStepFinish(messageID, sessionID: currentSessionID ?? "", outputTokens: tokensObj?["output"] as? Int)
+                // Tool-call input streams as deltas on the tool part, so it also
+                // counts as visible output; a step whose only output is a tool
+                // call would otherwise have no decoding window at all.
+                if let partType = partObj["type"] as? String, partType == "tool" || partType == "text",
+                   let delta = props["delta"]?.value as? String, !delta.isEmpty {
+                    messageStore.recordVisibleToken(messageID, sessionID: sessionID)
+                }
+                if partObj["type"] as? String == "step-finish" {
+                    let tokensObj = partObj["tokens"] as? [String: Any]
+                    messageStore.recordStepFinish(messageID, sessionID: sessionID, outputTokens: tokensObj?["output"] as? Int)
+                }
             }
             switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {
             case .ignored:

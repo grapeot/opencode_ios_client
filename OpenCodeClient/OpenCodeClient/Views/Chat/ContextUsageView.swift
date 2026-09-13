@@ -45,19 +45,19 @@ extension AppState {
         let sumCost = messages.compactMap { $0.info.cost }.reduce(0.0, +)
         let totalCost: Double? = sumCost > 0 ? sumCost : nil
 
-        // Session-level LLM throughput: sum emitted tokens over the total LLM
-        // step time. Each step's window excludes tool execution, so this is a
-        // clean generation rate across the whole conversation.
+        // Session-level LLM throughput: sum emitted tokens over the total
+        // generation time. The step window (`created` -> `completed`) contains
+        // the step's tool execution, so each step's tool wall-clock is
+        // subtracted before the rate is computed.
         var totalOutput = 0
         var totalSeconds = 0.0
         for m in messages where m.info.isAssistant {
-            guard let completed = m.info.time.completed else { continue }
-            let ms = completed - m.info.time.created
-            guard ms > 0 else { continue }
+            guard let window = m.info.stepSeconds else { continue }
             let gen = m.info.generatedTokens
             guard gen > 0 else { continue }
+            let generation = window - m.toolRunSeconds
             totalOutput += gen
-            totalSeconds += Double(ms) / 1000.0
+            totalSeconds += generation > 0 ? generation : window
         }
         let avgThroughput: Double? = (totalSeconds > 0 && totalOutput > 0)
             ? Double(totalOutput) / totalSeconds
