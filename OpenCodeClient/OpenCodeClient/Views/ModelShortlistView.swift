@@ -1,5 +1,5 @@
 import SwiftUI
-import UniformTypeIdentifiers
+import UIKit
 
 struct ModelShortlistView: View {
     @Bindable var state: AppState
@@ -7,6 +7,10 @@ struct ModelShortlistView: View {
     @State private var editingItem: ModelShortlistItem?
     @State private var draftShortName = ""
     @State private var draggingID: String?
+    @State private var dragTranslation: CGFloat = 0
+    @State private var rowFrames: [String: CGRect] = [:]
+    @State private var listOrigin: CGPoint = .zero
+    @State private var listFrameReady = false
 
     var body: some View {
         List {
@@ -17,42 +21,23 @@ struct ModelShortlistView: View {
                 } else {
                     ForEach(state.modelShortlist) { item in
                         HStack(spacing: 12) {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 28)
-                                .contentShape(Rectangle())
-                                .onDrag {
-                                    draggingID = item.id
-                                    return NSItemProvider(object: item.id as NSString)
-                                }
-                                .accessibilityLabel(L10n.t(.settingsModelShortlistReorder))
+                            reorderGrip(for: item)
                             Button {
                                 draftShortName = item.shortName
                                 editingItem = item
                             } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.displayName)
-                                        .foregroundStyle(.primary)
-                                    Text("\(state.providerDisplayNames[item.providerID] ?? item.providerID) / \(item.modelID)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
+                                shortlistLabel(item)
                             }
                             .buttonStyle(.plain)
                         }
-                        .accessibilityIdentifier("model-shortlist-row-\(item.providerID)-\(item.modelID)")
-                        .onDrop(of: [UTType.plainText], delegate: ShortlistDropDelegate(
-                            itemID: item.id,
-                            items: state.modelShortlist,
-                            draggingID: $draggingID,
-                            move: { source, dest in
-                                state.moveShortlist(from: source, to: dest)
+                        .opacity(draggingID == item.id ? 0.35 : 1)
+                        .background {
+                            ShortlistRowFrameReader(isEnabled: draggingID == nil) { frame in
+                                rowFrames[item.id] = frame
                             }
-                        ))
+                        }
+                        .accessibilityIdentifier("model-shortlist-row-\(item.providerID)-\(item.modelID)")
+                        .shortlistDropHighlight(isDropTarget(item))
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
                                 state.removeShortlistItem(id: item.id)
@@ -65,6 +50,23 @@ struct ModelShortlistView: View {
             } footer: {
                 Text(L10n.t(.settingsModelShortlistHint))
             }
+        }
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        listOrigin = geo.frame(in: .global).origin
+                        listFrameReady = true
+                    }
+                    .onChange(of: geo.frame(in: .global).origin) { _, origin in
+                        guard draggingID == nil else { return }
+                        listOrigin = origin
+                        listFrameReady = true
+                    }
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            dragPreview
         }
         .navigationTitle(L10n.t(.settingsModelShortlist))
         .navigationBarTitleDisplayMode(.inline)
@@ -99,6 +101,116 @@ struct ModelShortlistView: View {
                 editingItem = nil
             }
         }
+    }
+
+    private func reorderGrip(for item: ModelShortlistItem) -> some View {
+        ShortlistReorderGrip(
+            onChanged: { translation in
+                if draggingID != item.id {
+                    draggingID = item.id
+                }
+                dragTranslation = translation
+            },
+            onEnded: { translation in
+                commitReorder(id: item.id, translation: translation)
+            }
+        )
+        .frame(width: 28, height: 44)
+        .overlay {
+            Image(systemName: "line.3.horizontal")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .allowsHitTesting(false)
+        }
+        .accessibilityLabel(L10n.t(.settingsModelShortlistReorder))
+        .accessibilityIdentifier("model-shortlist-handle-\(item.providerID)-\(item.modelID)")
+    }
+
+    private func shortlistLabel(_ item: ModelShortlistItem) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(item.displayName)
+                .foregroundStyle(.primary)
+            Text("\(state.providerDisplayNames[item.providerID] ?? item.providerID) / \(item.modelID)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var dragPreview: some View {
+        if listFrameReady,
+           let draggingID,
+           let item = state.modelShortlist.first(where: { $0.id == draggingID }),
+           let frame = rowFrames[draggingID] {
+            HStack(spacing: 12) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28)
+                shortlistLabel(item)
+            }
+            .padding(.horizontal, 16)
+            .frame(width: frame.width, height: frame.height, alignment: .leading)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
+            .offset(x: frame.minX - listOrigin.x, y: frame.minY - listOrigin.y + dragTranslation)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func isDropTarget(_ item: ModelShortlistItem) -> Bool {
+        guard let draggingID, draggingID != item.id, let target = dragTargetIndex else { return false }
+        return state.modelShortlist.firstIndex(where: { $0.id == item.id }) == target
+    }
+
+    private var dragTargetIndex: Int? {
+        guard let draggingID,
+              let start = state.modelShortlist.firstIndex(where: { $0.id == draggingID })
+        else { return nil }
+        return ShortlistReorderMath.targetIndex(
+            start: start,
+            translation: dragTranslation,
+            rowHeight: rowFrames[draggingID]?.height ?? 56,
+            count: state.modelShortlist.count
+        )
+    }
+
+    private func commitReorder(id: String, translation: CGFloat) {
+        let start = state.modelShortlist.firstIndex(where: { $0.id == id })
+        let height = rowFrames[id]?.height ?? 56
+        let count = state.modelShortlist.count
+        draggingID = nil
+        dragTranslation = 0
+        guard let start else { return }
+        let target = ShortlistReorderMath.targetIndex(
+            start: start,
+            translation: translation,
+            rowHeight: height,
+            count: count
+        )
+        guard target != start else { return }
+        state.moveShortlist(
+            from: IndexSet(integer: start),
+            to: ShortlistReorderMath.moveDestination(from: start, to: target)
+        )
+    }
+}
+
+enum ShortlistReorderMath {
+    static func targetIndex(start: Int, translation: CGFloat, rowHeight: CGFloat, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        let height = rowHeight > 1 ? rowHeight : 56
+        let steps = Int((translation / height).rounded(.toNearestOrAwayFromZero))
+        return min(max(start + steps, 0), count - 1)
+    }
+
+    static func moveDestination(from start: Int, to target: Int) -> Int {
+        target > start ? target + 1 : target
     }
 }
 
@@ -210,26 +322,106 @@ struct ModelCatalogPickerView: View {
     }
 }
 
-private struct ShortlistDropDelegate: DropDelegate {
-    let itemID: String
-    let items: [ModelShortlistItem]
-    @Binding var draggingID: String?
-    let move: (IndexSet, Int) -> Void
+private extension View {
+    @ViewBuilder
+    func shortlistDropHighlight(_ on: Bool) -> some View {
+        if on {
+            listRowBackground(DesignColors.Brand.primary.opacity(0.16))
+        } else {
+            self
+        }
+    }
+}
 
-    func performDrop(info: DropInfo) -> Bool {
-        draggingID = nil
-        return true
+private struct ShortlistRowFrameReader: View {
+    var isEnabled: Bool
+    var onFrame: (CGRect) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { report(geo) }
+                .onChange(of: geo.frame(in: .global).minY) { _, _ in
+                    report(geo)
+                }
+        }
     }
 
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
+    private func report(_ geo: GeometryProxy) {
+        guard isEnabled else { return }
+        onFrame(geo.frame(in: .global))
+    }
+}
+
+private struct ShortlistReorderGrip: UIViewRepresentable {
+    var onChanged: (CGFloat) -> Void
+    var onEnded: (CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onChanged: onChanged, onEnded: onEnded)
     }
 
-    func dropEntered(info: DropInfo) {
-        guard let draggingID, draggingID != itemID,
-              let from = items.firstIndex(where: { $0.id == draggingID }),
-              let to = items.firstIndex(where: { $0.id == itemID })
-        else { return }
-        move(IndexSet(integer: from), to > from ? to + 1 : to)
+    func makeUIView(context: Context) -> ShortlistReorderGripView {
+        let view = ShortlistReorderGripView()
+        view.backgroundColor = .clear
+        view.isAccessibilityElement = false
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+        pan.maximumNumberOfTouches = 1
+        pan.cancelsTouchesInView = true
+        pan.delaysTouchesBegan = false
+        pan.delegate = context.coordinator
+        view.addGestureRecognizer(pan)
+        return view
+    }
+
+    func updateUIView(_ uiView: ShortlistReorderGripView, context: Context) {
+        context.coordinator.onChanged = onChanged
+        context.coordinator.onEnded = onEnded
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onChanged: (CGFloat) -> Void
+        var onEnded: (CGFloat) -> Void
+
+        init(onChanged: @escaping (CGFloat) -> Void, onEnded: @escaping (CGFloat) -> Void) {
+            self.onChanged = onChanged
+            self.onEnded = onEnded
+        }
+
+        @objc func handlePan(_ pan: UIPanGestureRecognizer) {
+            let basis = pan.view?.window ?? pan.view
+            let translation = pan.translation(in: basis).y
+            switch pan.state {
+            case .began, .changed:
+                onChanged(translation)
+            case .ended, .cancelled, .failed:
+                onEnded(translation)
+            default:
+                break
+            }
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            otherGestureRecognizer.view is UIScrollView
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            false
+        }
+    }
+}
+
+private final class ShortlistReorderGripView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, bounds.contains(point) else {
+            return nil
+        }
+        return self
     }
 }

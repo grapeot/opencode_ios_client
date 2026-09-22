@@ -210,6 +210,37 @@ struct ModelShortlistTests {
         #expect(pickerIDs == state.modelShortlist.map(\.id))
     }
 
+    @Test func reorderMathUsesHalfRowThresholdAndOnMoveDestination() {
+        #expect(ShortlistReorderMath.targetIndex(start: 1, translation: 20, rowHeight: 50, count: 4) == 1)
+        #expect(ShortlistReorderMath.targetIndex(start: 1, translation: 30, rowHeight: 50, count: 4) == 2)
+        #expect(ShortlistReorderMath.targetIndex(start: 1, translation: -30, rowHeight: 50, count: 4) == 0)
+        #expect(ShortlistReorderMath.targetIndex(start: 0, translation: -80, rowHeight: 50, count: 4) == 0)
+        #expect(ShortlistReorderMath.targetIndex(start: 3, translation: 200, rowHeight: 50, count: 4) == 3)
+        #expect(ShortlistReorderMath.targetIndex(start: 0, translation: 10, rowHeight: 0, count: 3) == 0)
+        #expect(ShortlistReorderMath.moveDestination(from: 0, to: 2) == 3)
+        #expect(ShortlistReorderMath.moveDestination(from: 2, to: 0) == 0)
+    }
+
+    @Test @MainActor func reorderMathDestinationMatchesMoveShortlist() {
+        let state = Self.isolatedShortlistState()
+        state.addModelsToShortlist([
+            ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
+            ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash"),
+            ModelPreset(displayName: "Grok 4.7", providerID: "xai", modelID: "grok-4.7")
+        ])
+        let target = ShortlistReorderMath.targetIndex(start: 0, translation: 120, rowHeight: 56, count: 3)
+        state.moveShortlist(
+            from: IndexSet(integer: 0),
+            to: ShortlistReorderMath.moveDestination(from: 0, to: target)
+        )
+        #expect(target == 2)
+        #expect(state.modelShortlist.map(\.id) == [
+            "google/gemini-3.5-flash",
+            "xai/grok-4.7",
+            "zai-coding-plan/glm-5.3"
+        ])
+    }
+
     @Test @MainActor func revealModelShortlistJumpsToSettingsFocus() {
         let state = Self.isolatedShortlistState()
         state.selectedTab = RootTab.chat.rawValue
