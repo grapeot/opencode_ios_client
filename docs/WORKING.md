@@ -5,9 +5,16 @@
 ## 当前状态
 
 - **最后更新**：2026-09-21
-- **分支**：`master`（PR #165 合并）
+- **分支**：`fix/model-shortlist-reorder`
 - **编译/测试**：build 通过；throughput 相关 5 个 suite 29 条单测通过（Xcode 27 beta / iOS 27.0 模拟器）
 - **Phase**：LLM throughput 显示（per-message 脚注 + Context sheet）；分母已扣除 tool 执行时间，TTFT 已删
+
+### 2026-09-21 — 模型短名单左手柄排序松手不生效
+
+- **现象**：Settings → Models 每行左侧 `line.3.horizontal` 能抬起，松手后顺序不变。
+- **原因**：排序挂在 `List` row 的 `.onDrop` 上。同列表内部的 drag session 到不了 `ShortlistDropDelegate`，`dropEntered` 不跑，`moveShortlist` 不会被调用。provider 类型（`public.utf8-plain-text`）和 `UTType.plainText` 也不一致。
+- **处理**：去掉 `onDrag` / `onDrop`。左手柄改成 UIKit pan，拖动期间只移动预览、不改数据；松手按位移 / 行高算目标下标，一次调用 `moveShortlist`。左滑删除保留。
+- **测试**：`ShortlistReorderMath` 半行阈值、越界夹紧、以及和 `moveShortlist` 的 destination 约定。真机拖放待手动验收。
 
 ### 2026-09-21 — 删除生产代码里已死的硬编码默认模型列表 `modelPresets`
 
