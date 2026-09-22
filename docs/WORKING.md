@@ -4,10 +4,23 @@
 
 ## 当前状态
 
-- **最后更新**：2026-09-13
+- **最后更新**：2026-09-21
 - **分支**：`master`（PR #165 合并）
 - **编译/测试**：build 通过；throughput 相关 5 个 suite 29 条单测通过（Xcode 27 beta / iOS 27.0 模拟器）
 - **Phase**：LLM throughput 显示（per-message 脚注 + Context sheet）；分母已扣除 tool 执行时间，TTFT 已删
+
+### 2026-09-21 — 删除生产代码里已死的硬编码默认模型列表 `modelPresets`
+
+- **背景**：2026-08-24 起 chat picker 改读用户自管 `modelShortlist`（本地持久化，`pickerModelPresets` = `modelShortlist.map(asPreset)`），settings catalog 改为从 `/provider` registry 实时拉取（`catalogModelPresets`）。`AppState.swift` 的硬编码默认数组 `modelPresets` 在生产代码已零引用，仅被单测当作 seed fixture。
+- **处理**：删除 `AppState.swift` 的 `modelPresets` 数组（保留 `selectedModelIndex` 默认值及全部 live 逻辑）。测试 seed 集中到 `TestDoubles.swift` 的共享 fixture `testSeedPresets`（内容与原数组逐字节一致），`SessionFlowTests.makeState` 与 `AIUsageQuotaTests` 改为 `addModelsToShortlist(testSeedPresets)`。
+- **单测**：3 条测「默认 preset 列表」行为的废弃用例（`defaultSelectionUsesGemini37Flash` / `defaultPresetsIncludeDeepSeekLocal` / `defaultPresetsExcludeRemovedGPTVariants`）删除；3 条 aging 用例（legacy GLM / GPT / Kimi 映射）保留，断言从 `state.modelPresets[...]` 改为 `state.pickerModelPresets[...]`（seed 后逐位等价）。顺手修正 `ModelsTests` 遗留测试名 `grok46ShortName` → `grok47ShortName`（用例体早已是 4.7）。
+- **影响**：无运行时行为变化，纯死代码 + 测试清理。`xcodebuild test` 需串行跑（共享 DerivedData）。
+
+### 2026-09-21 — Grok 4.7 模型 preset 升级
+
+- xAI 发布 Grok 4.7，按 2026-08-14 的 4.5→4.6 升级先例处理：尾部 `Grok 4.6` / `xai/grok-4.6` preset 升级为 `Grok 4.7` / `grok-4.7`（`AppState.swift` 模型列表、`ModelPreset.suggestedShortName` 同步改名，不加 canonical 遗留映射）。
+- 测试同步更新：`ModelShortlistTests` / `ModelsTests` / `SessionFlowTests` 中的 `grok-4.6` / `Grok 4.6` 全部改为 4.7，三个 suite 定向 `xcodebuild test` 通过（iOS Simulator）。
+- 不涉及 preset 顺序、数量或其他模型条目。
 
 ### 2026-09-13 — 文档归档落位：Markdown Web Preview 子文档
 

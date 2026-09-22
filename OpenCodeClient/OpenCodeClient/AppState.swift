@@ -494,17 +494,6 @@ final class AppState {
     var streamingReasoningPart: Part? { get { messageStore.streamingReasoningPart } set { messageStore.streamingReasoningPart = newValue } }
     var stepTimings: [String: MessageStore.StepTiming] { get { messageStore.stepTimings } set { messageStore.stepTimings = newValue } }
 
-    var modelPresets: [ModelPreset] = [
-        ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
-        ModelPreset(displayName: "GPT-5.6 Sol", providerID: "openai", modelID: "gpt-5.6-sol"),
-        ModelPreset(displayName: "Gemini 3.7 Flash", providerID: "google", modelID: "gemini-3.7-flash"),
-        ModelPreset(displayName: "DeepSeek Local", providerID: "ds4", modelID: "deepseek-v4-flash"),
-        ModelPreset(displayName: "Ollama GLM 5.2", providerID: "ollama-cloud", modelID: "glm-5.2"),
-        ModelPreset(displayName: "GPT-5.6 Terra Fast", providerID: "openai", modelID: "gpt-5.6-terra-fast"),
-        ModelPreset(displayName: "GPT-5.6 Luna", providerID: "openai", modelID: "gpt-5.6-luna"),
-        ModelPreset(displayName: "Grok 4.6", providerID: "xai", modelID: "grok-4.6"),
-        ModelPreset(displayName: "Qwen 3.8 27B", providerID: "qwen38", modelID: "qwen3.8-27b"),
-    ]
     var selectedModelIndex: Int = 2
     
     var agents: [AgentInfo] = [

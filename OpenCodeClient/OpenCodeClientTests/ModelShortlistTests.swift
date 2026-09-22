@@ -93,7 +93,7 @@ struct ModelShortlistTests {
         let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         let registry = ProviderRegistryResponse(
             providers: [
-                Self.makeRegistryProvider(id: "xai", name: "xAI", models: [("grok-4.6", "Grok 4.6", true)]),
+                Self.makeRegistryProvider(id: "xai", name: "xAI", models: [("grok-4.7", "Grok 4.7", true)]),
                 Self.makeRegistryProvider(id: "zai-coding-plan", name: "ZAI", models: [("glm-5.3", "GLM-5.3", true)]),
                 Self.makeRegistryProvider(id: "aaa", name: "AAA", models: [("zzz-model", "ZZZ", true)])
             ],
@@ -104,7 +104,7 @@ struct ModelShortlistTests {
 
         #expect(state.catalogModelPresets.map(\.id) == [
             "aaa/zzz-model",
-            "xai/grok-4.6",
+            "xai/grok-4.7",
             "zai-coding-plan/glm-5.3"
         ])
     }
@@ -193,11 +193,11 @@ struct ModelShortlistTests {
         state.addModelsToShortlist([
             ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3"),
             ModelPreset(displayName: "Gemini 3.5 Flash", providerID: "google", modelID: "gemini-3.5-flash"),
-            ModelPreset(displayName: "Grok 4.6", providerID: "xai", modelID: "grok-4.6")
+            ModelPreset(displayName: "Grok 4.7", providerID: "xai", modelID: "grok-4.7")
         ])
         state.moveShortlist(from: IndexSet(integer: 2), to: 0)
         #expect(state.modelShortlist.map(\.id) == [
-            "xai/grok-4.6",
+            "xai/grok-4.7",
             "zai-coding-plan/glm-5.3",
             "google/gemini-3.5-flash"
         ])
