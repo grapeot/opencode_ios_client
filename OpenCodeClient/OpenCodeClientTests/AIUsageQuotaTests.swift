@@ -90,7 +90,7 @@ struct AIUsageQuotaTests {
         )
         let mock = MockAIUsageQuotaClient(result: .success(.init(generatedAt: "2026-07-12T09:00:00", quotas: [quota])))
         let state = makeIsolatedAppState(aiUsageQuotaClient: mock)
-        state.addModelsToShortlist(state.modelPresets)
+        state.addModelsToShortlist(testSeedPresets)
         state.aiUsageDashboardURL = "https://usage.example.com"
         state.selectedModelIndex = 1
 

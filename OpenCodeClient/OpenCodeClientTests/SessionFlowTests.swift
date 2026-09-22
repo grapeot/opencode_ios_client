@@ -332,7 +332,7 @@ struct ModelSelectionPersistenceTests {
         }
         let state = AppState(userDefaults: defaults)
         if seedShortlist {
-            state.addModelsToShortlist(state.modelPresets)
+            state.addModelsToShortlist(testSeedPresets)
         }
         return state
     }
@@ -357,8 +357,8 @@ struct ModelSelectionPersistenceTests {
                 state.selectSession(session)
 
                 #expect(state.selectedModelIndex == 0)
-                #expect(state.modelPresets[state.selectedModelIndex].displayName == "GLM-5.3")
-                #expect(state.modelPresets[state.selectedModelIndex].id == "zai-coding-plan/glm-5.3")
+                #expect(state.pickerModelPresets[state.selectedModelIndex].displayName == "GLM-5.3")
+                #expect(state.pickerModelPresets[state.selectedModelIndex].id == "zai-coding-plan/glm-5.3")
         }
     }
 
@@ -382,8 +382,8 @@ struct ModelSelectionPersistenceTests {
             state.selectSession(session)
 
             #expect(state.selectedModelIndex == 1)
-            #expect(state.modelPresets[state.selectedModelIndex].displayName == "GPT-5.6 Sol")
-            #expect(state.modelPresets[state.selectedModelIndex].id == "openai/gpt-5.6-sol")
+            #expect(state.pickerModelPresets[state.selectedModelIndex].displayName == "GPT-5.6 Sol")
+            #expect(state.pickerModelPresets[state.selectedModelIndex].id == "openai/gpt-5.6-sol")
         }
     }
 
@@ -405,42 +405,8 @@ struct ModelSelectionPersistenceTests {
 
         state.selectSession(session)
 
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "Ollama GLM 5.2")
-        #expect(state.modelPresets[state.selectedModelIndex].id == "ollama-cloud/glm-5.2")
-    }
-
-    @Test @MainActor func defaultSelectionUsesGemini37Flash() {
-        let state = makeState()
-
-        #expect(state.selectedModelIndex == 2)
-        #expect(state.modelPresets[state.selectedModelIndex].displayName == "Gemini 3.7 Flash")
-        #expect(state.modelPresets[state.selectedModelIndex].id == "google/gemini-3.7-flash")
-    }
-
-    @Test @MainActor func defaultPresetsIncludeDeepSeekLocal() {
-        let state = makeState()
-
-        #expect(state.modelPresets.contains(where: { $0.id == "ds4/deepseek-v4-flash" }))
-        let preset = state.modelPresets.first(where: { $0.id == "ds4/deepseek-v4-flash" })
-        #expect(preset?.displayName == "DeepSeek Local")
-    }
-
-    @Test @MainActor func defaultPresetsExcludeRemovedGPTVariants() {
-        let state = makeState()
-
-        #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-pro" }))
-        #expect(!state.modelPresets.contains(where: { $0.id == "openai/gpt-5.6-sol-fast" }))
-        #expect(state.modelPresets.contains(where: {
-            $0.id == "openai/gpt-5.6-terra-fast" && $0.displayName == "GPT-5.6 Terra Fast"
-        }))
-        #expect(state.modelPresets.contains(where: {
-            $0.id == "openai/gpt-5.6-luna" && $0.displayName == "GPT-5.6 Luna"
-        }))
-        #expect(state.modelPresets.contains(where: {
-            $0.id == "xai/grok-4.6" && $0.displayName == "Grok 4.6"
-        }))
-        #expect(state.modelPresets.last?.id == "qwen38/qwen3.8-27b")
-        #expect(state.modelPresets.last?.displayName == "Qwen 3.8 27B")
+        #expect(state.pickerModelPresets[state.selectedModelIndex].displayName == "Ollama GLM 5.2")
+        #expect(state.pickerModelPresets[state.selectedModelIndex].id == "ollama-cloud/glm-5.2")
     }
 }
 

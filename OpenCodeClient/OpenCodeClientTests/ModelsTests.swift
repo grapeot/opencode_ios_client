@@ -849,8 +849,8 @@ struct ModelPresetShortNameTests {
         #expect(luna.shortName == "GPT-L")
     }
 
-    @Test func grok46ShortName() {
-        let preset = ModelPreset(displayName: "Grok 4.6", providerID: "xai", modelID: "grok-4.6")
+    @Test func grok47ShortName() {
+        let preset = ModelPreset(displayName: "Grok 4.7", providerID: "xai", modelID: "grok-4.7")
         #expect(preset.shortName == "Grok")
     }
 
