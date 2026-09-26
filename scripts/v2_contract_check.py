@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Functional contract gate for an OpenCode 2 server.
 
-This is the pass-rate gateway. It does not start the server and does not
-touch port 4096. Point it at a V2 serve process:
+This is the pass-rate gateway. It does not start the server. Point it at a V2 serve process:
 
   V2_BASE=http://127.0.0.1:4198 V2_PASSWORD=... python3 scripts/v2_contract_check.py
 
