@@ -7,36 +7,42 @@ struct AIUsageQuotaButton: View {
     private var quota: AIUsageQuota? { state.selectedModelQuota }
 
     private var badgeTextColor: Color {
-        state.isSelectedModelQuotaStale ? DesignColors.Neutral.textSecondary : DesignColors.Brand.primary
+        if quota != nil, !state.isSelectedModelQuotaStale {
+            return DesignColors.Brand.primary
+        }
+        return DesignColors.Neutral.textSecondary
     }
 
     private var badgeText: String {
-        guard let quota else { return "" }
-        return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
+        if let quota {
+            return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
+        }
+        return state.selectedModel?.primaryQuotaKey?.label ?? ""
     }
 
     var body: some View {
-        if state.isAIUsageQuotaConfigured, quota != nil {
-            Button {
-                showSheet = true
-                Task { await state.refreshAIUsageQuotas(force: true) }
-            } label: {
-                Text(badgeText)
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(badgeTextColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .overlay(
-                        Capsule()
-                            .stroke(badgeTextColor.opacity(0.45), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("chat-toolbar-quota")
-            .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, badgeText))
-            .accessibilityHint(state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
-            .sheet(isPresented: $showSheet) {
+        Group {
+            if state.isAIUsageQuotaConfigured, state.selectedModel?.primaryQuotaKey != nil {
+                Button {
+                    showSheet = true
+                    Task { await state.refreshAIUsageQuotas(force: true) }
+                } label: {
+                    Text(badgeText)
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(badgeTextColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .overlay(
+                            Capsule()
+                                .stroke(badgeTextColor.opacity(0.45), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chat-toolbar-quota")
+                .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, badgeText))
+                .accessibilityHint(quota != nil && state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
+                .sheet(isPresented: $showSheet) {
                 NavigationStack {
                     AIUsageQuotaDetailView(state: state)
                         .toolbar {
@@ -58,6 +64,11 @@ struct AIUsageQuotaButton: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            }
+        }
+        .task(id: state.aiUsageDashboardURL) {
+            guard state.isAIUsageQuotaConfigured else { return }
+            await state.refreshAIUsageQuotas()
         }
     }
 }
