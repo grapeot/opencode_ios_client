@@ -1,6 +1,6 @@
 # V1 / V2 server compatibility
 
-Status: spec, ready to implement. The app code is not changed yet.
+Status: waiting for the server to reach feature parity before client implementation. The app code is not changed.
 
 Measured on tag `v2.0.18`, `serve` at `127.0.0.1:4198`, Basic auth user `opencode`. Clone: `tmp/opencode_v2`. Do not use port 4096.
 
@@ -58,7 +58,7 @@ This is the inventory. `已有替代` means a V2 route was measured, or the even
 | Archive write | `PATCH` `time.archived` | update route ignores the field. No write route | 还没有替代 |
 | Archive restore | `PATCH` `time.archived` to `-1` | same. No write route | 还没有替代 |
 
-`还没有替代` is archive write, archive restore, and todos. The official V2 app also rejects archive with `Session archiving is unavailable`. The iOS todo panel is not a local list. It loads `GET /session/:id/todo` and applies `todo.updated`. V2 has neither. Do not invent a replacement. `untracked` is not a separate client feature. If that string arrives, the file icon uses the same color as `modified`. V2 not emitting it does not remove a screen.
+Two server APIs still have no parity, so this is not a good time to implement the client. Archive write and restore have no route. The official V2 app rejects that action with `Session archiving is unavailable`. Todos are `GET /session/:id/todo` plus `todo.updated` on V1. V2 returns 404 and has no todo event. Do not invent either one. Wait until the server exposes those two, then implement from this spec. `untracked` is not a separate client feature. If that string arrives, the file icon uses the same color as `modified`.
 
 `GET /api/session/active` returns `{data: {sessionID: {type: "running"}}}`. Ids in that map are busy. Ids absent from it are idle. It does not carry `retry`. After connect, `session.status` events update that snapshot. Directory on list, create, and file calls is in the 2.0.18 protocol. The contract script does not call those query forms yet.
 
