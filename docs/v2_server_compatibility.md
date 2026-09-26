@@ -2,61 +2,61 @@
 
 Status: waiting for the server to reach feature parity before client implementation. The app code is not changed.
 
-Measured on tag `v2.0.18`, `serve` at `127.0.0.1:4198`, Basic auth user `opencode`. Clone: `tmp/opencode_v2`. Do not use port 4096.
+Measured on tag `v2.0.18`, a local `serve` process, Basic auth user `opencode`.
 
-The target is every V1 behavior the iOS app has today, except the rows marked `还没有替代`. Those rows have no V2 server API. Do not invent a local stand-in for them. V1 hosts stay on the current requests. V2 hosts use the mappings below. Do not guess a body that is not written here.
+The target is every V1 behavior the iOS app has today, except the rows marked `no server API`. Those rows have no V2 server API. Do not invent a local stand-in for them. V1 hosts stay on the current requests. V2 hosts use the mappings below. Do not guess a body that is not written here.
 
 ## Coverage
 
-This is the inventory. `已有替代` means a V2 route was measured, or the event name is in the 2.0.18 protocol. `只有客户端替代` means the server will not do the V1 job, and the client procedure below is the behavior. `还没有替代` means do not implement that write or that guarantee on V2.
+This is the inventory. `replaced` means a V2 route was measured, or the event name is in the 2.0.18 protocol. `client substitute` means the server will not do the V1 job, and the client procedure below is the behavior. `no server API` means do not implement that write or that guarantee on V2.
 
 | V1 client behavior | V1 server API | V2 | Status |
 |---|---|---|---|
-| Test connection | `GET /global/health` | `GET /api/info` | 已有替代 |
-| Live updates | `GET /global/event` | `GET /api/event` | 已有替代 |
-| Session list | `GET /session?directory=` | `GET /api/session?directory=` | 已有替代 |
-| Session get | `GET /session/:id` | `GET /api/session/:id` | 已有替代 |
-| Create session in a directory | `POST /session?directory=` | `POST /api/session` with `location.directory` | 已有替代 |
-| Rename | `PATCH /session/:id` title | `PATCH /api/session/:id` title | 已有替代 |
-| Delete | `DELETE /session/:id` | `DELETE /api/session/:id` | 已有替代 |
-| Fork | `POST /session/:id/fork` | `POST /api/session/:id/fork` | 已有替代 |
-| Revert | `POST /session/:id/revert` | `POST .../revert/stage`, then GET | 已有替代 |
-| Clear revert | none separate | `DELETE .../revert` | 已有替代 |
-| Message list | `GET /session/:id/message` | `GET /api/session/:id/message` | 已有替代 |
-| Text send | `POST /session/:id/prompt_async` | `POST /api/session/:id/prompt` | 已有替代 |
-| Image send | file part in `parts` | `files[].uri` as a `data:` URI | 已有替代 |
-| Agent and model on send | fields on the prompt body | `POST .../agent`, `POST .../model` | 已有替代 |
-| Stop | `POST /session/:id/abort` | `POST .../interrupt` | 已有替代 |
-| Busy / idle poll | `GET /session/status` | `GET /api/session/active`, then `session.status` events | 已有替代 |
-| Permission list | `GET /permission` | `GET /api/session/:id/permission` | 已有替代 |
-| Permission reply | `POST .../permissions/:id` | `POST .../permission/:id/reply` | 已有替代 |
-| Question list | `GET /question` | `GET /api/session/:id/form` | 已有替代 |
-| Question reply | `POST /question/:id/reply` | `POST .../form/:id/reply` | 已有替代 |
-| Question reject | `POST /question/:id/reject` | `DELETE .../form/:id` | 已有替代 |
-| Providers and models | `GET /config/providers`, `GET /provider` | `GET /api/provider`, `GET /api/model`, `GET /api/model/default` | 已有替代 |
-| Agents | `GET /agent` | `GET /api/agent` | 已有替代 |
-| Diff | `GET /session/:id/diff` | `GET /api/session/:id/diff` | 已有替代 |
-| File list | `GET /file?directory=` | `GET /api/fs/list?location[directory]=` | 已有替代 |
-| File read | `GET /file/content?directory=` | `GET /api/fs/read/*?location[directory]=` | 已有替代 |
-| File find | `GET /find/file` | `GET /api/fs/find` | 已有替代 |
-| File status | `GET /file/status` | `GET /api/vcs/status` | 已有替代 |
-| Project list | `GET /project` | `GET /api/project` | 已有替代 |
-| Current project | `GET /project/current` | `GET /api/location` | 已有替代 |
-| Read archive flag | `time.archived` on session | same field, when the server sends it | 已有替代 |
-| `server.connected` | SSE | same name | 已有替代 |
-| `session.status` | SSE | same name | 已有替代 |
-| `session.deleted` | SSE | same name | 已有替代 |
-| `session.updated` | SSE | GET on `session.created`, `session.renamed`, `session.metadata.updated` | 已有替代 |
-| Streaming text | `message.part.delta` | `session.text.delta` | 已有替代 |
-| Message refresh | `message.updated`, `message.part.updated` | reload on `session.text.ended` and `session.message.content.updated` | 已有替代 |
-| Permission events | `permission.asked`, `permission.replied` | same names, different fields | 已有替代 |
-| Question events | `question.asked`, `question.replied`, `question.rejected` | `form.created`, `form.replied`, `form.cancelled` | 已有替代 |
-| Turn failure | `session.error` | `session.execution.failed` | 已有替代 |
-| Structured send | `POST /session/:id/message` with `format` | server ignores `format` | 只有客户端替代 |
-| Todo list | `GET /session/:id/todo`. The client calls this directly. | 404. No todo route in the 2.0.18 protocol. | 还没有替代 |
-| Todo live update | `todo.updated` | no event | 还没有替代 |
-| Archive write | `PATCH` `time.archived` | update route ignores the field. No write route | 还没有替代 |
-| Archive restore | `PATCH` `time.archived` to `-1` | same. No write route | 还没有替代 |
+| Test connection | `GET /global/health` | `GET /api/info` | replaced |
+| Live updates | `GET /global/event` | `GET /api/event` | replaced |
+| Session list | `GET /session?directory=` | `GET /api/session?directory=` | replaced |
+| Session get | `GET /session/:id` | `GET /api/session/:id` | replaced |
+| Create session in a directory | `POST /session?directory=` | `POST /api/session` with `location.directory` | replaced |
+| Rename | `PATCH /session/:id` title | `PATCH /api/session/:id` title | replaced |
+| Delete | `DELETE /session/:id` | `DELETE /api/session/:id` | replaced |
+| Fork | `POST /session/:id/fork` | `POST /api/session/:id/fork` | replaced |
+| Revert | `POST /session/:id/revert` | `POST .../revert/stage`, then GET | replaced |
+| Clear revert | none separate | `DELETE .../revert` | replaced |
+| Message list | `GET /session/:id/message` | `GET /api/session/:id/message` | replaced |
+| Text send | `POST /session/:id/prompt_async` | `POST /api/session/:id/prompt` | replaced |
+| Image send | file part in `parts` | `files[].uri` as a `data:` URI | replaced |
+| Agent and model on send | fields on the prompt body | `POST .../agent`, `POST .../model` | replaced |
+| Stop | `POST /session/:id/abort` | `POST .../interrupt` | replaced |
+| Busy / idle poll | `GET /session/status` | `GET /api/session/active`, then `session.status` events | replaced |
+| Permission list | `GET /permission` | `GET /api/session/:id/permission` | replaced |
+| Permission reply | `POST .../permissions/:id` | `POST .../permission/:id/reply` | replaced |
+| Question list | `GET /question` | `GET /api/session/:id/form` | replaced |
+| Question reply | `POST /question/:id/reply` | `POST .../form/:id/reply` | replaced |
+| Question reject | `POST /question/:id/reject` | `DELETE .../form/:id` | replaced |
+| Providers and models | `GET /config/providers`, `GET /provider` | `GET /api/provider`, `GET /api/model`, `GET /api/model/default` | replaced |
+| Agents | `GET /agent` | `GET /api/agent` | replaced |
+| Diff | `GET /session/:id/diff` | `GET /api/session/:id/diff` | replaced |
+| File list | `GET /file?directory=` | `GET /api/fs/list?location[directory]=` | replaced |
+| File read | `GET /file/content?directory=` | `GET /api/fs/read/*?location[directory]=` | replaced |
+| File find | `GET /find/file` | `GET /api/fs/find` | replaced |
+| File status | `GET /file/status` | `GET /api/vcs/status` | replaced |
+| Project list | `GET /project` | `GET /api/project` | replaced |
+| Current project | `GET /project/current` | `GET /api/location` | replaced |
+| Read archive flag | `time.archived` on session | same field, when the server sends it | replaced |
+| `server.connected` | SSE | same name | replaced |
+| `session.status` | SSE | same name | replaced |
+| `session.deleted` | SSE | same name | replaced |
+| `session.updated` | SSE | GET on `session.created`, `session.renamed`, `session.metadata.updated` | replaced |
+| Streaming text | `message.part.delta` | `session.text.delta` | replaced |
+| Message refresh | `message.updated`, `message.part.updated` | reload on `session.text.ended` and `session.message.content.updated` | replaced |
+| Permission events | `permission.asked`, `permission.replied` | same names, different fields | replaced |
+| Question events | `question.asked`, `question.replied`, `question.rejected` | `form.created`, `form.replied`, `form.cancelled` | replaced |
+| Turn failure | `session.error` | `session.execution.failed` | replaced |
+| Structured send | `POST /session/:id/message` with `format` | server ignores `format` | client substitute |
+| Todo list | `GET /session/:id/todo`. The client calls this directly. | 404. No todo route in the 2.0.18 protocol. | no server API |
+| Todo live update | `todo.updated` | no event | no server API |
+| Archive write | `PATCH` `time.archived` | update route ignores the field. No write route | no server API |
+| Archive restore | `PATCH` `time.archived` to `-1` | same. No write route | no server API |
 
 Two server APIs still have no parity, so this is not a good time to implement the client. Archive write and restore have no route. The official V2 app rejects that action with `Session archiving is unavailable`. Todos are `GET /session/:id/todo` plus `todo.updated` on V1. V2 returns 404 and has no todo event. Do not invent either one. Wait until the server exposes those two, then implement from this spec. `untracked` is not a separate client feature. If that string arrives, the file icon uses the same color as `modified`.
 
@@ -319,7 +319,7 @@ There is no `todo.updated`. Recompute todos after every message reload. There is
 V2_BASE=http://127.0.0.1:4198 V2_PASSWORD=... python3 scripts/v2_contract_check.py
 ```
 
-Exit 0 only when every case passes. This script starts no server and does not touch port 4096. It locks the requests and envelopes. It does not run a model, so it does not prove a live token, a real permission ask, or a Car Mode JSON parse. Those three are unit tests against the saved bodies below.
+Exit 0 only when every case passes. This script starts no server. It locks the requests and envelopes. It does not run a model, so it does not prove a live token, a real permission ask, or a Car Mode JSON parse. Those three are unit tests against the saved bodies below.
 
 The script locks wire status and envelopes. It does not decode Swift models. Saved-body unit tests do that, and they are written with the mapper, not in this spec. The script covers detection on the live server, session create/list/get/patch/delete, text prompt, a client-supplied message id echoed back, image data URI, ignored `format`, rejected `parts`, message reload, interrupt, absent todo, absent status map, file list with `path`, find with `limit` and `data[].path`, file read bytes, agents, providers, models, `GET /api/model/default`, location, projects, vcs, diff, form list, session permission list, missing form reply and cancel as 404, missing permission reply as 404, archive PATCH ignored, field still absent, fork, revert stage 200, revert clear 204 or 404 after interrupt, agent switch, model switch, and an SSE frame parsed as `type` `server.connected` with `data` `{}`.
 
