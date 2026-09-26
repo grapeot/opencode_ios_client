@@ -39,8 +39,7 @@ This is the inventory. `已有替代` means a V2 route was measured, or the even
 | File list | `GET /file?directory=` | `GET /api/fs/list?location[directory]=` | 已有替代 |
 | File read | `GET /file/content?directory=` | `GET /api/fs/read/*?location[directory]=` | 已有替代 |
 | File find | `GET /find/file` | `GET /api/fs/find` | 已有替代 |
-| File status `added` / `modified` / `deleted` | `GET /file/status` | `GET /api/vcs/status` | 已有替代 |
-| File status `untracked` | `GET /file/status` | V2 status set has no `untracked` | 还没有替代 |
+| File status | `GET /file/status` | `GET /api/vcs/status` | 已有替代 |
 | Project list | `GET /project` | `GET /api/project` | 已有替代 |
 | Current project | `GET /project/current` | `GET /api/location` | 已有替代 |
 | Read archive flag | `time.archived` on session | same field, when the server sends it | 已有替代 |
@@ -54,12 +53,12 @@ This is the inventory. `已有替代` means a V2 route was measured, or the even
 | Question events | `question.asked`, `question.replied`, `question.rejected` | `form.created`, `form.replied`, `form.cancelled` | 已有替代 |
 | Turn failure | `session.error` | `session.execution.failed` | 已有替代 |
 | Structured send | `POST /session/:id/message` with `format` | server ignores `format` | 只有客户端替代 |
-| Todo list | `GET /session/:id/todo` | 404. `todowrite` was removed | 还没有替代 |
+| Todo list | `GET /session/:id/todo`. The client calls this directly. | 404. No todo route in the 2.0.18 protocol. | 还没有替代 |
 | Todo live update | `todo.updated` | no event | 还没有替代 |
 | Archive write | `PATCH` `time.archived` | update route ignores the field. No write route | 还没有替代 |
 | Archive restore | `PATCH` `time.archived` to `-1` | same. No write route | 还没有替代 |
 
-`还没有替代` is archive write, archive restore, todos, and `untracked` file status. The official V2 app also rejects archive with `Session archiving is unavailable`. A stock 2.0.18 server has no todo array. Do not ship a phone-only archive, and do not fill todos by scanning message text.
+`还没有替代` is archive write, archive restore, and todos. The official V2 app also rejects archive with `Session archiving is unavailable`. The iOS todo panel is not a local list. It loads `GET /session/:id/todo` and applies `todo.updated`. V2 has neither. Do not invent a replacement. `untracked` is not a separate client feature. If that string arrives, the file icon uses the same color as `modified`. V2 not emitting it does not remove a screen.
 
 `GET /api/session/active` returns `{data: {sessionID: {type: "running"}}}`. Ids in that map are busy. Ids absent from it are idle. It does not carry `retry`. After connect, `session.status` events update that snapshot. Directory on list, create, and file calls is in the 2.0.18 protocol. The contract script does not call those query forms yet.
 
@@ -253,7 +252,7 @@ File list and find unwrap `data` of `{path, type}`. `name` is the last path comp
 
 File read returns raw bytes, not JSON. UTF-8 that decodes is `FileContent` type `text` with that string. Anything else is type `binary` and `content` nil.
 
-File status unwraps `data` of `{file, additions, deletions, status}`. `FileStatusEntry.path` is `file`. `status` is copied. `added`, `deleted`, and `modified` are the only values. There is no `untracked`.
+File status unwraps `data` of `{file, additions, deletions, status}`. `FileStatusEntry.path` is `file`. `status` is copied. `added`, `deleted`, and `modified` are the only values. The client has no separate untracked screen. That string, if present, uses the modified color.
 
 Diff unwraps `data` of `{file, patch, additions, deletions, status}`. `FileDiff.file` is `file`. `before` is `""`. `after` is `patch`. Copy additions, deletions, and status.
 
