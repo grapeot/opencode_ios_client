@@ -38,7 +38,7 @@ Session, from `data` on get, create, fork, and each list element:
 | `title` | `title`, or `"Untitled"` |
 | `version` | `"2"` |
 | `time.created` / `time.updated` | those integers. Missing throws for get, create, and fork. |
-| `time.archived` | the local archive map below, not the server field |
+| `time.archived` | `time.archived` when the server sent it. Do not replace it with a phone-only flag. |
 | `share`, `summary` | nil |
 | `revert` | `revert` when it has `messageID`, else nil |
 
@@ -86,11 +86,11 @@ A malformed envelope throws. `{"data":[]}` is an empty transcript. Skipping ever
 | Method | V2 call | Status | Map |
 |---|---|---|---|
 | `health` | probe above | see Detection | |
-| `sessions` | `GET /api/session?limit=` | 200 | session map, then overlay local archive |
+| `sessions` | `GET /api/session?limit=` | 200 | session map, including server `time.archived` |
 | `session` | `GET /api/session/:id` | 200 | session map |
 | `createSession` | `POST /api/session` | 200 | session map |
 | `updateSession` | PATCH title, then GET | 204 then 200 | session map |
-| `updateSessionArchived` | no request | | local archive map |
+| `updateSessionArchived` | no write route | | read the server field. Do not PATCH it. |
 | `deleteSession` | `DELETE /api/session/:id` | 204 | |
 | `forkSession` | `POST .../fork` | 200 | session map |
 | `revertSession` | `POST .../revert/stage`, then GET | 200 then 200 | session map |
@@ -118,7 +118,7 @@ A malformed envelope throws. `{"data":[]}` is an empty transcript. Skipping ever
 
 `sessions(directory:)`, `createSession(directory:)`, `fileList(directory:)`, and `fileContent(directory:)` ignore `directory`. Do not send it, and do not send `x-opencode-directory`. `revertSession(partID:)` ignores `partID`. Stage the whole message. `promptAsync` ignores `directory`. If `messageID` is non-empty, the prompt body includes `"id": messageID`. 2.0.18 echoed that id.
 
-`updateSessionArchived` returns the mapped session after the local overlay. It does not call the network.
+`updateSessionArchived` does not call the network. It throws `APIError.httpError(statusCode: 404, data: Data())`. The returned session is not a locally forged archive.
 
 `selectSession` on V2 loads messages, permissions, and forms, then runs the todo walk for that session id. It does not call `/session/status`, `/todo`, or `/question`. `refreshSessions` updates busy state from the last `session.status` event.
 
@@ -134,7 +134,13 @@ An extra `format` field is ignored. 2.0.18 returned 200 and did not constrain th
 
 ### Archive
 
-`PATCH` drops `time.archived`. The gate proved a follow-up GET still has no `archived`. Store `HostProfile.archivedSessionIDs`, `[String: Int]`, optional, missing decodes as empty. Archive writes the session id to the current epoch milliseconds. Restore removes the key. Overlay that value onto `time.archived` after the session map. Send does not restore on the server first.
+The server does not drop an existing archive. `time.archived` is a real optional field on the session object, and the database column `time_archived` is what V1 migration copies. A GET that includes it must be shown as archived.
+
+What the gate proved is narrower. `PATCH /api/session/:id` only accepts title, metadata, and permissions. Sending `{"time":{"archived":1}}` returns 204 because unknown fields are ignored, then GET still has no `archived`. That 204 is not a stored archive and not a deleted one. Do not send that body.
+
+2.0.18 has no archive write route. The official V2 app says the same thing: archive stays unavailable until the client exposes a session archive API, and the action rejects with `Session archiving is unavailable`. Do not invent a phone-only map. That map would disagree with the desktop, and it would hide a server `time.archived` that migration already wrote.
+
+Archive and Restore on V2 fail with that 404. The list still sorts by the server field. Send does not try to restore first. If the server says the session is archived, it stays archived after send.
 
 ### Questions
 
@@ -255,7 +261,7 @@ V2_BASE=http://127.0.0.1:4198 V2_PASSWORD=... python3 scripts/v2_contract_check.
 
 Exit 0 only when every case passes. This script starts no server and does not touch port 4096. It locks the requests and envelopes. It does not run a model, so it does not prove a live token, a real permission ask, or a Car Mode JSON parse. Those three are unit tests against the saved bodies below.
 
-The script locks wire status and envelopes. It does not decode Swift models. Saved-body unit tests do that, and they are written with the mapper, not in this spec. The script covers detection on the live server, session create/list/get/patch/delete, text prompt, a client-supplied message id echoed back, image data URI, ignored `format`, rejected `parts`, message reload, interrupt, absent todo, absent status map, file list with `path`, find with `limit` and `data[].path`, file read bytes, agents, providers, models, `GET /api/model/default`, location, projects, vcs, diff, form list, session permission list, missing form reply and cancel as 404, missing permission reply as 404, archive PATCH 204 with the field still absent, fork, revert stage 200, revert clear 204 or 404 after interrupt, agent switch, model switch, and an SSE frame parsed as `type` `server.connected` with `data` `{}`.
+The script locks wire status and envelopes. It does not decode Swift models. Saved-body unit tests do that, and they are written with the mapper, not in this spec. The script covers detection on the live server, session create/list/get/patch/delete, text prompt, a client-supplied message id echoed back, image data URI, ignored `format`, rejected `parts`, message reload, interrupt, absent todo, absent status map, file list with `path`, find with `limit` and `data[].path`, file read bytes, agents, providers, models, `GET /api/model/default`, location, projects, vcs, diff, form list, session permission list, missing form reply and cancel as 404, missing permission reply as 404, archive PATCH ignored, field still absent, fork, revert stage 200, revert clear 204 or 404 after interrupt, agent switch, model switch, and an SSE frame parsed as `type` `server.connected` with `data` `{}`.
 
 `providers()` also calls `GET /api/model/default`. The body is `{location, data}`. `data` is a model object or null. `ProvidersResponse.default` uses `data.providerID` and `data.id` when both are strings. Otherwise nil. A provider with missing `activation` is connected. `activation` `"disabled"` is not. A model whose provider is absent from the provider list still appears, under a provider whose id and name are that `providerID`.
 
@@ -268,7 +274,7 @@ Saved bodies, no server. One test per row. A row is not done until its test pass
 - Message `{"data":[]}` is empty. A user item `{"id":"msg_1","type":"user","text":"hi","time":{"created":1}}` becomes one text part. An assistant item with `content:[{"type":"text","text":"ok"}]` becomes one text part. An `idle` item is skipped.
 - V2 prompt encode for text is `{"text":"hi"}`. V2 prompt encode for one image is `{"text":"hi","files":[{"uri":"data:image/png;base64,aGVsbG8=","name":"a.png"}]}`. V1 encode still has `parts`.
 - Prompt status 204 throws on V2. Interrupt `{"interrupted":false}` at 200 succeeds. Title patch is not decoded.
-- Archive overlay: server session without `time.archived`, local map `{"ses_1": 5}`, mapped session is archived. Restore removes the key.
+- Archive read: server session `time.archived` `5` maps to archived. Missing `archived` maps to not archived. `updateSessionArchived` does not encode a PATCH and throws 404.
 - Permission `{"id":"per_1","sessionID":"ses_1","action":"read","resources":["*.env"],"source":{"type":"tool","messageID":"msg_1","id":"call_1"}}` maps to `permission` `read`, `patterns` `["*.env"]`, `tool.callID` `call_1`. Reply encode is `{"decision":"once"}`.
 - Form `{"id":"frm_1","sessionID":"ses_1","title":"Pick","fields":[{"key":"color","type":"string","options":[{"value":"red","label":"Red"}]}]}` maps to one question whose header is `color` and whose selected label `Red` replies as `{"answer":{"color":"red"}}`.
 - Model `{"id":"gpt-5","providerID":"openai","name":"GPT","capabilities":{"tools":true,"input":["text","image"],"output":["text"]},"limit":{"context":8,"output":2}}` becomes a provider model with `toolCall` true and attachment true.
@@ -281,4 +287,4 @@ Saved bodies, no server. One test per row. A row is not done until its test pass
 
 ## What not to do
 
-Do not ship a proxy. Do not fork the app. Do not send `parts`, `mime`, `source`, or `format` to V2. Do not decode a 204 body. Do not call `/session/status`, `/todo`, `/question`, or `/api/project/current` on a V2 host. Do not drop archive, todos, questions, images, or Car Mode because the old route is gone.
+Do not ship a proxy. Do not fork the app. Do not send `parts`, `mime`, `source`, or `format` to V2. Do not decode a 204 body. Do not call `/session/status`, `/todo`, `/question`, or `/api/project/current` on a V2 host. Do not hide a server `time.archived`. Do not store archive only on the phone. Do not drop todos, questions, images, or Car Mode because the old route is gone.
