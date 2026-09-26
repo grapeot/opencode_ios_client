@@ -25,13 +25,13 @@ extension AppState {
 
     var selectedModelQuota: AIUsageQuota? {
         guard let key = selectedModel?.primaryQuotaKey else { return nil }
-        return aiUsageQuotaState.snapshot?.quota(provider: key.provider, label: key.label)
+        return aiUsageQuotaState.snapshot?.quota(provider: key.provider, preferredLabel: key.label)
     }
 
     var isSelectedModelQuotaStale: Bool {
         guard let snapshot = aiUsageQuotaState.snapshot else { return false }
         if case .failed = aiUsageQuotaState { return true }
-        return Date().timeIntervalSince(snapshot.fetchedAt) > 300
+        return Date().timeIntervalSince(snapshot.fetchedAt) > 3_600
     }
 
     func refreshAIUsageQuotas(force: Bool = false) async {

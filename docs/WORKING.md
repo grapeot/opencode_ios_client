@@ -4,10 +4,16 @@
 
 ## 当前状态
 
-- **最后更新**：2026-09-21
-- **分支**：`fix/model-shortlist-reorder`
-- **编译/测试**：build 通过；throughput 相关 5 个 suite 29 条单测通过（Xcode 27 beta / iOS 27.0 模拟器）
-- **Phase**：LLM throughput 显示（per-message 脚注 + Context sheet）；分母已扣除 tool 执行时间，TTFT 已删
+- **最后更新**：2026-09-26
+- **分支**：`fix/grok-quota-pill`
+- **编译/测试**：`AIUsageQuotaTests` 7/7 通过（iPhone 16 模拟器）
+- **Phase**：Grok quota pill 映射
+
+### 2026-09-26 — Grok 不显示 quota pill
+
+- **现象**：选中 `xai/grok-*` 时 toolbar 没有 quota pill，GPT / GLM / Ollama 有。
+- **原因**：pill 的显示条件是 `primaryQuotaKey != nil`。映射只覆盖 `openai` → `codex/5h`、`zai-coding-plan` → `glm/5h`、`ollama-cloud` → `ollama/5h`。`xai` 落到 default，返回 nil，按钮整段不渲染。Dashboard `/api/v1/quotas` 里这条窗口是 `provider=grok`、`label=Weekly`。
+- **处理**：`xai` 映射到 `grok` / `Weekly`。首选窗口不在快照里时，改用该 provider 实际有的窗口。进入 Chat 就拉取，不等点击。有数字显示百分比；还没有数字时只显示窗口名，不画 `--`。一小时内成功拉取为品牌蓝，超过一小时或刷新失败为灰色。详情页 provider 名补上 Grok。非强制刷新的 60 秒去重不变。
 
 ### 2026-09-21 — 模型短名单左手柄排序松手不生效
 

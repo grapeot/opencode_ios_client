@@ -6,45 +6,43 @@ struct AIUsageQuotaButton: View {
 
     private var quota: AIUsageQuota? { state.selectedModelQuota }
 
-    private var badgeColor: Color {
-        guard !state.isSelectedModelQuotaStale, let remaining = quota?.clampedRemainingPercentage else {
-            return DesignColors.Neutral.textSecondary
+    private var badgeTextColor: Color {
+        if quota != nil, !state.isSelectedModelQuotaStale {
+            return DesignColors.Brand.primary
         }
-        if remaining <= 10 { return DesignColors.Semantic.error }
-        if remaining <= 20 { return DesignColors.Semantic.warning }
         return DesignColors.Neutral.textSecondary
     }
 
     private var badgeText: String {
-        if state.isSelectedModelQuotaStale { return "stale @ 5h" }
-        guard let quota else {
-            if case .loading = state.aiUsageQuotaState { return "... @ 5h" }
-            return "-- @ 5h"
+        if let quota {
+            return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
         }
-        return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
+        return state.selectedModel?.primaryQuotaKey?.label ?? ""
     }
 
     var body: some View {
-        if state.isAIUsageQuotaConfigured, state.selectedModel?.primaryQuotaKey != nil {
-            Button {
-                showSheet = true
-                Task { await state.refreshAIUsageQuotas(force: true) }
-            } label: {
-                Text(badgeText)
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(badgeColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .overlay(
-                        Capsule()
-                            .stroke(badgeColor.opacity(0.45), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("chat-toolbar-quota")
-            .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, badgeText))
-            .sheet(isPresented: $showSheet) {
+        Group {
+            if state.isAIUsageQuotaConfigured, state.selectedModel?.primaryQuotaKey != nil {
+                Button {
+                    showSheet = true
+                    Task { await state.refreshAIUsageQuotas(force: true) }
+                } label: {
+                    Text(badgeText)
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(badgeTextColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .overlay(
+                            Capsule()
+                                .stroke(badgeTextColor.opacity(0.45), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chat-toolbar-quota")
+                .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, badgeText))
+                .accessibilityHint(quota != nil && state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
+                .sheet(isPresented: $showSheet) {
                 NavigationStack {
                     AIUsageQuotaDetailView(state: state)
                         .toolbar {
@@ -66,6 +64,11 @@ struct AIUsageQuotaButton: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            }
+        }
+        .task(id: state.aiUsageDashboardURL) {
+            guard state.isAIUsageQuotaConfigured else { return }
+            await state.refreshAIUsageQuotas()
         }
     }
 }
@@ -178,6 +181,7 @@ struct AIUsageQuotaDetailView: View {
         case "codex": return "OpenAI / Codex"
         case "glm": return "Z.ai / GLM"
         case "ollama": return "Ollama Cloud"
+        case "grok": return "Grok"
         case "claude": return "Claude"
         case "antigravity": return "Antigravity"
         default: return provider
