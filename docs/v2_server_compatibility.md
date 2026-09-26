@@ -4,7 +4,68 @@ Status: spec, ready to implement. The app code is not changed yet.
 
 Measured on tag `v2.0.18`, `serve` at `127.0.0.1:4198`, Basic auth user `opencode`. Clone: `tmp/opencode_v2`. Do not use port 4096.
 
-The target is every V1 behavior the iOS app has today. Same screens, same models. V1 hosts stay on the current requests. V2 hosts use the mappings below. Do not guess a body that is not written here. Do not hide a control because the old route is gone.
+The target is every V1 behavior the iOS app has today, except the rows marked `还没有替代`. Those rows have no V2 server API. Do not invent a local stand-in for them. V1 hosts stay on the current requests. V2 hosts use the mappings below. Do not guess a body that is not written here.
+
+## Coverage
+
+This is the inventory. `已有替代` means a V2 route was measured, or the event name is in the 2.0.18 protocol. `只有客户端替代` means the server will not do the V1 job, and the client procedure below is the behavior. `还没有替代` means do not implement that write or that guarantee on V2.
+
+| V1 client behavior | V1 server API | V2 | Status |
+|---|---|---|---|
+| Test connection | `GET /global/health` | `GET /api/info` | 已有替代 |
+| Live updates | `GET /global/event` | `GET /api/event` | 已有替代 |
+| Session list | `GET /session?directory=` | `GET /api/session?directory=` | 已有替代 |
+| Session get | `GET /session/:id` | `GET /api/session/:id` | 已有替代 |
+| Create session in a directory | `POST /session?directory=` | `POST /api/session` with `location.directory` | 已有替代 |
+| Rename | `PATCH /session/:id` title | `PATCH /api/session/:id` title | 已有替代 |
+| Delete | `DELETE /session/:id` | `DELETE /api/session/:id` | 已有替代 |
+| Fork | `POST /session/:id/fork` | `POST /api/session/:id/fork` | 已有替代 |
+| Revert | `POST /session/:id/revert` | `POST .../revert/stage`, then GET | 已有替代 |
+| Clear revert | none separate | `DELETE .../revert` | 已有替代 |
+| Message list | `GET /session/:id/message` | `GET /api/session/:id/message` | 已有替代 |
+| Text send | `POST /session/:id/prompt_async` | `POST /api/session/:id/prompt` | 已有替代 |
+| Image send | file part in `parts` | `files[].uri` as a `data:` URI | 已有替代 |
+| Agent and model on send | fields on the prompt body | `POST .../agent`, `POST .../model` | 已有替代 |
+| Stop | `POST /session/:id/abort` | `POST .../interrupt` | 已有替代 |
+| Busy / idle poll | `GET /session/status` | `GET /api/session/active`, then `session.status` events | 已有替代 |
+| Permission list | `GET /permission` | `GET /api/session/:id/permission` | 已有替代 |
+| Permission reply | `POST .../permissions/:id` | `POST .../permission/:id/reply` | 已有替代 |
+| Question list | `GET /question` | `GET /api/session/:id/form` | 已有替代 |
+| Question reply | `POST /question/:id/reply` | `POST .../form/:id/reply` | 已有替代 |
+| Question reject | `POST /question/:id/reject` | `DELETE .../form/:id` | 已有替代 |
+| Providers and models | `GET /config/providers`, `GET /provider` | `GET /api/provider`, `GET /api/model`, `GET /api/model/default` | 已有替代 |
+| Agents | `GET /agent` | `GET /api/agent` | 已有替代 |
+| Diff | `GET /session/:id/diff` | `GET /api/session/:id/diff` | 已有替代 |
+| File list | `GET /file?directory=` | `GET /api/fs/list?location[directory]=` | 已有替代 |
+| File read | `GET /file/content?directory=` | `GET /api/fs/read/*?location[directory]=` | 已有替代 |
+| File find | `GET /find/file` | `GET /api/fs/find` | 已有替代 |
+| File status `added` / `modified` / `deleted` | `GET /file/status` | `GET /api/vcs/status` | 已有替代 |
+| File status `untracked` | `GET /file/status` | V2 status set has no `untracked` | 还没有替代 |
+| Project list | `GET /project` | `GET /api/project` | 已有替代 |
+| Current project | `GET /project/current` | `GET /api/location` | 已有替代 |
+| Read archive flag | `time.archived` on session | same field, when the server sends it | 已有替代 |
+| `server.connected` | SSE | same name | 已有替代 |
+| `session.status` | SSE | same name | 已有替代 |
+| `session.deleted` | SSE | same name | 已有替代 |
+| `session.updated` | SSE | GET on `session.created`, `session.renamed`, `session.metadata.updated` | 已有替代 |
+| Streaming text | `message.part.delta` | `session.text.delta` | 已有替代 |
+| Message refresh | `message.updated`, `message.part.updated` | reload on `session.text.ended` and `session.message.content.updated` | 已有替代 |
+| Permission events | `permission.asked`, `permission.replied` | same names, different fields | 已有替代 |
+| Question events | `question.asked`, `question.replied`, `question.rejected` | `form.created`, `form.replied`, `form.cancelled` | 已有替代 |
+| Turn failure | `session.error` | `session.execution.failed` | 已有替代 |
+| Structured send | `POST /session/:id/message` with `format` | server ignores `format` | 只有客户端替代 |
+| Todo list | `GET /session/:id/todo` | 404. `todowrite` was removed | 还没有替代 |
+| Todo live update | `todo.updated` | no event | 还没有替代 |
+| Archive write | `PATCH` `time.archived` | update route ignores the field. No write route | 还没有替代 |
+| Archive restore | `PATCH` `time.archived` to `-1` | same. No write route | 还没有替代 |
+
+`还没有替代` is archive write, archive restore, todos, and `untracked` file status. The official V2 app also rejects archive with `Session archiving is unavailable`. A stock 2.0.18 server has no todo array. Do not ship a phone-only archive, and do not fill todos by scanning message text.
+
+`GET /api/session/active` returns `{data: {sessionID: {type: "running"}}}`. Ids in that map are busy. Ids absent from it are idle. It does not carry `retry`. After connect, `session.status` events update that snapshot. Directory on list, create, and file calls is in the 2.0.18 protocol. The contract script does not call those query forms yet.
+
+Structured send is the one client substitute. The server will not enforce the schema. The client parses the assistant text into `CarResponseEnvelope` and throws `CarModeError.invalidResponse` when that fails. That is not the V1 guarantee.
+
+Streaming event names are in the protocol. A live token frame was not captured, because this server had no model turn. Implement from the field table below. Do not wait for `message.part.delta`.
 
 ## Detection
 
@@ -108,7 +169,7 @@ A malformed envelope throws. `{"data":[]}` is an empty transcript. Skipping ever
 | `providerRegistry` | same two calls | 200 | connected ids are provider `id`s whose `activation` is not `"disabled"`. If the provider list is empty, use the provider ids present on the model list. |
 | `agents` | `GET /api/agent` | 200 | agent map |
 | `sessionDiff` | `GET /api/session/:id/diff` | 200 | diff map |
-| `sessionTodos` | no request | | todo walk |
+| `sessionTodos` | no request | | return `[]`. Do not scan messages. |
 | `fileList` | `GET /api/fs/list?path=` | 200 | file node map |
 | `fileContent` | `GET /api/fs/read/` plus the relative path | 200 | raw bytes |
 | `findFile` | `GET /api/fs/find?query=&limit=` | 200 | `data[].path` |
@@ -116,11 +177,11 @@ A malformed envelope throws. `{"data":[]}` is an empty transcript. Skipping ever
 | `projects` | `GET /api/project` | 200 | project map. The body is a bare array. |
 | `projectCurrent` | `GET /api/location` | 200 | the project whose `id` equals `project.id`. If the list has no match, build one from `project.id` and `project.directory`. |
 
-`sessions(directory:)`, `createSession(directory:)`, `fileList(directory:)`, and `fileContent(directory:)` ignore `directory`. Do not send it, and do not send `x-opencode-directory`. `revertSession(partID:)` ignores `partID`. Stage the whole message. `promptAsync` ignores `directory`. If `messageID` is non-empty, the prompt body includes `"id": messageID`. 2.0.18 echoed that id.
+When `directory` is non-empty, session list adds `directory`. Create sends `{"location":{"directory": directory}}` plus title when present. File list and file read add `location[directory]`. Do not send `x-opencode-directory`. `revertSession(partID:)` ignores `partID`. Stage the whole message. `promptAsync` does not send directory. If `messageID` is non-empty, the prompt body includes `"id": messageID`. 2.0.18 echoed that id.
 
 `updateSessionArchived` does not call the network. It throws `APIError.httpError(statusCode: 404, data: Data())`. The returned session is not a locally forged archive.
 
-`selectSession` on V2 loads messages, permissions, and forms, then runs the todo walk for that session id. It does not call `/session/status`, `/todo`, or `/question`. `refreshSessions` updates busy state from the last `session.status` event.
+`selectSession` on V2 loads messages, permissions, and forms. It does not call `/todo` or `/question`. `sessionTodos` stays empty. `refreshSessions` calls `GET /api/session/active`, marks listed ids busy, and marks the others idle. Later `session.status` events replace that snapshot for one id.
 
 ### Send
 
@@ -206,7 +267,7 @@ Current project is `GET /api/location`. Match `project.id` in the list. If missi
 
 ### Todos
 
-`GET .../todo` is 404. The 2.0.18 server removed the `todowrite` tool, so a stock server has no todo array. The screen stays. `sessionTodos(sessionID:)` loads that session's messages with the message map, including when it is not the current session. Walk assistant messages from last to first. The first tool part whose `state.input.todos` is an array wins. Map each element with the existing `TodoItem` decoder. If no part has that array, store an empty list for that session. That clears a stale list. Do not call `/todo`. Do not remove the control.
+`GET .../todo` is 404. There is no `todo.updated` event. `sessionTodos` returns `[]` and does not read messages. Do not call `/todo`. The control can stay on screen and show nothing. That empty list is not the V1 todo feature.
 
 ### Structured send
 
@@ -251,7 +312,7 @@ The JSON has `id`, `type`, and `data`. Durable events also have `created` and ma
 
 There is no `todo.updated`. Recompute todos after every message reload. There is no `message.updated` and no `message.part.delta` on this socket. Do not wait for those names.
 
-`sessionStatus()` does not poll. A session missing from the last status event is idle. `/api/session/active` is not the replacement.
+`sessionStatus()` is `GET /api/session/active`. An id in `data` with `type` `"running"` is `SessionStatus` type `busy`. Every other known session is `idle`. Do not call `/session/status`. `retry` still comes only from a later `session.status` event.
 
 ## Test gate
 
@@ -281,10 +342,10 @@ Saved bodies, no server. One test per row. A row is not done until its test pass
 - Project `{"id":"prj_1","canonical":"/repo","time":{"created":1,"updated":2,"active":3},"sandboxes":[]}` has `worktree` `/repo`.
 - Diff `{"file":"a.swift","patch":"+let x","additions":1,"deletions":0,"status":"added"}` has `after` `+let x` and `before` `""`.
 - File status `{"file":"a.swift","additions":1,"deletions":0,"status":"modified"}` has `path` `a.swift`.
-- Todo walk input is an assistant message `{"id":"msg_a","type":"assistant","time":{"created":1},"agent":"build","model":{"id":"m","providerID":"p"},"content":[{"type":"tool","id":"call_1","name":"other","state":{"status":"completed","input":{"todos":[{"content":"a","status":"pending","priority":"high","id":"t1"}]},"content":[{"type":"text","text":"ok"}]}}]}`. The walk yields one `TodoItem` with id `t1`. A later assistant with no such array does not replace it, because the walk stops at the first match from the end. A list with no such part stores `[]`.
+- `sessionTodos` returns `[]` and does not decode message content.
 - SSE `data` `{"sessionID":"ses_1","assistantMessageID":"msg_1","ordinal":0,"delta":"hi"}` on `session.text.delta` becomes part id `msg_1-text-0` and field `text`. `ordinal` is that integer field, not an invented counter.
 - Structured fixture text is `{"version":1,"status":"completed","speech":"Done","confirmation":null,"clientActions":[]}`. Decode it as `CarResponseEnvelope`, set `Message.structured`, and set `time.completed` when the server omitted it and the session is idle. Text `not json` throws `CarModeError.invalidResponse`.
 
 ## What not to do
 
-Do not ship a proxy. Do not fork the app. Do not send `parts`, `mime`, `source`, or `format` to V2. Do not decode a 204 body. Do not call `/session/status`, `/todo`, `/question`, or `/api/project/current` on a V2 host. Do not hide a server `time.archived`. Do not store archive only on the phone. Do not drop todos, questions, images, or Car Mode because the old route is gone.
+Do not ship a proxy. Do not fork the app. Do not send `parts`, `mime`, `source`, or `format` to V2. Do not decode a 204 body. Do not call `/session/status`, `/todo`, `/question`, or `/api/project/current` on a V2 host. Do not hide a server `time.archived`. Do not store archive only on the phone. Do not invent a todo list. Do not drop questions, images, or Car Mode because the old route is gone.
