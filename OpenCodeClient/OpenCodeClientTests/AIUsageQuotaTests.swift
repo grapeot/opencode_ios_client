@@ -58,6 +58,34 @@ struct AIUsageQuotaTests {
         #expect(grok.primaryQuotaKey == AIUsageQuotaKey(provider: "grok", label: "Weekly"))
     }
 
+    @Test func fallsBackToProviderWindowWhenPreferredLabelIsMissing() {
+        let weekly = AIUsageQuota(
+            provider: "grok",
+            label: "Weekly",
+            usedPercentage: 23,
+            remainingPercentage: 77,
+            nextResetTimeMs: nil,
+            nextResetISO: nil,
+            usage: nil,
+            remaining: nil
+        )
+        let weeklyWindow = AIUsageQuota(
+            provider: "codex",
+            label: "7d",
+            usedPercentage: 0,
+            remainingPercentage: 100,
+            nextResetTimeMs: nil,
+            nextResetISO: nil,
+            usage: nil,
+            remaining: nil
+        )
+        let snapshot = AIUsageQuotaSnapshot(generatedAt: nil, fetchedAt: Date(), quotas: [weekly, weeklyWindow])
+
+        #expect(snapshot.quota(provider: "grok", preferredLabel: "Weekly") == weekly)
+        #expect(snapshot.quota(provider: "codex", preferredLabel: "5h") == weeklyWindow)
+        #expect(snapshot.quota(provider: "glm", preferredLabel: "5h") == nil)
+    }
+
     @Test @MainActor func blankEndpointMakesNoRequest() async {
         let previous = UserDefaults.standard.string(forKey: AppState.aiUsageDashboardURLKey)
         defer {

@@ -6,37 +6,17 @@ struct AIUsageQuotaButton: View {
 
     private var quota: AIUsageQuota? { state.selectedModelQuota }
 
-    private var showsStaleTint: Bool {
-        state.isSelectedModelQuotaStale && quota != nil
-    }
-
-    private var statusColor: Color {
-        guard let remaining = quota?.clampedRemainingPercentage else {
-            return DesignColors.Neutral.textSecondary
-        }
-        if remaining <= 10 { return DesignColors.Semantic.error }
-        if remaining <= 20 { return DesignColors.Semantic.warning }
-        return DesignColors.Neutral.textSecondary
-    }
-
     private var badgeTextColor: Color {
-        showsStaleTint ? DesignColors.Semantic.stale : statusColor
-    }
-
-    private var windowLabel: String {
-        state.selectedModel?.primaryQuotaKey?.label ?? "5h"
+        state.isSelectedModelQuotaStale ? DesignColors.Neutral.textSecondary : DesignColors.Brand.primary
     }
 
     private var badgeText: String {
-        guard let quota else {
-            if case .loading = state.aiUsageQuotaState { return "... @ \(windowLabel)" }
-            return "-- @ \(windowLabel)"
-        }
+        guard let quota else { return "" }
         return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
     }
 
     var body: some View {
-        if state.isAIUsageQuotaConfigured, state.selectedModel?.primaryQuotaKey != nil {
+        if state.isAIUsageQuotaConfigured, quota != nil {
             Button {
                 showSheet = true
                 Task { await state.refreshAIUsageQuotas(force: true) }
@@ -49,13 +29,13 @@ struct AIUsageQuotaButton: View {
                     .padding(.vertical, 5)
                     .overlay(
                         Capsule()
-                            .stroke(statusColor.opacity(0.45), lineWidth: 1)
+                            .stroke(badgeTextColor.opacity(0.45), lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("chat-toolbar-quota")
             .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, badgeText))
-            .accessibilityHint(showsStaleTint ? L10n.t(.quotaStale) : "")
+            .accessibilityHint(state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
             .sheet(isPresented: $showSheet) {
                 NavigationStack {
                     AIUsageQuotaDetailView(state: state)

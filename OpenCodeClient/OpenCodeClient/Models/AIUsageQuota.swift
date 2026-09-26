@@ -48,6 +48,19 @@ struct AIUsageQuotaSnapshot: Equatable {
                 && $0.label.caseInsensitiveCompare(label) == .orderedSame
         }
     }
+
+    func quota(provider: String, preferredLabel: String) -> AIUsageQuota? {
+        if let exact = quota(provider: provider, label: preferredLabel) {
+            return exact
+        }
+        let matches = quotas.filter { $0.provider.caseInsensitiveCompare(provider) == .orderedSame }
+        for label in ["5h", "7d", "Weekly"] {
+            if let found = matches.first(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) {
+                return found
+            }
+        }
+        return matches.min { $0.label < $1.label }
+    }
 }
 
 enum AIUsageQuotaState: Equatable {
