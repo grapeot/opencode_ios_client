@@ -13,7 +13,7 @@
 
 - **现象**：选中 `xai/grok-*` 时 toolbar 没有 quota pill，GPT / GLM / Ollama 有。
 - **原因**：pill 的显示条件是 `primaryQuotaKey != nil`。映射只覆盖 `openai` → `codex/5h`、`zai-coding-plan` → `glm/5h`、`ollama-cloud` → `ollama/5h`。`xai` 落到 default，返回 nil，按钮整段不渲染。Dashboard `/api/v1/quotas` 里这条窗口是 `provider=grok`、`label=Weekly`。
-- **处理**：`xai` 映射到 `grok` / `Weekly`。加载中和 stale 的 pill 文案改用该 key 的 label，不再写死 `5h`。详情页 provider 名补上 Grok。
+- **处理**：`xai` 映射到 `grok` / `Weekly`。加载中和 stale 的 pill 文案改用该 key 的 label，不再写死 `5h`。详情页 provider 名补上 Grok。stale 从本地拉取超过 5 分钟改为超过 1 小时；刷新失败仍立即标 stale。非强制刷新的 60 秒去重不变。
 
 ### 2026-09-21 — 模型短名单左手柄排序松手不生效
 
