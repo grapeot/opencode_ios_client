@@ -34,6 +34,16 @@ enum DesignColors {
         static let error = Color.red
         static let success = Color(red: 0.20, green: 0.65, blue: 0.35)
         static let warning = Color.orange
+        #if canImport(UIKit)
+        static let stale = Color(UIColor { traits in
+            if traits.userInterfaceStyle == .dark {
+                return UIColor(red: 0.76, green: 0.68, blue: 0.40, alpha: 1)
+            }
+            return UIColor(red: 0.55, green: 0.46, blue: 0.18, alpha: 1)
+        })
+        #else
+        static let stale = Color(red: 0.55, green: 0.46, blue: 0.18)
+        #endif
         static let info = Color(red: 0.25, green: 0.47, blue: 0.85)
     }
 

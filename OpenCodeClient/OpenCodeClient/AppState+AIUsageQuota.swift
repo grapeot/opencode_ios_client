@@ -31,7 +31,7 @@ extension AppState {
     var isSelectedModelQuotaStale: Bool {
         guard let snapshot = aiUsageQuotaState.snapshot else { return false }
         if case .failed = aiUsageQuotaState { return true }
-        return Date().timeIntervalSince(snapshot.fetchedAt) > 3_600
+        return Date().timeIntervalSince(snapshot.fetchedAt) > 600
     }
 
     func refreshAIUsageQuotas(force: Bool = false) async {
