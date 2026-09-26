@@ -15,11 +15,15 @@ struct AIUsageQuotaButton: View {
         return DesignColors.Neutral.textSecondary
     }
 
+    private var windowLabel: String {
+        state.selectedModel?.primaryQuotaKey?.label ?? "5h"
+    }
+
     private var badgeText: String {
-        if state.isSelectedModelQuotaStale { return "stale @ 5h" }
+        if state.isSelectedModelQuotaStale { return "stale @ \(windowLabel)" }
         guard let quota else {
-            if case .loading = state.aiUsageQuotaState { return "... @ 5h" }
-            return "-- @ 5h"
+            if case .loading = state.aiUsageQuotaState { return "... @ \(windowLabel)" }
+            return "-- @ \(windowLabel)"
         }
         return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
     }
@@ -178,6 +182,7 @@ struct AIUsageQuotaDetailView: View {
         case "codex": return "OpenAI / Codex"
         case "glm": return "Z.ai / GLM"
         case "ollama": return "Ollama Cloud"
+        case "grok": return "Grok"
         case "claude": return "Claude"
         case "antigravity": return "Antigravity"
         default: return provider

@@ -50,10 +50,12 @@ struct AIUsageQuotaTests {
         let gpt = ModelPreset(displayName: "GPT-5.6 Sol", providerID: "openai", modelID: "gpt-5.6-sol")
         let glm = ModelPreset(displayName: "GLM-5.3", providerID: "zai-coding-plan", modelID: "glm-5.3")
         let gemini = ModelPreset(displayName: "Gemini 3.7 Flash", providerID: "google", modelID: "gemini-3.7-flash")
+        let grok = ModelPreset(displayName: "Grok 4.7", providerID: "xai", modelID: "grok-4.7")
 
         #expect(gpt.primaryQuotaKey == AIUsageQuotaKey(provider: "codex", label: "5h"))
         #expect(glm.primaryQuotaKey == AIUsageQuotaKey(provider: "glm", label: "5h"))
         #expect(gemini.primaryQuotaKey == nil)
+        #expect(grok.primaryQuotaKey == AIUsageQuotaKey(provider: "grok", label: "Weekly"))
     }
 
     @Test @MainActor func blankEndpointMakesNoRequest() async {
@@ -99,6 +101,34 @@ struct AIUsageQuotaTests {
         #expect(state.selectedModelQuota == quota)
         #expect(state.aiUsageQuotaTestOK)
         #expect(await mock.requestCount() == 1)
+    }
+
+    @Test @MainActor func refreshLoadsSelectedGrokQuota() async {
+        let previous = UserDefaults.standard.string(forKey: AppState.aiUsageDashboardURLKey)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: AppState.aiUsageDashboardURLKey) }
+            else { UserDefaults.standard.removeObject(forKey: AppState.aiUsageDashboardURLKey) }
+        }
+        let quota = AIUsageQuota(
+            provider: "grok",
+            label: "Weekly",
+            usedPercentage: 18,
+            remainingPercentage: 82,
+            nextResetTimeMs: nil,
+            nextResetISO: nil,
+            usage: nil,
+            remaining: nil
+        )
+        let mock = MockAIUsageQuotaClient(result: .success(.init(generatedAt: "2026-09-26T09:00:00", quotas: [quota])))
+        let state = makeIsolatedAppState(aiUsageQuotaClient: mock)
+        state.addModelsToShortlist(testSeedPresets)
+        state.aiUsageDashboardURL = "https://usage.example.com"
+        state.selectedModelIndex = testSeedPresets.firstIndex { $0.providerID == "xai" } ?? 0
+
+        await state.refreshAIUsageQuotas(force: true)
+
+        #expect(state.selectedModel?.providerID == "xai")
+        #expect(state.selectedModelQuota == quota)
     }
 
     @Test @MainActor func manualRefreshUpdatesDashboardBeforeFetchingQuotas() async {

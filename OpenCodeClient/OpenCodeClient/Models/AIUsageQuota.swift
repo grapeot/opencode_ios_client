@@ -78,6 +78,7 @@ extension ModelPreset {
         case "openai": return AIUsageQuotaKey(provider: "codex", label: "5h")
         case "zai-coding-plan": return AIUsageQuotaKey(provider: "glm", label: "5h")
         case "ollama-cloud": return AIUsageQuotaKey(provider: "ollama", label: "5h")
+        case "xai": return AIUsageQuotaKey(provider: "grok", label: "Weekly")
         default: return nil
         }
     }
