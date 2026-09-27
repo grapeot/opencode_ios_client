@@ -41,7 +41,7 @@ Current visionOS baseline limitations:
 ## Quick Start
 
 1. Start OpenCode on your Mac: `opencode serve --port 4096`
-2. Open the iOS app, go to Settings, enter the server address (e.g. `http://192.168.x.x:4096`)
+2. Open the iOS app, go to Settings, enter the server address (e.g. `http://192.168.x.x:4096`). A missing `http://` prefix is added automatically and trailing slashes are stripped, so `192.168.x.x:4096/` works the same as `http://192.168.x.x:4096`
 3. Tap Test Connection
 4. Switch to Chat, create or select a session, and start talking
 

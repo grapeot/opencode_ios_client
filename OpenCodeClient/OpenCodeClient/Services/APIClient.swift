@@ -20,15 +20,25 @@ actor APIClient {
     nonisolated static let defaultServer = "127.0.0.1:4096"
 
     init(baseURL: String = APIClient.defaultServer, username: String? = nil, password: String? = nil) {
-        self.baseURL = baseURL.hasPrefix("http") ? baseURL : "http://\(baseURL)"
+        self.baseURL = Self.normalizeBaseURL(baseURL)
         self.username = username
         self.password = password
     }
 
     func configure(baseURL: String, username: String? = nil, password: String? = nil) {
-        self.baseURL = baseURL.hasPrefix("http") ? baseURL : "http://\(baseURL)"
+        self.baseURL = Self.normalizeBaseURL(baseURL)
         self.username = username
         self.password = password
+    }
+
+    /// Adds http:// when no scheme is present and strips trailing slashes so
+    /// appended paths (e.g. "/global/health") never produce double slashes.
+    nonisolated static func normalizeBaseURL(_ raw: String) -> String {
+        var base = raw.hasPrefix("http") ? raw : "http://\(raw)"
+        while base.hasSuffix("/"), base.count > 8 {
+            base.removeLast()
+        }
+        return base
     }
 
     private func makeRequest(

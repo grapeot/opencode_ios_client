@@ -481,3 +481,52 @@ struct SSHKnownHostStoreTests {
         #expect(SSHKnownHostStore.trustedOpenSSHKey(host: host, port: port) == nil)
     }
 }
+
+// MARK: - Server URL Normalization Tests
+
+struct ServerURLNormalizationTests {
+
+    @Test func apIClientNormalizeAddsScheme() {
+        #expect(APIClient.normalizeBaseURL("192.168.1.5:4096") == "http://192.168.1.5:4096")
+    }
+
+    @Test func apIClientNormalizeStripsTrailingSlash() {
+        #expect(APIClient.normalizeBaseURL("http://192.168.1.5:4096/") == "http://192.168.1.5:4096")
+    }
+
+    @Test func apIClientNormalizeStripsMultipleTrailingSlashes() {
+        #expect(APIClient.normalizeBaseURL("http://192.168.1.5:4096///") == "http://192.168.1.5:4096")
+    }
+
+    @Test func apIClientNormalizeStripsTrailingSlashFromBareHost() {
+        #expect(APIClient.normalizeBaseURL("192.168.1.5:4096/") == "http://192.168.1.5:4096")
+    }
+
+    @Test func apIClientNormalizeKeepsUnslashedURLUnchanged() {
+        #expect(APIClient.normalizeBaseURL("http://127.0.0.1:4096") == "http://127.0.0.1:4096")
+        #expect(APIClient.normalizeBaseURL("https://opencode.example.com:4096") == "https://opencode.example.com:4096")
+    }
+
+    @Test func apIClientNormalizeDoesNotCollapseSchemeOnlyURL() {
+        #expect(APIClient.normalizeBaseURL("http://") == "http://")
+        #expect(APIClient.normalizeBaseURL("https://") == "https://")
+    }
+
+    @Test func serverURLInfoStripsTrailingSlash() {
+        let info = AppState.serverURLInfo("http://127.0.0.1:4096/")
+        #expect(info.isAllowed)
+        #expect(info.normalized == "http://127.0.0.1:4096")
+    }
+
+    @Test func serverURLInfoStripsTrailingSlashFromBareHost() {
+        let info = AppState.serverURLInfo("127.0.0.1:4096/")
+        #expect(info.isAllowed)
+        #expect(info.normalized == "http://127.0.0.1:4096")
+    }
+
+    @Test func serverURLInfoKeepsUnslashedURLUnchanged() {
+        let info = AppState.serverURLInfo("http://127.0.0.1:4096")
+        #expect(info.isAllowed)
+        #expect(info.normalized == "http://127.0.0.1:4096")
+    }
+}
