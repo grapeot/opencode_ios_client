@@ -598,6 +598,10 @@ struct MessageRowView: View {
         }
     }
 
+    // Weight-reduced process row (parity with Android PR #114): no card
+    // surface; the header is a quiet single line aligned with the answer body,
+    // the whole row toggles, and the revealed ToolPartViews keep their own
+    // surface as detail cards.
     private func toolCallsRow(_ parts: [Part]) -> some View {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: DesignSpacing.sm) {
@@ -616,12 +620,12 @@ struct MessageRowView: View {
                 .font(DesignTypography.micro)
                 .fontWeight(.medium)
                 .foregroundStyle(DesignColors.Brand.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
         }
         .tint(DesignColors.Brand.primary)
-        .padding(DesignSpacing.cardPadding)
+        .padding(.vertical, DesignSpacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
-        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("toolcard.toolcalls")
     }
 
@@ -634,7 +638,6 @@ struct MessageRowView: View {
 
 private struct ThinkingCard<Content: View>: View {
     @State private var expanded = false
-    @Environment(\.colorScheme) private var colorScheme
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -642,8 +645,12 @@ private struct ThinkingCard<Content: View>: View {
     }
 
     var body: some View {
+        // Weight-reduced process row (parity with Android PR #114): no card
+        // surface; quiet single-line header, whole row toggles, expanded
+        // markdown stays full width and muted — process sits below the answer.
         DisclosureGroup(isExpanded: $expanded) {
             content
+                .foregroundStyle(DesignColors.Neutral.textSecondary)
                 .padding(.top, DesignSpacing.sm)
         } label: {
             HStack(spacing: DesignSpacing.xs) {
@@ -653,12 +660,12 @@ private struct ThinkingCard<Content: View>: View {
             .font(DesignTypography.micro)
             .fontWeight(.medium)
             .foregroundStyle(DesignColors.Brand.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .tint(DesignColors.Brand.primary)
-        .padding(DesignSpacing.cardPadding)
+        .padding(.vertical, DesignSpacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
-        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("message-thinking-card")
     }
 }
