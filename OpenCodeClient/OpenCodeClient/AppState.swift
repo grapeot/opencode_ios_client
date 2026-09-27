@@ -115,7 +115,10 @@ final class AppState {
             )
         }
 
-        let normalized = hasScheme ? trimmed : "\(scheme)://\(trimmed)"
+        var normalized = hasScheme ? trimmed : "\(scheme)://\(trimmed)"
+        while normalized.hasSuffix("/"), normalized.count > 8 {
+            normalized.removeLast()
+        }
         let parsed = URL(string: normalized)
         return .init(
             raw: raw,
