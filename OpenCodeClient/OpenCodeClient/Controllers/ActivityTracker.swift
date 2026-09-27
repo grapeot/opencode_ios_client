@@ -10,7 +10,6 @@ enum ActivityTracker {
         existing: SessionActivity?,
         messages: [MessageWithParts],
         currentSessionID: String?,
-        hasActiveStreaming: Bool = false,
         now: Date = Date()
     ) -> SessionActivity? {
         let wasBusy = isBusyStatus(previous)
@@ -42,7 +41,7 @@ enum ActivityTracker {
         }
 
         if wasBusy, var completed = existing {
-            if hasActiveStreaming || hasRunningAssistantWork(sessionID: sessionID, messages: messages) {
+            if hasRunningAssistantWork(sessionID: sessionID, messages: messages) {
                 completed.state = .running
                 completed.endedAt = nil
                 completed.anchorMessageID = nil
@@ -76,9 +75,7 @@ enum ActivityTracker {
         sessionID: String,
         currentSessionID: String?,
         sessionStatuses: [String: SessionStatus],
-        messages: [MessageWithParts],
-        streamingReasoningPart: Part?,
-        streamingPartTexts: [String: String]
+        messages: [MessageWithParts]
     ) -> String {
         if let status = sessionStatuses[sessionID],
            let msg = status.message?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -89,14 +86,6 @@ enum ActivityTracker {
         if let part = lastAssistantToolPart(sessionID: sessionID, state: "running", messages: messages),
            let mapped = formatStatusFromPart(part) {
             return mapped
-        }
-
-        if sessionID == currentSessionID,
-           let part = streamingReasoningPart,
-           part.sessionID == sessionID {
-            let key = "\(part.messageID):\(part.id)"
-            let text = streamingPartTexts[key] ?? ""
-            return formatThinkingFromReasoningText(text)
         }
 
         if let part = lastAssistantPart(sessionID: sessionID, messages: messages),

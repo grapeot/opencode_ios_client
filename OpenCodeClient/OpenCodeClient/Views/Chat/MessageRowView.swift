@@ -50,6 +50,7 @@ struct MessageRowView: View {
 
     enum AssistantBlock: Identifiable {
         case text(Part)
+        case thinking(Part)
         case cards([Part])
         case attachment(Part)
 
@@ -57,6 +58,8 @@ struct MessageRowView: View {
             switch self {
             case .text(let p):
                 return "text-\(p.id)"
+            case .thinking(let p):
+                return "thinking-\(p.id)"
             case .cards(let parts):
                 let first = parts.first?.id ?? "nil"
                 let last = parts.last?.id ?? "nil"
@@ -87,7 +90,12 @@ struct MessageRowView: View {
         }
 
         for part in parts {
-            if part.isReasoning { continue }
+            if part.isReasoning {
+                if normalizedText(part.text).isEmpty { continue }
+                flushBuffer()
+                blocks.append(.thinking(part))
+                continue
+            }
             if part.isTool || part.isPatch {
                 buffer.append(part)
                 continue
@@ -114,18 +122,19 @@ struct MessageRowView: View {
     }
 
     @ViewBuilder
-    private func markdownText(_ text: String, isUser: Bool) -> some View {
+    private func markdownText(_ text: String, isUser: Bool, forcingMarkdown: Bool = false) -> some View {
         let trimmed = isUser
             ? text.trimmingCharacters(in: .whitespacesAndNewlines)
             : Self.normalizedText(text)
         let font = isUser ? DesignTypography.bodyProminent : DesignTypography.body
+        let style = Self.renderStyle(for: trimmed, forcingMarkdown: forcingMarkdown)
         if trimmed.isEmpty {
             EmptyView()
-        } else if Self.isLargeMessage(trimmed) {
+        } else if style == .largePreview {
             LargeMessagePreview(text: trimmed, preview: Self.largeMessagePreview(trimmed))
                 .font(font)
                 .textSelection(.enabled)
-        } else if shouldRenderMarkdown(trimmed) {
+        } else if style == .markdown {
             ResolvedMarkdownView(
                 text: trimmed,
                 state: state,
@@ -198,6 +207,21 @@ struct MessageRowView: View {
 
     private func shouldRenderMarkdown(_ text: String) -> Bool {
         Self.hasMarkdownSyntax(text)
+    }
+
+    enum TextRenderStyle {
+        case markdown
+        case plain
+        case largePreview
+    }
+
+    /// Thinking cards force markdown rendering regardless of length (parity with
+    /// Android ReasoningCard). Regular text parts keep the >12k plain preview.
+    static func renderStyle(for trimmedText: String, forcingMarkdown: Bool) -> TextRenderStyle {
+        guard !trimmedText.isEmpty else { return .plain }
+        if forcingMarkdown { return .markdown }
+        if isLargeMessage(trimmedText) { return .largePreview }
+        return hasMarkdownSyntax(trimmedText) ? .markdown : .plain
     }
 
     static func isLargeMessage(_ text: String) -> Bool {
@@ -498,6 +522,8 @@ struct MessageRowView: View {
                 case .text(let part):
                     markdownText(part.text ?? "", isUser: false)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                case .thinking(let part):
+                    thinkingCard(part)
                 case .cards(let parts):
                     cardsBlock(parts)
                 case .attachment(let part):
@@ -597,6 +623,43 @@ struct MessageRowView: View {
         .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("toolcard.toolcalls")
+    }
+
+    private func thinkingCard(_ part: Part) -> some View {
+        ThinkingCard {
+            markdownText(part.text ?? "", isUser: false, forcingMarkdown: true)
+        }
+    }
+}
+
+private struct ThinkingCard<Content: View>: View {
+    @State private var expanded = false
+    @Environment(\.colorScheme) private var colorScheme
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            content
+                .padding(.top, DesignSpacing.sm)
+        } label: {
+            HStack(spacing: DesignSpacing.xs) {
+                Image(systemName: "brain.head.profile")
+                Text(L10n.t(.chatThinkingCard))
+            }
+            .font(DesignTypography.micro)
+            .fontWeight(.medium)
+            .foregroundStyle(DesignColors.Brand.primary)
+        }
+        .tint(DesignColors.Brand.primary)
+        .padding(DesignSpacing.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
+        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
+        .accessibilityIdentifier("message-thinking-card")
     }
 }
 

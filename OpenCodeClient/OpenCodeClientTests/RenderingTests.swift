@@ -327,6 +327,17 @@ struct MessageRenderingHeuristicTests {
         #expect(MessageRowView.isLargeMessage(text) == true)
         #expect(MessageRowView.largeMessagePreview(text).count == 12_000)
     }
+
+    @Test func thinkingCardForcesMarkdownRenderingRegardlessOfLength() {
+        let longPlainText = String(repeating: "a", count: 13_000)
+
+        #expect(MessageRowView.renderStyle(for: "", forcingMarkdown: true) == .plain)
+        #expect(MessageRowView.renderStyle(for: "just a plain sentence", forcingMarkdown: true) == .markdown)
+        #expect(MessageRowView.renderStyle(for: longPlainText, forcingMarkdown: true) == .markdown)
+        #expect(MessageRowView.renderStyle(for: longPlainText, forcingMarkdown: false) == .largePreview)
+        #expect(MessageRowView.renderStyle(for: "**bold**", forcingMarkdown: false) == .markdown)
+        #expect(MessageRowView.renderStyle(for: "just a plain sentence", forcingMarkdown: false) == .plain)
+    }
 }
 
 struct MessageThinkLeakNormalizationTests {
@@ -443,6 +454,111 @@ struct MessageThinkLeakNormalizationTests {
             return
         }
         #expect(part.id == "p2")
+    }
+
+    @Test func assistantBlocksPlaceThinkingBeforeText() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"r1","messageID":"m1","sessionID":"s1","type":"reasoning","text":"consider the approach"}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"the answer"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.map(\.id) == ["thinking-r1", "text-p1"])
+        guard case .thinking(let thinking) = blocks[0] else {
+            Issue.record("expected a thinking block before text")
+            return
+        }
+        #expect(thinking.id == "r1")
+        guard case .text(let text) = blocks[1] else {
+            Issue.record("expected a text block after thinking")
+            return
+        }
+        #expect(text.id == "p1")
+    }
+
+    @Test func assistantBlocksSkipEmptyReasoning() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"r1","messageID":"m1","sessionID":"s1","type":"reasoning","text":""}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"answer"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.count == 1)
+        guard case .text(let part) = blocks[0] else {
+            Issue.record("expected only the text block")
+            return
+        }
+        #expect(part.id == "p1")
+    }
+
+    @Test func assistantBlocksFlushToolRunAtReasoningBoundary() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"t1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash"}
+            """,
+            """
+            {"id":"r1","messageID":"m1","sessionID":"s1","type":"reasoning","text":"next step"}
+            """,
+            """
+            {"id":"t2","messageID":"m1","sessionID":"s1","type":"tool","tool":"read"}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"done"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.map(\.id) == ["cards-t1-t1", "thinking-r1", "cards-t2-t2", "text-p1"])
+        guard case .cards(let before) = blocks[0], case .thinking = blocks[1], case .cards(let after) = blocks[2] else {
+            Issue.record("expected tool cards to flush on either side of thinking")
+            return
+        }
+        #expect(before.map(\.id) == ["t1"])
+        #expect(after.map(\.id) == ["t2"])
+    }
+
+    @Test func assistantBlocksSkipReasoningThatNormalizesEmpty() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"r1","messageID":"m1","sessionID":"s1","type":"reasoning","text":"leaked tail\\n\\u003C/think\\u003E\\n\\n"}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"done"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.count == 1)
+        guard case .text(let part) = blocks[0] else {
+            Issue.record("expected reasoning that normalizes empty to be skipped")
+            return
+        }
+        #expect(part.id == "p1")
+    }
+
+    @Test func assistantBlocksEmitOneThinkingCardPerReasoningPart() throws {
+        let parts: [Part] = try [
+            """
+            {"id":"r1","messageID":"m1","sessionID":"s1","type":"reasoning","text":"first"}
+            """,
+            """
+            {"id":"r2","messageID":"m1","sessionID":"s1","type":"reasoning","text":"second"}
+            """,
+            """
+            {"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"answer"}
+            """
+        ].map { try JSONDecoder().decode(Part.self, from: Data($0.utf8)) }
+
+        let blocks = MessageRowView.buildAssistantBlocks(parts: parts)
+        #expect(blocks.map(\.id) == ["thinking-r1", "thinking-r2", "text-p1"])
     }
 }
 

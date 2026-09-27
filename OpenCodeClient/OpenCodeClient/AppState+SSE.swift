@@ -72,10 +72,6 @@ extension AppState {
                     }
 
                     updateSessionActivity(sessionID: sessionID, previous: prev, current: decoded)
-
-                    if sessionID == currentSessionID, !isBusySession(decoded) {
-                        messageStore.resetStreaming()
-                    }
                 }
             }
         case "session.updated":
@@ -117,7 +113,6 @@ extension AppState {
                    let sessionID = eventSessionID {
                     messageStore.recordStepStart(assistantID, sessionID: sessionID)
                 }
-                messageStore.resetStreaming()
                 await loadMessages()
                 await loadSessionDiff()
             }
@@ -154,8 +149,6 @@ extension AppState {
             switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {
             case .ignored:
                 break
-            case .appended(let sessionID):
-                refreshSessionActivityText(sessionID: sessionID)
             case .finalized:
                 await loadMessages()
                 await loadSessionDiff()
@@ -230,8 +223,7 @@ extension AppState {
             current: current,
             existing: sessionActivities[sessionID],
             messages: messages,
-            currentSessionID: currentSessionID,
-            hasActiveStreaming: streamingReasoningPart?.sessionID == sessionID || messageStore.hasActiveStreaming
+            currentSessionID: currentSessionID
         )
     }
 
@@ -253,9 +245,6 @@ extension AppState {
 
             sessionStatuses[sid] = st
             updateSessionActivity(sessionID: sid, previous: prev, current: st)
-            if sid == currentSessionID, !isBusySession(st) {
-                messageStore.resetStreaming()
-            }
             if prev?.type != st.type {
                 Self.logger.debug(
                     "session.status(poll) session=\(sid, privacy: .public) prev=\(prev?.type ?? "nil", privacy: .public) next=\(st.type, privacy: .public)"
@@ -276,9 +265,6 @@ extension AppState {
             let idle = SessionStatus(type: "idle", attempt: nil, message: nil, next: nil)
             sessionStatuses[sid] = idle
             updateSessionActivity(sessionID: sid, previous: prev, current: idle)
-            if sid == currentSessionID {
-                messageStore.resetStreaming()
-            }
 
             Self.logger.debug(
                 "session.status(poll) session=\(sid, privacy: .public) prev=\(prev.type, privacy: .public) next=idle (missing from poll)"
@@ -293,9 +279,7 @@ extension AppState {
             sessionID: sessionID,
             currentSessionID: currentSessionID,
             sessionStatuses: sessionStatuses,
-            messages: messages,
-            streamingReasoningPart: streamingReasoningPart,
-            streamingPartTexts: streamingPartTexts
+            messages: messages
         )
         setSessionActivityText(sessionID: sessionID, next)
     }
@@ -327,9 +311,7 @@ extension AppState {
                 sessionID: sessionID,
                 currentSessionID: self.currentSessionID,
                 sessionStatuses: self.sessionStatuses,
-                messages: self.messages,
-                streamingReasoningPart: self.streamingReasoningPart,
-                streamingPartTexts: self.streamingPartTexts
+                messages: self.messages
             )
             self.setSessionActivityText(sessionID: sessionID, best)
         }
@@ -337,7 +319,6 @@ extension AppState {
 
     func clearCurrentSessionViewState() {
         sessionLoadingID = UUID()
-        messageStore.resetStreaming()
         messageStore.stepTimings = [:]
         messageStore.clearPartTypes()
         messages = []
@@ -351,10 +332,6 @@ extension AppState {
         sessionScope.remove(sessionID: sessionID)
         messageStore.removeTimings(forSession: sessionID)
         messageStore.removePartTypes(forSession: sessionID)
-
-        if streamingReasoningPart?.sessionID == sessionID {
-            messageStore.streamingReasoningPart = nil
-        }
 
         persistDraftInputs()
         persistSelectedModelMap()

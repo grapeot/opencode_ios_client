@@ -641,10 +641,6 @@ struct ChatTabView: View {
                                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                                     }
                                 }
-                                if let streamingPart = state.streamingReasoningPart {
-                                    StreamingReasoningView(part: streamingPart, state: state)
-                                        .padding(.top, 6)
-                                }
 
                                 if useGridCards {
                                     LazyVGrid(
@@ -1031,18 +1027,13 @@ struct ChatTabView: View {
             guard let lastMessage else { return "none" }
             return "\(lastMessage.info.id)-\(lastMessage.parts.count)-\(lastMessage.info.time.completed ?? -1)"
         }()
-        let streamKeyCount = state.streamingPartTexts.count
-        let streamCharCount = state.streamingPartTexts.values.reduce(into: 0) { partial, text in
-            partial += text.count
-        }
-        let streamingReasoningID = state.streamingReasoningPart?.id ?? ""
         let sid = state.currentSessionID ?? ""
         let status = state.currentSessionStatus?.type ?? ""
         let activity = runningTurnActivity.map {
             let state = ($0.state == .running) ? "running" : "completed"
             return "\($0.id)-\($0.text)-\(state)"
         } ?? ""
-        return "\(perm)-\(questionCount)-\(messageCount)-\(lastMessageSignature)-\(streamKeyCount)-\(streamCharCount)-\(streamingReasoningID)-\(sid)-\(status)-\(activity)"
+        return "\(perm)-\(questionCount)-\(messageCount)-\(lastMessageSignature)-\(sid)-\(status)-\(activity)"
     }
 
     @ViewBuilder

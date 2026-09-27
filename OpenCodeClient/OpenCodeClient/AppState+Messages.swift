@@ -45,15 +45,8 @@ extension AppState {
             messageStore.untrackPendingOptimisticMessages(loadedMessageIDs)
             messageStore.pruneSendFailures(loadedMessageIDs: loadedMessageIDs)
 
-            let draftMessages = messages.filter {
-                messageStore.isStreamingDraftMessage($0.info.id) && !loadedMessageIDs.contains($0.info.id)
-            }
-
             var merged: [MessageWithParts] = loaded
             for message in pendingMessages where !loadedMessageIDs.contains(message.info.id) {
-                merged.append(message)
-            }
-            for message in draftMessages where !merged.contains(where: { $0.info.id == message.info.id }) {
                 merged.append(message)
             }
 
@@ -76,7 +69,6 @@ extension AppState {
                 partsByMessageID[message.info.id] = message.parts
             }
             partsByMessage = partsByMessageID
-            messageStore.removeStreamingDraftMessages(loadedMessageIDs)
 
             if isBusySession(currentSessionStatus) {
                 refreshSessionActivityText(sessionID: sessionID)

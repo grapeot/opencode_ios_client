@@ -269,6 +269,7 @@ enum L10n {
         case chatCopyMessage
         case chatEditFromHere
         case chatForkFromHere
+        case chatThinkingCard
         case carTitle
         case carReady
         case carListening
@@ -706,6 +707,7 @@ enum L10n {
         Key.chatCopyMessage.rawValue: "Copy Message",
         Key.chatEditFromHere.rawValue: "Edit from here",
         Key.chatForkFromHere.rawValue: "Fork from here",
+        Key.chatThinkingCard.rawValue: "Thinking",
         Key.carTitle.rawValue: "Car Mode",
         Key.carReady.rawValue: "Ready",
         Key.carListening.rawValue: "Listening",
@@ -1171,6 +1173,7 @@ enum L10n {
         Key.carMapsUnavailable.rawValue: "Apple 地图无法打开这条路线。",
         Key.carTranscriptionFailed.rawValue: "无法完成这段录音的转写。",
         Key.chatForkFromHere.rawValue: "从这里分叉",
+        Key.chatThinkingCard.rawValue: "思考",
         Key.attachmentImageTitle.rawValue: "图片",
         Key.attachmentFileTitle.rawValue: "附件",
         Key.attachmentRemoveImageAccessibilityLabel.rawValue: "移除图片",
