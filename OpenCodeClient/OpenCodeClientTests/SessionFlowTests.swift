@@ -259,9 +259,7 @@ struct ActivityTrackerTests {
             sessionID: "s1",
             currentSessionID: "s1",
             sessionStatuses: statuses,
-            messages: [],
-            streamingReasoningPart: nil,
-            streamingPartTexts: [:]
+            messages: []
         )
         #expect(text == "Running formatter")
     }
@@ -1397,32 +1395,26 @@ struct AppStateFlowTests {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
-        state.streamingPartTexts = ["m1:p1": "partial"]
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
         {"payload":{"type":"message.updated","properties":{"sessionID":"s2","messageID":"m2"}}}
         """))
 
-        #expect(state.streamingPartTexts["m1:p1"] == "partial")
         #expect(await apiClient.messagesCallCount == 0)
         #expect(await apiClient.sessionDiffCallCount == 0)
     }
 
-    @Test @MainActor func messageUpdatedForCurrentSessionClearsStreamingAndReloads() async {
+    @Test @MainActor func messageUpdatedForCurrentSessionReloads() async {
         let apiClient = MockAPIClient()
         await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "Final")])
         await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/MessageStore.swift")])
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
-        state.streamingPartTexts = ["m1:p1": "partial"]
-        state.streamingReasoningPart = Self.makeReasoningPart(messageID: "m1", partID: "p-reasoning", sessionID: "s1")
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
         {"payload":{"type":"message.updated","properties":{"sessionID":"s1","messageID":"m1"}}}
         """))
 
-        #expect(state.streamingPartTexts.isEmpty)
-        #expect(state.streamingReasoningPart == nil)
         #expect(state.messages.count == 1)
         #expect(state.messages.first?.parts.first?.text == "Final")
         #expect(state.sessionDiffs == [Self.makeDiff(file: "Sources/MessageStore.swift")])
@@ -1527,26 +1519,7 @@ struct AppStateFlowTests {
         #expect(state.sessions == [current, Self.makeSession(id: "s-other", updated: 8, title: "Other")])
     }
 
-    @Test @MainActor func messagePartUpdatedAccumulatesStreamingMessageText() async {
-        let apiClient = MockAPIClient()
-        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
-        state.currentSessionID = "s1"
-
-        await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":"Hello","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
-        """))
-        await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":" world","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
-        """))
-
-        #expect(state.streamingPartTexts["m1:p1"] == "Hello world")
-        #expect(state.messages.count == 1)
-        #expect(state.messages.first?.info.id == "m1")
-        #expect(state.messages.first?.parts.first?.text == "Hello world")
-        #expect(state.partsByMessage["m1"]?.first?.text == "Hello world")
-    }
-
-    @Test @MainActor func messagePartUpdatedWithoutDeltaReloadsAndClearsStreamingState() async {
+    @Test @MainActor func messagePartUpdatedReloadsCurrentSession() async {
         let apiClient = MockAPIClient()
         await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "Final")])
         await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/AppState.swift")])
@@ -1554,16 +1527,31 @@ struct AppStateFlowTests {
         state.currentSessionID = "s1"
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":"Draft","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
-        """))
-        await state.applySSEEventForTesting(Self.makeSSEEvent("""
         {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
         """))
 
-        #expect(state.streamingPartTexts["m1:p1"] == nil)
+        #expect(state.messageStore.partType(for: "p1", inSession: "s1") == "text")
         #expect(state.messages.count == 1)
         #expect(state.messages.first?.parts.first?.text == "Final")
         #expect(state.sessionDiffs == [Self.makeDiff(file: "Sources/AppState.swift")])
+        #expect(await apiClient.messagesCallCount == 1)
+        #expect(await apiClient.sessionDiffCallCount == 1)
+    }
+
+    @Test @MainActor func messagePartUpdatedWithDeltaStillReloads() async {
+        let apiClient = MockAPIClient()
+        await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "Final")])
+        await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/AppState.swift")])
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":"Hello world","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
+        """))
+
+        #expect(state.messageStore.partType(for: "p1", inSession: "s1") == "text")
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.parts.first?.text == "Final")
         #expect(await apiClient.messagesCallCount == 1)
         #expect(await apiClient.sessionDiffCallCount == 1)
     }
@@ -1577,29 +1565,23 @@ struct AppStateFlowTests {
         {"payload":{"type":"message.part.updated","properties":{"sessionID":"s2","delta":"ignored","part":{"id":"p1","messageID":"m2","sessionID":"s2","type":"text"}}}}
         """))
 
-        #expect(state.streamingPartTexts.isEmpty)
+        #expect(state.messageStore.partType(for: "p1", inSession: "s2") == nil)
         #expect(state.messages.isEmpty)
         #expect(await apiClient.messagesCallCount == 0)
         #expect(await apiClient.sessionDiffCallCount == 0)
     }
 
-    @Test @MainActor func sessionStatusIdleClearsStreamingStateForCurrentSession() async {
+    @Test @MainActor func sessionStatusIdleRecordsIdleForCurrentSession() async {
         let apiClient = MockAPIClient()
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
-
-        await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","delta":"thinking","part":{"id":"p-reasoning","messageID":"m1","sessionID":"s1","type":"reasoning"}}}}
-        """))
-        #expect(state.streamingReasoningPart?.messageID == "m1")
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
         {"payload":{"type":"session.status","properties":{"sessionID":"s1","status":{"type":"idle","attempt":null,"message":null,"next":null}}}}
         """))
 
         #expect(state.sessionStatuses["s1"]?.type == "idle")
-        #expect(state.streamingReasoningPart == nil)
-        #expect(state.streamingPartTexts.isEmpty)
+        #expect(await apiClient.messagesCallCount == 0)
     }
 
     @Test @MainActor func sseStreamCapturesStepTimingForCurrentSession() async {
@@ -1749,21 +1731,6 @@ struct AppStateFlowTests {
 
     private static func makeDiff(file: String) -> FileDiff {
         FileDiff(file: file, before: "", after: "+change", additions: 1, deletions: 0, status: "M")
-    }
-
-    private static func makeReasoningPart(messageID: String, partID: String, sessionID: String) -> Part {
-        Part(
-            id: partID,
-            messageID: messageID,
-            sessionID: sessionID,
-            type: "reasoning",
-            text: nil,
-            tool: nil,
-            callID: nil,
-            state: nil,
-            metadata: nil,
-            files: nil
-        )
     }
 
     private static func makeSSEEvent(_ json: String) -> SSEEvent {

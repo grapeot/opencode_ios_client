@@ -434,9 +434,7 @@ final class AppState {
             sessionID: sessionID,
             currentSessionID: currentSessionID,
             sessionStatuses: sessionStatuses,
-            messages: messages,
-            streamingReasoningPart: streamingReasoningPart,
-            streamingPartTexts: streamingPartTexts
+            messages: messages
         )
     }
     
@@ -490,8 +488,6 @@ final class AppState {
 
     var messages: [MessageWithParts] { get { messageStore.messages } set { messageStore.messages = newValue } }
     var partsByMessage: [String: [Part]] { get { messageStore.partsByMessage } set { messageStore.partsByMessage = newValue } }
-    var streamingPartTexts: [String: String] { get { messageStore.streamingPartTexts } set { messageStore.streamingPartTexts = newValue } }
-    var streamingReasoningPart: Part? { get { messageStore.streamingReasoningPart } set { messageStore.streamingReasoningPart = newValue } }
     var stepTimings: [String: MessageStore.StepTiming] { get { messageStore.stepTimings } set { messageStore.stepTimings = newValue } }
 
     var selectedModelIndex: Int = 2

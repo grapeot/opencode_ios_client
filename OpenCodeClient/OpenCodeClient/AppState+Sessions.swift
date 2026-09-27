@@ -237,7 +237,6 @@ extension AppState {
         let loadingID = UUID()
         sessionLoadingID = loadingID
 
-        messageStore.resetStreaming()
         messages = []
         partsByMessage = [:]
         currentSessionID = session.id
@@ -305,7 +304,6 @@ extension AppState {
                 selectedModelIDBySessionID[session.id] = m.id
                 persistSelectedModelMap()
             }
-            messageStore.resetStreaming()
             messages = []
             partsByMessage = [:]
         } catch {
@@ -329,7 +327,6 @@ extension AppState {
 
             upsertSession(forked)
             currentSessionID = forked.id
-            messageStore.resetStreaming()
             messages = []
             partsByMessage = [:]
             await loadMessages()
