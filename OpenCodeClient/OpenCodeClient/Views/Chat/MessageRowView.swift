@@ -598,6 +598,10 @@ struct MessageRowView: View {
         }
     }
 
+    // Weight-reduced process row (parity with Android PR #114): no card
+    // surface; the header is a quiet single line aligned with the answer body,
+    // the whole row toggles, and the revealed ToolPartViews keep their own
+    // surface as detail cards.
     private func toolCallsRow(_ parts: [Part]) -> some View {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: DesignSpacing.sm) {
@@ -612,16 +616,19 @@ struct MessageRowView: View {
             }
             .padding(.top, DesignSpacing.sm)
         } label: {
+            // Vertical padding inside the label (before contentShape) so the
+            // 4pt band is part of the button hit area; visible height is
+            // unchanged.
             Text(L10n.toolCallsCount(parts.count))
                 .font(DesignTypography.micro)
                 .fontWeight(.medium)
                 .foregroundStyle(DesignColors.Brand.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, DesignSpacing.xs)
+                .contentShape(Rectangle())
         }
         .tint(DesignColors.Brand.primary)
-        .padding(DesignSpacing.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
-        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("toolcard.toolcalls")
     }
 
@@ -634,7 +641,6 @@ struct MessageRowView: View {
 
 private struct ThinkingCard<Content: View>: View {
     @State private var expanded = false
-    @Environment(\.colorScheme) private var colorScheme
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -642,10 +648,17 @@ private struct ThinkingCard<Content: View>: View {
     }
 
     var body: some View {
+        // Weight-reduced process row (parity with Android PR #114): no card
+        // surface; quiet single-line header, whole row toggles, expanded
+        // markdown stays full width and muted — process sits below the answer.
         DisclosureGroup(isExpanded: $expanded) {
             content
+                .foregroundStyle(DesignColors.Neutral.textSecondary)
                 .padding(.top, DesignSpacing.sm)
         } label: {
+            // Vertical padding inside the label (before contentShape) so the
+            // 4pt band is part of the button hit area; visible height is
+            // unchanged.
             HStack(spacing: DesignSpacing.xs) {
                 Image(systemName: "brain.head.profile")
                 Text(L10n.t(.chatThinkingCard))
@@ -653,12 +666,12 @@ private struct ThinkingCard<Content: View>: View {
             .font(DesignTypography.micro)
             .fontWeight(.medium)
             .foregroundStyle(DesignColors.Brand.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, DesignSpacing.xs)
+            .contentShape(Rectangle())
         }
         .tint(DesignColors.Brand.primary)
-        .padding(DesignSpacing.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
-        .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
         .accessibilityIdentifier("message-thinking-card")
     }
 }
