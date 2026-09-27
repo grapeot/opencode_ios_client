@@ -616,15 +616,18 @@ struct MessageRowView: View {
             }
             .padding(.top, DesignSpacing.sm)
         } label: {
+            // Vertical padding inside the label (before contentShape) so the
+            // 4pt band is part of the button hit area; visible height is
+            // unchanged.
             Text(L10n.toolCallsCount(parts.count))
                 .font(DesignTypography.micro)
                 .fontWeight(.medium)
                 .foregroundStyle(DesignColors.Brand.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, DesignSpacing.xs)
                 .contentShape(Rectangle())
         }
         .tint(DesignColors.Brand.primary)
-        .padding(.vertical, DesignSpacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("toolcard.toolcalls")
     }
@@ -653,6 +656,9 @@ private struct ThinkingCard<Content: View>: View {
                 .foregroundStyle(DesignColors.Neutral.textSecondary)
                 .padding(.top, DesignSpacing.sm)
         } label: {
+            // Vertical padding inside the label (before contentShape) so the
+            // 4pt band is part of the button hit area; visible height is
+            // unchanged.
             HStack(spacing: DesignSpacing.xs) {
                 Image(systemName: "brain.head.profile")
                 Text(L10n.t(.chatThinkingCard))
@@ -661,10 +667,10 @@ private struct ThinkingCard<Content: View>: View {
             .fontWeight(.medium)
             .foregroundStyle(DesignColors.Brand.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, DesignSpacing.xs)
             .contentShape(Rectangle())
         }
         .tint(DesignColors.Brand.primary)
-        .padding(.vertical, DesignSpacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("message-thinking-card")
     }
