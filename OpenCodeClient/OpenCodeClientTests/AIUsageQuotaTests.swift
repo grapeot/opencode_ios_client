@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import OpenCodeClient
 
-private actor MockAIUsageQuotaClient: AIUsageQuotaClientProtocol {
+@MainActor
+private final class MockAIUsageQuotaClient: AIUsageQuotaClientProtocol {
     let result: Result<AIUsageQuotasResponse, Error>
     private(set) var endpoints: [URL] = []
     private(set) var events: [String] = []
@@ -21,8 +22,8 @@ private actor MockAIUsageQuotaClient: AIUsageQuotaClientProtocol {
         events.append("refresh")
     }
 
-    func requestCount() -> Int { endpoints.count }
-    func recordedEvents() -> [String] { events }
+    func requestCount() async -> Int { endpoints.count }
+    func recordedEvents() async -> [String] { events }
 }
 
 @Suite(.serialized)
@@ -174,4 +175,85 @@ struct AIUsageQuotaTests {
         #expect(await mock.recordedEvents() == ["refresh", "fetch"])
         #expect(!state.isRefreshingAIUsageProviders)
     }
+
+    @Test func resetCountdownLabelUsesFloorRules() {
+        let cases: [(Int64, String)] = [
+            (Int64(5.16 * 86_400), "5.1D"),
+            (86_400, "1.0D"),
+            (86_399, "23H"),
+            (13 * 3_600 + 3_000, "13H"),
+            (13 * 3_600 + 1, "13H"),
+            (Int64(12.5 * 3_600), "12H"),
+            (3_600, "1H"),
+            (3_599, "<1H"),
+            (1, "<1H"),
+            (0, "0H"),
+            (-90, "0H"),
+        ]
+        for (offset, expected) in cases {
+            let sample = countdownQuota(resetOffsetSeconds: offset)
+            #expect(sample.resetCountdownLabel(at: countdownNow) == expected)
+        }
+
+        let fiveDay = countdownQuota(remainingPercentage: 87, resetOffsetSeconds: Int64(5.16 * 86_400))
+        #expect(fiveDay.resetCountdownLabel(at: countdownNow) == "5.1D")
+        #expect(countdownPillText(fiveDay) == "87% / 5.1D")
+
+        let missingMilliseconds = countdownQuota(nextResetISO: "2026-07-12T10:54:01")
+        #expect(missingMilliseconds.resetCountdownLabel(at: countdownNow) == nil)
+        #expect(countdownPillText(missingMilliseconds) == "71% @ 5h")
+
+        let dirtySeconds = countdownQuota(nextResetTimeMs: 1_783_842_841, nextResetISO: "2026-07-12T10:54:01")
+        #expect(dirtySeconds.resetCountdownLabel(at: countdownNow) == nil)
+    }
+
+    @Test func resetCountdownDaySuffixStaysDottedInChineseLocale() {
+        let sample = countdownQuota(remainingPercentage: 87, resetOffsetSeconds: Int64(5.16 * 86_400))
+        let label = sample.resetCountdownLabel(at: countdownNow)
+        #expect(label == "5.1D")
+        for identifier in ["zh_CN", "zh-Hans", "zh_Hans_CN", "de_DE"] {
+            let localized = String(format: "%.1fD", locale: Locale(identifier: identifier), 5.1)
+            #expect(label == "5.1D")
+            #expect(label?.contains(",") == false)
+            if localized.contains(",") {
+                #expect(label != localized)
+            }
+        }
+    }
+}
+
+private let countdownNow = Date(timeIntervalSince1970: 1_700_000_000)
+private let countdownNowMs: Int64 = 1_700_000_000_000
+
+private func countdownQuota(
+    remainingPercentage: Int = 71,
+    resetOffsetSeconds: Int64? = nil,
+    nextResetTimeMs: Int64? = nil,
+    nextResetISO: String? = nil
+) -> AIUsageQuota {
+    let milliseconds: Int64?
+    if let nextResetTimeMs {
+        milliseconds = nextResetTimeMs
+    } else if let resetOffsetSeconds {
+        milliseconds = countdownNowMs + resetOffsetSeconds * 1_000
+    } else {
+        milliseconds = nil
+    }
+    return AIUsageQuota(
+        provider: "codex",
+        label: "5h",
+        usedPercentage: 0,
+        remainingPercentage: remainingPercentage,
+        nextResetTimeMs: milliseconds,
+        nextResetISO: nextResetISO,
+        usage: nil,
+        remaining: nil
+    )
+}
+
+private func countdownPillText(_ quota: AIUsageQuota) -> String {
+    if let countdown = quota.resetCountdownLabel(at: countdownNow) {
+        return "\(quota.clampedRemainingPercentage)% / \(countdown)"
+    }
+    return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
 }

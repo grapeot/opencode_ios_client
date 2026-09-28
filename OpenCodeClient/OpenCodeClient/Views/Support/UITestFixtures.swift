@@ -399,14 +399,16 @@ enum UITestFixtures {
             ModelShortlistItem(providerID: "openai", modelID: "gpt-5.6-sol", displayName: "GPT-5.6 Sol", shortName: "GPT-5.6 Sol"),
         ]
         state.aiUsageDashboardURL = "http://usage-dashboard.local:7995"
+        let appliedAtMs = Int64(Date().timeIntervalSince1970 * 1_000)
+        let secondMs: Int64 = 1_000
         state.aiUsageQuotaState = .ready(.init(
             generatedAt: "2026-07-12T09:40:00",
             fetchedAt: Date(),
             quotas: [
-                AIUsageQuota(provider: "codex", label: "5h", usedPercentage: 29, remainingPercentage: 71, nextResetTimeMs: 1_783_842_841_000, nextResetISO: nil, usage: nil, remaining: nil),
-                AIUsageQuota(provider: "codex", label: "7d", usedPercentage: 62, remainingPercentage: 38, nextResetTimeMs: 1_783_950_000_000, nextResetISO: nil, usage: nil, remaining: nil),
-                AIUsageQuota(provider: "claude", label: "5h", usedPercentage: 84, remainingPercentage: 16, nextResetTimeMs: 1_783_850_000_000, nextResetISO: nil, usage: nil, remaining: nil),
-                AIUsageQuota(provider: "glm", label: "5h", usedPercentage: 8, remainingPercentage: 92, nextResetTimeMs: 1_783_860_000_000, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "codex", label: "5h", usedPercentage: 29, remainingPercentage: 71, nextResetTimeMs: appliedAtMs + (13 * 3_600 + 30 * 60) * secondMs, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "codex", label: "7d", usedPercentage: 62, remainingPercentage: 38, nextResetTimeMs: appliedAtMs + 6 * 86_400 * secondMs, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "claude", label: "5h", usedPercentage: 84, remainingPercentage: 16, nextResetTimeMs: appliedAtMs + 4 * 3_600 * secondMs, nextResetISO: nil, usage: nil, remaining: nil),
+                AIUsageQuota(provider: "glm", label: "5h", usedPercentage: 8, remainingPercentage: 92, nextResetTimeMs: appliedAtMs + 9 * 3_600 * secondMs, nextResetISO: nil, usage: nil, remaining: nil),
             ]
         ))
     }

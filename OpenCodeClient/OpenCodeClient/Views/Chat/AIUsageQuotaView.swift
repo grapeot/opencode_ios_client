@@ -6,15 +6,19 @@ struct AIUsageQuotaButton: View {
 
     private var quota: AIUsageQuota? { state.selectedModelQuota }
 
-    private var badgeTextColor: Color {
-        if quota != nil, !state.isSelectedModelQuotaStale {
+    private func badgeTextColor(at now: Date) -> Color {
+        let resetExpired = quota?.resetCountdownLabel(at: now) == "0H"
+        if quota != nil, !state.isSelectedModelQuotaStale, !resetExpired {
             return DesignColors.Brand.primary
         }
         return DesignColors.Neutral.textSecondary
     }
 
-    private var badgeText: String {
+    private func badgeText(at now: Date) -> String {
         if let quota {
+            if let countdown = quota.resetCountdownLabel(at: now) {
+                return "\(quota.clampedRemainingPercentage)% / \(countdown)"
+            }
             return "\(quota.clampedRemainingPercentage)% @ \(quota.label)"
         }
         return state.selectedModel?.primaryQuotaKey?.label ?? ""
@@ -23,25 +27,9 @@ struct AIUsageQuotaButton: View {
     var body: some View {
         Group {
             if state.isAIUsageQuotaConfigured, state.selectedModel?.primaryQuotaKey != nil {
-                Button {
-                    showSheet = true
-                    Task { await state.refreshAIUsageQuotas(force: true) }
-                } label: {
-                    Text(badgeText)
-                        .font(.caption2.weight(.semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(badgeTextColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .overlay(
-                            Capsule()
-                                .stroke(badgeTextColor.opacity(0.45), lineWidth: 1)
-                        )
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    quotaButton(at: context.date)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("chat-toolbar-quota")
-                .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, badgeText))
-                .accessibilityHint(quota != nil && state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
                 .sheet(isPresented: $showSheet) {
                 NavigationStack {
                     AIUsageQuotaDetailView(state: state)
@@ -70,6 +58,30 @@ struct AIUsageQuotaButton: View {
             guard state.isAIUsageQuotaConfigured else { return }
             await state.refreshAIUsageQuotas()
         }
+    }
+
+    private func quotaButton(at now: Date) -> some View {
+        let text = badgeText(at: now)
+        let color = badgeTextColor(at: now)
+        return Button {
+            showSheet = true
+            Task { await state.refreshAIUsageQuotas(force: true) }
+        } label: {
+            Text(text)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+                .foregroundStyle(color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .overlay(
+                    Capsule()
+                        .stroke(color.opacity(0.45), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("chat-toolbar-quota")
+        .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, text))
+        .accessibilityHint(quota != nil && state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
     }
 }
 

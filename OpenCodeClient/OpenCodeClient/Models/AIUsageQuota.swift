@@ -35,6 +35,19 @@ struct AIUsageQuota: Decodable, Equatable, Identifiable {
     var resetDate: Date? {
         nextResetTimeMs.map { Date(timeIntervalSince1970: Double($0) / 1_000) }
     }
+
+    func resetCountdownLabel(at now: Date) -> String? {
+        guard let nextResetTimeMs, nextResetTimeMs >= 1_000_000_000_000 else { return nil }
+        let nowMs = Int64((now.timeIntervalSince1970 * 1_000).rounded(.down))
+        let remainingMs = nextResetTimeMs - nowMs
+        if remainingMs <= 0 { return "0H" }
+        if remainingMs < 3_600_000 { return "<1H" }
+        if remainingMs < 86_400_000 {
+            return "\(remainingMs / 3_600_000)H"
+        }
+        let tenths = remainingMs / 8_640_000
+        return "\(tenths / 10).\(tenths % 10)D"
+    }
 }
 
 struct AIUsageQuotaSnapshot: Equatable {
