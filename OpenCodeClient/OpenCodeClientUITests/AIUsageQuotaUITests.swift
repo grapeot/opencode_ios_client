@@ -14,7 +14,7 @@ final class AIUsageQuotaUITests: XCTestCase {
 
         let badge = app.buttons["chat-toolbar-quota"]
         XCTAssertTrue(badge.waitForExistence(timeout: 8))
-        XCTAssertTrue(badge.label.contains("71% @ 5h"))
+        XCTAssertTrue(badge.label.contains("71% / 13h"))
         saveScreenshot(app, name: "quota-toolbar")
 
         badge.tap()
