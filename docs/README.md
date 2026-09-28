@@ -21,7 +21,7 @@
 | `client_capabilities/` | 设备能力扩展（V0: Health export） | `prd.md` / `rfc.md` / `protocol.md` | V0 shipped；protocol 是 wire contract 的 source of truth |
 | `context_compaction/` | 手动 Context Compaction | `design.md` | proposal only，未实现 |
 | `session_finder/` | Session Finder 智能会话检索 | `design.md` | 设计草案 |
-| `background_task_notification/` | 后台 Subagent 任务通知渲染（TaskNotificationCard + synthetic 通用规则） | `design.md` | 设计草案，未实现 |
+| `background_task_notification/` | 后台 Subagent 任务通知渲染（TaskNotificationCard + synthetic 通用规则） | `design.md` | 已实现 |
 | `push_notifications/` | 后台推送通知方案 | `research.md` | 调研 |
 | `localization/` | en/zh-Hans 双语本地化 | `research.md` | Settings 已有 en/zh；research 文档偏旧 |
 

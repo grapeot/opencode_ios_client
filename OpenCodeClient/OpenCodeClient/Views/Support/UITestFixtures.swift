@@ -8,6 +8,7 @@ enum UITestFixtures {
     static var shouldSkipConnectionRestore: Bool {
         hasUITestSessionTreeFixture
             || hasUITestToolCardsFixture
+            || hasUITestTaskNotificationFixture
             || hasUITestF3ComposerFixture
             || hasUITestWebPreviewFixture
             || hasUITestWebPreviewModeFixture
@@ -30,6 +31,10 @@ enum UITestFixtures {
 
     static var hasUITestToolCardsFixture: Bool {
         ProcessInfo.processInfo.arguments.contains("UITEST_TOOL_CARDS_FIXTURE")
+    }
+
+    static var hasUITestTaskNotificationFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_TASK_NOTIFICATION_FIXTURE")
     }
 
     static var hasUITestF3ComposerFixture: Bool {
@@ -179,6 +184,11 @@ enum UITestFixtures {
 
         if hasUITestToolCardsFixture {
             applyToolCardsFixture(to: state)
+            return state
+        }
+
+        if hasUITestTaskNotificationFixture {
+            applyTaskNotificationFixture(to: state)
             return state
         }
 
@@ -576,6 +586,74 @@ enum UITestFixtures {
             MessageWithParts(info: userInfo, parts: [userTextPart]),
             MessageWithParts(info: assistantInfo, parts: assistantParts),
         ]
+    }
+
+    static func applyTaskNotificationFixture(to state: AppState) {
+        let parentID = "task-notification-parent"
+        let childID = "ses_task_child"
+        state.isConnected = true
+        state.sessions = [
+            Session(
+                id: parentID,
+                slug: parentID,
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: nil,
+                title: "Parent Session",
+                version: "1",
+                time: .init(created: 1_000, updated: 2_000, archived: nil),
+                share: nil,
+                summary: nil
+            ),
+            Session(
+                id: childID,
+                slug: childID,
+                projectID: "p1",
+                directory: "/tmp",
+                parentID: parentID,
+                title: "Inspect the API client (@general subagent)",
+                version: "1",
+                time: .init(created: 1_100, updated: 1_900, archived: nil),
+                share: nil,
+                summary: nil
+            ),
+        ]
+        state.currentSessionID = parentID
+        let user = Message(
+            id: "task-notification-user",
+            sessionID: parentID,
+            role: "user",
+            parentID: nil,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: .init(created: 1_200, completed: 1_200),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        let marker = "Fixture marker: failing tests remain."
+        let padding = String(repeating: "x", count: 560)
+        let envelope = """
+        <task id="\(childID)" state="completed">
+        <summary>Background task completed: Inspect the API client</summary>
+        <task_result>
+        \(marker)
+
+        \(padding)
+        </task_result>
+        </task>
+        """
+        let part = decodePart([
+            "id": "task-notification-part",
+            "messageID": user.id,
+            "sessionID": parentID,
+            "type": "text",
+            "synthetic": true,
+            "text": envelope,
+        ])
+        state.messages = [MessageWithParts(info: user, parts: [part])]
     }
 
     /// Injects a deterministic busy session for F3 composer screenshots.

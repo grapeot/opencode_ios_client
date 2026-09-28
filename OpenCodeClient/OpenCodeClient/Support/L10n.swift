@@ -270,6 +270,10 @@ enum L10n {
         case chatEditFromHere
         case chatForkFromHere
         case chatThinkingCard
+        case taskNotificationCompleted
+        case taskNotificationFailed
+        case taskNotificationOpenSession
+        case taskNotificationNoOutput
         case carTitle
         case carReady
         case carListening
@@ -708,6 +712,10 @@ enum L10n {
         Key.chatEditFromHere.rawValue: "Edit from here",
         Key.chatForkFromHere.rawValue: "Fork from here",
         Key.chatThinkingCard.rawValue: "Thinking",
+        Key.taskNotificationCompleted.rawValue: "Completed",
+        Key.taskNotificationFailed.rawValue: "Failed",
+        Key.taskNotificationOpenSession.rawValue: "Open subagent session",
+        Key.taskNotificationNoOutput.rawValue: "No output",
         Key.carTitle.rawValue: "Car Mode",
         Key.carReady.rawValue: "Ready",
         Key.carListening.rawValue: "Listening",
@@ -1174,6 +1182,10 @@ enum L10n {
         Key.carTranscriptionFailed.rawValue: "无法完成这段录音的转写。",
         Key.chatForkFromHere.rawValue: "从这里分叉",
         Key.chatThinkingCard.rawValue: "思考",
+        Key.taskNotificationCompleted.rawValue: "已完成",
+        Key.taskNotificationFailed.rawValue: "失败",
+        Key.taskNotificationOpenSession.rawValue: "打开子代理会话",
+        Key.taskNotificationNoOutput.rawValue: "无输出",
         Key.attachmentImageTitle.rawValue: "图片",
         Key.attachmentFileTitle.rawValue: "附件",
         Key.attachmentRemoveImageAccessibilityLabel.rawValue: "移除图片",

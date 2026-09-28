@@ -433,6 +433,7 @@ nonisolated struct Part: Codable, Identifiable {
     let sessionID: String
     let type: String
     let text: String?
+    let synthetic: Bool?
     let tool: String?
     let callID: String?
     let state: PartStateBridge?
@@ -442,6 +443,82 @@ nonisolated struct Part: Codable, Identifiable {
     var filename: String? = nil
     var url: String? = nil
     var source: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case id, messageID, sessionID, type, text, synthetic, tool, callID, state, metadata, files, mime, filename, url, source
+    }
+
+    init(
+        id: String,
+        messageID: String,
+        sessionID: String,
+        type: String,
+        text: String?,
+        synthetic: Bool? = nil,
+        tool: String?,
+        callID: String?,
+        state: PartStateBridge?,
+        metadata: PartMetadata?,
+        files: [FileChange]?,
+        mime: String? = nil,
+        filename: String? = nil,
+        url: String? = nil,
+        source: String? = nil
+    ) {
+        self.id = id
+        self.messageID = messageID
+        self.sessionID = sessionID
+        self.type = type
+        self.text = text
+        self.synthetic = synthetic
+        self.tool = tool
+        self.callID = callID
+        self.state = state
+        self.metadata = metadata
+        self.files = files
+        self.mime = mime
+        self.filename = filename
+        self.url = url
+        self.source = source
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        messageID = try c.decode(String.self, forKey: .messageID)
+        sessionID = try c.decode(String.self, forKey: .sessionID)
+        type = try c.decode(String.self, forKey: .type)
+        text = try c.decodeIfPresent(String.self, forKey: .text)
+        synthetic = try c.decodeIfPresent(Bool.self, forKey: .synthetic)
+        tool = try c.decodeIfPresent(String.self, forKey: .tool)
+        callID = try c.decodeIfPresent(String.self, forKey: .callID)
+        state = try c.decodeIfPresent(PartStateBridge.self, forKey: .state)
+        metadata = try c.decodeIfPresent(PartMetadata.self, forKey: .metadata)
+        files = try c.decodeIfPresent([FileChange].self, forKey: .files)
+        mime = try c.decodeIfPresent(String.self, forKey: .mime)
+        filename = try c.decodeIfPresent(String.self, forKey: .filename)
+        url = try c.decodeIfPresent(String.self, forKey: .url)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(messageID, forKey: .messageID)
+        try c.encode(sessionID, forKey: .sessionID)
+        try c.encode(type, forKey: .type)
+        try c.encodeIfPresent(text, forKey: .text)
+        try c.encodeIfPresent(synthetic, forKey: .synthetic)
+        try c.encodeIfPresent(tool, forKey: .tool)
+        try c.encodeIfPresent(callID, forKey: .callID)
+        try c.encodeIfPresent(state, forKey: .state)
+        try c.encodeIfPresent(metadata, forKey: .metadata)
+        try c.encodeIfPresent(files, forKey: .files)
+        try c.encodeIfPresent(mime, forKey: .mime)
+        try c.encodeIfPresent(filename, forKey: .filename)
+        try c.encodeIfPresent(url, forKey: .url)
+        try c.encodeIfPresent(source, forKey: .source)
+    }
 
     /// For UI display; handles both string and object state
     var stateDisplay: String? { state?.displayString }
@@ -568,6 +645,7 @@ nonisolated struct Part: Codable, Identifiable {
     }
 
     var isText: Bool { type == "text" }
+    var isSyntheticText: Bool { isText && synthetic == true }
     var isReasoning: Bool { type == "reasoning" }
     var isTool: Bool { type == "tool" }
     var isPatch: Bool { type == "patch" }
