@@ -1,6 +1,6 @@
 # OpenCode iOS Client — Docs 索引
 
-> 最后更新：2026-09-27（agent 目录校验与删除失败可见）。查阅与检索任何文档请先参考本索引。
+> 最后更新：2026-09-27（background task 回执卡片实现；agent 目录校验与删除失败可见）。查阅与检索任何文档请先参考本索引。
 
 ## 顶层主文档（living）
 
@@ -21,6 +21,7 @@
 | `client_capabilities/` | 设备能力扩展（V0: Health export） | `prd.md` / `rfc.md` / `protocol.md` | V0 shipped；protocol 是 wire contract 的 source of truth |
 | `context_compaction/` | 手动 Context Compaction | `design.md` | proposal only，未实现 |
 | `session_finder/` | Session Finder 智能会话检索 | `design.md` | 设计草案 |
+| `background_task_notification/` | 后台 Subagent 任务通知渲染（TaskNotificationCard + synthetic 通用规则） | `design.md` | 已实现 |
 | `push_notifications/` | 后台推送通知方案 | `research.md` | 调研 |
 | `localization/` | en/zh-Hans 双语本地化 | `research.md` | Settings 已有 en/zh；research 文档偏旧 |
 | `agent_catalog_validation/` | Agent 目录校验与删除失败可见 | `notes.md` | shipped；选中 agent 对照当前 server `/agent`，delete 非 2xx 带状态码与 body |

@@ -387,11 +387,33 @@ struct MessageRowView: View {
         return message.info.structured?.speech
     }
 
+    static func taskNotification(for part: Part) -> TaskNotification? {
+        guard part.isSyntheticText, let text = part.text else { return nil }
+        return TaskNotificationParser.parse(text)
+    }
+
+    static func taskNotification(in message: MessageWithParts) -> TaskNotification? {
+        message.parts.compactMap(taskNotification(for:)).first
+    }
+
+    static func showsEditFromHere(_ message: MessageWithParts) -> Bool {
+        message.info.isUser && taskNotification(in: message) == nil
+    }
+
+    static func taskNotificationAccessibilityIdentifier(for message: MessageWithParts) -> String? {
+        guard taskNotification(in: message) != nil else { return nil }
+        return TaskNotificationParser.cardAccessibilityIdentifier
+    }
+
     static func copyableText(for message: MessageWithParts) -> String {
         let isAssistant = message.info.isAssistant
         let text = message.parts
             .filter(\.isText)
             .compactMap { part -> String? in
+                if let notification = taskNotification(for: part) {
+                    let result = notification.resultText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return result.isEmpty ? nil : result
+                }
                 let normalized = isAssistant
                     ? normalizedText(part.text)
                     : (part.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -455,7 +477,7 @@ struct MessageRowView: View {
                 Label(L10n.t(.chatCopyMessage), systemImage: "doc.on.doc")
             }
 
-            if message.info.isUser, let onEditFromMessage {
+            if Self.showsEditFromHere(message), let onEditFromMessage {
                 Button {
                     onEditFromMessage(message.info.id)
                 } label: {
@@ -509,30 +531,55 @@ struct MessageRowView: View {
         }
     }
 
+    private var taskNotificationParts: [(id: String, notification: TaskNotification)] {
+        message.parts.compactMap { part in
+            guard let notification = Self.taskNotification(for: part) else { return nil }
+            return (part.id, notification)
+        }
+    }
+
+    private var bubbleTextParts: [Part] {
+        message.parts.filter { part in
+            part.isText && Self.isRenderableText(part.text) && Self.taskNotification(for: part) == nil
+        }
+    }
+
     private var userMessageView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(DesignColors.Brand.primary)
-                    .frame(width: 4)
-                
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(message.parts.filter { $0.isText && Self.isRenderableText($0.text) }, id: \.id) { part in
-                        markdownText(part.text ?? "", isUser: true)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                    }
-                    let attachments = message.parts.filter { $0.isFile }
-                    if !attachments.isEmpty {
-                        MessageAttachmentsGrid(parts: attachments)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                    }
+        let notifications = taskNotificationParts
+        let bubbleParts = bubbleTextParts
+        let attachments = message.parts.filter(\.isFile)
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(notifications, id: \.id) { item in
+                TaskNotificationCardView(notification: item.notification) {
+                    Task { await state.openReferencedSession(sessionID: item.notification.sessionID) }
+                } result: {
+                    markdownText(item.notification.resultText, isUser: false)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DesignColors.Brand.primary.opacity(DesignColors.userMessageFill(for: colorScheme)))
-            .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
+
+            if !bubbleParts.isEmpty || !attachments.isEmpty {
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(DesignColors.Brand.primary)
+                        .frame(width: 4)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(bubbleParts, id: \.id) { part in
+                            markdownText(part.text ?? "", isUser: true)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                        }
+                        if !attachments.isEmpty {
+                            MessageAttachmentsGrid(parts: attachments)
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 10)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DesignColors.Brand.primary.opacity(DesignColors.userMessageFill(for: colorScheme)))
+                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
+            }
 
             // Inline send-failure banner (async session.error or failed HTTP
             // send): subtle, non-modal, attached to the affected row. The row's

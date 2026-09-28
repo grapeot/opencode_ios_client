@@ -86,7 +86,7 @@ extension AppState {
         }
     }
 
-    private func applyProjectDirectory(for session: Session) {
+    func applyProjectDirectory(for session: Session) {
         if session.directory == serverCurrentProjectWorktree {
             selectedProjectWorktree = nil
             return

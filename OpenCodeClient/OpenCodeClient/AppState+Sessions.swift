@@ -230,6 +230,38 @@ extension AppState {
         await syncSessionStatusesFromPoll()
     }
 
+    func openReferencedSession(sessionID: String) async {
+        let trimmed = sessionID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            sendError = L10n.t(.errorSessionNotFound)
+            return
+        }
+        do {
+            let session: Session
+            if let existing = sessions.first(where: { $0.id == trimmed }) {
+                session = existing
+            } else {
+                session = try await apiClient.session(sessionID: trimmed)
+            }
+            let previousDirectory = effectiveProjectDirectory
+            applyProjectDirectory(for: session)
+            upsertSession(session)
+            selectedTab = RootTab.chat.rawValue
+            if currentSessionID != session.id {
+                selectSession(session)
+            }
+            if effectiveProjectDirectory != previousDirectory {
+                await loadFileTree()
+            }
+        } catch {
+            if case APIError.httpError(let statusCode, _) = error, statusCode == 404 {
+                sendError = L10n.t(.errorSessionNotFound)
+            } else {
+                sendError = error.localizedDescription
+            }
+        }
+    }
+
     func selectSession(_ session: Session) {
         guard currentSessionID != session.id else { return }
 
