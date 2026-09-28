@@ -38,13 +38,33 @@ final class CarModeUITests: XCTestCase {
 
         XCTAssertEqual(app.tabBars.buttons.count, 3)
         app.tabBars.buttons.element(boundBy: 2).tap()
+        // Let the settings screen settle at the top before scrolling.
+        XCTAssertTrue(app.buttons["settings-current-host"].waitForExistence(timeout: 5))
         let toggle = app.switches["settings-car-mode-toggle"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 8))
+        // The toggle sits ~42% of the scrollable settings content below the
+        // top. Slow press-then-drag steps (minimal fling inertia) scroll it
+        // into view; stop as soon as it materializes — overshooting the 58pt
+        // cell un-materializes it again.
+        var scrolled = 0
+        var found = toggle.waitForExistence(timeout: 1)
+        while !found && scrolled < 8 {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                .press(
+                    forDuration: 0.1,
+                    thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                )
+            found = toggle.waitForExistence(timeout: 1.5)
+            scrolled += 1
+        }
+        XCTAssertTrue(found && toggle.exists, "settings-car-mode-toggle 应滚动进视口")
         XCTAssertTrue(app.staticTexts["Experimental Features"].exists)
         XCTAssertTrue(app.staticTexts["AI Usage Dashboard"].exists)
 
         toggle.tap()
-        XCTAssertEqual(toggle.value as? String, "1")
+        // Enabling car mode adds the 4th tab; the TabView re-layout scrolls the
+        // settings list back toward the top, so the switch cell un-materializes
+        // right after the tap. The 4th tab itself is gated on carModeEnabled,
+        // so it is the authoritative assertion of the toggle state.
         XCTAssertTrue(app.tabBars.buttons.element(boundBy: 3).waitForExistence(timeout: 4))
         XCTAssertEqual(app.tabBars.buttons.count, 4)
     }
