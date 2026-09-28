@@ -29,7 +29,6 @@ enum TaskNotificationParser {
     static let openSessionAccessibilityIdentifier = "task-notification-open-session"
     static let completedSummaryPrefix = "Background task completed: "
     static let failedSummaryPrefix = "Background task failed: "
-    static let defaultExpandedCharacterLimit = 500
 
     static func parse(_ text: String) -> TaskNotification? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -101,7 +101,7 @@ enum TaskNotificationParser {
   - 任务标题：一行截断。
   - 右侧：展开 chevron（DisclosureGroup 自带，tint brand primary）。
 - 展开内容：`resultText` 走既有 `markdownText` 路径（workspace 链接解析、图片解析、`textSelection(.enabled)`），超长由 `LargeMessagePreview`（>12k 截断 + 提示）保护；空结果显示占位 caption "No output"。
-- 默认展开状态：结果 ≤ 500 字符时展开，否则折叠——主 agent 随后的消息通常携带消化后的结论，卡片正文是参考材料。实现时以常量固定，可调。
+- 默认展开状态：**默认折叠**（2026-09-27 用户决定，取代原"≤500 字符展开"设计）——主 agent 随后的消息通常携带消化后的结论，卡片正文是参考材料，用户 tap 展开。iOS/Android 两端同步生效。
 - `accessibilityIdentifier("task-notification-card")`；跳转按钮 `accessibilityIdentifier("task-notification-open-session")`；UI 测试按这两个锚定。
 
 ### 交互
@@ -128,7 +128,7 @@ enum TaskNotificationParser {
 
 1. `Part.synthetic` 解码（`decodeIfPresent`）。
 2. `TaskNotificationParser` + 单测。
-3. `TaskNotificationCardView`：completed/error 两态、展开/折叠、默认展开阈值、markdown 渲染、跳转按钮。
+3. `TaskNotificationCardView`：completed/error 两态、展开/折叠（默认折叠）、markdown 渲染、跳转按钮。
 4. `MessageRowView` 分流 + `copyableText` 修正。
 5. L10n keys：`taskNotificationCompleted` / `taskNotificationFailed` / `taskNotificationOpenSession` / `taskNotificationNoOutput`。
 

@@ -21,8 +21,8 @@ struct TaskNotificationCardView<Result: View>: View {
         self.notification = notification
         self.onOpenSession = onOpenSession
         self.result = result
-        let count = notification.resultText.trimmingCharacters(in: .whitespacesAndNewlines).count
-        self._isExpanded = State(initialValue: count <= TaskNotificationParser.defaultExpandedCharacterLimit)
+        // 默认折叠：结论在随后 assistant 消息里，卡片正文是参考材料，tap 展开。
+        self._isExpanded = State(initialValue: false)
     }
 
     var body: some View {
