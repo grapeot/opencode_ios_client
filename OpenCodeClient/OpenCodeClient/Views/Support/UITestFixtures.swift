@@ -386,6 +386,18 @@ enum UITestFixtures {
         state.currentSessionID = sessionID
         state.draftInputsBySessionID[sessionID] = ""
         state.selectedModelIndex = 6
+        // Deterministic shortlist so selectedModelIndex 6 resolves to an
+        // OpenAI model (primaryQuotaKey codex/5h) regardless of the
+        // simulator's persisted UserDefaults.
+        state.modelShortlist = [
+            ModelShortlistItem(providerID: "zai-coding-plan", modelID: "glm-5.3", displayName: "GLM-5.3", shortName: "GLM-5.3"),
+            ModelShortlistItem(providerID: "google", modelID: "gemini-3.5-flash", displayName: "Gemini 3.5 Flash", shortName: "Gemini 3.5 Flash"),
+            ModelShortlistItem(providerID: "google", modelID: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash Lite", shortName: "Gemini 3.5 Flash Lite"),
+            ModelShortlistItem(providerID: "openai", modelID: "gpt-5.6-terra", displayName: "GPT-5.6 Terra", shortName: "GPT-5.6 Terra"),
+            ModelShortlistItem(providerID: "xai", modelID: "grok-4.5", displayName: "Grok 4.5", shortName: "Grok 4.5"),
+            ModelShortlistItem(providerID: "ollama-cloud", modelID: "kimi-k2.7", displayName: "Kimi K2.7", shortName: "Kimi K2.7"),
+            ModelShortlistItem(providerID: "openai", modelID: "gpt-5.6-sol", displayName: "GPT-5.6 Sol", shortName: "GPT-5.6 Sol"),
+        ]
         state.aiUsageDashboardURL = "http://usage-dashboard.local:7995"
         state.aiUsageQuotaState = .ready(.init(
             generatedAt: "2026-07-12T09:40:00",

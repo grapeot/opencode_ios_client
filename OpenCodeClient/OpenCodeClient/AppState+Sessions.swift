@@ -214,10 +214,10 @@ extension AppState {
         isLoadingAgents = true
         do {
             let loaded = try await apiClient.agents()
+            let previous = selectedAgentName
             agents = loaded
-            if selectedAgentIndex >= visibleAgents.count && !visibleAgents.isEmpty {
-                selectedAgentIndex = 0
-            }
+            hasServerAgentCatalog = true
+            reconcileSelectedAgent(preferredName: previous)
         } catch {
             Self.logger.warning("loadAgents failed: \(error.localizedDescription)")
         }

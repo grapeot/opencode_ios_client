@@ -35,4 +35,16 @@ struct AgentInfo: Codable, Identifiable, Hashable {
         guard let mode = mode else { return true }
         return mode == "primary" || mode == "all"
     }
+
+    static let fallbackAgentName = "build"
+
+    /// Keep `selection` when the server catalog is empty or contains it.
+    /// Otherwise use the first visible agent, then `fallbackAgentName`.
+    static func effectiveSelectedAgent(selection: String, agents: [AgentInfo]) -> String {
+        guard !agents.isEmpty else { return selection }
+        if agents.contains(where: { $0.name == selection }) {
+            return selection
+        }
+        return agents.first(where: { $0.isVisible })?.name ?? fallbackAgentName
+    }
 }

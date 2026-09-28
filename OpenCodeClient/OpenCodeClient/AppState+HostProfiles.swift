@@ -313,6 +313,10 @@ extension AppState {
         sessionStatuses = [:]
         sessionTodos = [:]
         sessionScope.resetAll()
+        agents = []
+        hasServerAgentCatalog = false
+        selectedAgentName = AgentInfo.fallbackAgentName
+        selectedAgentIndex = 0
         persistDraftInputs()
         persistSelectedModelMap()
     }

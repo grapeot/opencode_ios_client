@@ -853,9 +853,23 @@ nonisolated struct HealthResponse: Codable {
     let version: String?
 }
 
-enum APIError: Error {
+enum APIError: LocalizedError {
     case invalidURL
     case httpError(statusCode: Int, data: Data)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL"
+        case .httpError(let statusCode, let data):
+            let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if body.isEmpty {
+                return "HTTP \(statusCode)"
+            }
+            return "HTTP \(statusCode): \(body)"
+        }
+    }
 }
 
 protocol APIClientProtocol: Actor {

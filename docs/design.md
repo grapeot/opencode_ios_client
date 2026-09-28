@@ -107,6 +107,7 @@
 
 - 用户消息登场：采用 offset y 从 16→0 配合 opacity 从 0→1 的过渡，时长 ease-out 0.28s。AI 流式文本不添加任何入场动效。
 - Tool 卡片展开：采用自定义 spring（response 0.32, damping 0.82），带来比系统默认 DisclosureGroup 更为紧凑灵动的展开体验。
+- Thinking / "N tool calls" 半宽过程 tile 展开：**无动画**，自绘 header 点击直接切换，tile 高度变化触发网格 reflow（首版接受，不做展开动效）。
 - Permission/Question 卡片登场：从下方滑入（offset y 从 24→0）并配合淡入效果，相比纯淡入能更有效地引导用户视觉焦点。
 - Session 切换：消息列表采用 0.2s 的 opacity crossfade 渐变过渡，消除直接硬切带来的突兀停顿感。
 - 明确不做：splash 启动动画、bouncing 弹跳动效、渐变背景（避免过度装饰带来的视觉廉价感）。
@@ -248,7 +249,7 @@ Key technical decisions：Host 实体代表单一 OpenCode 运行环境，而非
 
 ---
 
-# 工具卡渲染重做（探索稿 — 仅设计，未实现）
+# 工具卡渲染重做（已实现；最新演进：过程 tile 永远半宽、共享两列网格）
 
 **明确不做像素风格。** 本章节的设计完全立足于上述 Quiet Tech 设计语言，不引入任何多余的视觉纹理——严格维持现有的极简现代图标、微细分割线与中性卡片底色。本次重构聚焦于**信息组织结构**的优化，而非更换视觉皮肤：重点解决发言角色的区隔以及工具调用结果的高效呈现。
 
@@ -269,15 +270,19 @@ Key technical decisions：Host 实体代表单一 OpenCode 运行环境，而非
 
 **文件操作类工具（涵盖 patch / edit / write / read 四类）**统一渲染为**文件卡片**：卡片左侧展示简洁现代的**文件图标**，中间呈现 monospace 等宽字体的文件名或路径，右侧配置用于触发跳转或展开的 chevron 图标。每个工具调用对应一张卡片，**采用 2 列网格排布**（每行并排展示两张卡片，与 iPhone 现有的 2 列网格规范对齐；iPad 端可扩展为 3 列）。逻辑判断规则为 `part.tool ∈ {apply_patch, edit_file, write_file, read_file}`（包含历史兼容别名）。
 
-## 三、合并成 "N tool calls"
+## 三、合并成 "N tool calls"（半宽 tile）
 
-**除文件操作外的其余工具（包括 bash / 测试 / grep / glob / list / webfetch / task 等）统一合并收敛为单行**，文本格式统一定义为 **"N tool calls"**（例如 `▸ 3 tool calls`）——进行适度抽象，在未展开时不直接暴露具体工具类别。点击 chevron 图标展开后，逐项展示其中包含的各工具名称以及单行输入/输出摘要（复用现有 ToolPartView 的展开逻辑）。组件默认处于折叠收起状态。
+**除文件操作外的其余工具（包括 bash / 测试 / grep / glob / list / webfetch / task 等）统一合并收敛为单个 "N tool calls" tile**，文本格式统一定义为 **"N tool calls"**（例如 `3 tool calls`）——进行适度抽象，在未展开时不直接暴露具体工具类别。组件默认处于折叠收起状态，且是**永远半宽的 tile**：与 file card 同进两列（iPhone）/ 三列（iPad）网格，宽度由网格列决定，**无论收起或展开都不撑到全宽**。
 
-## 排列：版式优先的近时间序
+tile 采用自绘披露（不用系统 DisclosureGroup）：header 为纯文本（无 icon，与 Android 一致）+ 右侧 chevron，字体/字重/颜色遵循过程行规范（micro / medium / accent 蓝）；点击 header 切换展开，展开后逐项展示其中包含的各工具（复用现有 ToolPartView 的展开逻辑），**内容留在半宽 tile 内部**（窄列），tile 变高、网格 reflow。
 
-文件卡片与 "N tool calls" 合并行**大体依据发生时间先后排序，但允许进行局部微调以保证整体版式整齐**——相邻的文件卡片聚拢为 2 列网格，相邻的非文件类工具聚拢合并为单行 "N tool calls"。整体不作额外分组，亦不添加类似 "Files updated" 或 "Actions" 的分类标题。
+## 排列：半宽 tile 共享两列网格
 
-两种形态均遵循 Quiet Tech 的中性卡片规范（采用 neutral `surface` 底色、无边框描边、12pt 圆角），彩色点缀仅限制在文件图标与 chevron 区域——确保同屏内至多保留一处蓝色强调。
+thinking（ThinkingCard）、"N tool calls" 合并 tile 与 file card **同进一个 LazyVGrid 两列（iPhone）/ 三列（iPad）网格**，tile 按 part 原始顺序排布：reasoning 生成半宽 ThinkingCard tile，file 操作逐张生成半宽 file card tile，非文件工具聚拢合并为**一个**半宽 "N tool calls" tile。所有过程 tile **永远半宽**——宽度由网格列决定，展开时不撑全宽；**展开内容留在半宽 tile 内部**（窄列），tile 变高、网格 reflow（首版接受，无动画）。
+
+text 与附件块不进网格，**全宽渲染在网格之后**（读序：网格在前、全宽文本在后，用户接受）。整体不作额外分组，亦不添加类似 "Files updated" 或 "Actions" 的分类标题。
+
+file card 遵循 Quiet Tech 的中性卡片规范（neutral `surface` 底色、无边框描边、12pt 圆角）；thinking / tool calls tile 保持轻量过程行形态（无重卡面），彩色点缀仅限制在文件图标、header 与 chevron 区域——确保同屏内至多保留一处蓝色强调。
 
 ![工具卡：说话区分 + 2 列文件卡 + N tool calls](design_images/tool_cards_chronological.png)
 

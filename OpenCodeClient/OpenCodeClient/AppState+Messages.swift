@@ -69,6 +69,7 @@ extension AppState {
                 partsByMessageID[message.info.id] = message.parts
             }
             partsByMessage = partsByMessageID
+            reconcileSelectedAgent()
 
             if isBusySession(currentSessionStatus) {
                 refreshSessionActivityText(sessionID: sessionID)
@@ -151,7 +152,7 @@ extension AppState {
         let messageID = Self.makeServerID(prefix: "msg")
         let tempMessageID = appendOptimisticUserMessage(text, attachments: attachments, messageID: messageID)
         let model = selectedModel.map { Message.ModelInfo(providerID: $0.providerID, modelID: $0.modelID) }
-        let agentName = selectedAgent?.name ?? "build"
+        let agentName = agentNameForPrompt()
         do {
             try await apiClient.promptAsync(
                 sessionID: sessionID,
