@@ -806,6 +806,33 @@ struct AgentInfoTests {
         #expect(hiddenPrimary.isVisible == false)
         #expect(noMode.isVisible == true)
     }
+
+    @Test func effectiveSelectedAgentKeepsKnownName() {
+        let agents = [
+            AgentInfo(name: "build", description: nil, mode: "primary", hidden: false, native: nil),
+            AgentInfo(name: "plan", description: nil, mode: "primary", hidden: false, native: nil),
+        ]
+        #expect(AgentInfo.effectiveSelectedAgent(selection: "plan", agents: agents) == "plan")
+    }
+
+    @Test func effectiveSelectedAgentFallsBackWhenUnknown() {
+        let agents = [
+            AgentInfo(name: "explore", description: nil, mode: "subagent", hidden: false, native: nil),
+            AgentInfo(name: "build", description: nil, mode: "primary", hidden: false, native: nil),
+        ]
+        #expect(AgentInfo.effectiveSelectedAgent(selection: "grok", agents: agents) == "build")
+    }
+
+    @Test func effectiveSelectedAgentKeepsSelectionWhenCatalogEmpty() {
+        #expect(AgentInfo.effectiveSelectedAgent(selection: "grok", agents: []) == "grok")
+    }
+
+    @Test func effectiveSelectedAgentUsesFallbackWhenNoVisibleAgent() {
+        let agents = [
+            AgentInfo(name: "explore", description: nil, mode: "subagent", hidden: false, native: nil),
+        ]
+        #expect(AgentInfo.effectiveSelectedAgent(selection: "grok", agents: agents) == "build")
+    }
 }
 
 // MARK: - ModelPreset ShortName Tests

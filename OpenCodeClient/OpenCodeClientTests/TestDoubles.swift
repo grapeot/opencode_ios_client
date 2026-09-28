@@ -99,6 +99,7 @@ actor MockAPIClient: APIClientProtocol {
     var promptError: Error?
         var promptAsyncCalls: [(String, String, [ComposerImageAttachment])] = []
         var promptAsyncMessageIDs: [String] = []
+        var promptAsyncAgents: [String] = []
     var promptStructuredCalls: [(sessionID: String, messageID: String?, text: String, system: String, agent: String, providerID: String, modelID: String)] = []
     var promptStructuredResult: MessageWithParts?
     var promptStructuredDelayNanoseconds: UInt64 = 0
@@ -106,6 +107,9 @@ actor MockAPIClient: APIClientProtocol {
     var sessionError: Error?
     var sessionRequests: [String] = []
     var deletedSessionIDs: [String] = []
+    var deleteSessionError: Error?
+    var agentsResult: [AgentInfo] = []
+    var agentsError: Error?
     var updateSessionCalls: [(String, String)] = []
     var updateSessionArchivedCalls: [(String, Int)] = []
     var sessionDiffResult: [FileDiff] = []
@@ -153,6 +157,18 @@ actor MockAPIClient: APIClientProtocol {
 
     func setPromptError(_ error: Error?) {
         promptError = error
+    }
+
+    func setDeleteSessionError(_ error: Error?) {
+        deleteSessionError = error
+    }
+
+    func setAgentsResult(_ agents: [AgentInfo]) {
+        agentsResult = agents
+    }
+
+    func setAgentsError(_ error: Error?) {
+        agentsError = error
     }
 
     func setPromptStructuredResult(_ result: MessageWithParts) {
@@ -240,6 +256,7 @@ actor MockAPIClient: APIClientProtocol {
     }
 
     func deleteSession(sessionID: String) async throws {
+        if let deleteSessionError { throw deleteSessionError }
         deletedSessionIDs.append(sessionID)
     }
 
@@ -253,6 +270,7 @@ actor MockAPIClient: APIClientProtocol {
     func promptAsync(sessionID: String, messageID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?, directory: String?) async throws {
         promptAsyncCalls.append((sessionID, text, attachments))
         promptAsyncMessageIDs.append(messageID)
+        promptAsyncAgents.append(agent)
         if let promptError { throw promptError }
     }
 
@@ -282,7 +300,10 @@ actor MockAPIClient: APIClientProtocol {
     func providerRegistry() async throws -> ProviderRegistryResponse {
         providerRegistryResult ?? ProviderRegistryResponse(providers: [], connectedProviderIDs: [])
     }
-    func agents() async throws -> [AgentInfo] { [] }
+    func agents() async throws -> [AgentInfo] {
+        if let agentsError { throw agentsError }
+        return agentsResult
+    }
     func sessionDiff(sessionID: String) async throws -> [FileDiff] {
         sessionDiffCallCount += 1
         return sessionDiffResult
