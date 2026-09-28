@@ -4,10 +4,16 @@
 
 ## 当前状态
 
-- **最后更新**：2026-09-26
-- **分支**：`fix/grok-quota-pill`
-- **编译/测试**：`AIUsageQuotaTests` 7/7 通过（iPhone 16 模拟器）
-- **Phase**：Grok quota pill 映射
+- **最后更新**：2026-09-27
+- **分支**：`task-notification-card`
+- **编译/测试**：`xcodebuild build` 通过。先 boot 模拟器再用 device ID 跑 `OpenCodeClientTests`：480/480 通过（iPhone 16 `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，约 9 秒）。全量 UI 套件未再跑。
+- **Phase**：Background task notification card
+
+### 2026-09-27 — 后台 subagent 回执渲染为 TaskNotificationCard
+
+- **现象**：服务端把后台任务完成结果注入成 synthetic user message，正文是 `<task>` XML。客户端没解码 `synthetic`，这段回执被画成蓝色用户气泡里的原始 XML。
+- **处理**：`Part.synthetic` 用 `decodeIfPresent` 解码。`TaskNotificationParser` 用 range 定位最外层信封，嵌套尖括号不误切。解析成功的 synthetic text 渲染为卡片：状态图标 + 本地化状态 + 去掉英文前缀后的任务标题，结果走既有 markdown 路径，≤500 字符默认展开。展开后可打开子代理会话，复用 `selectSession`，目录不一致时切 project directory；会话不存在走 `sendError`。复制回执时复制结果正文。这类消息不显示 Edit-from-here。
+- **测试**：`TaskNotificationParserTests` / `TaskNotificationRenderingTests` 16 条；`UITEST_TASK_NOTIFICATION_FIXTURE` 覆盖展开与跳转。长结果的跳转按钮在首屏外，UI 测试展开后上滑再点。
 
 ### 2026-09-26 — Grok 不显示 quota pill
 
