@@ -1,6 +1,6 @@
 # OpenCode iOS Client — Docs 索引
 
-> 最后更新：2026-09-13（Markdown Web Preview 子文档归档落位）。查阅与检索任何文档请先参考本索引。
+> 最后更新：2026-09-27（agent 目录校验与删除失败可见）。查阅与检索任何文档请先参考本索引。
 
 ## 顶层主文档（living）
 
@@ -23,6 +23,7 @@
 | `session_finder/` | Session Finder 智能会话检索 | `design.md` | 设计草案 |
 | `push_notifications/` | 后台推送通知方案 | `research.md` | 调研 |
 | `localization/` | en/zh-Hans 双语本地化 | `research.md` | Settings 已有 en/zh；research 文档偏旧 |
+| `agent_catalog_validation/` | Agent 目录校验与删除失败可见 | `notes.md` | shipped；选中 agent 对照当前 server `/agent`，delete 非 2xx 带状态码与 body |
 
 ## archive/ — 一次性工作记录与冻结决策（只进不改）
 

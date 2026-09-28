@@ -503,6 +503,10 @@ final class AppState {
         AgentInfo(name: "Atlas (Plan Executor)", description: "Plan Executor", mode: "primary", hidden: false, native: false),
     ]
     var selectedAgentIndex: Int = 0
+    /// Name actually sent to the server. Not an index into a previous host's list.
+    var selectedAgentName: String = AgentInfo.fallbackAgentName
+    /// True only after GET /agent succeeds for the current host.
+    var hasServerAgentCatalog: Bool = false
     var isLoadingAgents: Bool = false
 
     var expandedSessionIDs: Set<String> = []

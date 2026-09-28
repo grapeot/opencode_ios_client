@@ -32,6 +32,26 @@ extension AppState {
         let visibleAgents = agents.filter { $0.isVisible }
         guard visibleAgents.indices.contains(index) else { return }
         selectedAgentIndex = index
+        if hasServerAgentCatalog {
+            selectedAgentName = visibleAgents[index].name
+        }
+    }
+
+    func reconcileSelectedAgent(preferredName: String? = nil) {
+        let selection = preferredName ?? selectedAgentName
+        let catalog = hasServerAgentCatalog ? agents : []
+        selectedAgentName = AgentInfo.effectiveSelectedAgent(selection: selection, agents: catalog)
+        if let index = visibleAgents.firstIndex(where: { $0.name == selectedAgentName }) {
+            selectedAgentIndex = index
+        } else if !visibleAgents.isEmpty {
+            selectedAgentIndex = visibleAgents.count
+        }
+    }
+
+    func agentNameForPrompt() -> String {
+        guard hasServerAgentCatalog else { return AgentInfo.fallbackAgentName }
+        reconcileSelectedAgent()
+        return selectedAgentName
     }
 
     func applySavedModelForCurrentSession() {
