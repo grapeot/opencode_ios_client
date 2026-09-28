@@ -24,8 +24,8 @@ struct MessageRowView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showsTextSelection = false
 
-    // iPhone packs tool/patch cards two-up to keep information density high;
-    // iPad has room for a 3-up grid.
+    // iPhone packs process tiles (thinking / merged tool calls / file cards)
+    // two-up to keep information density high; iPad has room for a 3-up grid.
     private var cardGridColumnCount: Int { sizeClass == .regular ? 3 : 2 }
     private var cardGridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
@@ -66,6 +66,29 @@ struct MessageRowView: View {
                 return "cards-\(first)-\(last)"
             case .attachment(let part):
                 return "attachment-\(part.id)"
+            }
+        }
+    }
+
+    /// One cell of the assistant card grid. Every process tile (thinking,
+    /// merged non-file tool calls, file-operation cards) shares the same
+    /// 2-up (iPhone) / 3-up (iPad) LazyVGrid and is always half-width, laid
+    /// out in part order.
+    enum CardGridTile: Identifiable {
+        case thinking(Part)
+        case fileCard(Part)
+        case toolCalls([Part])
+
+        var id: String {
+            switch self {
+            case .thinking(let part):
+                return "tile-thinking-\(part.id)"
+            case .fileCard(let part):
+                return "tile-file-\(part.id)"
+            case .toolCalls(let parts):
+                let first = parts.first?.id ?? "nil"
+                let last = parts.last?.id ?? "nil"
+                return "tile-toolcalls-\(first)-\(last)"
             }
         }
     }
@@ -119,6 +142,36 @@ struct MessageRowView: View {
 
     private var assistantBlocks: [AssistantBlock] {
         Self.buildAssistantBlocks(parts: message.parts)
+    }
+
+    private struct AssistantLayout {
+        let tiles: [CardGridTile]
+        let contents: [AssistantBlock]
+    }
+
+    /// Splits the assistant blocks into grid tiles (process tiles plus file
+    /// cards, in part order) and full-width content blocks (text /
+    /// attachments), which render after the grid.
+    private var assistantLayout: AssistantLayout {
+        var tiles: [CardGridTile] = []
+        var contents: [AssistantBlock] = []
+        for block in assistantBlocks {
+            switch block {
+            case .thinking(let part):
+                tiles.append(.thinking(part))
+            case .cards(let parts):
+                let (fileParts, otherParts) = ToolCardClassifier.split(parts)
+                for filePart in fileParts {
+                    tiles.append(.fileCard(filePart))
+                }
+                if !otherParts.isEmpty {
+                    tiles.append(.toolCalls(otherParts))
+                }
+            case .text, .attachment:
+                contents.append(block)
+            }
+        }
+        return AssistantLayout(tiles: tiles, contents: contents)
     }
 
     @ViewBuilder
@@ -517,17 +570,46 @@ struct MessageRowView: View {
                     .accessibilityIdentifier("structured-assistant-speech")
             }
 
-            ForEach(assistantBlocks) { block in
+            let layout = assistantLayout
+
+            // All process tiles (thinking / merged tool calls / file cards)
+            // share one 2-up (iPhone) / 3-up (iPad) grid and are always
+            // half-width, laid out in part order. Full-width text and
+            // attachments render after the grid (accepted reading order).
+            if !layout.tiles.isEmpty {
+                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: DesignSpacing.sm) {
+                    ForEach(layout.tiles) { tile in
+                        switch tile {
+                        case .thinking(let part):
+                            thinkingCard(part)
+                        case .fileCard(let part):
+                            FileCardView(
+                                part: part,
+                                workspaceDirectory: workspaceDirectory,
+                                onOpenResolvedPath: onOpenResolvedPath,
+                                onOpenFilesTab: onOpenFilesTab
+                            )
+                        case .toolCalls(let parts):
+                            ToolCallsRowView(
+                                parts: parts,
+                                sessionTodos: sessionTodos,
+                                workspaceDirectory: workspaceDirectory,
+                                onOpenResolvedPath: onOpenResolvedPath
+                            )
+                        }
+                    }
+                }
+            }
+
+            ForEach(layout.contents) { block in
                 switch block {
                 case .text(let part):
                     markdownText(part.text ?? "", isUser: false)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                case .thinking(let part):
-                    thinkingCard(part)
-                case .cards(let parts):
-                    cardsBlock(parts)
                 case .attachment(let part):
                     MessageAttachmentView(part: part)
+                case .thinking, .cards:
+                    EmptyView()
                 }
             }
 
@@ -567,71 +649,6 @@ struct MessageRowView: View {
         }
     }
 
-    // A buffered run of tool/patch parts becomes: a 2-up (iPhone) / 3-up (iPad)
-    // grid of file cards for the file operations, plus a single collapsed
-    // "N tool calls" row for everything else. Layout-first near-time order:
-    // file cards cluster into the grid, other tools cluster into one row.
-    @ViewBuilder
-    private func cardsBlock(_ parts: [Part]) -> some View {
-        let (fileParts, otherParts) = ToolCardClassifier.split(parts)
-
-        VStack(alignment: .leading, spacing: DesignSpacing.sm) {
-            if !fileParts.isEmpty {
-                LazyVGrid(
-                    columns: cardGridColumns,
-                    alignment: .leading,
-                    spacing: DesignSpacing.sm
-                ) {
-                    ForEach(fileParts, id: \.id) { part in
-                        FileCardView(
-                            part: part,
-                            workspaceDirectory: workspaceDirectory,
-                            onOpenResolvedPath: onOpenResolvedPath,
-                            onOpenFilesTab: onOpenFilesTab
-                        )
-                    }
-                }
-            }
-            if !otherParts.isEmpty {
-                toolCallsRow(otherParts)
-            }
-        }
-    }
-
-    // Weight-reduced process row (parity with Android PR #114): no card
-    // surface; the header is a quiet single line aligned with the answer body,
-    // the whole row toggles, and the revealed ToolPartViews keep their own
-    // surface as detail cards.
-    private func toolCallsRow(_ parts: [Part]) -> some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: DesignSpacing.sm) {
-                ForEach(parts, id: \.id) { part in
-                    ToolPartView(
-                        part: part,
-                        sessionTodos: sessionTodos,
-                        workspaceDirectory: workspaceDirectory,
-                        onOpenResolvedPath: onOpenResolvedPath
-                    )
-                }
-            }
-            .padding(.top, DesignSpacing.sm)
-        } label: {
-            // Vertical padding inside the label (before contentShape) so the
-            // 4pt band is part of the button hit area; visible height is
-            // unchanged.
-            Text(L10n.toolCallsCount(parts.count))
-                .font(DesignTypography.micro)
-                .fontWeight(.medium)
-                .foregroundStyle(DesignColors.Brand.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, DesignSpacing.xs)
-                .contentShape(Rectangle())
-        }
-        .tint(DesignColors.Brand.primary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("toolcard.toolcalls")
-    }
-
     private func thinkingCard(_ part: Part) -> some View {
         ThinkingCard {
             markdownText(part.text ?? "", isUser: false, forcingMarkdown: true)
@@ -639,6 +656,11 @@ struct MessageRowView: View {
     }
 }
 
+// Always-half-width process tile: the width comes from the LazyVGrid column
+// (2-up on iPhone, 3-up on iPad), never full width. The self-drawn header is
+// the only tappable element and toggles expansion in place; the revealed
+// content stays inside the narrow tile, so the tile grows and the grid
+// reflows (no animation, first-version accepted behavior).
 private struct ThinkingCard<Content: View>: View {
     @State private var expanded = false
     private let content: Content
@@ -648,31 +670,81 @@ private struct ThinkingCard<Content: View>: View {
     }
 
     var body: some View {
-        // Weight-reduced process row (parity with Android PR #114): no card
-        // surface; quiet single-line header, whole row toggles, expanded
-        // markdown stays full width and muted — process sits below the answer.
-        DisclosureGroup(isExpanded: $expanded) {
-            content
-                .foregroundStyle(DesignColors.Neutral.textSecondary)
-                .padding(.top, DesignSpacing.sm)
-        } label: {
-            // Vertical padding inside the label (before contentShape) so the
-            // 4pt band is part of the button hit area; visible height is
-            // unchanged.
+        VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+            // Vertical padding inside the header (before contentShape) so the
+            // 4pt band is part of the button hit area.
             HStack(spacing: DesignSpacing.xs) {
                 Image(systemName: "brain.head.profile")
                 Text(L10n.t(.chatThinkingCard))
+                Spacer()
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
             }
             .font(DesignTypography.micro)
             .fontWeight(.medium)
             .foregroundStyle(DesignColors.Brand.primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, DesignSpacing.xs)
             .contentShape(Rectangle())
+            .onTapGesture { expanded.toggle() }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.t(.chatThinkingCard))
+            .accessibilityIdentifier("message-thinking-card")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(expanded ? "已展开" : "已收起")
+
+            if expanded {
+                content
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+            }
         }
-        .tint(DesignColors.Brand.primary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("message-thinking-card")
+    }
+}
+
+// Always-half-width process tile for the merged non-file tool calls, sharing
+// the same LazyVGrid as thinking and file-card tiles. Header is plain text
+// (no icon, parity with Android) with a trailing chevron; the whole tile is
+// half-width whether collapsed or expanded — the revealed ToolPartViews stay
+// inside the narrow column.
+private struct ToolCallsRowView: View {
+    let parts: [Part]
+    let sessionTodos: [TodoItem]
+    let workspaceDirectory: String?
+    let onOpenResolvedPath: (String) -> Void
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+            // Vertical padding inside the header (before contentShape) so the
+            // 4pt band is part of the button hit area.
+            HStack(spacing: DesignSpacing.xs) {
+                Text(L10n.toolCallsCount(parts.count))
+                Spacer()
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+            }
+            .font(DesignTypography.micro)
+            .fontWeight(.medium)
+            .foregroundStyle(DesignColors.Brand.primary)
+            .padding(.vertical, DesignSpacing.xs)
+            .contentShape(Rectangle())
+            .onTapGesture { expanded.toggle() }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.toolCallsCount(parts.count))
+            .accessibilityIdentifier("toolcard.toolcalls")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(expanded ? "已展开" : "已收起")
+
+            if expanded {
+                VStack(alignment: .leading, spacing: DesignSpacing.sm) {
+                    ForEach(parts, id: \.id) { part in
+                        ToolPartView(
+                            part: part,
+                            sessionTodos: sessionTodos,
+                            workspaceDirectory: workspaceDirectory,
+                            onOpenResolvedPath: onOpenResolvedPath
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
