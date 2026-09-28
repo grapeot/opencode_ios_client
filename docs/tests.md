@@ -100,7 +100,7 @@ Tier 2 基于 fake data 或 mock 依赖来驱动真实的 client 状态机及真
 第二种是 fixture-driven XCUITest。app 在启动时通过 launch arguments 注入确定性的 deterministic state，随后由 UI test 驱动真实 app 进行操作验证：
 
 - `UITEST_SESSION_TREE_FIXTURE`：验证 child/subagent session 在 session list 里可见；当前 fixture 也包含 active/archived session tree，用来覆盖 archive section wiring。
-- `UITEST_TOOL_CARDS_FIXTURE`：验证 tool card grid、merged tool calls row、展开后的内容。
+- `UITEST_TOOL_CARDS_FIXTURE`：验证半宽过程 tile 网格（file card 与 merged tool calls tile 同进 2-up 网格、永远半宽）、展开后的内容（展开内容留在半宽 tile 内）。
 - `UITEST_F3_TRANSCRIBING_FIXTURE`：验证 voice rail 在 agent running + transcribing 并行状态下仍保留 text review/send，并把 agent interrupt 降到 `⋯` 菜单。
 - `UITEST_F3_RETRY_FIXTURE`：验证 preserved-audio retry 状态清楚表达“重试同一段音频”，并且恢复动作与 agent abort 语义分离。
 - `UITEST_CLIENT_CAPABILITY_FIXTURE`：验证 Health export 本地授权理由、仅这次、以后自动允许和取消入口。
@@ -210,9 +210,12 @@ Tier 2、Tier 3 与 Tier 4 的有效运作均高度依赖于稳定、语义化�
 - file read：`toolcard.read.<basename>`，label `Read file <basename>`。
 - write/edit/patch：`toolcard.write.<basename>`，label `Write file <basename>`。
 - directory read：`toolcard.folder.<basename>`，label `Read directory <basename>`。
-- merged non-file tools：`toolcard.toolcalls`。
+- merged non-file tools：`toolcard.toolcalls`。该 tile 为自绘按钮行（不用系统 DisclosureGroup）：`.isButton` trait + 展开 value（`已展开`/`已收起`），identifier 保持不变。
+- thinking tile：`message-thinking-card`。同样为自绘按钮行：`.isButton` trait + 展开 value（`已展开`/`已收起`），identifier 保持不变。
 
 `ToolCardsUITests` 通过 `UITEST_TOOL_CARDS_FIXTURE` 确保 read 与 write 类型的卡片均能在 XCUITest 中被正确捕获识别。鉴于在真实 server 上执行 write/edit/patch 操作存在安全隐患，write card 的 UI 渲染主要依托 Tier 2 fixture 开展验证；而 read card 则由 Tier 2 fixture 与 Tier 3 真实 server 的 read 路径提供双重覆盖保障。
+
+过程 tile（thinking / merged tool calls）的**半宽视觉 QA** 由 `ToolCardsUITests` 产出的 `oc_toolcards_collapsed` / `oc_toolcards` 截图承担（deterministic screenshot，读图核对 tile 宽度 = 网格列宽、展开内容留在半宽内）。注意当前 `UITEST_TOOL_CARDS_FIXTURE` 不含 reasoning part，thinking tile 暂无 UI 覆盖；可选给该 fixture 补一个 reasoning part 以补齐。
 
 ## 边界与安全
 
