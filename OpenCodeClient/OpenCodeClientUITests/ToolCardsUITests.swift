@@ -15,6 +15,9 @@ final class ToolCardsUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // A previous suite (Tier4Driver) may leave the simulator in landscape;
+        // the layout assertions below assume the portrait 2-up grid.
+        XCUIDevice.shared.orientation = .portrait
     }
 
     @MainActor
@@ -29,19 +32,16 @@ final class ToolCardsUITests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(assistantText.waitForExistence(timeout: 12), "fixture assistant text 应可见")
 
-        // Read/write file cards must be distinguishable in the accessibility tree.
         let readCardPredicate = NSPredicate(format: "identifier BEGINSWITH 'toolcard.read.'")
         let writeCardPredicate = NSPredicate(format: "identifier BEGINSWITH 'toolcard.write.'")
         let readCards = app.descendants(matching: .any).matching(readCardPredicate)
         let writeCards = app.descendants(matching: .any).matching(writeCardPredicate)
 
-        XCTAssertTrue(readCards.firstMatch.waitForExistence(timeout: 8), "至少一个 toolcard.read.* 读文件卡应渲染")
-        XCTAssertTrue(writeCards.firstMatch.waitForExistence(timeout: 8), "至少一个 toolcard.write.* 写文件卡应渲染")
-
-        // XCUITest only exposes currently materialized cells in the scroll view on
-        // some simulator/orientation combinations. The stable contract here is
-        // that read and write cards are distinguishable, not that every fixture
-        // card is simultaneously present in the accessibility snapshot.
+        // The chat scroll view auto-scrolls to the bottom on launch, so the
+        // file-card grid (top of the assistant turn) is un-materialized while
+        // the merged disclosure row (bottom) is visible. Lazy cells only
+        // materialize inside the viewport — assert each region while it is
+        // on screen.
 
         // The merged "N tool calls" disclosure row.
         let toolCalls = app.descendants(matching: .any)["toolcard.toolcalls"]
@@ -50,20 +50,28 @@ final class ToolCardsUITests: XCTestCase {
         // Capture the collapsed state before expanding.
         attachScreenshot(named: "oc_toolcards_collapsed")
 
-        // Expand the disclosure group and assert it reveals merged tool content.
-        // "list" tool output contains "client.ts" — a string only visible once expanded.
-        let expandedMarkerBefore = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'client.ts'")
-        ).count
+        // Scroll up (swipe down) until the file-card grid enters the viewport.
+        var scrolled = 0
+        while !(readCards.firstMatch.exists || writeCards.firstMatch.exists) && scrolled < 5 {
+            app.swipeDown()
+            Thread.sleep(forTimeInterval: 1.0)
+            scrolled += 1
+        }
+        XCTAssertTrue(readCards.firstMatch.waitForExistence(timeout: 4), "至少一个 toolcard.read.* 读文件卡应渲染")
+        XCTAssertTrue(writeCards.firstMatch.waitForExistence(timeout: 4), "至少一个 toolcard.write.* 写文件卡应渲染")
 
-        toolCalls.tap()
+        // Scroll back down to the merged row and expand it.
+        while !toolCalls.firstMatch.exists && scrolled > 0 {
+            app.swipeUp()
+            Thread.sleep(forTimeInterval: 1.0)
+            scrolled -= 1
+        }
+        toolCalls.firstMatch.tap()
 
-        let expandedMarker = app.staticTexts.containing(
+        let revealed = app.staticTexts.containing(
             NSPredicate(format: "label CONTAINS[c] 'npm test'")
         ).firstMatch
-        let revealed = expandedMarker.waitForExistence(timeout: 6)
-            || app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'client.ts'")).count > expandedMarkerBefore
-        XCTAssertTrue(revealed, "展开 toolcard.toolcalls 后应出现合并工具的内容（如 'npm test' / 'client.ts'）")
+        XCTAssertTrue(revealed.waitForExistence(timeout: 6), "展开 toolcard.toolcalls 后应出现合并工具的内容（如 'npm test'）")
 
         // Capture the expanded state — primary visual QA artifact.
         attachScreenshot(named: "oc_toolcards")
