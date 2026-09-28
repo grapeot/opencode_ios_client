@@ -7,7 +7,7 @@ struct AIUsageQuotaButton: View {
     private var quota: AIUsageQuota? { state.selectedModelQuota }
 
     private func badgeTextColor(at now: Date) -> Color {
-        let resetExpired = quota?.resetCountdownLabel(at: now) == "0H"
+        let resetExpired = quota?.resetCountdownLabel(at: now) == "0h"
         if quota != nil, !state.isSelectedModelQuotaStale, !resetExpired {
             return DesignColors.Brand.primary
         }

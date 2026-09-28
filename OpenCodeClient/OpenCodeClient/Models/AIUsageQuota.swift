@@ -40,13 +40,13 @@ struct AIUsageQuota: Decodable, Equatable, Identifiable {
         guard let nextResetTimeMs, nextResetTimeMs >= 1_000_000_000_000 else { return nil }
         let nowMs = Int64((now.timeIntervalSince1970 * 1_000).rounded(.down))
         let remainingMs = nextResetTimeMs - nowMs
-        if remainingMs <= 0 { return "0H" }
-        if remainingMs < 3_600_000 { return "<1H" }
+        if remainingMs <= 0 { return "0h" }
+        if remainingMs < 3_600_000 { return "<1h" }
         if remainingMs < 86_400_000 {
-            return "\(remainingMs / 3_600_000)H"
+            return "\(remainingMs / 3_600_000)h"
         }
         let tenths = remainingMs / 8_640_000
-        return "\(tenths / 10).\(tenths % 10)D"
+        return "\(tenths / 10).\(tenths % 10)d"
     }
 }
 

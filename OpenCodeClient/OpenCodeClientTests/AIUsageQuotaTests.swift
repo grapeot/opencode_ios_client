@@ -178,17 +178,17 @@ struct AIUsageQuotaTests {
 
     @Test func resetCountdownLabelUsesFloorRules() {
         let cases: [(Int64, String)] = [
-            (Int64(5.16 * 86_400), "5.1D"),
-            (86_400, "1.0D"),
-            (86_399, "23H"),
-            (13 * 3_600 + 3_000, "13H"),
-            (13 * 3_600 + 1, "13H"),
-            (Int64(12.5 * 3_600), "12H"),
-            (3_600, "1H"),
-            (3_599, "<1H"),
-            (1, "<1H"),
-            (0, "0H"),
-            (-90, "0H"),
+            (Int64(5.16 * 86_400), "5.1d"),
+            (86_400, "1.0d"),
+            (86_399, "23h"),
+            (13 * 3_600 + 3_000, "13h"),
+            (13 * 3_600 + 1, "13h"),
+            (Int64(12.5 * 3_600), "12h"),
+            (3_600, "1h"),
+            (3_599, "<1h"),
+            (1, "<1h"),
+            (0, "0h"),
+            (-90, "0h"),
         ]
         for (offset, expected) in cases {
             let sample = countdownQuota(resetOffsetSeconds: offset)
@@ -196,8 +196,8 @@ struct AIUsageQuotaTests {
         }
 
         let fiveDay = countdownQuota(remainingPercentage: 87, resetOffsetSeconds: Int64(5.16 * 86_400))
-        #expect(fiveDay.resetCountdownLabel(at: countdownNow) == "5.1D")
-        #expect(countdownPillText(fiveDay) == "87% / 5.1D")
+        #expect(fiveDay.resetCountdownLabel(at: countdownNow) == "5.1d")
+        #expect(countdownPillText(fiveDay) == "87% / 5.1d")
 
         let missingMilliseconds = countdownQuota(nextResetISO: "2026-07-12T10:54:01")
         #expect(missingMilliseconds.resetCountdownLabel(at: countdownNow) == nil)
@@ -210,10 +210,10 @@ struct AIUsageQuotaTests {
     @Test func resetCountdownDaySuffixStaysDottedInChineseLocale() {
         let sample = countdownQuota(remainingPercentage: 87, resetOffsetSeconds: Int64(5.16 * 86_400))
         let label = sample.resetCountdownLabel(at: countdownNow)
-        #expect(label == "5.1D")
+        #expect(label == "5.1d")
         for identifier in ["zh_CN", "zh-Hans", "zh_Hans_CN", "de_DE"] {
-            let localized = String(format: "%.1fD", locale: Locale(identifier: identifier), 5.1)
-            #expect(label == "5.1D")
+            let localized = String(format: "%.1fd", locale: Locale(identifier: identifier), 5.1)
+            #expect(label == "5.1d")
             #expect(label?.contains(",") == false)
             if localized.contains(",") {
                 #expect(label != localized)
