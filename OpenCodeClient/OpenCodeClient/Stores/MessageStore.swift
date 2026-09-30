@@ -252,10 +252,14 @@ final class MessageStore {
             if let partIndex = row.parts.firstIndex(where: { $0.id == part.id }) {
                 row.parts[partIndex] = part
             } else {
-                // Server parts never reuse temp ids; if this row is still a
-                // pending optimistic row, drop its temp parts first so a
-                // server part event never displays side-by-side with the
-                // optimistic temp parts.
+                // Server parts never reuse temp ids. Drop the row's optimistic
+                // temp parts of the same type so a server part never renders
+                // side-by-side with its placeholder. This cannot rely on the
+                // pending flag alone: for user messages the `message.updated`
+                // (which untracks the row) arrives before the text part
+                // event, and without this the placeholder text would linger
+                // next to the server text (duplicated bubble content).
+                row.parts.removeAll { $0.id.hasPrefix("temp-") && $0.type == part.type }
                 if isPendingOptimisticMessage(part.messageID) {
                     row.parts.removeAll { $0.id.hasPrefix("temp-") }
                 }

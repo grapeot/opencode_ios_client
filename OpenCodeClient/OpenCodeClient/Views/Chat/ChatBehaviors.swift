@@ -14,6 +14,60 @@ enum ChatScrollBehavior {
     ) -> Bool {
         bottomMarkerMinY <= viewportHeight + threshold
     }
+
+    /// How long after the view scrolls itself to the bottom a
+    /// bottom-marker measurement may still be mid-settle (the snap is
+    /// animated while idle and lands ~200ms out, the measurement is
+    /// debounced 75ms).
+    static let selfScrollSettleWindow: TimeInterval = 0.35
+
+    /// May a fresh bottom-marker measurement overwrite the follow flag?
+    /// A "not near bottom" reading taken while our own bottom snap is still
+    /// settling is stale: before this gate it latched the flag off with no
+    /// retry, so every later event (new tool call, new message) failed to
+    /// auto-scroll until the user switched sessions and back. "Near bottom"
+    /// readings always apply.
+    static func shouldApplyBottomMeasurement(
+        measuredNearBottom: Bool,
+        lastSelfScrollAt: Date?,
+        now: Date,
+        settleWindow: TimeInterval = selfScrollSettleWindow
+    ) -> Bool {
+        if measuredNearBottom { return true }
+        guard let last = lastSelfScrollAt else { return true }
+        return now.timeIntervalSince(last) >= settleWindow
+    }
+}
+
+extension ChatScrollBehavior {
+    /// Fingerprint of the newest message row for the auto-scroll signature.
+    /// `textLength` is the cumulative text across all of its parts: streaming
+    /// deltas append to an existing part's text without adding a part, so
+    /// `partCount` alone never changes during a long text answer and the
+    /// follow chain never fires.
+    struct LastMessageFingerprint: Equatable {
+        let id: String
+        let partCount: Int
+        let textLength: Int
+        let completed: Int?
+    }
+
+    /// Changes whenever the visible chat content can have grown or the turn
+    /// state can have changed; the view observes it to drive auto-scroll.
+    static func scrollSignature(
+        pendingPermissions: Int,
+        pendingQuestions: Int,
+        messageCount: Int,
+        lastMessage: LastMessageFingerprint?,
+        sessionID: String,
+        status: String,
+        activity: String
+    ) -> String {
+        let last = lastMessage.map {
+            "\($0.id)-\($0.partCount)-\($0.textLength)-\($0.completed ?? -1)"
+        } ?? "none"
+        return "\(pendingPermissions)-\(pendingQuestions)-\(messageCount)-\(last)-\(sessionID)-\(status)-\(activity)"
+    }
 }
 
 /// Why a leading-edge swipe was accepted or rejected. Used by the preview

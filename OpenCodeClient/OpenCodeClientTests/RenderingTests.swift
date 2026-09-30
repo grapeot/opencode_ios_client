@@ -593,6 +593,109 @@ struct ChatScrollBehaviorTests {
             ) == false
         )
     }
+
+    // MARK: scrollSignature — streaming follow
+
+    private func sig(
+        textLength: Int,
+        partCount: Int = 1,
+        messageCount: Int = 1,
+        sessionID: String = "s1",
+        completed: Int? = nil
+    ) -> String {
+        ChatScrollBehavior.scrollSignature(
+            pendingPermissions: 0,
+            pendingQuestions: 0,
+            messageCount: messageCount,
+            lastMessage: ChatScrollBehavior.LastMessageFingerprint(
+                id: "m1",
+                partCount: partCount,
+                textLength: textLength,
+                completed: completed
+            ),
+            sessionID: sessionID,
+            status: "busy",
+            activity: ""
+        )
+    }
+
+    @Test func signatureChangesWhenStreamingGrowsExistingPartText() {
+        // The regression: deltas append to the existing part's text, so
+        // partCount stays constant. Without textLength in the signature the
+        // follow chain never fires during a long text answer.
+        #expect(sig(textLength: 42) != sig(textLength: 43))
+    }
+
+    @Test func signatureStableWhenNothingChanged() {
+        #expect(sig(textLength: 42) == sig(textLength: 42))
+    }
+
+    @Test func signatureChangesWhenAPartIsAdded() {
+        #expect(sig(textLength: 42, partCount: 1) != sig(textLength: 42, partCount: 2))
+    }
+
+    @Test func signatureChangesWhenAMessageIsAdded() {
+        #expect(sig(textLength: 42, messageCount: 1) != sig(textLength: 42, messageCount: 2))
+    }
+
+    @Test func signatureChangesWhenSessionChanges() {
+        #expect(sig(textLength: 42, sessionID: "s1") != sig(textLength: 42, sessionID: "s2"))
+    }
+
+    @Test func signatureChangesWhenLastMessageCompletes() {
+        #expect(sig(textLength: 42, completed: nil) != sig(textLength: 42, completed: 1_700_000_000))
+    }
+
+    // MARK: shouldApplyBottomMeasurement — stale-latch guard
+
+    private let now = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    @Test func nearBottomMeasurementAlwaysApplies() {
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: true,
+            lastSelfScrollAt: now.addingTimeInterval(-0.1),
+            now: now
+        ))
+    }
+
+    @Test func farMeasurementAppliesWithoutRecentSelfScroll() {
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: nil,
+            now: now
+        ))
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-1.0),
+            now: now
+        ))
+    }
+
+    @Test func farMeasurementInsideSettleWindowIsSkipped() {
+        // The regression: the 75ms measurement catches the animated bottom
+        // snap mid-flight, reads "far", and latched isNearBottom off with no
+        // retry — every later new event failed to auto-scroll until a
+        // session switch. Inside the settle window the reading is too early
+        // to trust.
+        #expect(!ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-0.1),
+            now: now
+        ))
+        #expect(!ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-ChatScrollBehavior.selfScrollSettleWindow / 2),
+            now: now
+        ))
+    }
+
+    @Test func farMeasurementAfterSettleWindowApplies() {
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-ChatScrollBehavior.selfScrollSettleWindow - 0.05),
+            now: now
+        ))
+    }
 }
 
 struct SessionListEdgeSwipeBehaviorTests {

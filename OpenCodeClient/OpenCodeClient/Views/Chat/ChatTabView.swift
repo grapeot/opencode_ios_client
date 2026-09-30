@@ -92,6 +92,10 @@ struct ChatTabView: View {
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
+    /// When the view last scrolled itself to the bottom; bottom-marker
+    /// measurements inside the settle window after this are too early to
+    /// trust (the animated snap has not landed yet).
+    @State private var lastSelfScrollAt: Date?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
@@ -1015,6 +1019,7 @@ struct ChatTabView: View {
     }
 
     private func scheduleScrollToBottom(using proxy: ScrollViewProxy) {
+        lastSelfScrollAt = Date()
         pendingScrollTask?.cancel()
         let shouldAnimate = !state.isBusy
 
@@ -1037,10 +1042,21 @@ struct ChatTabView: View {
         pendingBottomVisibilityTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(75))
             guard !Task.isCancelled else { return }
-            isNearBottom = ChatScrollBehavior.shouldAutoScroll(
+            let nearBottom = ChatScrollBehavior.shouldAutoScroll(
                 bottomMarkerMinY: bottomMarkerMinY,
                 viewportHeight: viewportHeight
             )
+            // A "far from bottom" reading captured while our own snap is
+            // still settling must not latch the flag off — that stale
+            // reading used to block every later event-driven auto-scroll
+            // until the user switched sessions.
+            if ChatScrollBehavior.shouldApplyBottomMeasurement(
+                measuredNearBottom: nearBottom,
+                lastSelfScrollAt: lastSelfScrollAt,
+                now: Date()
+            ) {
+                isNearBottom = nearBottom
+            }
         }
     }
 
@@ -1108,23 +1124,30 @@ struct ChatTabView: View {
         }
     }
 
-    /// 内容变化时用于触发自动滚动
+    /// 内容变化时用于触发自动滚动。签名含最后一条消息的累计文本长度：流式
+    /// delta 只增长既有 part 的 text（parts.count 不变），没有这一项，长文本
+    /// 回复期间 onChange 永不触发，视图不再跟随到底部。
     private var scrollAnchor: String {
-        let perm = state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count
-        let questionCount = state.pendingQuestions.filter { $0.sessionID == state.currentSessionID }.count
-        let messageCount = state.messages.count
-        let lastMessage = state.messages.last
-        let lastMessageSignature = {
-            guard let lastMessage else { return "none" }
-            return "\(lastMessage.info.id)-\(lastMessage.parts.count)-\(lastMessage.info.time.completed ?? -1)"
-        }()
-        let sid = state.currentSessionID ?? ""
-        let status = state.currentSessionStatus?.type ?? ""
-        let activity = runningTurnActivity.map {
-            let state = ($0.state == .running) ? "running" : "completed"
-            return "\($0.id)-\($0.text)-\(state)"
-        } ?? ""
-        return "\(perm)-\(questionCount)-\(messageCount)-\(lastMessageSignature)-\(sid)-\(status)-\(activity)"
+        let lastMessage = state.messages.last.map { message in
+            ChatScrollBehavior.LastMessageFingerprint(
+                id: message.info.id,
+                partCount: message.parts.count,
+                textLength: message.parts.reduce(0) { $0 + ($1.text?.count ?? 0) },
+                completed: message.info.time.completed
+            )
+        }
+        return ChatScrollBehavior.scrollSignature(
+            pendingPermissions: state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count,
+            pendingQuestions: state.pendingQuestions.filter { $0.sessionID == state.currentSessionID }.count,
+            messageCount: state.messages.count,
+            lastMessage: lastMessage,
+            sessionID: state.currentSessionID ?? "",
+            status: state.currentSessionStatus?.type ?? "",
+            activity: runningTurnActivity.map {
+                let state = ($0.state == .running) ? "running" : "completed"
+                return "\($0.id)-\($0.text)-\(state)"
+            } ?? ""
+        )
     }
 
     /// Empty-state block that fills the viewport (minus content padding and the
