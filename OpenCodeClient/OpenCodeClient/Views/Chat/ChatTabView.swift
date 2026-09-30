@@ -92,6 +92,10 @@ struct ChatTabView: View {
     @State private var pendingScrollTask: Task<Void, Never>?
     @State private var pendingBottomVisibilityTask: Task<Void, Never>?
     @State private var isNearBottom = true
+    /// When the view last scrolled itself to the bottom; bottom-marker
+    /// measurements inside the settle window after this are too early to
+    /// trust (the animated snap has not landed yet).
+    @State private var lastSelfScrollAt: Date?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
@@ -1015,6 +1019,7 @@ struct ChatTabView: View {
     }
 
     private func scheduleScrollToBottom(using proxy: ScrollViewProxy) {
+        lastSelfScrollAt = Date()
         pendingScrollTask?.cancel()
         let shouldAnimate = !state.isBusy
 
@@ -1037,10 +1042,21 @@ struct ChatTabView: View {
         pendingBottomVisibilityTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(75))
             guard !Task.isCancelled else { return }
-            isNearBottom = ChatScrollBehavior.shouldAutoScroll(
+            let nearBottom = ChatScrollBehavior.shouldAutoScroll(
                 bottomMarkerMinY: bottomMarkerMinY,
                 viewportHeight: viewportHeight
             )
+            // A "far from bottom" reading captured while our own snap is
+            // still settling must not latch the flag off — that stale
+            // reading used to block every later event-driven auto-scroll
+            // until the user switched sessions.
+            if ChatScrollBehavior.shouldApplyBottomMeasurement(
+                measuredNearBottom: nearBottom,
+                lastSelfScrollAt: lastSelfScrollAt,
+                now: Date()
+            ) {
+                isNearBottom = nearBottom
+            }
         }
     }
 

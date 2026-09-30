@@ -645,6 +645,57 @@ struct ChatScrollBehaviorTests {
     @Test func signatureChangesWhenLastMessageCompletes() {
         #expect(sig(textLength: 42, completed: nil) != sig(textLength: 42, completed: 1_700_000_000))
     }
+
+    // MARK: shouldApplyBottomMeasurement — stale-latch guard
+
+    private let now = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    @Test func nearBottomMeasurementAlwaysApplies() {
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: true,
+            lastSelfScrollAt: now.addingTimeInterval(-0.1),
+            now: now
+        ))
+    }
+
+    @Test func farMeasurementAppliesWithoutRecentSelfScroll() {
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: nil,
+            now: now
+        ))
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-1.0),
+            now: now
+        ))
+    }
+
+    @Test func farMeasurementInsideSettleWindowIsSkipped() {
+        // The regression: the 75ms measurement catches the animated bottom
+        // snap mid-flight, reads "far", and latched isNearBottom off with no
+        // retry — every later new event failed to auto-scroll until a
+        // session switch. Inside the settle window the reading is too early
+        // to trust.
+        #expect(!ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-0.1),
+            now: now
+        ))
+        #expect(!ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-ChatScrollBehavior.selfScrollSettleWindow / 2),
+            now: now
+        ))
+    }
+
+    @Test func farMeasurementAfterSettleWindowApplies() {
+        #expect(ChatScrollBehavior.shouldApplyBottomMeasurement(
+            measuredNearBottom: false,
+            lastSelfScrollAt: now.addingTimeInterval(-ChatScrollBehavior.selfScrollSettleWindow - 0.05),
+            now: now
+        ))
+    }
 }
 
 struct SessionListEdgeSwipeBehaviorTests {

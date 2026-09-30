@@ -14,6 +14,29 @@ enum ChatScrollBehavior {
     ) -> Bool {
         bottomMarkerMinY <= viewportHeight + threshold
     }
+
+    /// How long after the view scrolls itself to the bottom a
+    /// bottom-marker measurement may still be mid-settle (the snap is
+    /// animated while idle and lands ~200ms out, the measurement is
+    /// debounced 75ms).
+    static let selfScrollSettleWindow: TimeInterval = 0.35
+
+    /// May a fresh bottom-marker measurement overwrite the follow flag?
+    /// A "not near bottom" reading taken while our own bottom snap is still
+    /// settling is stale: before this gate it latched the flag off with no
+    /// retry, so every later event (new tool call, new message) failed to
+    /// auto-scroll until the user switched sessions and back. "Near bottom"
+    /// readings always apply.
+    static func shouldApplyBottomMeasurement(
+        measuredNearBottom: Bool,
+        lastSelfScrollAt: Date?,
+        now: Date,
+        settleWindow: TimeInterval = selfScrollSettleWindow
+    ) -> Bool {
+        if measuredNearBottom { return true }
+        guard let last = lastSelfScrollAt else { return true }
+        return now.timeIntervalSince(last) >= settleWindow
+    }
 }
 
 extension ChatScrollBehavior {
