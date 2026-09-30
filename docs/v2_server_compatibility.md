@@ -1,8 +1,8 @@
 # V1 / V2 server compatibility
 
-Status: waiting for the server to reach feature parity before client implementation. The app code is not changed.
+Status: waiting for the server to reach feature parity before client implementation. The app code is not changed. Re-checked 2026-09-30 against upstream `v2.0.20` and master through PR #189; see "Changes since 2.0.18" at the end.
 
-Measured on tag `v2.0.18`, a local `serve` process, Basic auth user `opencode`.
+Measured on tag `v2.0.18`, a local `serve` process, Basic auth user `opencode`. The diff from `v2.0.18` to `v2.0.20` does not change any route, event name, or body this doc maps (only new credential routes and an optional provider-response field on session errors), so every mapping below stays the measured 2.0.18 wire behavior.
 
 The target is every V1 behavior the iOS app has today, except the rows marked `no server API`. Those rows have no V2 server API. Do not invent a local stand-in for them. V1 hosts stay on the current requests. V2 hosts use the mappings below. Do not guess a body that is not written here.
 
@@ -43,6 +43,7 @@ This is the inventory. `replaced` means a V2 route was measured, or the event na
 | Project list | `GET /project` | `GET /api/project` | replaced |
 | Current project | `GET /project/current` | `GET /api/location` | replaced |
 | Read archive flag | `time.archived` on session | same field, when the server sends it | replaced |
+| Task receipt card | synthetic user message text part (`synthetic: true`), `<task ...>` XML body | V2 emits message `type: "synthetic"`, which the message map skips | skipped message — not listed below |
 | `server.connected` | SSE | same name | replaced |
 | `session.status` | SSE | same name | replaced |
 | `session.deleted` | SSE | same name | replaced |
@@ -58,7 +59,9 @@ This is the inventory. `replaced` means a V2 route was measured, or the event na
 | Archive write | `PATCH` `time.archived` | update route ignores the field. No write route | no server API |
 | Archive restore | `PATCH` `time.archived` to `-1` | same. No write route | no server API |
 
-Two server APIs still have no parity, so this is not a good time to implement the client. Archive write and restore have no route. The official V2 app rejects that action with `Session archiving is unavailable`. Todos are `GET /session/:id/todo` plus `todo.updated` on V1. V2 returns 404 and has no todo event. Do not invent either one. Wait until the server exposes those two, then implement from this spec. `untracked` is not a separate client feature. If that string arrives, the file icon uses the same color as `modified`.
+Two server APIs still have no parity, so this is not a good time to implement the client. Archive write and restore have no route. The official V2 app rejects that action with `Session archiving is unavailable`. Todos are `GET /session/:id/todo` plus `todo.updated` on V1. V2 returns 404 and has no todo event. Do not invent either one. Wait until the server exposes those two, then implement from this spec. `untracked` is not a separate client feature. If that string arrives, the file icon uses the same color as `modified`. The `v2.0.20` protocol adds no change to either row.
+
+One V1 feature has no V2 target and is now client-shipped: the task receipt card (PR #179) renders V1's synthetic user message (`synthetic: true` text part carrying `<task ...>` XML). On V2 the server delivers the same payload shape as a `type: "synthetic"` message, which the message map skips, so the card never appears on a V2 host. The rest of chat works; subagent completion goes silent instead of rendering a card. That is a coverage gap to resolve during implementation (either map the `synthetic` message, or re-derive the receipt from its `metadata.source === "subagent"` child reference), not a reason to fork the mapping for it now.
 
 `GET /api/session/active` returns `{data: {sessionID: {type: "running"}}}`. Ids in that map are busy. Ids absent from it are idle. It does not carry `retry`. After connect, `session.status` events update that snapshot. Directory on list, create, and file calls is in the 2.0.18 protocol. The contract script does not call those query forms yet.
 
@@ -100,6 +103,7 @@ Session, from `data` on get, create, fork, and each list element:
 | `time.created` / `time.updated` | those integers. Missing throws for get, create, and fork. |
 | `time.archived` | `time.archived` when the server sent it. Do not replace it with a phone-only flag. |
 | `share`, `summary` | nil |
+| `tokens`, `cost` | the session aggregate `tokens` and `cost` when present (V2 `Session.Info` carries both; same token shape as the assistant message map). Otherwise nil. |
 | `revert` | `revert` when it has `messageID`, else nil |
 
 `POST /api/session` body is `{}` or `{"title": title}`. Do not send the V1 `directory` query. Do not send `x-opencode-directory`. The displayed directory is `location.directory`.
@@ -288,18 +292,18 @@ Do not call `/session/:id/message`. Do not send `format`.
 
 `ContentView` starts SSE on connect. On V2 the socket is `GET /api/event`, with the same Basic auth and `Accept: text/event-stream`. Frames are `data: {json}\n\n`. Ignore lines that start with `:`. The measured first frame is `data: {"id":"...","type":"server.connected","data":{}}`.
 
-The JSON has `id`, `type`, and `data`. Durable events also have `created` and may have `location`. Do not read `payload.properties`. Translate `data` into the dictionaries the existing handlers already accept, then call those handlers.
+The JSON has `id`, `type`, and `data`. Durable events also have `created` and may have `location`. Do not read `payload.properties`. Translate `data` into the dictionaries the existing handlers already accept, then call those handlers. The existing handlers are the SSE data path (PR #186): message and part handlers upsert decoded payloads into `MessageStore` in place and only fall back to REST on the per-type completeness gate, so the translations below must emit the same property shapes the V1 socket does — do not call `loadMessages()` directly from the translation layer, and do not special-case the data path. A synthetic V1-shaped part assembled from `session.text.*` fields carries `text`, so it passes the gate; frames that cannot map to a full part keep the REST fallback behavior unchanged.
 
 | V2 `type` | Existing handler | Translation |
 |---|---|---|
 | `server.connected` | `server.connected` | empty properties |
-| `session.status` | `session.status` | `data` already has `sessionID` and `status`. `status.type` is `idle`, `busy`, or `retry`. Retry also has `attempt`, `message`, and `next`. |
+| `session.status` | `session.status` | `data` already has `sessionID` and `status`. `status.type` is `idle`, `busy`, or `retry`. Retry also has `attempt`, `message`, and `next`. The idle branch reconciles once per turn; that stays. |
 | `session.idle` | `session.status` | `{sessionID, status:{type:"idle"}}` |
 | `session.created`, `session.renamed`, `session.metadata.updated` | `session.updated` | GET the session and upsert. Do not decode the event as `Session`. This is the V2 substitute for `session.updated`. |
 | `session.deleted` | `session.deleted` | `data.sessionID` |
-| `session.text.started` | step start, then `message.part.updated` | `ordinal` is `data.ordinal`. Part id is `data.assistantMessageID + "-text-" + String(ordinal)`. The same ordinal always yields the same id, including after reconnect. Call `recordStepStart(assistantMessageID, sessionID:)` first. Then part `{type:"text", id: that id, messageID: assistantMessageID, sessionID}`. |
-| `session.text.delta` | `message.part.delta` | Same part id from `data.ordinal`. Properties `{sessionID, messageID: assistantMessageID, partID, field:"text", delta: data.delta}`. |
-| `session.text.ended` | direct reload | Do not call the part-updated finalizer. Call `loadMessages()` and `loadSessionDiff()`. |
+| `session.text.started` | step start, then `message.part.updated` | `ordinal` is `data.ordinal`. Part id is `data.assistantMessageID + "-text-" + String(ordinal)`. The same ordinal always yields the same id, including after reconnect. Call `recordStepStart(assistantMessageID, sessionID:)` first. Then part `{type:"text", id: that id, messageID: assistantMessageID, sessionID}`. The part has no `text` field, so the data path gate rejects it; the fallback reload behaves as before. |
+| `session.text.delta` | `message.part.delta` | Same part id from `data.ordinal`. Properties `{sessionID, messageID: assistantMessageID, partID, field:"text", delta: data.delta}`. Feeds `appendDelta` on the data path. |
+| `session.text.ended` | direct reload | `data.text` is the full part text. Emit part `{type:"text", id: part id from ordinal, messageID: assistantMessageID, sessionID, text: data.text}` so the data path upserts it, and only then call `loadMessages()` and `loadSessionDiff()` as the finalizer. Do not call the part-updated handler twice. |
 | `session.reasoning.delta` | none | do not call `recordVisibleToken` |
 | `session.reasoning.ended` | none | `loadMessages()` |
 | `session.message.content.updated` | direct reload | `loadMessages()`. Step start already happened on `session.text.started`. |
@@ -307,9 +311,9 @@ The JSON has `id`, `type`, and `data`. Durable events also have `created` and ma
 | `permission.replied` | `permission.replied` | `permissionID` is `data.requestID`. The existing remover accepts `permissionID` or `id`. |
 | `form.created` | `question.asked` | map `data.form` with the form map, store it in the reply table, and append |
 | `form.replied`, `form.cancelled` | `question.rejected` | Both only remove the card. Pass `{id: data.id}` to `QuestionController.applyResolvedEvent`. `question.replied` uses that same remover. There is no second rejected behavior. |
-| `session.execution.failed` | `session.error` | properties `error` is `{name: data.error.type, data: {message: data.error.message}}`, plus `sessionID`. The existing handler decodes that as `Message.MessageError`. |
+| `session.execution.failed` | `session.error` | properties `error` is `{name: data.error.type, data: {message: data.error.message}}`, plus `sessionID`. The existing handler decodes that as `Message.MessageError`. `data.error.response.body` (new in 2.0.20, optional) is dropped. |
 
-There is no `todo.updated`. Recompute todos after every message reload. There is no `message.updated` and no `message.part.delta` on this socket. Do not wait for those names.
+There is no `todo.updated`. Recompute todos after every message reload. On V1 the `todo.updated` handler fills `sessionTodos` from the payload; on V2 that event never arrives, and the recompute path `sessionTodos` returns `[]` per the Todos section, which the todo panel already renders as empty. There is no `message.updated` and no `message.part.delta` on this socket. Do not wait for those names.
 
 `sessionStatus()` is `GET /api/session/active`. An id in `data` with `type` `"running"` is `SessionStatus` type `busy`. Every other known session is `idle`. Do not call `/session/status`. `retry` still comes only from a later `session.status` event.
 
@@ -348,3 +352,24 @@ Saved bodies, no server. One test per row. A row is not done until its test pass
 ## What not to do
 
 Do not ship a proxy. Do not fork the app. Do not send `parts`, `mime`, `source`, or `format` to V2. Do not decode a 204 body. Do not call `/session/status`, `/todo`, `/question`, or `/api/project/current` on a V2 host. Do not hide a server `time.archived`. Do not store archive only on the phone. Do not invent a todo list. Do not drop questions, images, or Car Mode because the old route is gone.
+
+## Changes since 2.0.18
+
+Re-audit 2026-09-30, after PRs #173–#189 landed on master and upstream moved to `v2.0.20`. Verdict: the spec maps and gates stay as written; the deltas below are the only things the post-spec work added or confirmed.
+
+Server side (`v2.0.18` → `v2.0.20`, verified by diffing `packages/protocol` and `packages/schema`):
+
+- New routes only in the credential group: `GET /api/credential`, `POST /api/credential`. Not in the iOS client's surface; none of the mapped surfaces moved.
+- `SessionError.Error` gains the optional `response: {body}` field (provider response body preserved in session errors). The `session.execution.failed` translation above ignores it — the banner keeps rendering `type` + `message`.
+- Event schemas are byte-identical between `v2.0.18` and `v2.0.20` (`session.text.*`, `session.status`, `permission.*`, `form.*`, execution events unchanged). The still-missing rows stay missing: no todo route or `todo.updated`, no archive write route.
+
+Client side (PRs merged after this spec):
+
+- PR #183/#189/#175 (UI test runner, build bump, URL trailing-slash normalize): no wire impact. The base-URL normalizer must run before the V2 probe so `GET /api/info` does not double-slash.
+- PR #179 (task receipt cards): new V1-only UI coverage row added at the top of this doc. The card keys off `Part.synthetic` plus the `<task>` envelope; V2 skips `type: "synthetic"` messages, so this feature is dark on V2 until the mapping gap is closed during implementation.
+- PR #176 (agent catalog validation): consumes the `GET /agent` result the V2 agent map already produces (`name` from `name`/`id`, `mode`, `hidden`). The fallback to `"build"` stays a client decision; V2 does not change it. No mapping change.
+- PR #186 (SSE data path): changes what the "existing handlers" are, which is why the SSE translation table now says the translations feed `MessageStore` upserts and append deltas instead of unconditional reloads. The V2 mapper itself is untouched: translation stays at the property-shape level, and the completeness gate decides upsert vs REST exactly as it does on V1 hosts.
+- PR #187/#185/#182 (status line numbers, cache hit rate): read `Session.tokens` and assistant `Message.tokens` from V1 payloads today. V2 `Session.Info` does carry a `tokens` aggregate with the same `{input, output, reasoning, cache:{read, write}}` shape (plus `cost`), so the session map should copy it the way it copies `time` — that row was missing from the map; the implementation must add `tokens`/`cost` from the session object, nil when absent. With that, the status line behaves the same on V2; without it, the own-session segment falls back to the message-window sum, which the message map already supports by copying assistant `tokens`.
+- PR #180/#179 notifications and background-refresh paths use no OpenCode server routes beyond the mapped surface (quota reads a dedicated dashboard URL unrelated to the OpenCode API). No mapping change.
+
+No client V1 route was added after the spec: the `APIClient` request-path inventory still matches the coverage table (`/global/health` through `/session/status`), so the "every current method" table remains the total surface a V2 implementation must branch.
