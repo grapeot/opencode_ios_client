@@ -408,10 +408,14 @@ struct ChatTabView: View {
     private var quietComposerStatus: some View {
         VStack(alignment: .leading, spacing: DesignSpacing.xs) {
             if let stats = sessionStatsStatusText {
+                // Full width + leading so the single-line block is not
+                // centered by the parent VStack (which would differ from the
+                // two-line layout, where the transient row spans the width).
                 Text(stats)
                     .font(DesignTypography.meta)
                     .foregroundStyle(DesignColors.Neutral.textTertiary)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if hasTransientComposerStatus {
                 Group {
