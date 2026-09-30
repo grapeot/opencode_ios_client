@@ -433,7 +433,8 @@ struct ChatTabView: View {
     /// transient per-turn state (agent activity, voice, elapsed time,
     /// abort). Top line = session counters; bottom line = transient state.
     private var quietComposerStatus: some View {
-        VStack(alignment: .leading, spacing: DesignSpacing.xs) {
+        // 6pt gap: xs (4) read as cramped between the two lines.
+        VStack(alignment: .leading, spacing: 6) {
             sessionStatsLine
             if hasTransientComposerStatus {
                 Group {
