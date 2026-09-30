@@ -1404,7 +1404,27 @@ struct AppStateFlowTests {
         #expect(await apiClient.sessionDiffCallCount == 0)
     }
 
-    @Test @MainActor func messageUpdatedForCurrentSessionReloads() async {
+    @Test @MainActor func messageUpdatedWithFullInfoUpsertsWithoutREST() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","sessionID":"s1","role":"assistant","time":{"created":1000,"completed":null}}}}}
+        """))
+
+        // SSE data path: the full info payload upserts the row locally.
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.info.id == "m1")
+        #expect(state.messages.first?.info.isAssistant == true)
+        #expect(state.messages.first?.parts.isEmpty == true)
+        #expect(await apiClient.messagesCallCount == 0)
+        #expect(await apiClient.sessionDiffCallCount == 0)
+    }
+
+    @Test @MainActor func messageUpdatedWithoutInfoStillReloads() async {
+        // Legacy/shim payloads carry no `info` object: the fallback path must
+        // keep doing what the pre-SSE-data-path client did.
         let apiClient = MockAPIClient()
         await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "Final")])
         await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/MessageStore.swift")])
@@ -1519,26 +1539,31 @@ struct AppStateFlowTests {
         #expect(state.sessions == [current, Self.makeSession(id: "s-other", updated: 8, title: "Other")])
     }
 
-    @Test @MainActor func messagePartUpdatedReloadsCurrentSession() async {
+    @Test @MainActor func messagePartUpdatedFullToolPartUpsertsShellRowWithoutREST() async {
         let apiClient = MockAPIClient()
-        await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "Final")])
-        await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/AppState.swift")])
         let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
         state.currentSessionID = "s1"
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"running","title":"run ls","input":{"command":"ls"},"time":{"start":1000}}}}}}
         """))
 
-        #expect(state.messageStore.partType(for: "p1", inSession: "s1") == "text")
+        // SSE data path: an assistant-only part for an unknown message creates
+        // a shell row and renders its state locally, with zero REST.
         #expect(state.messages.count == 1)
-        #expect(state.messages.first?.parts.first?.text == "Final")
-        #expect(state.sessionDiffs == [Self.makeDiff(file: "Sources/AppState.swift")])
-        #expect(await apiClient.messagesCallCount == 1)
-        #expect(await apiClient.sessionDiffCallCount == 1)
+        #expect(state.messages.first?.info.id == "m1")
+        #expect(state.messages.first?.info.isAssistant == true)
+        #expect(state.messages.first?.parts.first?.id == "p1")
+        #expect(state.messages.first?.parts.first?.stateDisplay == "running")
+        #expect(state.messageStore.partType(for: "p1", inSession: "s1") == "tool")
+        #expect(await apiClient.messagesCallCount == 0)
+        #expect(await apiClient.sessionDiffCallCount == 0)
     }
 
     @Test @MainActor func messagePartUpdatedWithDeltaStillReloads() async {
+        // Completeness-gate regression: a thin text part (no `text` field,
+        // top-level delta = dsh shim shape) cannot render locally, so it falls
+        // back to the REST reconciliation path exactly like before.
         let apiClient = MockAPIClient()
         await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "Final")])
         await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/AppState.swift")])
@@ -1580,8 +1605,11 @@ struct AppStateFlowTests {
         {"payload":{"type":"session.status","properties":{"sessionID":"s1","status":{"type":"idle","attempt":null,"message":null,"next":null}}}}
         """))
 
+        // idle fires once per turn at turn end: it now triggers the one
+        // per-turn reconciliation (message window + diff).
         #expect(state.sessionStatuses["s1"]?.type == "idle")
-        #expect(await apiClient.messagesCallCount == 0)
+        #expect(await apiClient.messagesCallCount == 1)
+        #expect(await apiClient.sessionDiffCallCount == 1)
     }
 
     @Test @MainActor func sseStreamCapturesStepTimingForCurrentSession() async {
@@ -1593,7 +1621,7 @@ struct AppStateFlowTests {
 
         // Step start: assistant message.created.
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","role":"assistant","time":{"created":1000,"completed":null},"tokens":{"output":0,"reasoning":0}}}}}
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","sessionID":"s1","role":"assistant","time":{"created":1000,"completed":null},"tokens":{"output":0,"reasoning":0}}}}}
         """))
         #expect(state.stepTimings["m1"] != nil)
         #expect(state.stepTimings["m1"]?.sessionID == "s1")
@@ -1605,7 +1633,7 @@ struct AppStateFlowTests {
         // that precedes each part's deltas, so the client tracks partID -> type.
         // Reasoning part created first.
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-reason","messageID":"m1","sessionID":"s1","type":"reasoning"}}}}
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-reason","messageID":"m1","sessionID":"s1","type":"reasoning","text":""}}}}
         """))
 
         // A reasoning delta (field "text", part type "reasoning") must NOT count
@@ -1617,7 +1645,7 @@ struct AppStateFlowTests {
 
         // Text part created.
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text"}}}}
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":""}}}}
         """))
         #expect(state.stepTimings["m1"]?.firstVisibleAt == nil)
 
@@ -1650,7 +1678,7 @@ struct AppStateFlowTests {
         state.currentSessionID = "s1"
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
-        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","role":"assistant","time":{"created":1000,"completed":null},"tokens":{"output":0,"reasoning":0}}}}}
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","sessionID":"s1","role":"assistant","time":{"created":1000,"completed":null},"tokens":{"output":0,"reasoning":0}}}}}
         """))
 
         // A step whose only output is a tool call: the tool part carries its JSON
@@ -1696,6 +1724,220 @@ struct AppStateFlowTests {
         {"payload":{"type":"message.part.delta","properties":{"sessionID":"s2","messageID":"m9","partID":"p9","field":"text","delta":"x"}}}
         """))
         #expect(state.stepTimings.isEmpty)
+    }
+
+    // MARK: - SSE data path (payload upsert)
+
+    @Test @MainActor func messagePartUpdatedToolPartStatusSequenceUpdatesLocalState() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-tool","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"pending"}}}}}
+        """))
+        #expect(state.messages.first?.parts.first?.stateDisplay == "pending")
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-tool","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"running","time":{"start":1000}}}}}}
+        """))
+        #expect(state.messages.first?.parts.first?.stateDisplay == "running")
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-tool","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"completed","output":"ok","time":{"start":1000,"end":3000}}}}}}
+        """))
+        #expect(state.messages.first?.parts.first?.stateDisplay == "completed")
+        #expect(state.messages.first?.parts.first?.toolOutput == "ok")
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.parts.count == 1)
+        #expect(await apiClient.messagesCallCount == 0)
+        #expect(await apiClient.sessionDiffCallCount == 0)
+    }
+
+    @Test @MainActor func messagePartDeltaAppendsStreamingTextInPlace() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        // Step start: the assistant message row exists before any part.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","sessionID":"s1","role":"assistant","time":{"created":1000,"completed":null}}}}}
+        """))
+        // Text part start frame (empty text).
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":""}}}}
+        """))
+        #expect(state.messages.first?.parts.first?.text == "")
+
+        for chunk in ["Hello", ", ", "world"] {
+            await state.applySSEEventForTesting(Self.makeSSEEvent("""
+            {"payload":{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"\(chunk)"}}}
+            """))
+        }
+        #expect(state.messages.first?.parts.first?.text == "Hello, world")
+
+        // End frame carries the full text and replaces the accumulated one.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"text","text":"Hello, world"}}}}
+        """))
+        #expect(state.messages.first?.parts.first?.text == "Hello, world")
+        #expect(await apiClient.messagesCallCount == 0)
+        #expect(await apiClient.sessionDiffCallCount == 0)
+    }
+
+    @Test @MainActor func messagePartUpdatedPartBeforeMessageInfoFillsShellRow() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        // Assistant-only part arrives before the message row (reconnect
+        // missed the message.updated): a shell row is created.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"reasoning","text":"thinking"}}}}
+        """))
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.info.id == "m1")
+
+        // A text part for a different unknown message must NOT create a row
+        // (role ambiguous): it waits for message.updated or reconciliation.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p2","messageID":"m2","sessionID":"s1","type":"text","text":"orphan"}}}}
+        """))
+        #expect(state.messages.count == 1)
+
+        // The message info fills the shell row: info replaced, parts kept.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"m1","sessionID":"s1","role":"assistant","time":{"created":1000,"completed":2000},"finish":"stop"}}}}
+        """))
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.info.time.completed == 2000)
+        #expect(state.messages.first?.info.finish == "stop")
+        #expect(state.messages.first?.parts.first?.text == "thinking")
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    @Test @MainActor func messagePartUpdatedReplayIsIdempotent() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        let frame = Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"running"}}}}}
+        """)
+        await state.applySSEEventForTesting(frame)
+        await state.applySSEEventForTesting(frame)
+
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.parts.count == 1)
+        #expect(state.messages.first?.parts.first?.stateDisplay == "running")
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    @Test @MainActor func messagePartAndMessageRemovedEventsApplyLocally() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","messageID":"m1","sessionID":"s1","type":"tool","tool":"bash","state":{"status":"pending"}}}}}
+        """))
+        #expect(state.messages.first?.parts.count == 1)
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.removed","properties":{"sessionID":"s1","messageID":"m1","partID":"p1"}}}
+        """))
+        #expect(state.messages.first?.parts.isEmpty == true)
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.removed","properties":{"sessionID":"s1","messageID":"m1"}}}
+        """))
+        #expect(state.messages.isEmpty)
+        #expect(state.partsByMessage["m1"] == nil)
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    @Test @MainActor func messageRemovedEventIgnoresOtherSession() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        _ = state.appendOptimisticUserMessage("hi", messageID: "m-keep")
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.removed","properties":{"sessionID":"s2","messageID":"m-keep"}}}
+        """))
+
+        #expect(state.messages.contains(where: { $0.info.id == "m-keep" }))
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    @Test @MainActor func messagePartUpdatedForPendingOptimisticRowReplacesTempParts() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        _ = state.appendOptimisticUserMessage("hello", messageID: "msg_abc")
+        #expect(state.messages.first?.parts.first?.id == "temp-part-msg_abc")
+
+        // The server persists the user message under the same deterministic
+        // id and emits its part: temp parts are dropped, server part shows.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p-user","messageID":"msg_abc","sessionID":"s1","type":"text","text":"[analyze-mode]\\nhello"}}}}
+        """))
+
+        #expect(state.messages.count == 1)
+        #expect(state.messages.first?.parts.count == 1)
+        #expect(state.messages.first?.parts.first?.id == "p-user")
+        #expect(state.messages.first?.parts.first?.text == "[analyze-mode]\nhello")
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    @Test @MainActor func messageUpdatedForUserMessageUntracksPendingOptimisticRow() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        _ = state.appendOptimisticUserMessage("hello", messageID: "msg_abc")
+        #expect(state.messageStore.pendingOptimisticMessageIDs == ["msg_abc"])
+
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"msg_abc","sessionID":"s1","role":"user","time":{"created":1000,"completed":1000}}}}}
+        """))
+
+        #expect(state.messageStore.pendingOptimisticMessageIDs.isEmpty)
+        #expect(state.messages.contains(where: { $0.info.id == "msg_abc" && $0.info.isUser }))
+        #expect(await apiClient.messagesCallCount == 0)
+    }
+
+    // MARK: - SSE heartbeat watchdog
+
+    @Test @MainActor func sseWatchdogFiresOneReconciliationAfterSilence() async {
+        let apiClient = MockAPIClient()
+        await apiClient.setMessagesResult([Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "x")])
+        await apiClient.setSessionDiffResult([Self.makeDiff(file: "Sources/AppState.swift")])
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        state.sseLastFrameAt = Date().addingTimeInterval(-30)
+        await state.checkSSEWatchdog()
+        #expect(await apiClient.messagesCallCount == 1)
+        #expect(await apiClient.sessionDiffCallCount == 1)
+
+        // The timestamp reset means one silence triggers one reconciliation,
+        // not one per check interval.
+        await state.checkSSEWatchdog()
+        #expect(await apiClient.messagesCallCount == 1)
+        #expect(await apiClient.sessionDiffCallCount == 1)
+    }
+
+    @Test @MainActor func sseWatchdogNoOpsWhenStreamIsFresh() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+        state.sseLastFrameAt = Date()
+
+        await state.checkSSEWatchdog()
+        #expect(await apiClient.messagesCallCount == 0)
+        #expect(await apiClient.sessionDiffCallCount == 0)
     }
 
     @Test @MainActor func deleteCurrentSessionSelectsNextMostRecentSession() async throws {

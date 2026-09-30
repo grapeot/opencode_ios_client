@@ -8,10 +8,25 @@ import Observation
 
 @Observable
 final class MessageStore {
-    enum MessagePartUpdateOutcome {
+    /// Result of applying an SSE part payload in place.
+    /// - applied: local state updated, no REST needed.
+    /// - needsReconcile: payload is incomplete for its part type (e.g. a thin
+    ///   shim-shape part); the caller falls back to the REST reconciliation
+    ///   path so behavior matches the pre-SSE-data-path host.
+    /// - ignored: payload is complete but intentionally a no-op (e.g. a text
+    ///   part for a row not loaded yet); nothing to apply and no REST needed.
+    enum PartUpsertOutcome {
+        case applied
+        case needsReconcile
         case ignored
-        case finalized(sessionID: String)
     }
+
+    /// Part types that only ever belong to assistant messages. These may
+    /// create a placeholder (shell) row when they arrive before the
+    /// `message.updated` that would have created the row (reconnect miss or
+    /// reordering). Text/file parts must not create shell rows: their role is
+    /// ambiguous (user or assistant), so a premature row would misrender.
+    private static let assistantShellPartTypes: Set<String> = ["tool", "reasoning", "step-finish", "patch"]
 
     var messages: [MessageWithParts] = []
     var partsByMessage: [String: [Part]] = [:]
@@ -206,20 +221,141 @@ final class MessageStore {
         }
     }
 
-    func applyMessagePartUpdate(
-        properties: [String: AnyCodable],
-        currentSessionID: String?
-    ) -> MessagePartUpdateOutcome {
-        guard let sessionID = properties["sessionID"]?.value as? String,
-              sessionID == currentSessionID,
-              let partObject = properties["part"]?.value as? [String: Any],
-              partObject["messageID"] as? String != nil,
-              let partID = partObject["id"] as? String else {
+    /// Completeness gate for the SSE data path, per part type:
+    /// - tool: the payload must carry a decodable `state` (the tool's
+    ///   status/input/output/time). A tool part without state is the thin
+    ///   shim shape and cannot render tool status locally.
+    /// - text/reasoning: the `text` field must be present. An empty string is
+    ///   valid (the start frame) — only an absent field fails.
+    /// - other types (step-start, step-finish, patch, file, ...): accept as-is;
+    ///   none of them have a critical local-render field that a thin payload
+    ///   would omit.
+    private func isPayloadComplete(_ part: Part) -> Bool {
+        switch part.type {
+        case "tool":
+            return part.state != nil
+        case "text", "reasoning":
+            return part.text != nil
+        default:
+            return true
+        }
+    }
+
+    /// Applies a full part payload in place (SSE data path): replace-or-insert
+    /// the part inside its message row, creating a shell row for
+    /// assistant-only part types when the row is not loaded yet.
+    func upsertPart(_ part: Part) -> PartUpsertOutcome {
+        guard isPayloadComplete(part) else { return .needsReconcile }
+
+        if let rowIndex = messages.firstIndex(where: { $0.info.id == part.messageID }) {
+            var row = messages[rowIndex]
+            if let partIndex = row.parts.firstIndex(where: { $0.id == part.id }) {
+                row.parts[partIndex] = part
+            } else {
+                // Server parts never reuse temp ids; if this row is still a
+                // pending optimistic row, drop its temp parts first so a
+                // server part event never displays side-by-side with the
+                // optimistic temp parts.
+                if isPendingOptimisticMessage(part.messageID) {
+                    row.parts.removeAll { $0.id.hasPrefix("temp-") }
+                }
+                row.parts.append(part)
+            }
+            messages[rowIndex] = row
+            partsByMessage[part.messageID] = row.parts
+            return .applied
+        }
+
+        guard Self.assistantShellPartTypes.contains(part.type) else {
+            // A text/file part for a row we do not have: wait for the
+            // `message.updated` (or the next reconciliation) instead of
+            // creating a row whose role we cannot know.
             return .ignored
         }
 
-        let partType = (partObject["type"] as? String) ?? "text"
-        recordPartType(sessionID: sessionID, partID: partID, type: partType)
-        return .finalized(sessionID: sessionID)
+        let shell = Message(
+            id: part.messageID,
+            sessionID: part.sessionID,
+            role: "assistant",
+            parentID: nil,
+            providerID: nil,
+            modelID: nil,
+            model: nil,
+            error: nil,
+            time: .init(created: Int(Date().timeIntervalSince1970 * 1000), completed: nil),
+            finish: nil,
+            tokens: nil,
+            cost: nil
+        )
+        messages.append(MessageWithParts(info: shell, parts: [part]))
+        partsByMessage[part.messageID] = [part]
+        return .applied
+    }
+
+    /// Applies a full message-info payload in place. Replaces the row's info
+    /// but keeps its parts (`message.updated` never carries parts; they come
+    /// from part events and reconciliations). Creates a shell row (empty
+    /// parts) when the row is not loaded yet. A confirmed user message is
+    /// untracked from the pending-optimistic set — the same id-membership
+    /// semantics as `loadMessages`' optimistic merge — and its inline send
+    /// failure (if any) is cleared.
+    func upsertMessageInfo(_ info: Message) {
+        if let rowIndex = messages.firstIndex(where: { $0.info.id == info.id }) {
+            var row = messages[rowIndex]
+            row.info = info
+            messages[rowIndex] = row
+            partsByMessage[info.id] = row.parts
+        } else {
+            messages.append(MessageWithParts(info: info, parts: []))
+            partsByMessage[info.id] = []
+        }
+        if info.isUser {
+            untrackPendingOptimisticMessages([info.id])
+            clearSendFailure(messageID: info.id)
+        }
+    }
+
+    /// Appends a streaming text delta to a locally-known part. No-op when the
+    /// part is not loaded (a reconnect that missed the start frame converges
+    /// on the part's end frame). Reserved coalescing switch: when
+    /// `deltaAppendThrottle` is set, appends inside the window are dropped;
+    /// the lost intermediate state converges on the end frame, which carries
+    /// the full text.
+    var deltaAppendThrottle: TimeInterval? = nil
+    private var lastDeltaAppendAt: Date?
+
+    func appendDelta(messageID: String, partID: String, delta: String) {
+        if let throttle = deltaAppendThrottle,
+           let last = lastDeltaAppendAt,
+           Date().timeIntervalSince(last) < throttle {
+            return
+        }
+        lastDeltaAppendAt = Date()
+        guard let rowIndex = messages.firstIndex(where: { $0.info.id == messageID }),
+              let partIndex = messages[rowIndex].parts.firstIndex(where: { $0.id == partID }) else {
+            return
+        }
+        messages[rowIndex].parts[partIndex].text =
+            (messages[rowIndex].parts[partIndex].text ?? "") + delta
+    }
+
+    /// Removes one part (SSE `message.part.removed`; the payload carries only
+    /// ids). No-op when the row or part is not loaded.
+    func removePart(messageID: String, partID: String) {
+        guard let rowIndex = messages.firstIndex(where: { $0.info.id == messageID }) else { return }
+        guard let partIndex = messages[rowIndex].parts.firstIndex(where: { $0.id == partID }) else { return }
+        messages[rowIndex].parts.remove(at: partIndex)
+        partsByMessage[messageID] = messages[rowIndex].parts
+    }
+
+    /// Removes a whole row (SSE `message.removed`). Mirrors `removeMessage`
+    /// housekeeping: drops the parts index entry, untracks the id, and clears
+    /// any inline send failure.
+    func removeMessageRow(messageID: String) {
+        guard messages.contains(where: { $0.info.id == messageID }) else { return }
+        messages.removeAll { $0.info.id == messageID }
+        partsByMessage[messageID] = nil
+        untrackPendingOptimisticMessages([messageID])
+        clearSendFailure(messageID: messageID)
     }
 }
