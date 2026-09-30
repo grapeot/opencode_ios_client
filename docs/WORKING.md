@@ -4,10 +4,18 @@
 
 ## 当前状态
 
-- **最后更新**：2026-09-27
-- **分支**：`task-notification-card`
-- **编译/测试**：`xcodebuild build` 通过。先 boot 模拟器再用 device ID 跑 `OpenCodeClientTests`：480/480 通过（iPhone 16 `302F88CA-C2D3-4DC0-8E12-B3ED82D5A3C8`，约 9 秒）。全量 UI 套件未再跑。
-- **Phase**：Background task notification card
+- **最后更新**：2026-09-29
+- **分支**：`fix/chat-session-scroll-anchor`
+- **编译/测试**：`OpenCodeClientTests` 519/519 通过。UI：`SessionScrollAnchorUITests` 2/2 与 `ToolCardsUITests` 1/1 通过（iPhone 16 Pro `3EB51FEF-C951-4485-AD0F-33463C66DBEB`，iOS 18.4）。
+- **Phase**：per-session scroll anchor（切 session 回底端）
+
+### 2026-09-29 — 切 session 再切回来，聊天区停在对话中间
+
+- **现象**：切到别的 session 再切回来，聊天区不滚到对话最底端，而是停在中间某条消息，要手动往下翻很久才能回到最新消息。
+- **原因**：聊天 `ScrollView` 是跨 session 复用的同一个 SwiftUI 身份，`selectSession` 替换 `messages` 时底层 UIScrollView 保留旧 session 的 `contentOffset` 作为新内容的起始位置（旧 session 内容长时，落点正好在对话中间）。唯一的回底端路径是反应式链条「`scrollAnchor` 变化 + `isNearBottom` 门 + 50ms 延迟 `scrollTo`」：切换时 `onChange(currentSessionID)` 只是乐观地把 `isNearBottom` 置 true，寄望下一次 `scrollAnchor` 变化带滚。若异步 load 落地后的那一次 `scrollTo` 没有真正到底（大量内容同事务布局、偏移被 clamp 到当时已知尺寸），75ms 的底部 marker 测量随即把 `isNearBottom` 翻成 false，之后所有自动滚动被 `guard` 挡掉且无重试，视图就钉死在旧偏移量上。
+- **处理**：给每个 session 的滚动视图全新身份——`ScrollView` 链尾加 `.defaultScrollAnchor(.bottom)` + `.id(state.currentSessionID)`。切 session 时整个滚动视图重建，初始位置由默认锚点固定在底部（iOS 17+，deployment target 17.0）；既有反应式跟随机制（`isNearBottom` + `scrollAnchor`）保留，继续负责流式更新时「用户在底部则跟随」。正面副作用：identity 变化触发 `onDisappear`，切换时取消残留的 pending scroll / visibility task，消除跨 session 的滚动任务竞态。
+- **副作用**：① 内容比屏幕矮时贴底显示——短 session（1–2 条消息）从顶部显示变为贴底（标准聊天行为）；空状态（无 session / 无消息 / busy 占位）用 viewport 高度 frame（`emptySessionStateView(viewportHeight:)`）保持原顶部外观。② 行级 `@State`（thinking 卡片 / tool calls 展开态）切走再切回后重置为收起。
+- **测试**：新增离线 fixture `UITEST_SESSION_SCROLL_FIXTURE`（`SessionScrollFixture.swift`：40 turn 长 session + 短 session，`APIClientProtocol` stub 提供 `selectSession` 全链路数据，不走网络）。`SessionScrollAnchorUITests` 2 条：长 session 首屏渲染在底部（frame 断言最后一条 user 消息在屏内、第一条在屏外）、切短 session 再切回长 session 后落在底部（即本现象的回归用例）。既有 `ToolCardsUITests`（依赖 launch 自动滚底）回归通过。
 
 ### 2026-09-27 — 后台 subagent 回执渲染为 TaskNotificationCard
 

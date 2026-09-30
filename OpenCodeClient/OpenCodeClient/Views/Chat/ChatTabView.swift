@@ -646,7 +646,11 @@ struct ChatTabView: View {
                                 }
 
                                 if messageGroups.isEmpty {
-                                    emptySessionStateView
+                                    // viewport height minus the content padding (16 on
+                                    // each side) and the 1pt bottom marker, so the
+                                    // block fills the viewport and the bottom anchor
+                                    // keeps it at its previous top position
+                                    emptySessionStateView(viewportHeight: scrollGeometry.size.height - 33)
                                 } else {
                                     ForEach(chatItems) { item in
                                         Group {
@@ -791,6 +795,16 @@ struct ChatTabView: View {
                                     .accessibilityHidden(true)
                             }
                         }
+                        // Per-session scroll identity: switching sessions tears down
+                        // the scroll view instead of reusing it, so the previous
+                        // session's contentOffset can't survive into the new
+                        // session's (different) content and drop the view in the
+                        // middle of the conversation. defaultScrollAnchor(.bottom)
+                        // gives every fresh session view a bottom-anchored start;
+                        // the reactive isNearBottom mechanism still follows live
+                        // updates after that.
+                        .defaultScrollAnchor(.bottom)
+                        .id(state.currentSessionID)
                     }
                     }
                 }
@@ -1099,44 +1113,51 @@ struct ChatTabView: View {
         return "\(perm)-\(questionCount)-\(messageCount)-\(lastMessageSignature)-\(sid)-\(status)-\(activity)"
     }
 
+    /// Empty-state block that fills the viewport (minus content padding and the
+    /// bottom marker). With the per-session bottom-anchored scroll view this keeps
+    /// the empty states at their previous top position instead of pinning the
+    /// short content to the bottom edge of the chat area.
     @ViewBuilder
-    private var emptySessionStateView: some View {
-        if state.currentSessionID == nil {
-            VStack(spacing: DesignSpacing.md) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(DesignColors.Brand.primary.opacity(0.2))
-                Text(L10n.t(.chatSelectSessionFirst))
-                    .font(DesignTypography.headline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.top, 60)
-            .frame(maxWidth: .infinity)
-        } else if isCurrentSessionBusy {
-            // If busy but there is no user turn yet, show a lightweight placeholder.
-            if lastUserMessageIDInCurrentSession == nil {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text(L10n.t(.chatSessionBusyMessage))
-                        .font(DesignTypography.meta)
+    private func emptySessionStateView(viewportHeight: CGFloat) -> some View {
+        Group {
+            if state.currentSessionID == nil {
+                VStack(spacing: DesignSpacing.md) {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(DesignColors.Brand.primary.opacity(0.2))
+                    Text(L10n.t(.chatSelectSessionFirst))
+                        .font(DesignTypography.headline)
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.vertical, 18)
+                .padding(.top, 60)
+                .frame(maxWidth: .infinity)
+            } else if isCurrentSessionBusy {
+                // If busy but there is no user turn yet, show a lightweight placeholder.
+                if lastUserMessageIDInCurrentSession == nil {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text(L10n.t(.chatSessionBusyMessage))
+                            .font(DesignTypography.meta)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 18)
+                }
+            } else {
+                VStack(spacing: DesignSpacing.md) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 48))
+                        .foregroundStyle(DesignColors.Brand.gold.opacity(0.3))
+                    Text(L10n.t(.chatNoMessages))
+                        .font(DesignTypography.headline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 60)
+                .frame(maxWidth: .infinity)
             }
-        } else {
-            VStack(spacing: DesignSpacing.md) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 48))
-                    .foregroundStyle(DesignColors.Brand.gold.opacity(0.3))
-                Text(L10n.t(.chatNoMessages))
-                    .font(DesignTypography.headline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.top, 60)
-            .frame(maxWidth: .infinity)
         }
+        .frame(minHeight: max(viewportHeight, 0), alignment: .topLeading)
     }
 
     private func statusColor(_ status: SessionStatus) -> Color {

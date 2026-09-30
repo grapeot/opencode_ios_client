@@ -19,6 +19,7 @@ enum UITestFixtures {
             || hasUITestClientCapabilityFixture
             || hasUITestDeepLinkFixture
             || hasUITestModelShortlistFixture
+            || SessionScrollFixture.isActive
     }
 
     static var hasUITestWebPreviewModeFixture: Bool {
@@ -101,6 +102,12 @@ enum UITestFixtures {
     }
 
     static func makeInitialState() -> AppState {
+        if SessionScrollFixture.isActive {
+            let state = SessionScrollFixture.makeAppState()
+            SessionScrollFixture.apply(to: state)
+            return state
+        }
+
         let state: AppState
         if hasUITestDeepLinkFixture {
             state = AppState(
