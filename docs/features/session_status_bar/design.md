@@ -99,7 +99,8 @@ token 的紧凑表示为：<1000 直接显示（`950`）；>=1000 用 K/M/B，�
 
 ## 边界与口径
 
-- **subagent**： task 工具在子 session 中运行，它的 tool 调用不算进父 session。状态栏用主 agent 视角，与 message 列表口径相同。不 rollup。
+- **subagent（tool/rounds 口径）**： task 工具在子 session 中运行，它的 tool 调用不算进父 session。rounds/tool calls 段保持主 agent 视角，与 message 列表口径相同。
+- **subagent（token/cache hit 口径）**：token 总量与 cache hit rate 并入主数字（含全部后代 subagent session）。服务端 session 对象带 `parentID` 链接且父聚合是 self-only（实测父 message 和 == 父聚合，子 session 用量未计入），客户端按 `parentID` 递归求和即可，零新增网络请求（子 session 在项目化 session 列表与 `session.updated` SSE 里都已存在）。主 session 自身部分不可知时整体隐藏；子 session 出分页窗口时少算（接受）。
 - **多 host**：本地状态以 sessionID 为键（与 app 内其他 per-session 持久化一致）。session ID 是 `ses_` + 26 位随机值，跨 host 撞 ID 实际不可能；同一 server 的多个 host profile 反而应共享同一份计数。
 - **成本**：`cost` 字段一并解析，本期 UI 不显示，留给后续。
 
