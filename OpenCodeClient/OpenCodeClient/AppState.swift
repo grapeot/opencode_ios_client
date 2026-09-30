@@ -199,6 +199,10 @@ final class AppState {
     ) {
         self.defaults = userDefaults
         self.sessionStore = SessionStore(defaults: userDefaults)
+        // MessageStore persists finalized step timings; it must use the same
+        // (test-isolated) defaults or suites would leak stepTimings across.
+        self.messageStore = MessageStore(defaults: userDefaults)
+        self.statsStore = SessionStatsStore(defaults: userDefaults)
         self.apiClient = apiClient
         self.sseClient = sseClient
         self.sshTunnelManager = sshTunnelManager ?? SSHTunnelManager()
@@ -469,9 +473,13 @@ final class AppState {
 
     let defaults: UserDefaults
     let sessionStore: SessionStore
-    let messageStore = MessageStore()
+    let messageStore: MessageStore
     let fileStore = FileStore()
     let todoStore = TodoStore()
+    let statsStore: SessionStatsStore
+    /// Sessions whose stats must be reset from the post-revert window on the
+    /// next `loadMessages` (revert truncates history beyond window visibility).
+    var revertResetPendingSessionIDs: Set<String> = []
 
     var sessions: [Session] { get { sessionStore.sessions } set { sessionStore.sessions = newValue } }
     var sortedSessions: [Session] {
@@ -492,6 +500,24 @@ final class AppState {
     var messages: [MessageWithParts] { get { messageStore.messages } set { messageStore.messages = newValue } }
     var partsByMessage: [String: [Part]] { get { messageStore.partsByMessage } set { messageStore.partsByMessage = newValue } }
     var stepTimings: [String: MessageStore.StepTiming] { get { messageStore.stepTimings } set { messageStore.stepTimings = newValue } }
+
+    /// Session-level cumulative token total for the status line. Prefers the
+    /// server-maintained aggregate on the session object (pushed with every
+    /// `session.updated` event); falls back to summing the loaded message
+    /// window for hosts that omit the field — but only when that window
+    /// covers the full history, since a partial-window sum would undercount.
+    /// Nil hides the segment: the status line never shows a number it cannot
+    /// stand behind.
+    func sessionTotalTokens(sessionID: String) -> Int? {
+        if let tokens = sessions.first(where: { $0.id == sessionID })?.tokens, tokens.total > 0 {
+            return tokens.total
+        }
+        guard hasMoreHistoryBySessionID[sessionID] == false else { return nil }
+        let windowSum = messages
+            .filter { $0.info.isAssistant }
+            .reduce(0) { $0 + ($1.info.tokens?.total ?? 0) }
+        return windowSum > 0 ? windowSum : nil
+    }
 
     var selectedModelIndex: Int = 2
     

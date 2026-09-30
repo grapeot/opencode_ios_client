@@ -133,14 +133,14 @@ nonisolated struct Message: Codable, Identifiable {
         let modelID: String
     }
 
-    struct TokenInfo: Codable {
+    struct TokenInfo: Codable, Equatable {
         let total: Int
         let input: Int
         let output: Int
         let reasoning: Int
         let cache: CacheInfo?
 
-        struct CacheInfo: Codable {
+        struct CacheInfo: Codable, Equatable {
             let read: Int
             let write: Int
         }

@@ -370,6 +370,50 @@ struct ChatTabView: View {
         return nil
     }
 
+    /// Session-level counters for the current session, shown persistently on
+    /// the top line of the composer status bar: session-scoped data lives on
+    /// the always-visible status bar rather than per-message footers. Icons
+    /// keep the line compact: refresh = rounds, tools = tool calls, TOK text
+    /// for tokens.
+    private var sessionStats: (rounds: Int, toolCalls: Int, tokens: Int?)? {
+        guard let sessionID = state.currentSessionID else { return nil }
+        let stats = state.statsStore.stats(for: sessionID)
+        return (stats.rounds, stats.toolCalls, state.sessionTotalTokens(sessionID: sessionID))
+    }
+
+    @ViewBuilder
+    private var sessionStatsLine: some View {
+        if let stats = sessionStats {
+            // Full width + leading so the single-line block is not centered
+            // by the parent VStack (which would differ from the two-line
+            // layout, where the transient row spans the width).
+            HStack(spacing: DesignSpacing.xs) {
+                sessionStatsIconLabel("arrow.triangle.2.circlepath", value: "\(stats.rounds)")
+                Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                sessionStatsIconLabel("wrench.and.screwdriver", value: "\(stats.toolCalls)")
+                if let tokens = stats.tokens {
+                    Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                    Text("\(MessageRowView.compactTokenCount(tokens)) \(L10n.t(.statusTokensLabel))")
+                }
+            }
+            .font(DesignTypography.meta)
+            .foregroundStyle(DesignColors.Neutral.textTertiary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(
+                "\(stats.rounds) \(L10n.t(.statusRoundsLabel)), \(stats.toolCalls) \(L10n.t(.statusToolsLabel))"
+                + (stats.tokens.map { ", \(MessageRowView.compactTokenCount($0)) \(L10n.t(.statusTokensLabel))" } ?? "")
+            )
+        }
+    }
+
+    private func sessionStatsIconLabel(_ systemImage: String, value: String) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: systemImage)
+            Text(value).monospacedDigit()
+        }
+    }
+
     private var composerStatusText: String? {
         let agentStatus = state.isBusy ? (runningTurnActivity?.text ?? L10n.t(.chatAgentRunning)) : nil
         let parts = [agentStatus, voiceStatusText].compactMap { $0 }
@@ -384,19 +428,35 @@ struct ChatTabView: View {
         return "mic.fill"
     }
 
+    /// Adaptive composer status bar: one line when only the persistent
+    /// session counters are present, expanding to two when there is also
+    /// transient per-turn state (agent activity, voice, elapsed time,
+    /// abort). Top line = session counters; bottom line = transient state.
     private var quietComposerStatus: some View {
-        Group {
-            if let activity = runningTurnActivity {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    quietComposerStatusRow(activity: activity, now: context.date)
+        // 6pt gap: xs (4) read as cramped between the two lines.
+        VStack(alignment: .leading, spacing: 6) {
+            sessionStatsLine
+            if hasTransientComposerStatus {
+                Group {
+                    if let activity = runningTurnActivity {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            quietComposerStatusRow(activity: activity, now: context.date)
+                        }
+                    } else {
+                        quietComposerStatusRow(activity: nil, now: Date())
+                    }
                 }
-            } else {
-                quietComposerStatusRow(activity: nil, now: Date())
             }
         }
         .padding(.horizontal, DesignSpacing.xs)
         .padding(.top, DesignSpacing.xs)
-        .padding(.bottom, DesignSpacing.sm)
+        .padding(.bottom, DesignSpacing.xs)
+    }
+
+    /// The transient (bottom) line only renders when it has content; an
+    /// empty line would just add height to the always-visible composer block.
+    private var hasTransientComposerStatus: Bool {
+        composerStatusText != nil || state.isBusy
     }
 
     private func quietComposerStatusRow(activity: TurnActivity?, now: Date) -> some View {
@@ -443,8 +503,11 @@ struct ChatTabView: View {
         }
     }
 
+    /// The status block stays up whenever there is anything to say: the
+    /// persistent session counters (top line) or transient turn state
+    /// (bottom line). Without this the counters would vanish while idle.
     private var shouldShowComposerStatus: Bool {
-        composerStatusText != nil
+        composerStatusText != nil || sessionStats != nil
     }
 
     private var voiceRailTrailingAction: some View {
@@ -525,8 +588,8 @@ struct ChatTabView: View {
             voiceRailTrailingAction
         }
         .padding(.horizontal, DesignSpacing.xs)
-        .padding(.top, DesignSpacing.sm)
-        .padding(.bottom, DesignSpacing.md)
+        .padding(.top, DesignSpacing.xs)
+        .padding(.bottom, 6)
     }
 
     var body: some View {
@@ -819,11 +882,11 @@ struct ChatTabView: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
                 .background(colorScheme == .dark ? DesignColors.Neutral.composerDark : DesignColors.Neutral.composerLight)
                 .clipShape(RoundedRectangle(cornerRadius: DesignCorners.large))
                 .padding(.horizontal, DesignControls.composerContainerHorizontalPadding)
-                .padding(.vertical, DesignControls.composerContainerVerticalPadding)
+                .padding(.vertical, 5)
                 .background(.bar)
             }
             .navigationTitle(state.currentSession?.title ?? L10n.t(.appChat))

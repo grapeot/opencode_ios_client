@@ -364,6 +364,9 @@ enum L10n {
         case contextUsageThroughputTime
         case contextUsageThroughputTokens
         case contextUsageThroughputNoData
+        case statusRoundsLabel
+        case statusToolsLabel
+        case statusTokensLabel
         case quotaTitle
         case quotaDataSource
         case quotaNotLoaded
@@ -806,6 +809,9 @@ enum L10n {
         Key.contextUsageThroughputTime.rawValue: "Generation time",
         Key.contextUsageThroughputTokens.rawValue: "Generated tokens",
         Key.contextUsageThroughputNoData.rawValue: "No throughput data",
+        Key.statusRoundsLabel.rawValue: "rounds",
+        Key.statusToolsLabel.rawValue: "tool calls",
+        Key.statusTokensLabel.rawValue: "tok",
         Key.quotaTitle.rawValue: "Usage & Limits",
         Key.quotaDataSource.rawValue: "Data Source",
         Key.quotaNotLoaded.rawValue: "Quota data has not been loaded.",
@@ -1252,6 +1258,9 @@ enum L10n {
         Key.contextUsageThroughputTime.rawValue: "生成耗时",
         Key.contextUsageThroughputTokens.rawValue: "生成令牌",
         Key.contextUsageThroughputNoData.rawValue: "无速率数据",
+        Key.statusRoundsLabel.rawValue: "轮",
+        Key.statusToolsLabel.rawValue: "工具",
+        Key.statusTokensLabel.rawValue: "token",
         Key.quotaTitle.rawValue: "用量与限额",
         Key.quotaDataSource.rawValue: "数据来源",
         Key.quotaNotLoaded.rawValue: "尚未加载 quota 数据。",

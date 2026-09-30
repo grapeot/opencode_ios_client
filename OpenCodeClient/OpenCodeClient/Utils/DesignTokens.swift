@@ -184,7 +184,9 @@ enum DesignControls {
     static let composerContainerHorizontalPadding: CGFloat = 16
     static let composerContainerVerticalPadding: CGFloat = 10
     static let composerTextMinHeight: CGFloat = 32
-    static let composerTextMaxHeight: CGFloat = 100
+    /// ~4 body-text lines: the composer block is always visible and does not
+    /// collapse, so the input caps lower than it used to (~5 lines).
+    static let composerTextMaxHeight: CGFloat = 80
     static let toolOpenFileIconFont: Font = DesignTypography.micro
     static let toolOpenFileButtonSize: CGFloat = 24
     #endif
