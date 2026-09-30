@@ -1108,23 +1108,30 @@ struct ChatTabView: View {
         }
     }
 
-    /// 内容变化时用于触发自动滚动
+    /// 内容变化时用于触发自动滚动。签名含最后一条消息的累计文本长度：流式
+    /// delta 只增长既有 part 的 text（parts.count 不变），没有这一项，长文本
+    /// 回复期间 onChange 永不触发，视图不再跟随到底部。
     private var scrollAnchor: String {
-        let perm = state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count
-        let questionCount = state.pendingQuestions.filter { $0.sessionID == state.currentSessionID }.count
-        let messageCount = state.messages.count
-        let lastMessage = state.messages.last
-        let lastMessageSignature = {
-            guard let lastMessage else { return "none" }
-            return "\(lastMessage.info.id)-\(lastMessage.parts.count)-\(lastMessage.info.time.completed ?? -1)"
-        }()
-        let sid = state.currentSessionID ?? ""
-        let status = state.currentSessionStatus?.type ?? ""
-        let activity = runningTurnActivity.map {
-            let state = ($0.state == .running) ? "running" : "completed"
-            return "\($0.id)-\($0.text)-\(state)"
-        } ?? ""
-        return "\(perm)-\(questionCount)-\(messageCount)-\(lastMessageSignature)-\(sid)-\(status)-\(activity)"
+        let lastMessage = state.messages.last.map { message in
+            ChatScrollBehavior.LastMessageFingerprint(
+                id: message.info.id,
+                partCount: message.parts.count,
+                textLength: message.parts.reduce(0) { $0 + ($1.text?.count ?? 0) },
+                completed: message.info.time.completed
+            )
+        }
+        return ChatScrollBehavior.scrollSignature(
+            pendingPermissions: state.pendingPermissions.filter { $0.sessionID == state.currentSessionID }.count,
+            pendingQuestions: state.pendingQuestions.filter { $0.sessionID == state.currentSessionID }.count,
+            messageCount: state.messages.count,
+            lastMessage: lastMessage,
+            sessionID: state.currentSessionID ?? "",
+            status: state.currentSessionStatus?.type ?? "",
+            activity: runningTurnActivity.map {
+                let state = ($0.state == .running) ? "running" : "completed"
+                return "\($0.id)-\($0.text)-\(state)"
+            } ?? ""
+        )
     }
 
     /// Empty-state block that fills the viewport (minus content padding and the

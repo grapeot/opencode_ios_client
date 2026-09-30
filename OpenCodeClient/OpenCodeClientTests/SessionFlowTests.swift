@@ -1141,6 +1141,33 @@ struct AppStateFlowTests {
         #expect(state.messageStore.pendingOptimisticMessageIDs == Set(sentMessageIDs))
     }
 
+    @Test @MainActor func serverTextPartDropsTempPlaceholderAfterUserInfoUntracksRow() async {
+        let apiClient = MockAPIClient()
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        state.currentSessionID = "s1"
+
+        let tempMessageID = state.appendOptimisticUserMessage("spoke sentence")
+        #expect(state.partsByMessage[tempMessageID]?.map(\.type) == ["text"])
+
+        // The server confirms the user row first. `message.updated` untracks
+        // the optimistic message (it carries no parts).
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.updated","properties":{"sessionID":"s1","info":{"id":"\(tempMessageID)","role":"user","sessionID":"s1","time":{"created":1}}}}}
+        """))
+        #expect(state.messageStore.pendingOptimisticMessageIDs.isEmpty)
+
+        // Then the text part event arrives. The temp text placeholder must be
+        // dropped even though the row is no longer tracked as pending —
+        // otherwise the bubble renders the sentence twice.
+        await state.applySSEEventForTesting(Self.makeSSEEvent("""
+        {"payload":{"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_server","messageID":"\(tempMessageID)","sessionID":"s1","type":"text","text":"spoke sentence"}}}}
+        """))
+        let parts = state.partsByMessage[tempMessageID] ?? []
+        #expect(parts.map(\.type) == ["text"])
+        #expect(parts.first?.id == "prt_server")
+        #expect(parts.first?.text == "spoke sentence")
+    }
+
     @Test @MainActor func loadMessagesStoresFetchedRowsAndParts() async {
         let apiClient = MockAPIClient()
         let loaded = [Self.makeMessageRow(messageID: "m1", sessionID: "s1", text: "hi")]
