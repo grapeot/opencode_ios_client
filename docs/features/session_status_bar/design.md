@@ -87,7 +87,8 @@ t+2.5s  step-finish part 带 tokens
 
 挂载点在 composer 上方的状态栏（`ChatTabView.quietComposerStatus`）。rounds/tools/tokens 是 session 级数据，天然属于常驻状态栏，不放消息 footer。真机试用发现单行放不下一切（计数 + Thinking + 耗时互相挤占、被截断），所以拆成两行：
 
-- **上行（常驻）**：`12 rounds · 37 tools · 1.07M tok`。有 current session 即显示，tertiary 样式，`lineLimit(1)`。
+- **上行（常驻）**：`⟳ 12 · 🔧 37 · 1.07M tok · 96% cache hit`（刷新环=rounds，扳手锤=tool calls，纯文本 tok 与 cache hit）。有 current session 即显示，tertiary 样式，`lineLimit(1)`。
+- **cache hit**：`cache.read / (input + cache.read)`，`input` 为未命中输入（聚合口径已用真实 payload 验证：total = input + output + reasoning + cache.read）。取数与 token 段同构（session 聚合优先、完整窗口回退、无数据隐藏）；input>0 且无 cache 字段 = 真实 0%。图标方案（memorychip/bolt）曾评估，因 memorychip 易被误读为 context window，最终用纯文本。
 - **下行（临时）**：原有行为不变——gold 点 + agent 活动（"Thinking"）· 语音状态（"Listening..."）· 耗时 · 中断按钮。
 - **消息 footer**：保持原样不变（`model | 通用 t/s | N t/s decoding`），本 feature 不动它。
 - 屏幕空间不够时计数段降级为紧凑标签（`12 rd · 37 tl · 1.07M tk`），以真机截图为准。
