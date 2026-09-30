@@ -810,7 +810,7 @@ enum L10n {
         Key.contextUsageThroughputTokens.rawValue: "Generated tokens",
         Key.contextUsageThroughputNoData.rawValue: "No throughput data",
         Key.statusRoundsLabel.rawValue: "rounds",
-        Key.statusToolsLabel.rawValue: "tools",
+        Key.statusToolsLabel.rawValue: "tool calls",
         Key.statusTokensLabel.rawValue: "tok",
         Key.quotaTitle.rawValue: "Usage & Limits",
         Key.quotaDataSource.rawValue: "Data Source",
