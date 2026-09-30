@@ -370,21 +370,48 @@ struct ChatTabView: View {
         return nil
     }
 
-    /// Session-level counters for the current session ("12 rounds · 37 tools ·
-    /// 1.07M tok"), shown persistently on the top line of the composer status
-    /// bar: these are session-scoped, so they live on the always-visible status
-    /// bar rather than per-message footers.
-    private var sessionStatsStatusText: String? {
+    /// Session-level counters for the current session, shown persistently on
+    /// the top line of the composer status bar: session-scoped data lives on
+    /// the always-visible status bar rather than per-message footers. Icons
+    /// keep the line compact: refresh = rounds, tools = tool calls, TOK text
+    /// for tokens.
+    private var sessionStats: (rounds: Int, toolCalls: Int, tokens: Int?)? {
         guard let sessionID = state.currentSessionID else { return nil }
         let stats = state.statsStore.stats(for: sessionID)
-        var segments = [
-            "\(stats.rounds) \(L10n.t(.statusRoundsLabel))",
-            "\(stats.toolCalls) \(L10n.t(.statusToolsLabel))",
-        ]
-        if let total = state.sessionTotalTokens(sessionID: sessionID) {
-            segments.append("\(MessageRowView.compactTokenCount(total)) \(L10n.t(.statusTokensLabel))")
+        return (stats.rounds, stats.toolCalls, state.sessionTotalTokens(sessionID: sessionID))
+    }
+
+    @ViewBuilder
+    private var sessionStatsLine: some View {
+        if let stats = sessionStats {
+            // Full width + leading so the single-line block is not centered
+            // by the parent VStack (which would differ from the two-line
+            // layout, where the transient row spans the width).
+            HStack(spacing: DesignSpacing.xs) {
+                sessionStatsIconLabel("arrow.triangle.2.circlepath", value: "\(stats.rounds)")
+                Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                sessionStatsIconLabel("wrench.and.screwdriver", value: "\(stats.toolCalls)")
+                if let tokens = stats.tokens {
+                    Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                    Text("\(MessageRowView.compactTokenCount(tokens)) \(L10n.t(.statusTokensLabel))")
+                }
+            }
+            .font(DesignTypography.meta)
+            .foregroundStyle(DesignColors.Neutral.textTertiary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(
+                "\(stats.rounds) \(L10n.t(.statusRoundsLabel)), \(stats.toolCalls) \(L10n.t(.statusToolsLabel))"
+                + (stats.tokens.map { ", \(MessageRowView.compactTokenCount($0)) \(L10n.t(.statusTokensLabel))" } ?? "")
+            )
         }
-        return segments.joined(separator: " · ")
+    }
+
+    private func sessionStatsIconLabel(_ systemImage: String, value: String) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: systemImage)
+            Text(value).monospacedDigit()
+        }
     }
 
     private var composerStatusText: String? {
@@ -407,16 +434,7 @@ struct ChatTabView: View {
     /// abort). Top line = session counters; bottom line = transient state.
     private var quietComposerStatus: some View {
         VStack(alignment: .leading, spacing: DesignSpacing.xs) {
-            if let stats = sessionStatsStatusText {
-                // Full width + leading so the single-line block is not
-                // centered by the parent VStack (which would differ from the
-                // two-line layout, where the transient row spans the width).
-                Text(stats)
-                    .font(DesignTypography.meta)
-                    .foregroundStyle(DesignColors.Neutral.textTertiary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            sessionStatsLine
             if hasTransientComposerStatus {
                 Group {
                     if let activity = runningTurnActivity {
@@ -488,7 +506,7 @@ struct ChatTabView: View {
     /// persistent session counters (top line) or transient turn state
     /// (bottom line). Without this the counters would vanish while idle.
     private var shouldShowComposerStatus: Bool {
-        composerStatusText != nil || sessionStatsStatusText != nil
+        composerStatusText != nil || sessionStats != nil
     }
 
     private var voiceRailTrailingAction: some View {
