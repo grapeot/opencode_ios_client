@@ -725,6 +725,15 @@ final class AppState {
     let deepLinkSessionResolver: ((String) async throws -> Session)?
     let deepLinkHydratesSelection: Bool
     var sseTask: Task<Void, Never>?
+    /// Time the last SSE frame of any type (including heartbeats) was
+    /// received. Internal so unit tests can pre-seed it and drive
+    /// `checkSSEWatchdog()` deterministically.
+    var sseLastFrameAt: Date?
+    /// Heartbeat watchdog task; same lifecycle as `sseTask` (launched after a
+    /// successful connect + bootstrap, cancelled when the stream ends).
+    var sseWatchdogTask: Task<Void, Never>?
+    nonisolated static let sseWatchdogCheckInterval: TimeInterval = 5
+    nonisolated static let sseSilenceThreshold: TimeInterval = 20
 
     var carSessionsByContext: [String: CarSessionRecord] = [:]
     var carPhase: CarModePhase = .idle

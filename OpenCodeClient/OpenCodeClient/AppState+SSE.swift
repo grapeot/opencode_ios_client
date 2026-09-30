@@ -8,6 +8,8 @@ import os
 extension AppState {
     func connectSSE() {
         sseTask?.cancel()
+        sseWatchdogTask?.cancel()
+        sseWatchdogTask = nil
         sseTask = Task {
             var attempt = 0
             while !Task.isCancelled {
@@ -24,6 +26,8 @@ extension AppState {
 
                 do {
                     await bootstrapSyncCurrentSession(reason: "sse.reconnect")
+                    sseLastFrameAt = Date()
+                    launchSSEWatchdog()
                     for try await event in stream {
                         attempt = 0
                         await handleSSEEvent(event)
@@ -34,13 +38,51 @@ extension AppState {
                     let base = min(30.0, pow(2.0, Double(attempt)))
                     try? await Task.sleep(for: .seconds(base))
                 }
+
+                // The stream is gone (clean end or error); the watchdog only
+                // covers "connected but silent", so stop it while the client
+                // is between connections (backoff). It relaunches after the
+                // next successful connect + bootstrap.
+                sseWatchdogTask?.cancel()
+                sseWatchdogTask = nil
             }
         }
+    }
+
+    /// Starts the heartbeat watchdog once per connected stream. Not a poller:
+    /// it checks every `sseWatchdogCheckInterval` whether any frame (a
+    /// heartbeat counts) arrived, and only after `sseSilenceThreshold` of
+    /// silence runs one reconciliation. On a host without heartbeats this
+    /// degrades to a low-frequency reconcile every ~20-25s of silence.
+    private func launchSSEWatchdog() {
+        guard sseWatchdogTask == nil else { return }
+        sseWatchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.sseWatchdogCheckInterval))
+                guard !Task.isCancelled else { return }
+                await self?.checkSSEWatchdog()
+            }
+        }
+    }
+
+    /// One watchdog check. When the stream has been silent past the threshold,
+    /// resets the timestamp (so one silence triggers one reconcile, not one
+    /// per check interval) and runs the reconciliation set: message window +
+    /// diff + polled statuses.
+    func checkSSEWatchdog() async {
+        guard let last = sseLastFrameAt, currentSessionID != nil else { return }
+        guard Date().timeIntervalSince(last) > Self.sseSilenceThreshold else { return }
+        sseLastFrameAt = Date()
+        await loadMessages()
+        await loadSessionDiff()
+        await syncSessionStatusesFromPoll()
     }
 
     func disconnectSSE() {
         sseTask?.cancel()
         sseTask = nil
+        sseWatchdogTask?.cancel()
+        sseWatchdogTask = nil
     }
 
     // Note: AppState is typically held for the app's lifetime (as @State in root view),
@@ -48,6 +90,9 @@ extension AppState {
     // should be called explicitly when needed (e.g., on background/terminate).
 
     func handleSSEEvent(_ event: SSEEvent) async {
+        // Any frame of any type — including heartbeats — proves the stream is
+        // alive; the watchdog only fires after this has gone stale.
+        sseLastFrameAt = Date()
         let type = event.payload.type
         let props = event.payload.properties ?? [:]
 
@@ -72,6 +117,17 @@ extension AppState {
                     }
 
                     updateSessionActivity(sessionID: sessionID, previous: prev, current: decoded)
+
+                    // idle fires once per turn (at turn end; step gaps do not
+                    // alternate), so busy -> idle is a turn-end signal. One
+                    // reconciliation per turn closes the loop: it picks up
+                    // time.completed/tokens the live frames omit. Only the
+                    // current session reconciles — sessionStatuses itself is a
+                    // global map that intentionally tracks every session.
+                    if decoded.type == "idle", sessionID == currentSessionID {
+                        await loadMessages()
+                        await loadSessionDiff()
+                    }
                 }
             }
         case "session.updated":
@@ -117,8 +173,18 @@ extension AppState {
                         statsStore.observeUserMessage(id: id, sessionID: sessionID)
                     }
                 }
-                await loadMessages()
-                await loadSessionDiff()
+                if let infoObj = props["info"]?.value as? [String: Any],
+                    let data = try? JSONSerialization.data(withJSONObject: infoObj),
+                    let info = try? JSONDecoder().decode(Message.self, from: data),
+                    info.sessionID == currentSessionID {
+                    messageStore.upsertMessageInfo(info)
+                } else {
+                    // info missing or undecodable: the payload cannot carry
+                    // the message state locally, so fall back to the REST
+                    // reconciliation path (pre-SSE-data-path behavior).
+                    await loadMessages()
+                    await loadSessionDiff()
+                }
             }
         case "message.part.delta":
             // `field` is "text" for both reasoning and text parts, so it cannot
@@ -128,16 +194,31 @@ extension AppState {
                sessionID == currentSessionID,
                props["field"]?.value as? String == "text",
                let delta = props["delta"]?.value as? String, !delta.isEmpty,
-               let messageID = props["messageID"]?.value as? String,
-               let partID = props["partID"]?.value as? String,
-               messageStore.partType(for: partID, inSession: sessionID) == "text" {
+                let messageID = props["messageID"]?.value as? String,
+                let partID = props["partID"]?.value as? String,
+                messageStore.partType(for: partID, inSession: sessionID) == "text" {
                 messageStore.recordVisibleToken(messageID, sessionID: sessionID)
+                // Streaming text: append in place. Only text parts reach this
+                // point (the partType guard above); reasoning text lands
+                // locally via its end frame. A part that is not loaded yet
+                // (reconnect missed the start frame) is a no-op — the end
+                // frame or the next reconciliation converges it.
+                messageStore.appendDelta(messageID: messageID, partID: partID, delta: delta)
             }
         case "message.part.updated":
-            if let sessionID = props["sessionID"]?.value as? String,
+            let eventSessionID = props["sessionID"]?.value as? String
+            if let sessionID = eventSessionID,
                sessionID == currentSessionID,
                let partObj = props["part"]?.value as? [String: Any],
-               let messageID = partObj["messageID"] as? String {
+               let messageID = partObj["messageID"] as? String,
+               let partID = partObj["id"] as? String {
+                // First-write-wins part-type index: the delta guard below
+                // (and throughput stamping) rely on the start frame's type.
+                messageStore.recordPartType(
+                    sessionID: sessionID,
+                    partID: partID,
+                    type: (partObj["type"] as? String) ?? "text"
+                )
                 // Tool-call input streams as deltas on the tool part, so it also
                 // counts as visible output; a step whose only output is a tool
                 // call would otherwise have no decoding window at all.
@@ -151,17 +232,51 @@ extension AppState {
                 }
                 // First sighting of a new tool part id (any status, pending
                 // first) counts one tool call; replayed statuses dedupe.
-                if partObj["type"] as? String == "tool", let partID = partObj["id"] as? String {
+                if partObj["type"] as? String == "tool" {
                     statsStore.observeToolPart(id: partID, sessionID: sessionID)
                 }
             }
-            switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {
-            case .ignored:
-                break
-            case .finalized:
-                await loadMessages()
-                await loadSessionDiff()
+            if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
+                if let partObj = props["part"]?.value as? [String: Any],
+                   let data = try? JSONSerialization.data(withJSONObject: partObj),
+                   let part = try? JSONDecoder().decode(Part.self, from: data),
+                   part.sessionID == currentSessionID {
+                    switch messageStore.upsertPart(part) {
+                    case .applied, .ignored:
+                        break
+                    case .needsReconcile:
+                        // Thin payload (e.g. dsh shim shape): fall back to the
+                        // REST reconciliation path so multi-host behavior
+                        // matches the pre-SSE-data-path client.
+                        await loadMessages()
+                        await loadSessionDiff()
+                    }
+                } else {
+                    await loadMessages()
+                    await loadSessionDiff()
+                }
             }
+        case "message.part.removed":
+            // The payload carries only ids (no part object): revert cleanup
+            // and the DELETE endpoints emit this. Apply locally so the UI no
+            // longer waits on a REST round-trip for deletions.
+            if let sessionID = props["sessionID"]?.value as? String,
+               sessionID == currentSessionID,
+               let messageID = props["messageID"]?.value as? String,
+               let partID = props["partID"]?.value as? String {
+                messageStore.removePart(messageID: messageID, partID: partID)
+            }
+        case "message.removed":
+            if let sessionID = props["sessionID"]?.value as? String,
+               sessionID == currentSessionID,
+               let messageID = props["messageID"]?.value as? String {
+                messageStore.removeMessageRow(messageID: messageID)
+            }
+        case "server.heartbeat":
+            // Explicit no-op: the liveness timestamp is stamped at the
+            // handleSSEEvent entry for every frame. Listed here so a
+            // heartbeat never silently falls through to `default`.
+            break
         case "permission.asked":
             if let perm = PermissionController.parseAskedEvent(properties: props),
                !pendingPermissions.contains(where: { $0.id == perm.id }) {

@@ -252,8 +252,10 @@ nonisolated struct Message: Codable, Identifiable {
 }
 
 nonisolated struct MessageWithParts: Codable {
-    let info: Message
-    let parts: [Part]
+    /// `var`: the SSE data path updates rows in place (part upserts, info
+    /// replacement, delta appends) instead of replacing the whole array.
+    var info: Message
+    var parts: [Part]
 
     /// Wall-clock this step spent inside its tools (sum of `state.time`). Zero
     /// when the server recorded no tool timing, e.g. a step that called no
@@ -432,7 +434,9 @@ nonisolated struct Part: Codable, Identifiable {
     let messageID: String
     let sessionID: String
     let type: String
-    let text: String?
+    /// `var`: streaming deltas append to the local copy in place (SSE data
+    /// path); the part's end frame later replaces it with the full text.
+    var text: String?
     let synthetic: Bool?
     let tool: String?
     let callID: String?
