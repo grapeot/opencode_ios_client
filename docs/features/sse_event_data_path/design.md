@@ -1,46 +1,46 @@
 # SSE Event Data Path 设计（SSE 作为消息状态的数据通路）
 
-Status: implementation-ready（step 2 调研完成，全部 file:line 基于 master `3c603dc` 与 opencode-official `71927c2d05` 复核；可开工）
+Status: implementation ready (step 2 investigation done, all file:line based on master `3c603dc` and opencode-official `71927c2d05`, ready to start)
 
 ## 1. Bottom Line
 
-iOS 客户端现在是「SSE 只当门铃」：每条消息相关 SSE 事件都丢弃 payload 里的完整数据，触发一次全量 REST 拉取（`loadMessages` + `loadSessionDiff`），且这些 `await` 发生在串行事件循环内，队头阻塞。一个 N=3 step、每 step M=2 tool 的普通 turn，静态计数是 **42 对 REST（84 次拉取）串行阻塞事件循环**（公式 `N×(8+3M)`，源码逐行验证，见「客户端现状盘点」末尾）。感知结果：tool 正在执行时 UI 要等 REST 快照回来才动。
+iOS 客户端目前是"用 SSE 当门铃，真话全靠 REST 说"：每个消息相关的 SSE 事件都把 payload 里的完整数据扔掉，转而触发一次全量 REST 拉取（`loadMessages` + `loadSessionDiff`），而且这些 `await` 在同一个串行事件循环内排队。一个 N=3 step、每 step M=2 tool 的普通 turn，静态算出来是 **42 对 REST（84 次拉取）串行阻塞事件循环**（公式 `N×(8+3M)`，源码逐行验证，见「客户端现状盘点」末尾）。感知结果是：tool 正在执行时 UI 要等 REST 快照回来才动。
 
-服务端把数据放在事件 payload 里（native OpenCode server，源码 + live 实测双重验证）：`message.part.updated` 带完整 part（tool 的 `state.status/input/output/time`），`message.updated` 带完整 message info，`message.part.delta` 带流式文本增量，`server.heartbeat` 每 10s 一帧。
+服务端把数据塞在事件的 payload 里（native OpenCode server + 源码 + live 实测双重验证）：`message.part.updated` 有完整 part（tool 的 `state.status/input/output/time`），`message.updated` 有完整 message info，`message.part.delta` 有流式文本增量，`server.heartbeat` 每 10s 一帧。
 
 设计三件套：
 
-1. **SSE 作为数据通路**：事件 payload 原地 upsert 到 `MessageStore`，零 RTT，事件到达即渲染。payload 完整性门禁：字段不全（如 dsh shim 的瘦 part 形状）回退现行 REST 路径，行为与今天一致。
-2. **REST 降级为对账**：per-event REST 归零，只在 bootstrap（重连）、turn 结束（`session.status → idle`）、手动刷新/切换、看门狗触发时拉。每 turn REST 从 42 对降到 1–2 对。
-3. **心跳看门狗**：`server.heartbeat` 是 `/global/event` 上保证存在的 10s 帧（long tool 期间也发，源码验证）。客户端 5s 周期检查静默时长，> 20s（错过 2 个心跳）触发一次对账。替代轮询的静默死亡恢复；无心跳的兼容 host 上退化为 20s 低频对账，不劣化。
+1. SSE作为数据通路：事件payload直接upsert到MessageStore，零RTT，事件到即渲染。payload完整性门禁：字段不全（如dsh shim的瘦part形状）回退现行REST路径，行为与今天一致。
+2. REST降级为对账：per-event REST归零，只在bootstrap（重连）、turn结束（session.status -> idle）、手动刷新/切换、看门狗触发时拉。每turn REST从42对降到1-2对。
+3. 心跳看门狗：server.heartbeat是/global/event上保证存在的10s帧（long tool期间也发，源码验证）。客户端5s周期检查静默时长，>20s（错过2个心跳）触发一次对账。替代轮询的静默死亡恢复；无心跳的兼容host上退化为20s低频对账，不劣化。
 
-明确不做：2s busy polling（用户痛点，不引入）、发送时乐观 busy（亚秒 cosmetic，不做）、tile 视觉升级（P2 另开）、服务端改动（零）。
+* **明确不做**：2s busy polling（用户痛点，不引入）、发送时乐观 busy（亚秒 cosmetic，不做）、tile 视觉升级（P2 另开）、服务端改动（零）。
 
 ## 2. 用户可见问题与根因
 
-现象：Android 上能看到正在跑的 tool 与计时；iOS 上 tool 执行期间界面无更新，tool 结束才一次性出现。
+观察：Android 可见运行中的 tool + 计时器；iOS tool 运行时 UI 无更新，结束后一次性呈现。
 
-根因链（全部有 file:line，基于 master）：
+根因链（均有文件行号，master）：
 
-1. **SSE 只当门铃**：`message.part.updated` handler（`AppState+SSE.swift:132-155`）调 `messageStore.applyMessagePartUpdate`（`MessageStore.swift:154-169`），该方法除 `recordPartType` 打点外**不应用任何 payload 数据**，无条件返回 `.finalized` → `await loadMessages() + await loadSessionDiff()`（:149-155）。part 的完整对象被解析出来后丢弃。
-2. **串行事件循环 + 队头阻塞**：`connectSSE`（`AppState+SSE.swift:9-39`）的 `for try await` 循环内 `await handleSSEEvent(event)`（:28），消息事件 handler 内部又 `await` REST 往返——一个慢 REST 卡住后续所有事件。
-3. **无静默死亡恢复**：backoff 重连（`min(30, 2^attempt)`，2s→4s→8s→16s→30s 封顶，:33-36；重连成功后跑 `bootstrapSyncCurrentSession` :26）只处理「连接断了」。连接活着但没帧（代理缓冲丢帧）时，UI 永久停在最后状态。（注：iOS 现在**没有** busy polling，也没有其他恢复路径。）
+1. **SSE 当门铃用**：`message.part.updated` handler (`AppState+SSE.swift:132-155`) 调用 `messageStore.applyMessagePartUpdate` (`MessageStore.swift:154-169`)，后者只做 `recordPartType` 打点，**不碰 payload**，直接返回 `.finalized` → `await loadMessages() + await loadSessionDiff()` (:149-155)。part 的完整对象被解析出来直接丢弃。
+2. **串行事件循环 + 队头阻塞**：`connectSSE` (`AppState+SSE.swift:9-39`) 的 `for try await` 循环里 `await handleSSEEvent(event)` (:28)，消息事件 handler 内部又 `await` REST 往返——一个慢 REST 卡死后续所有事件。
+3. **无静默死亡恢复**：backoff 重连（`min(30, 2^attempt)`，2s→4s→8s→16s→30s 封顶，:33-36；重连成功后跑 `bootstrapSyncCurrentSession` :26）只处理「连接断了」。连接活着但没帧（代理缓冲丢帧）时，UI 永久停在最后状态。（注：iOS 现在**没有**busy polling，也没有其他恢复路径。）
 
-第四处缺口在 UI 层（**UI 层缺口**，与数据通路独立）：**当前 UI 尚不足以把 tool 的 running 状态体现出来**——tool 卡位于折叠的 `ToolCallsRowView`（`MessageRowView.swift:754-796`），行内没有 per-tool 的 running 视觉（无 header spinner、无明确 running 标注）；composer 状态行文案依赖 `session.status` 的 `status.message` 与 ActivityTracker 推导（`ActivityTracker.swift:74-97`），质量取决于服务端措辞。所以数据通路是「用户能看到 tool 在跑」的**必要非充分条件**：本 feature 解决数据及时，running 状态的视觉呈现要由 P2 tile feature（5.7）补齐。P2 落地前，改后的体验 = composer 行及时出现（busy）+ 折叠 tool 行状态及时更新，行内仍无显式 running 指示。
+4. **UI 层缺口**（与数据通路独立）：**当前 UI 尚不足以把 tool 的 running 状态体现出来**——tool 卡位于折叠的 `ToolCallsRowView`（`MessageRowView.swift:754-796`），行内没有 per-tool 的 running 视觉（无 header spinner、无明确 running 标注）；composer 状态行文案依赖 `session.status` 的 `status.message` 与 ActivityTracker 推导（`ActivityTracker.swift:74-97`），质量取决于服务端措辞。所以数据通路是「用户能看到 tool 在跑」的**必要非充分条件**：本 feature 解决数据及时，running 状态的视觉呈现要由 P2 tile feature（5.7）补齐。P2 落地前，改后的体验 = composer 行及时出现（busy）+ 折叠 tool 行状态及时更新，行内仍无显式 running 指示。
 
-Android 对照（详见 Android 侧 plan）：同样的门铃架构 + 400ms debounce + 2s busy polling + in-memory 流式文本。本设计把数据源换成 payload 本身，用看门狗替代 polling；Android 侧同设计移植并移除 polling。
+* Android 对照（见 Android 侧 plan）：同样的门铃架构 + 400ms debounce + 2s busy polling + in-memory 流式文本。本设计把数据源换成 payload 本身，用看门狗替代 polling；Android 侧同设计移植并移除 polling。
 
 ## 3. 服务端事件契约（native OpenCode server）
 
-源码：`opencode-official`（upstream dev `7945de2089` + 1 个私有 commit `71927c2d05`；私有 patch 只改 run-state 的 runner 作用域与两个 schema 定义，**不影响下列任何契约**）。live 实测时间线：来自 `session_status_bar` feature 的探针（`tmp/status_bar_probe.py`，4096 live server，2026-09-30；该 feature 的文档在 opencode_ios_client 主 checkout，未进本分支——时间线已内联在下文，自足）。
+源码：`opencode-official`（upstream dev `7945de2089` + 1 个私有 commit `71927c2d05`；私有 patch 仅改动 run-state 的 runner 作用域与两个 schema 定义，**不影响下列任何契约**）。live 实测时间线：来自 `session_status_bar` feature 的探针（`tmp/status_bar_probe.py`，4096 live server，2026-09-30；该 feature 的文档在 opencode_ios_client 主 checkout，未进本分支——时间线已内联在下文，自足）。
 
 ### SSE 端点
 
 服务端同时挂 `/event`（instance 级，按 directory 过滤）、`/global/event`（全局无过滤）、`/api/event`（V2 面，256 容量 dropping 队列）。**iOS 订阅 `/global/event`**（`SSEClient.swift:57-58` 硬编码；`APIConstants.sseEndpoint` 是死常量）。
 
-- `/event`、`/global/event`：保证每 ~10s 一帧 `server.heartbeat`（handler 内独立 `Stream.tick("10 seconds")`，`handlers/event.ts:63-66`、`handlers/global.ts:35-38`；**不依赖任何 session/instance 状态**，idle/长 tool 期间照发）；连接建立第一帧 `server.connected`（`properties: {}`）；无界队列**不丢帧**；同 session 事件 FIFO 保序（单进程串行 notify + 同 session 由同一 runLoop fiber 顺序产出）。
-- `/api/event`：心跳是 15s SSE 注释帧（不是 `server.heartbeat` 事件）；对 v1 live 事件（`session.status`/`message.part.delta`）编码会失败（schema 编码探针实测），纯 `cli serve` 进程只挂这个端点。**iOS 客户端不订阅该端点，与本设计无关**；若 host 只有 `/api/event`（纯 cli serve），现状客户端已经连不上，不在范围内。
-- dsh shim host：iOS 多 host 可连 shim（现状可用 ⇒ shim 提供可用的 `/global/event`）；shim 是否发 `server.heartbeat` **未验证**——看门狗在无心跳 host 上退化为 20s 低频对账（见 5.6），不劣化。
+- `/event`、`/global/event`：每 ~10s 一发 `server.heartbeat`（handler 里独立的 `Stream.tick("10 seconds")`，`handlers/event.ts:63-66`、`handlers/global.ts:35-38`；**不依赖任何 session/instance 状态**，idle/长 tool 照样发）；新建连接的第一帧 `server.connected`（`properties: {}`）；无界队列不丢帧；同 session 的事件 FIFO 保序（单进程串行 notify + 同 session 来自同一个 runLoop fiber）。
+- `/api/event`：心跳是 15s 的 SSE 注释帧（不是 `server.heartbeat` 事件）；对 v1 live 事件（`session.status`/`message.part.delta`）编码会失败（schema 编码探针实测），纯 `cli serve` 进程只挂这个端点。**iOS 客户端不订阅这个端点，与本设计无关**；若主机只有 `/api/event`（纯 cli serve），现状客户端已经连不上，不在范围。
+- dsh shim host：iOS 多个 host 可以连 shim（现状可用 ⇒ shim 提供可用的 `/global/event`）；shim 有没有发 `server.heartbeat` **未验证**——看门狗在无心跳 host 上退化成 20s 低频对账（见 5.6），不劣化。
 
 ### 事件表（客户端相关，payload 形状已验证）
 
@@ -121,7 +121,7 @@ t+2.5s  session.updated；session.status=idle
 
 ### 5.2 `MessageStore` upsert 实现规格
 
-新增方法（都在 `MessageStore.swift`，`applyMessagePartUpdate` 旁）：
+新增方法（均在 `MessageStore.swift` 中，`applyMessagePartUpdate` 附近）：
 
 ```swift
 // 返回 .applied（已原地更新）/ .needsReconcile（门禁不通过，调用方回退 REST）/ .ignored（sessionID 不匹配等）
@@ -133,7 +133,9 @@ func removePart(messageID: String, partID: String)
 func removeMessageRow(messageID: String)           // 同步清 partsByMessage 对应键
 ```
 
-handler 侧骨架——`message.part.updated` 分支（`AppState+SSE.swift:132-155` 改造）：现有 sessionID 门控 + 打点块（:133-148，`recordVisibleToken`/`recordStepFinish`）原样保留；:149-155 的 `applyMessagePartUpdate` switch 替换为下。注意现状的 switch 在门控块**之外**（`applyMessagePartUpdate` 内部自做 sessionID 检查），新代码显式把 `part.sessionID == currentSessionID` 作为 gate：
+handler 侧骨架 —— `message.part.updated` 分支（`AppState+SSE.swift:132-155`）：
+现有的 sessionID 门控 + 打点块（:133-148，`recordVisibleToken`/`recordStepFinish`）原样保留；
+:149-155 的 `applyMessagePartUpdate` switch 替换为下。注意现状的 switch 在门控块**之外**（`applyMessagePartUpdate` 内部自做 sessionID 检查），新代码显式把 `part.sessionID == currentSessionID` 作为 gate：
 
 ```swift
 if let partObj = props["part"]?.value as? [String: Any],
@@ -157,7 +159,7 @@ if let partObj = props["part"]?.value as? [String: Any],
 }
 ```
 
-**同步删除**：`applyMessagePartUpdate` 方法与 `MessagePartUpdateOutcome` enum（`MessageStore.swift:11-14, 154-169`）。它内部的 `recordPartType` 打点移入 handler 打点块——直接调现有方法 `messageStore.recordPartType(sessionID:partID:type:)`（`MessageStore.swift:107-112`，首写优先，delta 的 partType 判断依赖它）。
+**同步删除** `applyMessagePartUpdate` 方法与 `MessagePartUpdateOutcome` enum (`MessageStore.swift:11-14, 154-169`)。其内部的 `recordPartType` 打点移至 handler 打点块——直接调用现有方法 `messageStore.recordPartType(sessionID:partID:type:)` (`MessageStore.swift:107-112`)，首写优先，delta 的 partType 判断依赖它。
 
 handler 侧骨架——`message.updated` 分支（`AppState+SSE.swift:107-118` 改造）：
 
@@ -182,7 +184,7 @@ case "message.updated":
     }
 ```
 
-`upsertPart` 语义：
+* `upsertPart` 语义：
 
 1. **门禁（payload 完整性）**：tool part 必须带可解码的 `state`（`PartStateBridge` 双形态已支持）；text/reasoning part 必须带 `text` 字段。不满足（如 dsh shim 的瘦 part + 顶层 delta）→ 返回 `.needsReconcile`，handler 走现行 `await loadMessages() + await loadSessionDiff()`。门禁让多 host 兼容自动成立：shim 走老路，native server 走数据通路。
 2. **行定位**：按 `part.messageID` 找 `messages` 行。
@@ -191,17 +193,17 @@ case "message.updated":
 3. **optimistic temp-part 去重**（关键边界）：行是 pending optimistic（id ∈ `pendingOptimisticMessageIDs`）且 incoming part id 不是 `temp-` 前缀 → 先移除该行全部 `temp-` 前缀 part，再插入 incoming part。避免服务端 user part 事件与 optimistic temp part 并排显示。
 4. **`partsByMessage` 同步重建**该行（app 侧只写不读，但 `removeMessage`/`appendOptimisticUserMessage` 都维护它，保持一致；测试也读它）。
 
-解码路径（已有先例 `AppState+SSE.swift:58-61`）：`properties["part"]?.value as? [String: Any]` → `JSONSerialization.data(withJSONObject:)` → `JSONDecoder().decode(Part.self)`。失败 → `.needsReconcile`。
+* 解码：用已有例子（`AppState+SSE.swift:58-61`）把 `properties["part"]?.value` 转 JSON → `JSONSerialization.data(withJSONObject:)` → `JSONDecoder().decode(Part.self)`。失败 → `.needsReconcile`。
 
-`upsertMessageInfo` 语义：行存在 → 替换 `info`（parts 不动——message.updated 不带 parts，parts 来自 part 事件与对账）；行不存在 → 壳行（parts 空）。**user message 且行 pending optimistic → 替换 info + `untrackPendingOptimisticMessage(id)`**（与 `loadMessages` 的 id-membership 语义对齐：服务端确认即出 pending 集合；parts 保留 temp 版直到对账，见 5.8 已知取舍）。
+`upsertMessageInfo`的含义是：如果消息已存在，则使用新的 `info` 替换它（注意：这里不更新 `parts` 字段，因为 `message.updated` 不包含 `parts` 信息，`parts` 由 `part` 事件和对账提供）；如果消息不存在，则插入一个壳行（`parts` 为空）。对于用户消息且消息处于 `pending optimistic` 状态的情况，则替换 `info` 并执行 `untrackPendingOptimisticMessage(id)`（与 `loadMessages` 中 id 的成员资格语义保持一致，当服务器确认该 id 的消息时，将其添加到 `pending` 集合中，但 `parts` 仍保持临时版本，直到对账完成，详见 5.8 中的已知取舍）。
 
 ### 5.3 壳行规则（part 先于 message 到达）
 
-正常流不会发生：服务端每 step 先 `message.updated`（step 开始建 assistant message，`prompt.ts:1201`）再发 part 事件，且同 session FIFO。发生场景 = 重连错过 message.updated 或乱序。规则：
+**注意**：正常流程下不会出现 "服务端每 step 先 `message.updated`（step 开始建 assistant message, `prompt.ts:1201`）再发 part 事件" 的情况，且同一个 session 是 FIFO 的。出现这种情况说明要么重连错过了 message.updated，要么消息乱序。规则：
 
-- part 类型 ∈ {`tool`, `reasoning`, `step-finish`, `patch`}（assistant 专属）→ 建壳行：`Message(id: part.messageID, sessionID, role: "assistant", time: 本地时间, 其余 nil)` + 该 part，追加到 `messages` 末尾。壳行必须能被后续 `upsertMessageInfo` 与 `loadMessages` 自然覆盖。
-- part 类型 ∈ {`text`, `file`}（user/assistant 都可能）→ **不建行，忽略该 part**（等 `message.updated` 或对账收敛）。宁可短暂不显示，不建角色不明的行。
-- `message.part.delta` 的 part 本地不存在 → 忽略（start 帧保证 part 已建；重连丢 start 时靠 end 帧/对账收敛）。
+- part 类型 ∈ {`tool`, `reasoning`, `step-finish`, `patch`}（仅 assistant）→ 创建空行：`Message(id: part.messageID, sessionID, role: "assistant", time: 本地时间, 其余字段置 null)`，并追加 part 到末尾。空行需能被后续 `upsertMessageInfo` / `loadMessages` 自然覆盖。
+- part 类型 ∈ {`text`, `file`}（用户或助手可能发送）→ **不创建空行，忽略此 part**（等待 `message.updated` 或对账）。宁可暂时不显示，也不要创建角色不明空行。
+- `message.part.delta` 的 part 在本地不存在 → 忽略（start 帧保证 part 已存在；重连丢 start 时由 end 帧/对账收敛）。
 
 ### 5.4 `message.part.delta` 处理
 
@@ -213,7 +215,7 @@ handler（`AppState+SSE.swift:119-131` 改造）。现有 guard 链是 `sessionI
 
 ### 5.5 REST 降级为对账
 
-`loadMessages`/`loadSessionDiff` 的 per-event 触发点全部移除，保留的触发时机：
+- 删除 `loadMessages` 和 `loadSessionDiff` 的所有 per-event 触发点，保留的触发时机：
 
 | 时机 | 现状 | 改后 |
 |---|---|---|
@@ -223,7 +225,7 @@ handler（`AppState+SSE.swift:119-131` 改造）。现有 guard 链是 `sessionI
 | 看门狗触发 | 无 | 新增（5.6） |
 | `session.error` | `await loadMessages`（无 diff） | 保留不动（错误路径保持现状，不扩大改动面） |
 
-预期：每 turn REST 从 `N×(8+3M)` 对降到 1（idle 对账）+ 0–1（bootstrap，仅重连时）。message list 重量级负载拉取频率显著下降——满足「取数动作不能放大」硬约束（`session_status_bar/design.md` 背景节），是收缩不是放大。
+* 预期：每 turn REST 从 `N×(8+3M)` 对降到 1（idle 对账）+ 0–1（bootstrap，仅重连时）。message list 重量级负载拉取频率显著下降——满足「取数动作不能放大」硬约束（`session_status_bar/design.md` 背景节），是收缩不是放大。
 
 **idle 对账的代码位置**：`session.status` handler（`AppState+SSE.swift:57-76`）内、`sessionStatuses[sessionID] = decoded` 之后追加：
 
@@ -234,18 +236,18 @@ if decoded.type == "idle", sessionID == currentSessionID {
 }
 ```
 
-注意门控：现状 handler 对**所有** session 更新 status（无 currentSession 过滤，`sessionStatuses` 是全局 map），所以 idle 对账动作必须显式带 `sessionID == currentSessionID`。busy/retry 分支不动。
+* 注意门控：现有handler对所有session更新status（无currentSession过滤，`sessionStatuses`是全局map），所以idle对账动作必须显式带`sessionID == currentSessionID`。busy/retry分支不动。
 
-**非 per-event 的 `loadMessages` 调用点清单**（全部保留；`loadSessionDiff` 同理，列主要项）：
+* **非 per-event 的 `loadMessages` 调用点清单**（全部保留；`loadSessionDiff` 同理，列主要项）：
 
-- `AppState+Sessions.swift`：`selectSession` :285、`loadSessions` 恢复 hydrate :174、`forkSession` :364、`deleteSession` :395、`abortSession` :482、`bootstrapSyncCurrentSession` :441
+- `AppState+Sessions.swift`：`selectSession` :285, `loadSessions` 恢复 hydrate :174, `forkSession` :364, `deleteSession` :395, `abortSession` :482, `bootstrapSyncCurrentSession` :441
 - `AppState.swift`：`refresh()` :900
-- `AppState+Messages.swift`：`loadOlderMessagesForCurrentSession` :111、`editFromMessage`/revert :191
-- `AppState+SSE.swift`：`recoverFromMissingCurrentSessionIfNeeded` :359、`handleRemoteSessionDeleted` :380、`session.error` handler :191（此路径保留，见上表）
+- `AppState+Messages.swift`：`loadOlderMessagesForCurrentSession` :111, `editFromMessage`/revert :191
+- `AppState+SSE.swift`：`recoverFromMissingCurrentSessionIfNeeded` :359, `handleRemoteSessionDeleted` :380, `session.error` handler :191（此路径保留，见上表）
 
 ### 5.6 心跳看门狗
 
-- **时间戳**：`handleSSEEvent` 入口统一 `sseLastFrameAt = Date()`（任何帧，含 heartbeat）。
+- **时间戳**：`handleSSEEvent` 入口统一 `sseLastFrameAt = Date()`（任何帧，包括 heartbeat）。
 - **检查**：5s 周期 Task（`connectSSE` 的 stream 启动时 launch，断流/取消时 cancel；AppState 是 `@MainActor`，与事件循环无竞态）：
 
 ```swift
@@ -271,7 +273,7 @@ sseWatchdogTask = Task { [weak self] in
 }
 ```
 
-  - `handleSSEEvent` 入口（`switch` 之前）：`sseLastFrameAt = Date()`。
+- `handleSSEEvent` 入口（`switch` 前）：`sseLastFrameAt = Date()`。
   - `checkSSEWatchdog()`：新增 `@MainActor` internal 方法，放 `AppState+SSE.swift`（上述伪码）；`syncSessionStatusesFromPoll` 已存在（`AppState+Sessions.swift:464-468`），直接复用。
   - AppState 销毁 / `connectSSE` 重入时 cancel watchdog Task（与 `sseTask` 同生命周期，:10-11 的 cancel 模式）。
 - **不是轮询**：无固定周期拉取；正常时（heartbeat 10s 一帧 + turn 中业务事件）检查恒 no-op。
@@ -302,11 +304,11 @@ sseWatchdogTask = Task { [weak self] in
 
 ## 6. 与 session_status_bar feature 的关系
 
-互补，命名注意区分：它的「数据通路」= session 级计数器（rounds/tool calls/tokens）的取数来源；本 feature 的「数据通路」= 聊天渲染的消息/part 状态实时落地。
+* **补充说明**：在命名上要注意区分，它的"数据通路"指的是 session 级别的一些计数器（比如 rounds, tool calls, tokens）的来源；这个 feature 的"数据通路"指的是聊天界面消息和 message/part 的状态实时反映出来。
 
-- **它已开始实现**（2026-09-29 观察，主 checkout 未提交）：`message.updated` handler 内加 `statsStore.observeUserMessage`（user role）、`message.part.updated` handler 内加 `statsStore.observeToolPart`，均位于 awaited REST 之前。
-- **兼容承诺**：本 feature 只移除 per-event 的 `await loadMessages/loadSessionDiff`，`statsStore.observe*` 调用点原样保留（它们是同步本地 bookkeeping，不依赖 REST）。其对账依赖的「loadMessages 完成后窗口对账」在 idle/bootstrap 对账时仍发生（频率下降，计数主体是 SSE 增量，不受影响）。
-- **live 证据共享**：本文档引用的事件时间线来自它的已验证事实（探针 `tmp/status_bar_probe.py`）。
+- **它已做**（2026-09-29 观察，主 checkout 未提交）：message.updated 里加了 `statsStore.observeUserMessage`（user role），message.part.updated 里加了 `statsStore.observeToolPart`，都在 await REST 前。
+- **兼容承诺**：本 feature 仅移除 per-event 的 `await loadMessages/loadSessionDiff`，`statsStore.observe*` 调用点原样保留（它们都是同步本地 bookkeeping，不依赖 REST）。其对账依赖的「loadMessages 完成后窗口对账」在 idle/bootstrap 对账时仍会发生（频率下降，计数主体是 SSE 增量，不受影响）。
+- live 证据共享：本文档引用的事件时间线来自它的已验证事实（探针 `tmp/status_bar_probe.py`）。
 - 实现顺序：相互独立。谁先 merge，后者基于其后的 master；branch 状态以实施时实际为准。
 
 ## 7. 实现顺序（按步验证）
@@ -330,7 +332,7 @@ sseWatchdogTask = Task { [weak self] in
 | `messageUpdatedForCurrentSessionReloads`（:1407） | `== 1` | `== 0` + info upsert 断言 |
 | `sessionStatusIdleRecordsIdleForCurrentSession`（:1574） | `messagesCallCount == 0` | `== 1`（idle 对账，新行为） |
 
-**新增用例**（同文件同 harness）：
+* **新增用例**（同文件同 harness）：
 
 - part upsert 三态：tool `pending→running→completed` 三帧各自改变本地 state，全程 0 REST。
 - delta 流式：`part.updated`(空 text start) → 3×`message.part.delta` → `part.updated`(完整 end)：中间 `part.text` 逐段增长，end 帧后等于完整文本。
@@ -371,7 +373,7 @@ sseWatchdogTask = Task { [weak self] in
 
 ## 12. 遗留开放项（不阻塞开工）
 
-1. turn 级 final completion `message.updated` 帧（带 `time.completed`）是否存在——live 待测；不存在也不影响设计（idle 对账收敛）。
-2. dsh shim host 是否发 `server.heartbeat`——未验证；退化行为已设计（5.6）。
-3. 服务端是否对 user message 的 parts 发 `part.updated` 事件——未验证；两种情况都被 5.2-3 / 5.8 覆盖。
-4. delta 节流开关是否需要——live 验收后定（见「10. 风险与回滚」）。
+1. **Turn 级的 `final completion` 消息帧**（含 `time.completed`）是否存在——live 待测；不存在也不影响设计（idle 对账会收敛）。
+2. **dsh shim host 是否发 `server.heartbeat`**——未验证；退化行为已设计（5.6）。
+3. **服务端是否对 user message 的 parts 发 `part.updated` 事件**——未验证；两种情况都被 5.2-3 / 5.8 覆盖。
+4. **delta 节流开关是否需要**——live 验收后定（见「10. 风险与回滚」）。
