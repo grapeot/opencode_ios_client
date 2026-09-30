@@ -108,10 +108,14 @@ extension AppState {
             let eventSessionID = props["sessionID"]?.value as? String
             if Self.shouldProcessMessageEvent(eventSessionID: eventSessionID, currentSessionID: currentSessionID) {
                 if let infoObj = props["info"]?.value as? [String: Any],
-                   infoObj["role"] as? String == "assistant",
-                   let assistantID = infoObj["id"] as? String,
-                   let sessionID = eventSessionID {
-                    messageStore.recordStepStart(assistantID, sessionID: sessionID)
+                    let role = infoObj["role"] as? String,
+                    let id = infoObj["id"] as? String,
+                    let sessionID = eventSessionID {
+                    if role == "assistant" {
+                        messageStore.recordStepStart(id, sessionID: sessionID)
+                    } else if role == "user" {
+                        statsStore.observeUserMessage(id: id, sessionID: sessionID)
+                    }
                 }
                 await loadMessages()
                 await loadSessionDiff()
@@ -144,6 +148,11 @@ extension AppState {
                 if partObj["type"] as? String == "step-finish" {
                     let tokensObj = partObj["tokens"] as? [String: Any]
                     messageStore.recordStepFinish(messageID, sessionID: sessionID, outputTokens: tokensObj?["output"] as? Int)
+                }
+                // First sighting of a new tool part id (any status, pending
+                // first) counts one tool call; replayed statuses dedupe.
+                if partObj["type"] as? String == "tool", let partID = partObj["id"] as? String {
+                    statsStore.observeToolPart(id: partID, sessionID: sessionID)
                 }
             }
             switch messageStore.applyMessagePartUpdate(properties: props, currentSessionID: currentSessionID) {

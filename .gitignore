@@ -68,3 +68,6 @@ tmp_*
 # 完整决策过程保留在 docs/archive/ 但不再随仓库分发。
 docs/archive/2026-06_markdown_web_preview_prd.md
 docs/archive/2026-06_markdown_web_preview_rfc.md
+
+# local test-runner state (simulator pin + derived data)
+.occlient/

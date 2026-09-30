@@ -33,6 +33,24 @@ extension AppState {
 
             hasMoreHistoryBySessionID[sessionID] = loaded.count >= fetchLimit
 
+            // Status-line stats reconcile: server-loaded window only (pending
+            // optimistic rows are not counted until the server confirms them).
+            let windowUserMessageIDs = Set(loaded.filter { $0.info.isUser }.map { $0.info.id })
+            let windowToolPartIDs = Set(loaded.flatMap { $0.parts.filter { $0.isTool }.map { $0.id } })
+            statsStore.reconcile(
+                sessionID: sessionID,
+                userMessageIDs: windowUserMessageIDs,
+                toolPartIDs: windowToolPartIDs,
+                isComplete: loaded.count < fetchLimit
+            )
+            if revertResetPendingSessionIDs.remove(sessionID) != nil {
+                statsStore.resetForRevert(
+                    sessionID: sessionID,
+                    userMessageIDs: windowUserMessageIDs,
+                    toolPartIDs: windowToolPartIDs
+                )
+            }
+
             let loadedMessageIDs = Set(loaded.map { $0.info.id })
             // Optimistic rows carry the same deterministic msg_ id the server
             // persists, so reconciliation is pure id membership: rows whose id
@@ -188,6 +206,9 @@ extension AppState {
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return nil }
             upsertSession(updatedSession)
             setDraftText(draft, for: sessionID)
+            // Revert truncates history; the reloaded window is the new ground
+            // truth for the status-line counters (see SessionStatsStore).
+            revertResetPendingSessionIDs.insert(sessionID)
             await loadMessages()
             await loadSessionDiff()
             await loadFileStatus()

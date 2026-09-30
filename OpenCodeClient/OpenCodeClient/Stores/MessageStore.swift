@@ -25,10 +25,28 @@ final class MessageStore {
 
     /// Per-step timing captured from the live SSE stream, keyed by assistant
     /// message id. Only populated while the client observed the stream for that
-    /// step (best-effort): a restart or a message loaded purely from REST has no
-    /// entry, so the footer falls back to the general (persisted) throughput.
-    /// Pruned on session-scoped clears.
+    /// step (best-effort): a message loaded purely from REST has no entry, so
+    /// the footer falls back to the general (persisted) throughput. Completed
+    /// steps (one with an observed step-finish token count) survive app
+    /// restarts via `defaults`; incomplete ones do not, since a truncated
+    /// window would fabricate a number. Pruned on session-scoped clears.
     var stepTimings: [String: StepTiming] = [:]
+
+    private let defaults: UserDefaults
+    private static let timingsKey = "stepTimings.v1"
+    private static let maxPersistedTimings = 200
+
+    private struct PersistedTiming: Codable {
+        let sessionID: String
+        let firstVisibleAt: Double?
+        let lastVisibleAt: Double?
+        let outputTokens: Int?
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        loadTimings()
+    }
 
     /// partID -> part type, keyed by "\(sessionID):\(partID)". Populated from
     /// `message.part.updated` (which carries the part's `type`) before any of
@@ -91,16 +109,53 @@ final class MessageStore {
     }
 
     /// No-op unless the step start was already observed (see
-    /// `recordVisibleToken`).
+    /// `recordVisibleToken`). A token count finalizes the decoding window, so
+    /// this is the only moment the entry is persisted: first/last timestamps
+    /// and the output count are all settled by then.
     func recordStepFinish(_ messageID: String, sessionID: String, outputTokens: Int?) {
-        if let out = outputTokens {
-            stepTimings[messageID]?.outputTokens = out
-        }
+        guard let out = outputTokens, stepTimings[messageID]?.outputTokens == nil else { return }
+        stepTimings[messageID]?.outputTokens = out
+        persistTimings()
     }
 
     func removeTimings(forSession sessionID: String) {
         for (id, timing) in stepTimings where timing.sessionID == sessionID {
             stepTimings[id] = nil
+        }
+        persistTimings()
+    }
+
+    private func loadTimings() {
+        guard let data = defaults.data(forKey: Self.timingsKey),
+              let saved = try? JSONDecoder().decode([String: PersistedTiming].self, from: data)
+        else { return }
+        for (id, saved) in saved
+        where saved.outputTokens != nil && saved.firstVisibleAt != nil {
+            stepTimings[id] = StepTiming(
+                sessionID: saved.sessionID,
+                firstVisibleAt: Date(timeIntervalSince1970: saved.firstVisibleAt! / 1000),
+                lastVisibleAt: saved.lastVisibleAt.map { Date(timeIntervalSince1970: $0 / 1000) },
+                outputTokens: saved.outputTokens
+            )
+        }
+    }
+
+    private func persistTimings() {
+        var snapshot: [String: PersistedTiming] = [:]
+        for (id, timing) in stepTimings where timing.outputTokens != nil {
+            snapshot[id] = PersistedTiming(
+                sessionID: timing.sessionID,
+                firstVisibleAt: timing.firstVisibleAt.map { $0.timeIntervalSince1970 * 1000 },
+                lastVisibleAt: timing.lastVisibleAt.map { $0.timeIntervalSince1970 * 1000 },
+                outputTokens: timing.outputTokens
+            )
+        }
+        if snapshot.count > Self.maxPersistedTimings {
+            let newestFirst = snapshot.sorted { ($0.value.lastVisibleAt ?? 0) > ($1.value.lastVisibleAt ?? 0) }
+            snapshot = Dictionary(uniqueKeysWithValues: Array(newestFirst.prefix(Self.maxPersistedTimings)).map { ($0.key, $0.value) })
+        }
+        if let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: Self.timingsKey)
         }
     }
 

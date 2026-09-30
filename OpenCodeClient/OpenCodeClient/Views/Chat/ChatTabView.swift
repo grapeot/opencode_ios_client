@@ -370,6 +370,23 @@ struct ChatTabView: View {
         return nil
     }
 
+    /// Session-level counters for the current session ("12 rounds · 37 tools ·
+    /// 1.07M tok"), shown persistently on the top line of the composer status
+    /// bar: these are session-scoped, so they live on the always-visible status
+    /// bar rather than per-message footers.
+    private var sessionStatsStatusText: String? {
+        guard let sessionID = state.currentSessionID else { return nil }
+        let stats = state.statsStore.stats(for: sessionID)
+        var segments = [
+            "\(stats.rounds) \(L10n.t(.statusRoundsLabel))",
+            "\(stats.toolCalls) \(L10n.t(.statusToolsLabel))",
+        ]
+        if let total = state.sessionTotalTokens(sessionID: sessionID) {
+            segments.append("\(MessageRowView.compactTokenCount(total)) \(L10n.t(.statusTokensLabel))")
+        }
+        return segments.joined(separator: " · ")
+    }
+
     private var composerStatusText: String? {
         let agentStatus = state.isBusy ? (runningTurnActivity?.text ?? L10n.t(.chatAgentRunning)) : nil
         let parts = [agentStatus, voiceStatusText].compactMap { $0 }
@@ -384,14 +401,26 @@ struct ChatTabView: View {
         return "mic.fill"
     }
 
+    /// Two-line composer status bar: the top line carries persistent
+    /// session-level counters, the bottom line carries transient per-turn
+    /// state (agent activity, voice, elapsed time, abort). Splitting them
+    /// keeps the persistent line from crowding out the transient one.
     private var quietComposerStatus: some View {
-        Group {
-            if let activity = runningTurnActivity {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    quietComposerStatusRow(activity: activity, now: context.date)
+        VStack(alignment: .leading, spacing: DesignSpacing.xs) {
+            if let stats = sessionStatsStatusText {
+                Text(stats)
+                    .font(DesignTypography.meta)
+                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+                    .lineLimit(1)
+            }
+            Group {
+                if let activity = runningTurnActivity {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        quietComposerStatusRow(activity: activity, now: context.date)
+                    }
+                } else {
+                    quietComposerStatusRow(activity: nil, now: Date())
                 }
-            } else {
-                quietComposerStatusRow(activity: nil, now: Date())
             }
         }
         .padding(.horizontal, DesignSpacing.xs)

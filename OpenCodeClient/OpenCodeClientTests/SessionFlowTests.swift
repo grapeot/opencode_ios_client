@@ -1586,7 +1586,9 @@ struct AppStateFlowTests {
 
     @Test @MainActor func sseStreamCapturesStepTimingForCurrentSession() async {
         let apiClient = MockAPIClient()
-        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        // Isolated defaults: stepTimings persist across store recreation, so
+        // shared .standard would leak entries between suites.
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: UserDefaults(suiteName: "opencode.tests.steptiming.\(UUID().uuidString)")!)
         state.currentSessionID = "s1"
 
         // Step start: assistant message.created.
@@ -1644,7 +1646,7 @@ struct AppStateFlowTests {
 
     @Test @MainActor func sseToolCallOnlyStepGetsDecodingWindow() async {
         let apiClient = MockAPIClient()
-        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: UserDefaults(suiteName: "opencode.tests.steptiming.\(UUID().uuidString)")!)
         state.currentSessionID = "s1"
 
         await state.applySSEEventForTesting(Self.makeSSEEvent("""
@@ -1682,7 +1684,7 @@ struct AppStateFlowTests {
 
     @Test @MainActor func sseStepTimingIgnoresNonCurrentSession() async {
         let apiClient = MockAPIClient()
-        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager())
+        let state = AppState(apiClient: apiClient, sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: UserDefaults(suiteName: "opencode.tests.steptiming.\(UUID().uuidString)")!)
         state.currentSessionID = "s1"
 
         // A full step for a NON-current session: part created + text delta.

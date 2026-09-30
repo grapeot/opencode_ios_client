@@ -17,6 +17,12 @@ struct Session: Identifiable, Equatable {
     let share: ShareInfo?
     let summary: SummaryInfo?
     var revert: RevertInfo? = nil
+    /// Session-level cumulative token usage, maintained server-side (atomic
+    /// SQL increments on the session row) and pushed with every
+    /// `session.updated` event. Older or compatible servers omit it.
+    var tokens: Message.TokenInfo? = nil
+    /// Session-level cumulative cost, same lineage as `tokens`.
+    var cost: Double? = nil
 
     var isArchived: Bool {
         guard let archived = time.archived else { return false }
