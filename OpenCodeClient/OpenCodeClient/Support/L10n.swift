@@ -367,6 +367,7 @@ enum L10n {
         case statusRoundsLabel
         case statusToolsLabel
         case statusTokensLabel
+        case statusCacheHitsLabel
         case quotaTitle
         case quotaDataSource
         case quotaNotLoaded
@@ -812,6 +813,7 @@ enum L10n {
         Key.statusRoundsLabel.rawValue: "rounds",
         Key.statusToolsLabel.rawValue: "tool calls",
         Key.statusTokensLabel.rawValue: "tok",
+        Key.statusCacheHitsLabel.rawValue: "cache hit",
         Key.quotaTitle.rawValue: "Usage & Limits",
         Key.quotaDataSource.rawValue: "Data Source",
         Key.quotaNotLoaded.rawValue: "Quota data has not been loaded.",
@@ -1261,6 +1263,7 @@ enum L10n {
         Key.statusRoundsLabel.rawValue: "轮",
         Key.statusToolsLabel.rawValue: "工具",
         Key.statusTokensLabel.rawValue: "token",
+        Key.statusCacheHitsLabel.rawValue: "缓存命中",
         Key.quotaTitle.rawValue: "用量与限额",
         Key.quotaDataSource.rawValue: "数据来源",
         Key.quotaNotLoaded.rawValue: "尚未加载 quota 数据。",

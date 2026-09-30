@@ -285,6 +285,124 @@ struct SessionTotalTokensTests {
     }
 }
 
+// MARK: - sessionCacheHitRate
+
+struct SessionCacheHitRateTests {
+
+    private static func makeTokenInfo(_ json: String) -> Message.TokenInfo {
+        try! JSONDecoder().decode(Message.TokenInfo.self, from: json.data(using: .utf8)!)
+    }
+
+    private func makeSession(id: String, tokensJSON: String? = nil) -> Session {
+        var session = Session(
+            id: id,
+            slug: "calm",
+            projectID: "p1",
+            directory: "/work",
+            parentID: nil,
+            title: "t",
+            version: "1",
+            time: .init(created: 1, updated: 2, archived: nil),
+            share: nil,
+            summary: nil
+        )
+        if let tokensJSON {
+            session.tokens = Self.makeTokenInfo(tokensJSON)
+        }
+        return session
+    }
+
+    private func makeAssistantRow(id: String, tokensJSON: String) -> MessageWithParts {
+        MessageWithParts(
+            info: Message(
+                id: id,
+                sessionID: "s1",
+                role: "assistant",
+                parentID: nil,
+                providerID: nil,
+                modelID: nil,
+                model: nil,
+                error: nil,
+                time: .init(created: 0, completed: 1),
+                finish: "stop",
+                tokens: Self.makeTokenInfo(tokensJSON),
+                cost: nil
+            ),
+            parts: []
+        )
+    }
+
+    @Test @MainActor func prefersServerAggregate() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        // Real wire shape: total = input + output + reasoning + cache.read,
+        // with `input` counting only non-cached input.
+        state.sessions = [makeSession(id: "s1", tokensJSON: """
+        {"total":38809,"input":1562,"output":108,"reasoning":60,"cache":{"read":37079,"write":0}}
+        """)]
+        let rate = state.sessionCacheHitRate(sessionID: "s1")
+        #expect(rate != nil)
+        #expect(abs(rate! - 37079.0 / 38641.0) < 1e-9)
+    }
+
+    @Test @MainActor func noCacheFieldsMeansZeroPercent() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [makeSession(id: "s1", tokensJSON: """
+        {"total":250,"input":200,"output":40,"reasoning":10}
+        """)]
+        // No cache field with input > 0 is a real 0%, not "no data":
+        // this host simply does not cache.
+        let rate = state.sessionCacheHitRate(sessionID: "s1")
+        #expect(rate != nil)
+        #expect(rate! == 0.0)
+    }
+
+    @Test @MainActor func fallsBackToCompleteWindow() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [makeSession(id: "s1")]
+        state.messages = [
+            makeAssistantRow(id: "m1", tokensJSON: """
+            {"total":400,"input":300,"output":90,"reasoning":10,"cache":{"read":0,"write":0}}
+            """),
+            makeAssistantRow(id: "m2", tokensJSON: """
+            {"total":1400,"input":100,"output":200,"reasoning":100,"cache":{"read":900,"write":0}}
+            """),
+        ]
+        state.hasMoreHistoryBySessionID["s1"] = false
+        let rate = state.sessionCacheHitRate(sessionID: "s1")
+        // (0 + 900) / (300 + 100 + 0 + 900) = 900/1300
+        #expect(rate != nil)
+        #expect(abs(rate! - 900.0 / 1300.0) < 1e-9)
+    }
+
+    @Test @MainActor func partialWindowWithoutAggregateIsNil() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [makeSession(id: "s1")]
+        state.messages = [
+            makeAssistantRow(id: "m1", tokensJSON: """
+            {"total":400,"input":300,"output":90,"reasoning":10,"cache":{"read":0,"write":0}}
+            """),
+        ]
+        state.hasMoreHistoryBySessionID["s1"] = true
+        #expect(state.sessionCacheHitRate(sessionID: "s1") == nil)
+    }
+
+    @Test @MainActor func inputlessAggregateFallsThroughToWindow() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [makeSession(id: "s1", tokensJSON: """
+        {"total":50,"input":0,"output":50,"reasoning":0,"cache":{"read":0,"write":0}}
+        """)]
+        state.messages = [
+            makeAssistantRow(id: "m1", tokensJSON: """
+            {"total":1100,"input":100,"output":100,"reasoning":0,"cache":{"read":900,"write":0}}
+            """),
+        ]
+        state.hasMoreHistoryBySessionID["s1"] = false
+        let rate = state.sessionCacheHitRate(sessionID: "s1")
+        #expect(rate != nil)
+        #expect(abs(rate! - 0.9) < 1e-9)
+    }
+}
+
 // MARK: - SSE increments through AppState
 
 struct SSEStatsIncrementTests {

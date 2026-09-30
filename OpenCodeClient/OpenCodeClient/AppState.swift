@@ -519,6 +519,34 @@ final class AppState {
         return windowSum > 0 ? windowSum : nil
     }
 
+    /// Session-level cache hit rate for the status line: cached input over
+    /// all input (the aggregate keeps `input` non-cached, with
+    /// `cache.read` alongside, so the two partition the input side).
+    /// Same sourcing rules as `sessionTotalTokens`: server aggregate first,
+    /// complete-window fallback second, nil hides the segment.
+    func sessionCacheHitRate(sessionID: String) -> Double? {
+        if let tokens = sessions.first(where: { $0.id == sessionID })?.tokens,
+           let rate = Self.cacheHitRate(freshInput: tokens.input, cacheRead: tokens.cache?.read ?? 0) {
+            return rate
+        }
+        // Aggregate missing or input-less (fresh session): same window
+        // fallback as sessionTotalTokens.
+        guard hasMoreHistoryBySessionID[sessionID] == false else { return nil }
+        var freshInput = 0
+        var cacheRead = 0
+        for row in messages where row.info.isAssistant {
+            freshInput += row.info.tokens?.input ?? 0
+            cacheRead += row.info.tokens?.cache?.read ?? 0
+        }
+        return Self.cacheHitRate(freshInput: freshInput, cacheRead: cacheRead)
+    }
+
+    private static func cacheHitRate(freshInput: Int, cacheRead: Int) -> Double? {
+        let denominator = freshInput + cacheRead
+        guard denominator > 0 else { return nil }
+        return Double(cacheRead) / Double(denominator)
+    }
+
     var selectedModelIndex: Int = 2
     
     var agents: [AgentInfo] = [

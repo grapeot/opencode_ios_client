@@ -375,10 +375,19 @@ struct ChatTabView: View {
     /// the always-visible status bar rather than per-message footers. Icons
     /// keep the line compact: refresh = rounds, tools = tool calls, TOK text
     /// for tokens.
-    private var sessionStats: (rounds: Int, toolCalls: Int, tokens: Int?)? {
+    private var sessionStats: (rounds: Int, toolCalls: Int, tokens: Int?, cacheHitRate: Double?)? {
         guard let sessionID = state.currentSessionID else { return nil }
         let stats = state.statsStore.stats(for: sessionID)
-        return (stats.rounds, stats.toolCalls, state.sessionTotalTokens(sessionID: sessionID))
+        return (
+            stats.rounds,
+            stats.toolCalls,
+            state.sessionTotalTokens(sessionID: sessionID),
+            state.sessionCacheHitRate(sessionID: sessionID)
+        )
+    }
+
+    private func cacheHitRateText(_ rate: Double) -> String {
+        "\(Int((rate * 100).rounded()))%"
     }
 
     @ViewBuilder
@@ -395,6 +404,10 @@ struct ChatTabView: View {
                     Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
                     Text("\(MessageRowView.compactTokenCount(tokens)) \(L10n.t(.statusTokensLabel))")
                 }
+                if let hitRate = stats.cacheHitRate {
+                    Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                    Text("\(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText(hitRate))")
+                }
             }
             .font(DesignTypography.meta)
             .foregroundStyle(DesignColors.Neutral.textTertiary)
@@ -403,6 +416,7 @@ struct ChatTabView: View {
             .accessibilityLabel(
                 "\(stats.rounds) \(L10n.t(.statusRoundsLabel)), \(stats.toolCalls) \(L10n.t(.statusToolsLabel))"
                 + (stats.tokens.map { ", \(MessageRowView.compactTokenCount($0)) \(L10n.t(.statusTokensLabel))" } ?? "")
+                + (stats.cacheHitRate.map { ", \(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText($0))" } ?? "")
             )
         }
     }
