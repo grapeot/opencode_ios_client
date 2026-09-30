@@ -501,42 +501,86 @@ final class AppState {
     var partsByMessage: [String: [Part]] { get { messageStore.partsByMessage } set { messageStore.partsByMessage = newValue } }
     var stepTimings: [String: MessageStore.StepTiming] { get { messageStore.stepTimings } set { messageStore.stepTimings = newValue } }
 
-    /// Session-level cumulative token total for the status line. Prefers the
-    /// server-maintained aggregate on the session object (pushed with every
-    /// `session.updated` event); falls back to summing the loaded message
-    /// window for hosts that omit the field — but only when that window
-    /// covers the full history, since a partial-window sum would undercount.
-    /// Nil hides the segment: the status line never shows a number it cannot
-    /// stand behind.
-    func sessionTotalTokens(sessionID: String) -> Int? {
-        if let tokens = sessions.first(where: { $0.id == sessionID })?.tokens, tokens.total > 0 {
-            return tokens.total
+    /// The given session plus every descendant subagent session (linked via
+    /// `parentID`), cycle-safe, with the requested session first. Subagents
+    /// are same-project sessions spawned by the `task` tool; only those
+    /// currently in the loaded session list are returned (pagination
+    /// boundary — accepted, off-window subagents are always finished).
+    func sessionGroup(including sessionID: String) -> [Session] {
+        var seen = Set<String>([sessionID])
+        var descendants: [Session] = []
+        func visit(_ id: String) {
+            for child in sessions where child.parentID == id {
+                guard seen.insert(child.id).inserted else { continue }
+                descendants.append(child)
+                visit(child.id)
+            }
         }
-        guard hasMoreHistoryBySessionID[sessionID] == false else { return nil }
-        let windowSum = messages
-            .filter { $0.info.isAssistant }
-            .reduce(0) { $0 + ($1.info.tokens?.total ?? 0) }
-        return windowSum > 0 ? windowSum : nil
+        visit(sessionID)
+        guard let main = sessions.first(where: { $0.id == sessionID }) else {
+            return descendants
+        }
+        return [main] + descendants
     }
 
-    /// Session-level cache hit rate for the status line: cached input over
-    /// all input (the aggregate keeps `input` non-cached, with
-    /// `cache.read` alongside, so the two partition the input side).
-    /// Same sourcing rules as `sessionTotalTokens`: server aggregate first,
-    /// complete-window fallback second, nil hides the segment.
-    func sessionCacheHitRate(sessionID: String) -> Double? {
-        if let tokens = sessions.first(where: { $0.id == sessionID })?.tokens,
-           let rate = Self.cacheHitRate(freshInput: tokens.input, cacheRead: tokens.cache?.read ?? 0) {
-            return rate
+    /// Status-line token total: the session's own cumulative usage plus every
+    /// descendant subagent session's, so the number reflects what the whole
+    /// conversation tree consumed. The session's own part prefers the
+    /// server-maintained aggregate (pushed with every `session.updated`) and
+    /// falls back to the loaded message window only when it covers the full
+    /// history; subagent parts are aggregate-only, since their message
+    /// windows are not loaded. The total is reported only when the session's
+    /// own part is knowable — the status line never shows a number it cannot
+    /// stand behind.
+    func sessionTotalTokens(sessionID: String) -> Int? {
+        let group = sessionGroup(including: sessionID)
+        let main = group.first { $0.id == sessionID }
+        var ownTotal: Int?
+        if let own = main?.tokens, own.total > 0 {
+            ownTotal = own.total
+        } else if main != nil, hasMoreHistoryBySessionID[sessionID] == false {
+            let windowSum = messages
+                .filter { $0.info.isAssistant }
+                .reduce(0) { $0 + ($1.info.tokens?.total ?? 0) }
+            ownTotal = windowSum > 0 ? windowSum : nil
         }
-        // Aggregate missing or input-less (fresh session): same window
-        // fallback as sessionTotalTokens.
-        guard hasMoreHistoryBySessionID[sessionID] == false else { return nil }
+        guard let base = ownTotal else { return nil }
+        var total = base
+        for sub in group.dropFirst() {
+            if let tokens = sub.tokens, tokens.total > 0 {
+                total += tokens.total
+            }
+        }
+        return total
+    }
+
+    /// Status-line cache hit rate over the whole conversation tree: cached
+    /// input divided by all input, summed across the session and every
+    /// descendant subagent (the aggregate keeps `input` non-cached with
+    /// `cache.read` alongside, so the two partition the input side). The
+    /// session's own part uses the server aggregate, or the loaded message
+    /// window when it covers the full history; subagent parts are
+    /// aggregate-only. Reported only when the session's own part is
+    /// knowable, mirroring `sessionTotalTokens`.
+    func sessionCacheHitRate(sessionID: String) -> Double? {
+        let group = sessionGroup(including: sessionID)
+        let main = group.first { $0.id == sessionID }
+        let ownKnown = main?.tokens != nil || hasMoreHistoryBySessionID[sessionID] == false
+        guard ownKnown else { return nil }
         var freshInput = 0
         var cacheRead = 0
-        for row in messages where row.info.isAssistant {
-            freshInput += row.info.tokens?.input ?? 0
-            cacheRead += row.info.tokens?.cache?.read ?? 0
+        for session in group {
+            // An input-less aggregate (fresh session) carries no rate
+            // information; the main session then falls back to its window.
+            if let tokens = session.tokens, tokens.input + (tokens.cache?.read ?? 0) > 0 {
+                freshInput += tokens.input
+                cacheRead += tokens.cache?.read ?? 0
+            } else if session.id == sessionID, hasMoreHistoryBySessionID[sessionID] == false {
+                for row in messages where row.info.isAssistant {
+                    freshInput += row.info.tokens?.input ?? 0
+                    cacheRead += row.info.tokens?.cache?.read ?? 0
+                }
+            }
         }
         return Self.cacheHitRate(freshInput: freshInput, cacheRead: cacheRead)
     }

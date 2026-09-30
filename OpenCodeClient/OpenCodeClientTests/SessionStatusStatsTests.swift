@@ -500,3 +500,134 @@ struct SSEStatsIncrementTests {
         return try! JSONDecoder().decode(SSEEvent.self, from: data)
     }
 }
+
+// MARK: - Subagent rollup (tokens + cache hit rate fold into the main number)
+
+struct SessionSubagentRollupTests {
+
+    private func makeSession(
+        id: String,
+        parentID: String? = nil,
+        tokensJSON: String? = nil
+    ) -> Session {
+        var session = Session(
+            id: id,
+            slug: "calm",
+            projectID: "p1",
+            directory: "/work",
+            parentID: parentID,
+            title: "t",
+            version: "1",
+            time: .init(created: 1, updated: 2, archived: nil),
+            share: nil,
+            summary: nil
+        )
+        if let tokensJSON {
+            session.tokens = try! JSONDecoder().decode(
+                Message.TokenInfo.self, from: tokensJSON.data(using: .utf8)!
+            )
+        }
+        return session
+    }
+
+    @Test @MainActor func groupContainsSelfAndAllDescendantsSelfFirst() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [
+            makeSession(id: "main", tokensJSON: "{\"total\":100,\"input\":10,\"output\":40,\"reasoning\":10,\"cache\":{\"read\":40,\"write\":0}}"),
+            makeSession(id: "child-a", parentID: "main", tokensJSON: "{\"total\":300,\"input\":30,\"output\":120,\"reasoning\":30,\"cache\":{\"read\":120,\"write\":0}}"),
+            makeSession(id: "child-b", parentID: "main", tokensJSON: "{\"total\":500,\"input\":50,\"output\":200,\"reasoning\":50,\"cache\":{\"read\":200,\"write\":0}}"),
+            // Grandchild: subagent of a subagent (defensive; live data shows none).
+            makeSession(id: "grand", parentID: "child-a", tokensJSON: "{\"total\":77,\"input\":7,\"output\":30,\"reasoning\":7,\"cache\":{\"read\":33,\"write\":0}}"),
+        ]
+        let group = state.sessionGroup(including: "main")
+        #expect(group.first?.id == "main")
+        #expect(Set(group.map(\.id)) == Set(["main", "child-a", "child-b", "grand"]))
+        #expect(state.sessionGroup(including: "child-a").map(\.id) == ["child-a", "grand"])
+    }
+
+    @Test @MainActor func groupIsCycleSafe() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        // A mutual parentID cycle must terminate: neither session may be
+        // appended twice or loop forever.
+        state.sessions = [
+            makeSession(id: "a", parentID: "b"),
+            makeSession(id: "b", parentID: "a"),
+        ]
+        let group = state.sessionGroup(including: "a")
+        #expect(group.count == 2)
+        #expect(Set(group.map(\.id)) == Set(["a", "b"]))
+    }
+
+    @Test @MainActor func totalIncludesDescendantAggregates() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [
+            makeSession(id: "main", tokensJSON: "{\"total\":100,\"input\":10,\"output\":40,\"reasoning\":10,\"cache\":{\"read\":40,\"write\":0}}"),
+            makeSession(id: "child-a", parentID: "main", tokensJSON: "{\"total\":300,\"input\":30,\"output\":120,\"reasoning\":30,\"cache\":{\"read\":120,\"write\":0}}"),
+            makeSession(id: "child-b", parentID: "main", tokensJSON: "{\"total\":500,\"input\":50,\"output\":200,\"reasoning\":50,\"cache\":{\"read\":200,\"write\":0}}"),
+        ]
+        #expect(state.sessionTotalTokens(sessionID: "main") == 900)
+        // Unrelated sessions are never folded in.
+        state.sessions.append(makeSession(id: "other", tokensJSON: "{\"total\":999,\"input\":9,\"output\":399,\"reasoning\":9,\"cache\":{\"read\":382,\"write\":0}}"))
+        #expect(state.sessionTotalTokens(sessionID: "main") == 900)
+    }
+
+    @Test @MainActor func totalHidesWhenMainUnknownEvenWithSubagentData() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        // Main has no aggregate and a partial window: its own part is
+        // unknowable, so the number hides even though a subagent has data.
+        state.sessions = [
+            makeSession(id: "main"),
+            makeSession(id: "child-a", parentID: "main", tokensJSON: "{\"total\":300,\"input\":30,\"output\":120,\"reasoning\":30,\"cache\":{\"read\":120,\"write\":0}}"),
+        ]
+        state.hasMoreHistoryBySessionID["main"] = true
+        #expect(state.sessionTotalTokens(sessionID: "main") == nil)
+    }
+
+    @Test @MainActor func mainWindowFallbackPlusSubagentAggregate() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [
+            makeSession(id: "main"),
+            makeSession(id: "child-a", parentID: "main", tokensJSON: "{\"total\":300,\"input\":30,\"output\":120,\"reasoning\":30,\"cache\":{\"read\":120,\"write\":0}}"),
+        ]
+        // Host omits the aggregate on main; the loaded window is complete,
+        // so main's part comes from the window and the subagent from its
+        // aggregate.
+        state.messages = [
+            MessageWithParts(
+                info: Message(
+                    id: "m1", sessionID: "main", role: "assistant", parentID: nil,
+                    providerID: nil, modelID: nil, model: nil, error: nil,
+                    time: .init(created: 0, completed: 1), finish: "stop",
+                    tokens: try! JSONDecoder().decode(Message.TokenInfo.self, from:
+                        "{\"total\":155,\"input\":150,\"output\":3,\"reasoning\":2}".data(using: .utf8)!),
+                    cost: nil
+                ),
+                parts: []
+            ),
+        ]
+        state.hasMoreHistoryBySessionID["main"] = false
+        #expect(state.sessionTotalTokens(sessionID: "main") == 455)
+    }
+
+    @Test @MainActor func cacheHitRateIsComputedAcrossTheWholeTree() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [
+            makeSession(id: "main", tokensJSON: "{\"total\":410,\"input\":100,\"output\":90,\"reasoning\":10,\"cache\":{\"read\":300,\"write\":0}}"),
+            makeSession(id: "child-a", parentID: "main", tokensJSON: "{\"total\":500,\"input\":50,\"output\":90,\"reasoning\":10,\"cache\":{\"read\":450,\"write\":0}}"),
+        ]
+        // (300 + 450) / (100 + 50 + 300 + 450) = 750/900
+        let rate = state.sessionCacheHitRate(sessionID: "main")
+        #expect(rate != nil)
+        #expect(abs(rate! - 750.0 / 900.0) < 1e-9)
+    }
+
+    @Test @MainActor func cacheHitRateHidesWhenMainUnknown() {
+        let state = AppState(apiClient: MockAPIClient(), sseClient: MockSSEClient(), sshTunnelManager: SSHTunnelManager(), userDefaults: isolatedDefaults())
+        state.sessions = [
+            makeSession(id: "main"),
+            makeSession(id: "child-a", parentID: "main", tokensJSON: "{\"total\":500,\"input\":50,\"output\":90,\"reasoning\":10,\"cache\":{\"read\":450,\"write\":0}}"),
+        ]
+        state.hasMoreHistoryBySessionID["main"] = true
+        #expect(state.sessionCacheHitRate(sessionID: "main") == nil)
+    }
+}
