@@ -38,6 +38,12 @@ struct CompactTokenCountTests {
         #expect(MessageRowView.compactTokenCount(2_000_000_000) == "2B")
         #expect(MessageRowView.compactTokenCount(2_100_000_000) == "2.1B")
         #expect(MessageRowView.compactTokenCount(1_110_000_000) == "1.11B")
+        #expect(MessageRowView.compactTokenCount(999_999_999_999) == "1T")
+    }
+
+    @Test func terabyteRange() {
+        #expect(MessageRowView.compactTokenCount(1_000_000_000_000) == "1T")
+        #expect(MessageRowView.compactTokenCount(1_234_567_890_123) == "1.23T")
     }
 }
 
@@ -192,6 +198,17 @@ struct SessionTokensDecodingTests {
         #expect(session.tokens?.total == 108)
         #expect(session.tokens?.cache == nil)
         #expect(session.cost == nil)
+    }
+
+    @Test func synthesizedTotalIncludesCacheLikeServer() throws {
+        // The server's `total` sums every component, cache included. A payload
+        // that omits `total` must synthesize the same number, or the aggregate
+        // (cache read often dominates a long session) undercounts.
+        let json = """
+        {"id":"ses_1","slug":"calm","projectID":"p1","directory":"/work","parentID":null,"title":"t","version":"1","time":{"created":1,"updated":2},"tokens":{"input":21889,"output":2750,"reasoning":37,"cache":{"read":16128,"write":0}}}
+        """
+        let session = try JSONDecoder().decode(Session.self, from: json.data(using: .utf8)!)
+        #expect(session.tokens?.total == 40804)
     }
 
     @Test func missingFieldsDecodeAsNil() throws {

@@ -49,14 +49,17 @@ struct MessageRowView: View {
     }
 
     /// Compact token count for the session status line: raw value below 1000,
-    /// then K/M/B with one decimal at >= 10 and two below, trailing zeros
-    /// stripped: 950, 85.2K, 1.11M, 2B.
+    /// then K/M/B/T with one decimal at >= 10 and two below, trailing zeros
+    /// stripped: 950, 85.2K, 1.11M, 2B. Mirrors the Android formatter.
     static func compactTokenCount(_ value: Int) -> String {
         guard value > 0 else { return "0" }
         if value < 1_000 { return String(value) }
         var scaled: Double
         var suffix: String
-        if value >= 1_000_000_000 {
+        if value >= 1_000_000_000_000 {
+            scaled = Double(value) / 1_000_000_000_000
+            suffix = "T"
+        } else if value >= 1_000_000_000 {
             scaled = Double(value) / 1_000_000_000
             suffix = "B"
         } else if value >= 1_000_000 {
@@ -69,9 +72,13 @@ struct MessageRowView: View {
         var decimals = scaled >= 10 ? 1 : 2
         // Carry into the next unit when rounding overflows (999_999 -> 1M).
         let factor = decimals == 1 ? 10.0 : 100.0
-        if suffix != "B", (scaled * factor).rounded() / factor >= 1000 {
+        if suffix != "T", (scaled * factor).rounded() / factor >= 1000 {
             scaled /= 1000
-            suffix = suffix == "K" ? "M" : "B"
+            switch suffix {
+            case "K": suffix = "M"
+            case "M": suffix = "B"
+            default: suffix = "T"
+            }
             decimals = 2
         }
         var text = String(format: "%.\(decimals)f", scaled)
