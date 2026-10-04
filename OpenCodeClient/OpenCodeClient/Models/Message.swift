@@ -159,8 +159,11 @@ nonisolated struct Message: Codable, Identifiable {
             output = try c.decodeIfPresent(Int.self, forKey: .output) ?? 0
             reasoning = try c.decodeIfPresent(Int.self, forKey: .reasoning) ?? 0
             cache = try c.decodeIfPresent(CacheInfo.self, forKey: .cache)
-            // Newer OpenCode server payloads may omit `total`.
-            total = try c.decodeIfPresent(Int.self, forKey: .total) ?? (input + output + reasoning)
+            // Newer OpenCode server payloads may omit `total`. Synthesize it the
+            // same way the server does: `total` is the sum of every component,
+            // cache reads/writes included (schema `Session.Info.tokens`).
+            total = try c.decodeIfPresent(Int.self, forKey: .total)
+                ?? (input + output + reasoning + (cache?.read ?? 0) + (cache?.write ?? 0))
         }
     }
 
