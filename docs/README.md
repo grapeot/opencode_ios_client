@@ -25,7 +25,6 @@
 | `push_notifications/` | 后台推送通知方案 | `research.md` | 调研 |
 | `localization/` | en/zh-Hans 双语本地化 | `research.md` | Settings 已有 en/zh；research 文档偏旧 |
 | `agent_catalog_validation/` | Agent 目录校验与删除失败可见 | `notes.md` | shipped；选中 agent 对照当前 server `/agent`，delete 非 2xx 带状态码与 body |
-| `session_status_bar/` | Session 级状态行（model footer 追加 rounds / tool calls / tokens） | `design.md` | 设计中（数据通路已 live 实测验证） |
 
 ## archive/ — 一次性工作记录与冻结决策（只进不改）
 

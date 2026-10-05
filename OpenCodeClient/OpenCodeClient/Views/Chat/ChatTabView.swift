@@ -49,6 +49,39 @@ struct ChatTabView: View {
         isTranscribing || isRetryingSpeech
     }
 
+    /// Zero-padded stopwatch for the persistent status line: `MM:SS` below an
+    /// hour, `HH:MM:SS` at or above. Negative input (server/client clock skew,
+    /// message timestamp slightly in the future) clamps to `00:00` rather than
+    /// rendering a negative duration. Hours are not capped or truncated, so a
+    /// very long-lived session reads `49:23:10` in full.
+    static func elapsedStatusText(seconds: Int) -> String {
+        let total = max(0, seconds)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%02d:%02d", minutes, secs)
+    }
+
+    /// Localized, spoken form of the same duration for VoiceOver, e.g.
+    /// "3m 41s" / "1h 2m 3s". Keeps the raw `MM:SS` out of the screen reader,
+    /// which would otherwise read it as a clock time. Falls back to a literal
+    /// seconds string when the formatter yields nothing (e.g. exactly zero
+    /// with drop-leading behavior).
+    static func elapsedSpokenText(seconds: Int) -> String {
+        let total = max(0, seconds)
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.zeroFormattingBehavior = .dropLeading
+        if let text = formatter.string(from: TimeInterval(total)), !text.isEmpty {
+            return text
+        }
+        return "\(total)s"
+    }
+
     @Bindable var state: AppState
     var showSettingsInToolbar: Bool = false
     var showSessionListInToolbar: Bool = true
@@ -394,35 +427,89 @@ struct ChatTabView: View {
         "\(Int((rate * 100).rounded()))%"
     }
 
+    /// Anchor for the persistent "time since last user message" stopwatch:
+    /// the `time.created` of the last user message in the current session.
+    /// Derived from the already-loaded message window, so it needs no extra
+    /// network request and survives restart / session switch for free.
+    private var lastUserMessageDate: Date? {
+        guard let sid = state.currentSessionID else { return nil }
+        guard let msg = state.messages.last(where: { $0.info.sessionID == sid && $0.info.isUser }) else {
+            return nil
+        }
+        // A missing/zero timestamp would otherwise anchor the stopwatch at the
+        // Unix epoch and render an absurd duration; hide the segment instead.
+        guard msg.info.time.created > 0 else { return nil }
+        return Date(timeIntervalSince1970: Double(msg.info.time.created) / 1000.0)
+    }
+
     @ViewBuilder
     private var sessionStatsLine: some View {
         if let stats = sessionStats {
-            // Full width + leading so the single-line block is not centered
-            // by the parent VStack (which would differ from the two-line
-            // layout, where the transient row spans the width).
-            HStack(spacing: DesignSpacing.xs) {
-                sessionStatsIconLabel("arrow.triangle.2.circlepath", value: "\(stats.rounds)")
-                Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
-                sessionStatsIconLabel("wrench.and.screwdriver", value: "\(stats.toolCalls)")
-                if let tokens = stats.tokens {
-                    Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
-                    Text("\(MessageRowView.compactTokenCount(tokens)) \(L10n.t(.statusTokensLabel))")
-                }
-                if let hitRate = stats.cacheHitRate {
-                    Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
-                    Text("\(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText(hitRate))")
-                }
+            // The whole line ticks, not just the stopwatch segment: the
+            // VoiceOver label must stay live, and a single accessibility
+            // element can only be refreshed if it is rebuilt inside the
+            // TimelineView. The per-second cost is a handful of small Texts
+            // (cheaper than the transient row this replaced).
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                sessionStatsLineContent(stats: stats, now: context.date)
             }
-            .font(DesignTypography.meta)
-            .foregroundStyle(DesignColors.Neutral.textTertiary)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityLabel(
-                "\(stats.rounds) \(L10n.t(.statusRoundsLabel)), \(stats.toolCalls) \(L10n.t(.statusToolsLabel))"
-                + (stats.tokens.map { ", \(MessageRowView.compactTokenCount($0)) \(L10n.t(.statusTokensLabel))" } ?? "")
-                + (stats.cacheHitRate.map { ", \(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText($0))" } ?? "")
-            )
         }
+    }
+
+    private func sessionStatsLineContent(
+        stats: (rounds: Int, toolCalls: Int, tokens: Int?, cacheHitRate: Double?),
+        now: Date
+    ) -> some View {
+        // Full width + leading so the single-line block is not centered
+        // by the parent VStack (which would differ from the two-line
+        // layout, where the transient row spans the width).
+        HStack(spacing: DesignSpacing.xs) {
+            sessionStatsIconLabel("arrow.triangle.2.circlepath", value: "\(stats.rounds)")
+            Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+            sessionStatsIconLabel("wrench.and.screwdriver", value: "\(stats.toolCalls)")
+            if let tokens = stats.tokens {
+                Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                Text("\(MessageRowView.compactTokenCount(tokens)) \(L10n.t(.statusTokensLabel))")
+            }
+            if let hitRate = stats.cacheHitRate {
+                Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                Text("\(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText(hitRate))")
+            }
+            if let anchor = lastUserMessageDate {
+                Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
+                Text(ChatTabView.elapsedStatusText(seconds: secondsSince(anchor, now: now)))
+                    .monospacedDigit()
+            }
+        }
+        .font(DesignTypography.meta)
+        .foregroundStyle(DesignColors.Neutral.textTertiary)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(accessibilityLabel(stats: stats, now: now))
+    }
+
+    private func secondsSince(_ date: Date, now: Date) -> Int {
+        Int(now.timeIntervalSince(date))
+    }
+
+    private func accessibilityLabel(
+        stats: (rounds: Int, toolCalls: Int, tokens: Int?, cacheHitRate: Double?),
+        now: Date
+    ) -> String {
+        var parts = [
+            "\(stats.rounds) \(L10n.t(.statusRoundsLabel))",
+            "\(stats.toolCalls) \(L10n.t(.statusToolsLabel))",
+        ]
+        if let tokens = stats.tokens {
+            parts.append("\(MessageRowView.compactTokenCount(tokens)) \(L10n.t(.statusTokensLabel))")
+        }
+        if let hitRate = stats.cacheHitRate {
+            parts.append("\(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText(hitRate))")
+        }
+        if let anchor = lastUserMessageDate {
+            parts.append("\(L10n.t(.statusSinceLastPromptLabel)) \(ChatTabView.elapsedSpokenText(seconds: secondsSince(anchor, now: now)))")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func sessionStatsIconLabel(_ systemImage: String, value: String) -> some View {
@@ -448,22 +535,17 @@ struct ChatTabView: View {
 
     /// Adaptive composer status bar: one line when only the persistent
     /// session counters are present, expanding to two when there is also
-    /// transient per-turn state (agent activity, voice, elapsed time,
-    /// abort). Top line = session counters; bottom line = transient state.
+    /// transient per-turn state (agent activity, voice, abort). Top line =
+    /// session counters incl. the time-since-last-prompt stopwatch; bottom
+    /// line = transient state. The per-turn elapsed readout used to live on
+    /// the bottom line but moved to the always-visible top line, so it no
+    /// longer disappears (and duplicates) once the turn completes.
     private var quietComposerStatus: some View {
         // 6pt gap: xs (4) read as cramped between the two lines.
         VStack(alignment: .leading, spacing: 6) {
             sessionStatsLine
             if hasTransientComposerStatus {
-                Group {
-                    if let activity = runningTurnActivity {
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            quietComposerStatusRow(activity: activity, now: context.date)
-                        }
-                    } else {
-                        quietComposerStatusRow(activity: nil, now: Date())
-                    }
-                }
+                quietComposerStatusRow()
             }
         }
         .padding(.horizontal, DesignSpacing.xs)
@@ -477,7 +559,7 @@ struct ChatTabView: View {
         composerStatusText != nil || state.isBusy
     }
 
-    private func quietComposerStatusRow(activity: TurnActivity?, now: Date) -> some View {
+    private func quietComposerStatusRow() -> some View {
         HStack(spacing: DesignSpacing.sm) {
             if state.isBusy {
                 Circle()
@@ -492,13 +574,6 @@ struct ChatTabView: View {
                 .lineLimit(1)
 
             Spacer(minLength: 0)
-
-            if let activity {
-                Text(activity.elapsedString(now: now))
-                    .font(DesignTypography.meta)
-                    .monospacedDigit()
-                    .foregroundStyle(DesignColors.Neutral.textTertiary)
-            }
 
             if state.isBusy {
                 Menu {

@@ -47,6 +47,40 @@ struct CompactTokenCountTests {
     }
 }
 
+// MARK: - Elapsed stopwatch formatting
+
+struct ElapsedStatusTextTests {
+
+    @Test func belowAnHourIsZeroPaddedMinutesSeconds() {
+        #expect(ChatTabView.elapsedStatusText(seconds: 0) == "00:00")
+        #expect(ChatTabView.elapsedStatusText(seconds: 7) == "00:07")
+        #expect(ChatTabView.elapsedStatusText(seconds: 41) == "00:41")
+        #expect(ChatTabView.elapsedStatusText(seconds: 221) == "03:41")
+        #expect(ChatTabView.elapsedStatusText(seconds: 599) == "09:59")
+    }
+
+    @Test func atOrAboveAnHourAddsZeroPaddedHours() {
+        #expect(ChatTabView.elapsedStatusText(seconds: 3_599) == "59:59")
+        #expect(ChatTabView.elapsedStatusText(seconds: 3_600) == "01:00:00")
+        #expect(ChatTabView.elapsedStatusText(seconds: 7_421) == "02:03:41")
+        #expect(ChatTabView.elapsedStatusText(seconds: 177_790) == "49:23:10")
+    }
+
+    @Test func negativeClampsToZero() {
+        // Clock skew (message timestamp in the future) must never render a
+        // negative duration.
+        #expect(ChatTabView.elapsedStatusText(seconds: -1) == "00:00")
+        #expect(ChatTabView.elapsedStatusText(seconds: -9_999) == "00:00")
+    }
+
+    @Test func spokenTextIsNonEmptyForEveryInput() {
+        // Guards the accessibility fallback: zero and skew must not yield nil.
+        for seconds in [-1, 0, 1, 221, 3_600, 7_421] {
+            #expect(!ChatTabView.elapsedSpokenText(seconds: seconds).isEmpty)
+        }
+    }
+}
+
 // MARK: - SessionStatsStore
 
 private func isolatedDefaults() -> UserDefaults {
