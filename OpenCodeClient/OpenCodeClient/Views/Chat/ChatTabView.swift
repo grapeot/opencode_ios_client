@@ -49,8 +49,10 @@ struct ChatTabView: View {
         isTranscribing || isRetryingSpeech
     }
 
-    /// Zero-padded stopwatch for the persistent status line: `MM:SS` below an
-    /// hour, `HH:MM:SS` at or above. Negative input (server/client clock skew,
+    /// Zero-padded turn stopwatch for the persistent status line: `MM:SS`
+    /// below an hour, `HH:MM:SS` at or above. It counts up while the agent
+    /// works and holds at the completion instant once the turn stops (the
+    /// caller freezes the end time). Negative input (server/client clock skew,
     /// message timestamp slightly in the future) clamps to `00:00` rather than
     /// rendering a negative duration. Hours are not capped or truncated, so a
     /// very long-lived session reads `49:23:10` in full.
@@ -427,10 +429,10 @@ struct ChatTabView: View {
         "\(Int((rate * 100).rounded()))%"
     }
 
-    /// Anchor for the persistent "time since last user message" stopwatch:
-    /// the `time.created` of the last user message in the current session.
-    /// Derived from the already-loaded message window, so it needs no extra
-    /// network request and survives restart / session switch for free.
+    /// Anchor for the persistent turn stopwatch: the `time.created` of the
+    /// last user message in the current session. Derived from the already-
+    /// loaded message window, so it needs no extra network request and
+    /// survives restart / session switch for free.
     private var lastUserMessageDate: Date? {
         guard let sid = state.currentSessionID else { return nil }
         guard let msg = state.messages.last(where: { $0.info.sessionID == sid && $0.info.isUser }) else {
@@ -440,6 +442,20 @@ struct ChatTabView: View {
         // Unix epoch and render an absurd duration; hide the segment instead.
         guard msg.info.time.created > 0 else { return nil }
         return Date(timeIntervalSince1970: Double(msg.info.time.created) / 1000.0)
+    }
+
+    /// Frozen end time of the current turn's stopwatch, or nil while the turn
+    /// is still running (or has only just been sent). The stopwatch therefore
+    /// counts up while the agent works and holds at the completion instant
+    /// once it stops; a new user message moves the anchor and resets it to
+    /// zero. Matching by the latest user message id means a freshly sent
+    /// prompt (no assistant output yet, status not yet busy) reads as running
+    /// from zero rather than briefly showing the previous turn's value.
+    private var currentTurnEndedAt: Date? {
+        guard let lastUserID = lastUserMessageIDInCurrentSession else { return nil }
+        guard runningTurnActivity == nil else { return nil }
+        let completed = turnActivitiesForCurrentSession(.completedOnly).last
+        return completed?.id == lastUserID ? completed?.endedAt : nil
     }
 
     @ViewBuilder
@@ -477,7 +493,7 @@ struct ChatTabView: View {
             }
             if let anchor = lastUserMessageDate {
                 Text("·").foregroundStyle(DesignColors.Neutral.textTertiary)
-                Text(ChatTabView.elapsedStatusText(seconds: secondsSince(anchor, now: now)))
+                Text(ChatTabView.elapsedStatusText(seconds: turnElapsedSeconds(anchor: anchor, now: now)))
                     .monospacedDigit()
             }
         }
@@ -488,8 +504,17 @@ struct ChatTabView: View {
         .accessibilityLabel(accessibilityLabel(stats: stats, now: now))
     }
 
-    private func secondsSince(_ date: Date, now: Date) -> Int {
-        Int(now.timeIntervalSince(date))
+    /// Choose the stopwatch end: the frozen completion instant when the turn
+    /// has stopped, otherwise `now` so it keeps counting while the agent works.
+    static func turnStopwatchEnd(frozenEnd: Date?, now: Date) -> Date {
+        frozenEnd ?? now
+    }
+
+    /// Elapsed for the current turn: counts to `now` while the turn runs, and
+    /// to the frozen completion instant once it stops.
+    private func turnElapsedSeconds(anchor: Date, now: Date) -> Int {
+        let end = ChatTabView.turnStopwatchEnd(frozenEnd: currentTurnEndedAt, now: now)
+        return max(0, Int(end.timeIntervalSince(anchor)))
     }
 
     private func accessibilityLabel(
@@ -507,7 +532,7 @@ struct ChatTabView: View {
             parts.append("\(L10n.t(.statusCacheHitsLabel)) \(cacheHitRateText(hitRate))")
         }
         if let anchor = lastUserMessageDate {
-            parts.append("\(L10n.t(.statusSinceLastPromptLabel)) \(ChatTabView.elapsedSpokenText(seconds: secondsSince(anchor, now: now)))")
+            parts.append("\(L10n.t(.statusSinceLastPromptLabel)) \(ChatTabView.elapsedSpokenText(seconds: turnElapsedSeconds(anchor: anchor, now: now)))")
         }
         return parts.joined(separator: ", ")
     }

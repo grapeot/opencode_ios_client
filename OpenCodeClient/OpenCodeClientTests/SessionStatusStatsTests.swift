@@ -79,6 +79,26 @@ struct ElapsedStatusTextTests {
             #expect(!ChatTabView.elapsedSpokenText(seconds: seconds).isEmpty)
         }
     }
+
+    @Test func stopwatchEndTracksNowWhileRunningAndFreezesWhenStopped() {
+        let anchor = Date(timeIntervalSince1970: 10_000)
+
+        // Running: no frozen end yet, so the stopwatch follows `now`.
+        let runningNow = anchor.addingTimeInterval(221)
+        let runningEnd = ChatTabView.turnStopwatchEnd(frozenEnd: nil, now: runningNow)
+        #expect(runningEnd == runningNow)
+        #expect(ChatTabView.elapsedStatusText(
+            seconds: Int(runningEnd.timeIntervalSince(anchor))
+        ) == "03:41")
+
+        // Stopped: the frozen completion instant pins the reading, and later
+        // `now` values no longer move it.
+        let frozenEnd = anchor.addingTimeInterval(221)
+        #expect(ChatTabView.turnStopwatchEnd(frozenEnd: frozenEnd, now: anchor.addingTimeInterval(4_000)) == frozenEnd)
+        #expect(ChatTabView.elapsedStatusText(
+            seconds: Int(ChatTabView.turnStopwatchEnd(frozenEnd: frozenEnd, now: anchor.addingTimeInterval(4_000)).timeIntervalSince(anchor))
+        ) == "03:41")
+    }
 }
 
 // MARK: - SessionStatsStore
