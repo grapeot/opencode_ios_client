@@ -39,6 +39,27 @@ struct AIUsageQuotaTests {
         #expect(response.quotas.first?.resetDate != nil)
     }
 
+    @Test func decodesFractionalPercentages() throws {
+        let data = Data(#"{"generated_at":"2026-10-08T06:23:43","quotas":[{"provider":"ollama","label":"5h","used_percentage":1.6,"remaining_percentage":98.4,"next_reset_time_ms":1791468000000,"next_reset_iso":"2026-10-08T07:00","usage":null,"remaining":null},{"provider":"cursor","label":"Models","used_percentage":9.606333333333334,"remaining_percentage":90.39366666666666,"next_reset_time_ms":null,"next_reset_iso":null,"usage":null,"remaining":null}]}"#.utf8)
+
+        let response = try JSONDecoder().decode(AIUsageQuotasResponse.self, from: data)
+
+        #expect(response.quotas.count == 2)
+        #expect(response.quotas.first?.usedPercentage == 2)
+        #expect(response.quotas.first?.remainingPercentage == 98)
+        #expect(response.quotas.last?.usedPercentage == 10)
+        #expect(response.quotas.last?.remainingPercentage == 90)
+    }
+
+    @Test func decodesWholeNumberPercentagesSentAsFloats() throws {
+        let data = Data(#"{"generated_at":null,"quotas":[{"provider":"codex","label":"7d","used_percentage":79.0,"remaining_percentage":21.0,"next_reset_time_ms":null,"next_reset_iso":null,"usage":null,"remaining":null}]}"#.utf8)
+
+        let response = try JSONDecoder().decode(AIUsageQuotasResponse.self, from: data)
+
+        #expect(response.quotas.first?.usedPercentage == 79)
+        #expect(response.quotas.first?.remainingPercentage == 21)
+    }
+
     @Test func normalizesBaseAndFullEndpointURLs() {
         #expect(AppState.aiUsageQuotaEndpointURL("192.168.1.20:7995")?.absoluteString == "http://192.168.1.20:7995/api/v1/quotas")
         #expect(AppState.aiUsageQuotaEndpointURL("https://usage.example.com/api/v1/quotas")?.absoluteString == "https://usage.example.com/api/v1/quotas")
