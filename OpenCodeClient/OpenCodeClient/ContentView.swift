@@ -531,7 +531,7 @@ private struct TabletSessionsColumn: View {
                         }
 
                         if activeExpanded {
-                            sessionNodes(activeNodes, archived: false, attentionCounts: state.sessionAttentionCounts)
+                            sessionNodes(activeNodes, archived: false, attentionCounts: state.sessionAttentionCounts, descendantBusyCounts: state.sessionDescendantBusyCounts)
                         }
 
                         SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
@@ -539,7 +539,7 @@ private struct TabletSessionsColumn: View {
                         }
 
                         if archivedExpanded {
-                            sessionNodes(archivedNodes, archived: true, attentionCounts: state.sessionAttentionCounts)
+                            sessionNodes(archivedNodes, archived: true, attentionCounts: state.sessionAttentionCounts, descendantBusyCounts: state.sessionDescendantBusyCounts)
                         }
 
                         if state.isLoadingMoreSessions {
@@ -634,7 +634,8 @@ private struct TabletSessionsColumn: View {
         _ nodes: [SessionNode],
         archived: Bool,
         depth: Int = 0,
-        attentionCounts: [String: Int]
+        attentionCounts: [String: Int],
+        descendantBusyCounts: [String: Int]
     ) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
@@ -645,6 +646,7 @@ private struct TabletSessionsColumn: View {
                     session: session,
                     status: status,
                     attentionCount: attentionCounts[session.id, default: 0],
+                    busyDescendantCount: descendantBusyCounts[session.id, default: 0],
                     isSelected: state.currentSessionID == session.id,
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
@@ -686,7 +688,8 @@ private struct TabletSessionsColumn: View {
                         node.children,
                         archived: archived,
                         depth: depth + 1,
-                        attentionCounts: attentionCounts
+                        attentionCounts: attentionCounts,
+                        descendantBusyCounts: descendantBusyCounts
                     )
                 }
             }

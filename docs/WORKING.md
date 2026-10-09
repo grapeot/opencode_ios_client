@@ -4,10 +4,17 @@
 
 ## 当前状态
 
-- **最后更新**：2026-09-29
+- **最后更新**：2026-10-08
 - **分支**：`fix/chat-session-scroll-anchor`
-- **编译/测试**：`OpenCodeClientTests` 519/519 通过。UI：`SessionScrollAnchorUITests` 2/2 与 `ToolCardsUITests` 1/1 通过（iPhone 16 Pro `3EB51FEF-C951-4485-AD0F-33463C66DBEB`，iOS 18.4）。
-- **Phase**：per-session scroll anchor（切 session 回底端）
+- **编译/测试**：`OpenCodeClientTests` 全绿（569 条，含新增 subagent 聚合 6 条）。UI：`SessionScrollAnchorUITests` 2/2 与 `ToolCardsUITests` 1/1 通过（iPhone 16 Pro `3EB51FEF-C951-4485-AD0F-33463C66DBEB`，iOS 18.4）。
+- **Phase**：后台 subagent 活动在父行与聊天页可见
+
+### 2026-10-08 — 主会话 idle 时后台 subagent 仍运行，UI 不显示
+
+- **现象**：把任务派给 background subagent 后，父会话这一轮结束、状态变 `idle`，而 subagent 在它自己的子会话里 `busy`。会话列表父行显示 Idle，聊天页也没有任何进行中的迹象，看起来像什么都没在跑。
+- **原因**：状态是按会话（runner）存的（`session/status.ts`：`idle` 时从 map 删除），父 runner 结束即父 idle；subagent 有自己的 runner。客户端两边都把 `sessionStatuses` 存成全局 map，子的 busy 数据拿得到，但呈现只到单会话一层：列表父行只读 `statuses[父.id]`，子行默认收起且在折叠的嵌套里；聊天页 `isBusy` 只看当前会话。
+- **处理**：客户端派生「对话树聚合活动」，零服务端改动。`descendantBusyCountsBySession` 沿 `parentID` 把 busy 后代往上计数（不含自身），照抄既有的 attention 聚合机位。列表父行在自身非 busy、无 attention 时显示异构的次级信号（分支图标 + 中性色 +「N 个子代理运行中」，区别于自身 Running 的品牌蓝），并让这类树冒到列表顶部（折叠时也能发现）。聊天页在自身 idle 且有 busy 后代时，状态栏加一条独立「子代理正在运行」段，单条显示子会话标题、多条显示计数，点按复用 `openReferencedSession` 跳到该子会话；不占用 turn stopwatch 与 interrupt（那属于子会话自己的时钟）。文案经 AGY（gemini-3.8-flash-high）起草。
+- **测试**：`SessionTreeTests` 新增 `descendantBusyCountsRollUpAndExcludeSelf` / `...HandleRetryAndIgnoreIdle` / `...IgnoreBusySelfWhenNoChildren` / `descendantBusySessionsSortAheadOfNewerSessions` / `sessionDescendantBusyCountsReadGlobalStatusMap` / `runningDescendantSessions...` 6 条。Android 侧 `SessionTreeTest` 有对应 6 条（`./gradlew testDebugUnitTest` 绿）。
 
 ### 2026-09-29 — 切 session 再切回来，聊天区停在对话中间
 

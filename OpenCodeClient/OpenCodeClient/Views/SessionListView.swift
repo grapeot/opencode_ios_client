@@ -78,7 +78,7 @@ struct SessionListView: View {
                         }
 
                         if activeExpanded {
-                            sessionNodes(activeNodes, archived: false, attentionCounts: state.sessionAttentionCounts)
+                            sessionNodes(activeNodes, archived: false, attentionCounts: state.sessionAttentionCounts, descendantBusyCounts: state.sessionDescendantBusyCounts)
                         }
 
                         SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
@@ -86,7 +86,7 @@ struct SessionListView: View {
                         }
 
                         if archivedExpanded {
-                            sessionNodes(archivedNodes, archived: true, attentionCounts: state.sessionAttentionCounts)
+                            sessionNodes(archivedNodes, archived: true, attentionCounts: state.sessionAttentionCounts, descendantBusyCounts: state.sessionDescendantBusyCounts)
                         }
 
                         if state.isLoadingMoreSessions {
@@ -138,7 +138,8 @@ struct SessionListView: View {
         _ nodes: [SessionNode],
         archived: Bool,
         depth: Int = 0,
-        attentionCounts: [String: Int]
+        attentionCounts: [String: Int],
+        descendantBusyCounts: [String: Int]
     ) -> AnyView {
         AnyView(
             ForEach(nodes) { node in
@@ -149,6 +150,7 @@ struct SessionListView: View {
                     session: session,
                     status: status,
                     attentionCount: attentionCounts[session.id, default: 0],
+                    busyDescendantCount: descendantBusyCounts[session.id, default: 0],
                     isSelected: state.currentSessionID == session.id,
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
@@ -190,7 +192,8 @@ struct SessionListView: View {
                         node.children,
                         archived: archived,
                         depth: depth + 1,
-                        attentionCounts: attentionCounts
+                        attentionCounts: attentionCounts,
+                        descendantBusyCounts: descendantBusyCounts
                     )
                 }
             }
@@ -273,6 +276,10 @@ struct SessionRowView: View {
     let session: Session
     let status: SessionStatus?
     var attentionCount: Int = 0
+    /// Number of running descendant subagent sessions. Shown only when this
+    /// session is itself idle, so the parent row stops reading "Idle" while
+    /// delegated work is still in flight.
+    var busyDescendantCount: Int = 0
     let isSelected: Bool
     let isMutating: Bool
     let isArchived: Bool
@@ -287,6 +294,12 @@ struct SessionRowView: View {
     private var isBusy: Bool {
         guard let status else { return false }
         return status.type == "busy" || status.type == "retry"
+    }
+
+    /// The row falls back to the descendant-subagent signal only when it has
+    /// no stronger state of its own (attention > own busy/retry > descendants).
+    private var showsDescendantBusy: Bool {
+        attentionCount == 0 && !isBusy && busyDescendantCount > 0
     }
 
     @ViewBuilder
@@ -343,10 +356,24 @@ struct SessionRowView: View {
                         .font(DesignTypography.meta)
                         .foregroundStyle(isArchived ? DesignColors.Neutral.textTertiary : DesignColors.Neutral.textSecondary)
 
-                    if attentionCount > 0 || status != nil {
-                        Text(statusLabel(status, attentionCount: attentionCount))
+                    if attentionCount > 0 || status != nil || showsDescendantBusy {
+                        if showsDescendantBusy {
+                            // Delegated work still in flight under an idle session:
+                            // a heterogeneous signal (branch icon + neutral color)
+                            // so it reads apart from the session's own Running, which
+                            // uses the brand primary color.
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.triangle.branch")
+                                Text(L10n.sessionsSubagentsRunning(busyDescendantCount))
+                            }
                             .font(DesignTypography.meta)
-                            .foregroundStyle(statusColor(status, attentionCount: attentionCount))
+                            .foregroundStyle(DesignColors.Neutral.textSecondary)
+                            .lineLimit(1)
+                        } else {
+                            Text(statusLabel(status, attentionCount: attentionCount))
+                                .font(DesignTypography.meta)
+                                .foregroundStyle(statusColor(status, attentionCount: attentionCount))
+                        }
                     }
                 }
             }

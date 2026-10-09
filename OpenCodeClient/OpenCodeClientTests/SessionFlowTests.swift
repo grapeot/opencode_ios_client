@@ -742,6 +742,51 @@ struct SessionTreeTests {
         #expect(tree.isEmpty)
     }
 
+    @Test @MainActor func sessionDescendantBusyCountsReadGlobalStatusMap() {
+        let state = AppState()
+        state.sessions = [
+            makeSession(id: "root", parentID: nil, updated: 100),
+            makeSession(id: "child", parentID: "root", updated: 90),
+        ]
+        state.sessionStatuses = [
+            "child": SessionStatus(type: "busy", attempt: nil, message: nil, next: nil),
+        ]
+
+        #expect(state.sessionDescendantBusyCounts["root"] == 1)
+        #expect(state.sessionDescendantBusyCounts["child"] == nil)
+    }
+
+    @Test @MainActor func runningDescendantSessionsReturnsBusyChildrenNewestFirst() {
+        let state = AppState()
+        state.sessions = [
+            makeSession(id: "root", parentID: nil, updated: 100),
+            makeSession(id: "older", parentID: "root", updated: 50),
+            makeSession(id: "newer", parentID: "root", updated: 80),
+            makeSession(id: "idle-child", parentID: "root", updated: 90),
+        ]
+        state.sessionStatuses = [
+            "older": SessionStatus(type: "busy", attempt: nil, message: nil, next: nil),
+            "newer": SessionStatus(type: "retry", attempt: 1, message: nil, next: nil),
+            "idle-child": SessionStatus(type: "idle", attempt: nil, message: nil, next: nil),
+        ]
+
+        #expect(state.runningDescendantSessions(of: "root").map(\.id) == ["newer", "older"])
+    }
+
+    @Test @MainActor func runningDescendantSessionsCoverGrandchildren() {
+        let state = AppState()
+        state.sessions = [
+            makeSession(id: "root", parentID: nil, updated: 100),
+            makeSession(id: "child", parentID: "root", updated: 90),
+            makeSession(id: "grandchild", parentID: "child", updated: 80),
+        ]
+        state.sessionStatuses = [
+            "grandchild": SessionStatus(type: "busy", attempt: nil, message: nil, next: nil),
+        ]
+
+        #expect(state.runningDescendantSessions(of: "root").map(\.id) == ["grandchild"])
+    }
+
     @Test func attentionCountsRollUpThroughAllAncestors() {
         let sessions = [
             makeSession(id: "root", updated: 100),
@@ -772,6 +817,66 @@ struct SessionTreeTests {
         )
 
         #expect(prioritized.map(\.id) == ["attention", "newer"])
+    }
+
+    @Test func descendantBusyCountsRollUpAndExcludeSelf() {
+        let sessions = [
+            makeSession(id: "root", updated: 100),
+            makeSession(id: "child", parentID: "root", updated: 90),
+            makeSession(id: "grandchild", parentID: "child", updated: 80),
+        ]
+        let statuses = [
+            "child": SessionStatus(type: "busy", attempt: nil, message: nil, next: nil),
+            "grandchild": SessionStatus(type: "busy", attempt: nil, message: nil, next: nil),
+        ]
+
+        let counts = AppState.descendantBusyCountsBySession(sessions: sessions, sessionStatuses: statuses)
+
+        #expect(counts["root"] == 2)
+        #expect(counts["child"] == 1)
+        #expect(counts["grandchild"] == nil)
+    }
+
+    @Test func descendantBusyCountsHandleRetryAndIgnoreIdle() {
+        let sessions = [
+            makeSession(id: "root", updated: 100),
+            makeSession(id: "retrying", parentID: "root", updated: 90),
+            makeSession(id: "idle", parentID: "root", updated: 80),
+        ]
+        let statuses = [
+            "retrying": SessionStatus(type: "retry", attempt: 1, message: nil, next: nil),
+            "idle": SessionStatus(type: "idle", attempt: nil, message: nil, next: nil),
+        ]
+
+        let counts = AppState.descendantBusyCountsBySession(sessions: sessions, sessionStatuses: statuses)
+
+        #expect(counts["root"] == 1)
+        #expect(counts["idle"] == nil)
+    }
+
+    @Test func descendantBusyCountsIgnoreBusySelfWhenNoChildren() {
+        let sessions = [makeSession(id: "root", updated: 100)]
+        let statuses = ["root": SessionStatus(type: "busy", attempt: nil, message: nil, next: nil)]
+
+        let counts = AppState.descendantBusyCountsBySession(sessions: sessions, sessionStatuses: statuses)
+
+        #expect(counts["root"] == nil)
+    }
+
+    @Test func descendantBusySessionsSortAheadOfNewerSessions() {
+        let sessions = [
+            makeSession(id: "newer", updated: 200),
+            makeSession(id: "delegating", updated: 100),
+        ]
+        let tree = AppState.buildSessionTree(from: sessions)
+
+        let prioritized = AppState.prioritizeAttention(
+            tree,
+            attentionCounts: [:],
+            descendantBusyCounts: ["delegating": 1]
+        )
+
+        #expect(prioritized.map(\.id) == ["delegating", "newer"])
     }
 
     @Test func sessionTreeExcludesArchivedWhenFiltered() {
