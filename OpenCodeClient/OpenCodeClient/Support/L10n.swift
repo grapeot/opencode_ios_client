@@ -258,6 +258,9 @@ enum L10n {
         case chatSpeechDiscardAudio
         case chatAbortAgent
         case chatAgentRunning
+        case chatBackgroundTasksOne
+        case chatBackgroundTasksMany
+        case chatBackgroundTasksAccessibility
         case chatMicrophoneDenied
         case chatSessionStatusBusy
         case chatSessionStatusRetrying
@@ -397,6 +400,8 @@ enum L10n {
         case sessionsStatusRetry
         case sessionsStatusIdle
         case sessionsStatusNeedAttention
+        case sessionsStatusSubagentsRunningOne
+        case sessionsStatusSubagentsRunningMany
         case sessionsActive
         case sessionsArchived
         case sessionsArchive
@@ -705,6 +710,9 @@ enum L10n {
         Key.chatSpeechDiscardAudio.rawValue: "Discard audio",
         Key.chatAbortAgent.rawValue: "Interrupt agent",
         Key.chatAgentRunning.rawValue: "Agent running",
+        Key.chatBackgroundTasksOne.rawValue: "Subagent running",
+        Key.chatBackgroundTasksMany.rawValue: "%d subagents running",
+        Key.chatBackgroundTasksAccessibility.rawValue: "Subagent running in background. Tap to open subagent session.",
         Key.chatMicrophoneDenied.rawValue: "Microphone permission denied",
         Key.chatSessionStatusBusy.rawValue: "Running",
         Key.chatSessionStatusRetrying.rawValue: "Retrying",
@@ -844,6 +852,8 @@ enum L10n {
         Key.sessionsStatusRetry.rawValue: "Retrying",
         Key.sessionsStatusIdle.rawValue: "Idle",
         Key.sessionsStatusNeedAttention.rawValue: "Need attention",
+        Key.sessionsStatusSubagentsRunningOne.rawValue: "1 subagent running",
+        Key.sessionsStatusSubagentsRunningMany.rawValue: "%d subagents running",
         Key.sessionsActive.rawValue: "Active",
         Key.sessionsArchived.rawValue: "Archived",
         Key.sessionsArchive.rawValue: "Archive",
@@ -1156,6 +1166,9 @@ enum L10n {
         Key.chatSpeechDiscardAudio.rawValue: "丢弃音频",
         Key.chatAbortAgent.rawValue: "中断智能体",
         Key.chatAgentRunning.rawValue: "智能体正在运行",
+        Key.chatBackgroundTasksOne.rawValue: "子代理正在运行",
+        Key.chatBackgroundTasksMany.rawValue: "%d 个子代理正在运行",
+        Key.chatBackgroundTasksAccessibility.rawValue: "后台子代理正在运行，轻点打开子代理会话",
         Key.chatMicrophoneDenied.rawValue: "未授权麦克风权限",
         Key.chatSessionStatusBusy.rawValue: "运行中",
         Key.chatSessionStatusRetrying.rawValue: "重试中",
@@ -1295,6 +1308,8 @@ enum L10n {
         Key.sessionsStatusRetry.rawValue: "重试中",
         Key.sessionsStatusIdle.rawValue: "空闲",
         Key.sessionsStatusNeedAttention.rawValue: "需要关注",
+        Key.sessionsStatusSubagentsRunningOne.rawValue: "1 个子代理运行中",
+        Key.sessionsStatusSubagentsRunningMany.rawValue: "%d 个子代理运行中",
         Key.sessionsActive.rawValue: "活跃",
         Key.sessionsArchived.rawValue: "已归档",
         Key.sessionsArchive.rawValue: "归档",
@@ -1417,6 +1432,16 @@ enum L10n {
 
     static func sessionsFiles(_ count: Int) -> String {
         let key: Key = count == 1 ? .sessionsFilesOne : .sessionsFilesMany
+        return formatCount(key: key, count: count)
+    }
+
+    static func sessionsSubagentsRunning(_ count: Int) -> String {
+        let key: Key = count == 1 ? .sessionsStatusSubagentsRunningOne : .sessionsStatusSubagentsRunningMany
+        return formatCount(key: key, count: count)
+    }
+
+    static func chatBackgroundTasks(_ count: Int) -> String {
+        let key: Key = count == 1 ? .chatBackgroundTasksOne : .chatBackgroundTasksMany
         return formatCount(key: key, count: count)
     }
 

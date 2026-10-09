@@ -618,7 +618,8 @@ final class AppState {
     func sessionTree(archived: Bool) -> [SessionNode] {
         Self.prioritizeAttention(
             Self.buildSessionTree(from: filteredSessions(archived: archived)),
-            attentionCounts: sessionAttentionCounts
+            attentionCounts: sessionAttentionCounts,
+            descendantBusyCounts: sessionDescendantBusyCounts
         )
     }
 
@@ -631,6 +632,38 @@ final class AppState {
             sessions: sessions,
             attentionSessionIDs: attentionSessionIDs
         )
+    }
+
+    /// Number of running descendant subagent sessions per session, derived from
+    /// the global `sessionStatuses` map along `parentID` links. A session's own
+    /// busy state is never counted, so a row can render a distinct "subagents
+    /// running" signal side by side with (and subordinate to) its own Running.
+    var sessionDescendantBusyCounts: [String: Int] {
+        Self.descendantBusyCountsBySession(
+            sessions: sessions,
+            sessionStatuses: sessionStatuses
+        )
+    }
+
+    /// Busy descendant subagent sessions of `sessionID`, most recently updated
+    /// first. Drives the composer "background tasks running" segment; BFS over
+    /// `parentID` links is cycle-safe and covers arbitrary nesting.
+    func runningDescendantSessions(of sessionID: String) -> [Session] {
+        let childrenByParent = Dictionary(grouping: sessions, by: \.parentID)
+        var running: [Session] = []
+        var visited = Set<String>([sessionID])
+        var queue = [sessionID]
+        while let current = queue.first {
+            queue.removeFirst()
+            for child in childrenByParent[current] ?? [] {
+                guard visited.insert(child.id).inserted else { continue }
+                if isBusySession(sessionStatuses[child.id]) {
+                    running.append(child)
+                }
+                queue.append(child.id)
+            }
+        }
+        return running.sorted { $0.time.updated > $1.time.updated }
     }
 
     var projects: [Project] = []
@@ -942,22 +975,60 @@ final class AppState {
         return counts
     }
 
+    /// Aggregates running descendant subagents up the `parentID` chain: each
+    /// session gets the count of busy sessions strictly below it in the loaded
+    /// tree. Counting walks ancestors and stops at the first non-busy node, so
+    /// a session never contributes to its own count and a running chain is
+    /// counted once per ancestor. Cycle-safe; scoped to the loaded `sessions`
+    /// list (the global status map may carry other projects).
+    nonisolated static func descendantBusyCountsBySession(
+        sessions: [Session],
+        sessionStatuses: [String: SessionStatus]
+    ) -> [String: Int] {
+        let sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        func isBusy(_ id: String) -> Bool {
+            guard let type = sessionStatuses[id]?.type else { return false }
+            return type == "busy" || type == "retry"
+        }
+
+        var counts: [String: Int] = [:]
+        for session in sessions where isBusy(session.id) {
+            var ancestorID = sessionsByID[session.id]?.parentID
+            var visited: Set<String> = []
+            while let current = ancestorID, visited.insert(current).inserted {
+                counts[current, default: 0] += 1
+                ancestorID = sessionsByID[current]?.parentID
+            }
+        }
+        return counts
+    }
+
     nonisolated static func prioritizeAttention(
         _ nodes: [SessionNode],
-        attentionCounts: [String: Int]
+        attentionCounts: [String: Int],
+        descendantBusyCounts: [String: Int] = [:]
     ) -> [SessionNode] {
         nodes
             .map { node in
                 SessionNode(
                     session: node.session,
-                    children: prioritizeAttention(node.children, attentionCounts: attentionCounts)
+                    children: prioritizeAttention(
+                        node.children,
+                        attentionCounts: attentionCounts,
+                        descendantBusyCounts: descendantBusyCounts
+                    )
                 )
             }
             .sorted { lhs, rhs in
-                let lhsNeedsAttention = attentionCounts[lhs.id, default: 0] > 0
-                let rhsNeedsAttention = attentionCounts[rhs.id, default: 0] > 0
-                if lhsNeedsAttention != rhsNeedsAttention {
-                    return lhsNeedsAttention
+                // A collapsed row hides its children, so a tree whose delegated
+                // work is still running must surface by its parent row the same
+                // way an attention-needing tree does.
+                let lhsSurfaces = attentionCounts[lhs.id, default: 0] > 0
+                    || descendantBusyCounts[lhs.id, default: 0] > 0
+                let rhsSurfaces = attentionCounts[rhs.id, default: 0] > 0
+                    || descendantBusyCounts[rhs.id, default: 0] > 0
+                if lhsSurfaces != rhsSurfaces {
+                    return lhsSurfaces
                 }
                 return lhs.session.time.updated > rhs.session.time.updated
             }

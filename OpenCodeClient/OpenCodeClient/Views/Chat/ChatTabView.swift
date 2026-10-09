@@ -551,6 +551,25 @@ struct ChatTabView: View {
         return parts.joined(separator: " · ")
     }
 
+    /// Running descendant subagent sessions of the current session. Empty while
+    /// the current session is itself busy: its own activity line already covers
+    /// the turn, and a second "subagent running" segment would compete with it.
+    private var runningBackgroundSubagents: [Session] {
+        guard !state.isBusy, let sid = state.currentSessionID else { return [] }
+        return state.runningDescendantSessions(of: sid)
+    }
+
+    /// Label for the background-tasks segment: a single running subagent shows
+    /// its own title, several fall back to a count.
+    private var backgroundTasksText: String? {
+        let subs = runningBackgroundSubagents
+        guard !subs.isEmpty else { return nil }
+        if subs.count == 1, let title = subs.first?.title, !title.isEmpty {
+            return title
+        }
+        return L10n.chatBackgroundTasks(subs.count)
+    }
+
     private var voiceRailTransportIcon: String {
         if isRecording { return "stop.circle.fill" }
         if isShowingTranscribingUI || isRetryingSpeech { return "circle.dotted" }
@@ -569,6 +588,9 @@ struct ChatTabView: View {
         // 6pt gap: xs (4) read as cramped between the two lines.
         VStack(alignment: .leading, spacing: 6) {
             sessionStatsLine
+            if hasBackgroundTasks {
+                backgroundTasksRow
+            }
             if hasTransientComposerStatus {
                 quietComposerStatusRow()
             }
@@ -576,6 +598,45 @@ struct ChatTabView: View {
         .padding(.horizontal, DesignSpacing.xs)
         .padding(.top, DesignSpacing.xs)
         .padding(.bottom, DesignSpacing.xs)
+    }
+
+    private var hasBackgroundTasks: Bool {
+        !runningBackgroundSubagents.isEmpty
+    }
+
+    /// Delegated work is still in flight while this session is idle. Rendered on
+    /// its own line, visually apart from the session's own "Agent running" state:
+    /// a branch icon in the info color, the subagent title (or a count), and a
+    /// chevron. Tap opens the running subagent session. Deliberately no stopwatch
+    /// and no interrupt control — those belong to the subagent's own session, not
+    /// this turn's clock.
+    private var backgroundTasksRow: some View {
+        Button {
+            guard let sub = runningBackgroundSubagents.first else { return }
+            Task { await state.openReferencedSession(sessionID: sub.id) }
+        } label: {
+            HStack(spacing: DesignSpacing.sm) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(DesignTypography.meta)
+                    .foregroundStyle(DesignColors.Semantic.info)
+
+                Text(backgroundTasksText ?? "")
+                    .font(DesignTypography.meta)
+                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(DesignTypography.micro.weight(.semibold))
+                    .foregroundStyle(DesignColors.Neutral.textTertiary)
+            }
+            .frame(minHeight: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("background-tasks-row")
+        .accessibilityLabel(L10n.t(.chatBackgroundTasksAccessibility))
     }
 
     /// The transient (bottom) line only renders when it has content; an
@@ -625,7 +686,7 @@ struct ChatTabView: View {
     /// persistent session counters (top line) or transient turn state
     /// (bottom line). Without this the counters would vanish while idle.
     private var shouldShowComposerStatus: Bool {
-        composerStatusText != nil || sessionStats != nil
+        composerStatusText != nil || sessionStats != nil || hasBackgroundTasks
     }
 
     private var voiceRailTrailingAction: some View {
