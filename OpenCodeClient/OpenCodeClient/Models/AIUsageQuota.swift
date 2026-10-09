@@ -30,6 +30,38 @@ struct AIUsageQuota: Decodable, Equatable, Identifiable {
         case nextResetISO = "next_reset_iso"
     }
 
+    init(
+        provider: String,
+        label: String,
+        usedPercentage: Int,
+        remainingPercentage: Int,
+        nextResetTimeMs: Int64?,
+        nextResetISO: String?,
+        usage: Int?,
+        remaining: Int?
+    ) {
+        self.provider = provider
+        self.label = label
+        self.usedPercentage = usedPercentage
+        self.remainingPercentage = remainingPercentage
+        self.nextResetTimeMs = nextResetTimeMs
+        self.nextResetISO = nextResetISO
+        self.usage = usage
+        self.remaining = remaining
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try container.decode(String.self, forKey: .provider)
+        label = try container.decode(String.self, forKey: .label)
+        usedPercentage = try container.decodeRoundedPercentage(forKey: .usedPercentage)
+        remainingPercentage = try container.decodeRoundedPercentage(forKey: .remainingPercentage)
+        nextResetTimeMs = try container.decodeIfPresent(Int64.self, forKey: .nextResetTimeMs)
+        nextResetISO = try container.decodeIfPresent(String.self, forKey: .nextResetISO)
+        usage = try container.decodeIfPresent(Int.self, forKey: .usage)
+        remaining = try container.decodeIfPresent(Int.self, forKey: .remaining)
+    }
+
     var clampedUsedPercentage: Int { min(max(usedPercentage, 0), 100) }
     var clampedRemainingPercentage: Int { min(max(remainingPercentage, 0), 100) }
     var resetDate: Date? {
@@ -47,6 +79,20 @@ struct AIUsageQuota: Decodable, Equatable, Identifiable {
         }
         let tenths = remainingMs / 8_640_000
         return "\(tenths / 10).\(tenths % 10)d"
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeRoundedPercentage(forKey key: Key) throws -> Int {
+        let value = try decode(Double.self, forKey: key)
+        guard value.isFinite, let rounded = Int(exactly: value.rounded()) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: self,
+                debugDescription: "percentage value \(value) is out of range"
+            )
+        }
+        return rounded
     }
 }
 
