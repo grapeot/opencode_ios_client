@@ -136,6 +136,9 @@ extension AppState {
                JSONSerialization.isValidJSONObject(infoObj),
                let data = try? JSONSerialization.data(withJSONObject: infoObj),
                let session = try? JSONDecoder().decode(Session.self, from: data) {
+                if sessionScope.confirmedMissingSessionIDs.contains(session.id) {
+                    return
+                }
                 let dir = effectiveProjectDirectory ?? serverCurrentProjectWorktree
                 let isCurrent = (session.id == currentSessionID)
                 let isKnown = sessions.contains(where: { $0.id == session.id })
@@ -443,8 +446,6 @@ extension AppState {
 
     func clearCurrentSessionViewState() {
         sessionLoadingID = UUID()
-        messageStore.stepTimings = [:]
-        messageStore.clearPartTypes()
         messages = []
         partsByMessage = [:]
         sessionDiffs = []
@@ -456,9 +457,27 @@ extension AppState {
         sessionScope.remove(sessionID: sessionID)
         messageStore.removeTimings(forSession: sessionID)
         messageStore.removePartTypes(forSession: sessionID)
+        statsStore.remove(sessionID: sessionID)
+        revertResetPendingSessionIDs.remove(sessionID)
 
         persistDraftInputs()
         persistSelectedModelMap()
+    }
+
+    func noteConfirmedMissingSession(_ sessionID: String, clearSelection: Bool) {
+        sessionScope.confirmedMissingSessionIDs.insert(sessionID)
+        sessions.removeAll { $0.id == sessionID }
+        clearSessionScopedCaches(sessionID: sessionID)
+        guard clearSelection, currentSessionID == sessionID else { return }
+        clearCurrentSessionViewState()
+        currentSessionID = nil
+    }
+
+    func clearSelectionIfCurrent(_ sessionID: String) {
+        guard currentSessionID == sessionID else { return }
+        clearCurrentSessionViewState()
+        currentSessionID = nil
+        pendingPermissions = []
     }
 
     func isSessionNotFoundError(_ error: Error) -> Bool {
@@ -468,46 +487,60 @@ extension AppState {
 
     func recoverFromMissingCurrentSessionIfNeeded(
         error: Error,
-        requestedSessionID: String
+        requestedSessionID: String,
+        allowMissingSessionRecovery: Bool = true
     ) async -> Bool {
-        guard requestedSessionID == currentSessionID else { return false }
         guard isSessionNotFoundError(error) else { return false }
-
-        await loadSessions()
-
-        guard currentSessionID != nil else {
-            pendingPermissions = []
-            return true
+        guard requestedSessionID == currentSessionID else { return true }
+        if allowMissingSessionRecovery {
+            await recoverMissingCurrentSession(requestedSessionID)
+        } else {
+            clearSelectionIfCurrent(requestedSessionID)
         }
-
-        await loadMessages()
-        await refreshPendingPermissions()
-        await loadSessionDiff()
-        await loadSessionTodos()
-        syncModelFromMessageHistory()
         return true
+    }
+
+    func recoverMissingCurrentSession(_ sessionID: String) async {
+        guard currentSessionID == sessionID else { return }
+        clearSelectionIfCurrent(sessionID)
+        guard isConnected else { return }
+        let loaded: [Session]
+        do {
+            loaded = try await fetchSessions(limit: loadedSessionLimit)
+        } catch {
+            connectionError = error.localizedDescription
+            return
+        }
+        applyFetchedSessionPage(loaded.filter { $0.id != sessionID }, capturedSelection: nil)
+        hasMoreSessions = loaded.count >= loadedSessionLimit
+        selectFirstAvailableSessionIfNeeded()
+        guard let nextID = currentSessionID, nextID != sessionID else { return }
+        await loadMessages(allowMissingSessionRecovery: false)
+        guard currentSessionID == nextID else { return }
+        await refreshPendingPermissions()
+        guard currentSessionID == nextID else { return }
+        await loadSessionDiff(allowMissingSessionRecovery: false)
+        guard currentSessionID == nextID else { return }
+        await loadSessionTodos(allowMissingSessionRecovery: false)
+        guard currentSessionID == nextID else { return }
+        syncModelFromMessageHistory()
     }
 
     func handleRemoteSessionDeleted(sessionID: String) async {
         let deletedCurrentSession = (sessionID == currentSessionID)
-
-        sessions.removeAll { $0.id == sessionID }
-        clearSessionScopedCaches(sessionID: sessionID)
-
-        if deletedCurrentSession {
-            clearCurrentSessionViewState()
-        }
-
+        noteConfirmedMissingSession(sessionID, clearSelection: deletedCurrentSession)
         await loadSessions()
 
-        if deletedCurrentSession, currentSessionID != nil {
-            await loadMessages()
+        if currentSessionID == nil || currentSessionID == sessionID {
+            currentSessionID = nil
+            pendingPermissions = []
+            return
+        }
+        if deletedCurrentSession {
             await refreshPendingPermissions()
             await loadSessionDiff()
             await loadSessionTodos()
             syncModelFromMessageHistory()
-        } else if currentSessionID == nil {
-            pendingPermissions = []
         } else {
             let validSessionIDs = Set(sessions.map(\.id))
             pendingPermissions.removeAll { !validSessionIDs.contains($0.sessionID) }

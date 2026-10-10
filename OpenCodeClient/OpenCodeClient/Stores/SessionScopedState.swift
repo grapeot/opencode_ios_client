@@ -12,6 +12,7 @@ struct SessionScopedState {
     var selectedModelIDs: [String: String] = [:]
     var pendingPermissions: [PendingPermission] = []
     var pendingQuestions: [QuestionRequest] = []
+    var confirmedMissingSessionIDs: Set<String> = []
 
     mutating func remove(sessionID: String) {
         activities[sessionID] = nil

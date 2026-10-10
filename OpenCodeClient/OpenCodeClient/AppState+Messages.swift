@@ -19,7 +19,7 @@ extension AppState {
         }
     }
 
-    func loadMessages() async {
+    func loadMessages(allowMissingSessionRecovery: Bool = true) async {
         guard let sessionID = currentSessionID else { return }
         do {
             let fetchLimit = Self.normalizedMessageFetchLimit(current: loadedMessageLimitBySessionID[sessionID])
@@ -95,7 +95,11 @@ extension AppState {
         } catch let error as DecodingError {
             Self.logger.error("loadMessages decode failed: session=\(sessionID, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
         } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+            if await recoverFromMissingCurrentSessionIfNeeded(
+                error: error,
+                requestedSessionID: sessionID,
+                allowMissingSessionRecovery: allowMissingSessionRecovery
+            ) {
                 return
             }
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
@@ -134,7 +138,7 @@ extension AppState {
         return didLoadMore
     }
 
-    func loadSessionDiff() async {
+    func loadSessionDiff(allowMissingSessionRecovery: Bool = true) async {
         guard let sessionID = currentSessionID else { sessionDiffs = []; return }
         do {
             let loaded = try await apiClient.sessionDiff(sessionID: sessionID)
@@ -144,7 +148,11 @@ extension AppState {
             }
             sessionDiffs = loaded
         } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+            if await recoverFromMissingCurrentSessionIfNeeded(
+                error: error,
+                requestedSessionID: sessionID,
+                allowMissingSessionRecovery: allowMissingSessionRecovery
+            ) {
                 return
             }
             guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else { return }
