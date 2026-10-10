@@ -26,12 +26,14 @@ extension AppState {
         }
     }
 
-    func respondQuestion(_ request: QuestionRequest, answers: [[String]]) async {
+    func respondQuestion(_ request: QuestionRequest, answers: [[String]]) async -> Bool {
         do {
             try await apiClient.replyQuestion(requestID: request.id, answers: answers)
             pendingQuestions.removeAll { $0.id == request.id }
+            return true
         } catch {
             connectionError = error.localizedDescription
+            return false
         }
     }
 

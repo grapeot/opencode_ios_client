@@ -44,6 +44,7 @@ struct MarkdownWebPreviewContainer: View {
     @State private var renderError: String?
     @State private var linkError: String?
     @State private var proceedDespiteSize = false
+    @State private var retryGeneration = 0
 
     var body: some View {
         Group {
@@ -89,7 +90,7 @@ struct MarkdownWebPreviewContainer: View {
     }
 
     private var resolveTaskID: String {
-        "\(markdownFilePath ?? ""):\(proceedDespiteSize):\(text.hashValue)"
+        "\(markdownFilePath ?? ""):\(proceedDespiteSize):\(text.hashValue):\(retryGeneration)"
     }
 
     /// Resolve a workspace-relative link tapped in the preview and route it into
@@ -130,12 +131,26 @@ struct MarkdownWebPreviewContainer: View {
             Button(L10n.t(.markdownWebPreviewOpenNative)) { onSwitchToNative?() }
             Button(L10n.t(.markdownWebPreviewOpenSource)) { onSwitchToSource?() }
             Button(L10n.t(.commonRetry)) {
+                retryGeneration += 1
                 renderError = nil
                 resolvedMarkdown = nil
             }
+            .accessibilityIdentifier("markdown-web-preview-retry")
         }
     }
 }
+
+#if DEBUG
+private enum WebPreviewRenderFault {
+    private static var remaining = UITestFixtures.hasUITestWebPreviewRetryFixture ? 1 : 0
+
+    static func consumeFirst() -> Bool {
+        guard remaining > 0 else { return false }
+        remaining -= 1
+        return true
+    }
+}
+#endif
 
 /// Bridge message names exposed to the JS shell.
 private enum PreviewBridge {
@@ -234,6 +249,12 @@ struct MarkdownWebPreviewView: UIViewRepresentable {
         }
 
         private func evaluateRender(_ input: MarkdownWebPreviewInput) {
+            #if DEBUG
+            if WebPreviewRenderFault.consumeFirst() {
+                parent.onError?(L10n.t(.markdownWebPreviewUnknownRenderError))
+                return
+            }
+            #endif
             guard let webView else { return }
             let payload: [String: Any] = [
                 "markdown": input.markdown,
