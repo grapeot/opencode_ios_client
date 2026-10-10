@@ -86,6 +86,7 @@ struct ToolPartView: View {
     }
 
     var body: some View {
+        HStack(alignment: .top, spacing: 6) {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 if let reason = part.toolReason ?? part.metadata?.title, !reason.isEmpty {
@@ -123,39 +124,41 @@ struct ToolPartView: View {
                 if let path = part.metadata?.path {
                     LabeledContent(L10n.t(.toolPath), value: path)
                 }
-                if part.tool != "todowrite",
-                   let output = part.toolOutputForDisplay,
-                   !output.isEmpty {
+                switch part.toolDetailPresentation(isImageFile: isImageFile) {
+                case .hidden:
+                    EmptyView()
+                case .successImage:
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t(.toolOutput))
                             .font(DesignTypography.micro)
                             .foregroundStyle(.secondary)
-                        if isImageFile {
-                            if let img = decodedImage {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(maxHeight: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: DesignCorners.small))
-                                    .onTapGesture { showImageSheet = true }
-                            } else {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "photo")
-                                        .foregroundStyle(.secondary)
-                                    Text(L10n.t(.toolImageFile))
-                                        .font(DesignTypography.micro)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                        if let img = decodedImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: DesignCorners.small))
+                                .onTapGesture { showImageSheet = true }
                         } else {
-                            Text(Self.outputPreview(output))
-                                .font(DesignTypography.microMono)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if Self.isOutputTruncated(output) {
-                                Text("Output truncated: showing first \(Self.outputPreviewCharacterLimit.formatted()) of \(output.count.formatted()) characters.")
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo")
+                                    .foregroundStyle(.secondary)
+                                Text(L10n.t(.toolImageFile))
                                     .font(DesignTypography.micro)
                                     .foregroundStyle(.secondary)
                             }
+                        }
+                    }
+                case .text(let output):
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t(.toolOutput))
+                            .font(DesignTypography.micro)
+                            .foregroundStyle(.secondary)
+                        detailOutputText(output)
+                        if Self.isOutputTruncated(output) {
+                            Text("Output truncated: showing first \(Self.outputPreviewCharacterLimit.formatted()) of \(output.count.formatted()) characters.")
+                                .font(DesignTypography.micro)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -197,27 +200,12 @@ struct ToolPartView: View {
                         .scaleEffect(0.5)
                 }
                 Spacer()
-                if !part.filePathsForNavigation.isEmpty {
-                    Button {
-                        if part.filePathsForNavigation.count == 1 {
-                            openFile(part.filePathsForNavigation[0])
-                        } else {
-                            showOpenFileSheet = true
-                        }
-                    } label: {
-                        Image(systemName: "folder.badge.plus")
-                            .font(DesignControls.toolOpenFileIconFont)
-                            .frame(
-                                width: DesignControls.toolOpenFileButtonSize,
-                                height: DesignControls.toolOpenFileButtonSize
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .font(DesignTypography.micro)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("toolcard.detail.\(part.id)")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         // Let the DisclosureGroup chevron take the accent — it's the expand
         // affordance, and a blue chevron reinforces that the card is tappable.
         .tint(DesignColors.Brand.primary)
@@ -225,6 +213,10 @@ struct ToolPartView: View {
             if newValue?.lowercased() == "completed" {
                 isExpanded = false
             }
+        }
+        if !part.filePathsForNavigation.isEmpty {
+            headerFileOpenButton
+        }
         }
         .task(id: part.id) {
             decodedImage = nil
@@ -291,10 +283,62 @@ struct ToolPartView: View {
         }
     }
 
+    @ViewBuilder
+    private func detailOutputText(_ output: String) -> some View {
+        if part.showsToolErrorBody {
+            Text(Self.outputPreview(output))
+                .font(DesignTypography.microMono)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("toolcard.error.\(part.id)")
+        } else {
+            Text(Self.outputPreview(output))
+                .font(DesignTypography.microMono)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var headerFileOpenButton: some View {
+        Button {
+            if part.filePathsForNavigation.count == 1 {
+                openFile(part.filePathsForNavigation[0])
+            } else {
+                showOpenFileSheet = true
+            }
+        } label: {
+            Image(systemName: "folder.badge.plus")
+                .font(DesignControls.toolOpenFileIconFont)
+                .frame(
+                    width: DesignControls.toolOpenFileButtonSize,
+                    height: DesignControls.toolOpenFileButtonSize
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func openFile(_ path: String) {
         let raw = path.trimmingCharacters(in: .whitespacesAndNewlines)
         let p = PathNormalizer.resolveWorkspaceRelativePath(raw, workspaceDirectory: workspaceDirectory)
         guard !p.isEmpty else { return }
         onOpenResolvedPath(p)
+    }
+}
+
+nonisolated enum ToolDetailPresentation: Equatable {
+    case hidden
+    case successImage
+    case text(String)
+}
+
+extension Part {
+    nonisolated var showsToolErrorBody: Bool {
+        (toolOutput?.isEmpty != false) && !(toolError ?? "").isEmpty
+    }
+
+    nonisolated func toolDetailPresentation(isImageFile: Bool) -> ToolDetailPresentation {
+        guard let output = toolOutputForDisplay, !output.isEmpty else { return .hidden }
+        if tool == "todowrite" && !showsToolErrorBody { return .hidden }
+        if isImageFile && !showsToolErrorBody { return .successImage }
+        return .text(output)
     }
 }

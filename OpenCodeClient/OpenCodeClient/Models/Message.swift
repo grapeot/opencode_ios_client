@@ -82,6 +82,144 @@ enum DisplayTextDecoder {
     }
 }
 
+nonisolated enum WireJSON: Equatable, Sendable {
+    case null
+    case bool(Bool)
+    case int(Int)
+    case double(Double)
+    case string(String)
+    case array([WireJSON])
+    case object([String: WireJSON])
+
+    var stringValue: String? {
+        if case .string(let value) = self { return value }
+        return nil
+    }
+
+    var objectValue: [String: WireJSON]? {
+        if case .object(let value) = self { return value }
+        return nil
+    }
+
+    subscript(key: String) -> WireJSON? {
+        objectValue?[key]
+    }
+
+    var arrayValue: [WireJSON]? {
+        if case .array(let value) = self { return value }
+        return nil
+    }
+}
+
+extension WireJSON: Codable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+            return
+        }
+        if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+            return
+        }
+        if let value = try? container.decode(Int.self) {
+            self = .int(value)
+            return
+        }
+        if let value = try? container.decode(Double.self) {
+            guard value.isFinite else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "JSON number must be finite")
+            }
+            self = .double(value)
+            return
+        }
+        if let value = try? container.decode(String.self) {
+            self = .string(value)
+            return
+        }
+        if let value = try? container.decode([WireJSON].self) {
+            self = .array(value)
+            return
+        }
+        if let value = try? container.decode([String: WireJSON].self) {
+            self = .object(value)
+            return
+        }
+        throw DecodingError.dataCorruptedError(in: container, debugDescription: "unsupported JSON value")
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .null:
+            try container.encodeNil()
+        case .bool(let value):
+            try container.encode(value)
+        case .int(let value):
+            try container.encode(value)
+        case .double(let value):
+            try container.encode(value)
+        case .string(let value):
+            try container.encode(value)
+        case .array(let value):
+            try container.encode(value)
+        case .object(let value):
+            try container.encode(value)
+        }
+    }
+
+    init(encoding value: some Encodable) throws {
+        let data = try JSONEncoder().encode(value)
+        self = try JSONDecoder().decode(WireJSON.self, from: data)
+    }
+}
+
+nonisolated struct WireDecodeDiagnostic: Equatable, Sendable {
+    let codingPath: String
+    let reason: String
+
+    init(codingPath: String, reason: String) {
+        self.codingPath = codingPath
+        self.reason = reason
+    }
+
+    init(_ error: DecodingError, prefix: String = "") {
+        let path: String
+        let reason: String
+        switch error {
+        case .typeMismatch(_, let context):
+            path = Self.join(prefix: prefix, path: context.codingPath)
+            reason = "typeMismatch"
+        case .valueNotFound(_, let context):
+            path = Self.join(prefix: prefix, path: context.codingPath)
+            reason = "valueNotFound"
+        case .keyNotFound(let key, let context):
+            path = Self.join(prefix: prefix, path: context.codingPath + [key])
+            reason = "keyNotFound"
+        case .dataCorrupted(let context):
+            path = Self.join(prefix: prefix, path: context.codingPath)
+            reason = "dataCorrupted"
+        @unknown default:
+            path = prefix
+            reason = "dataCorrupted"
+        }
+        self.codingPath = path
+        self.reason = reason
+    }
+
+    private static func join(prefix: String, path: [CodingKey]) -> String {
+        let rendered = path.map { key in
+            if let index = key.intValue { return "[\(index)]" }
+            return key.stringValue
+        }.joined(separator: ".")
+        let relative = rendered.replacingOccurrences(of: ".[", with: "[")
+        if prefix.isEmpty { return relative }
+        if relative.isEmpty { return prefix }
+        if relative.hasPrefix("[") { return prefix + relative }
+        return prefix + "." + relative
+    }
+}
+
 nonisolated struct Message: Codable, Identifiable {
     let id: String
     let sessionID: String
@@ -96,7 +234,7 @@ nonisolated struct Message: Codable, Identifiable {
     let finish: String?
     let tokens: TokenInfo?
     let cost: Double?
-    let structured: CarResponseEnvelope?
+    let structured: WireJSON?
 
     init(
         id: String,
@@ -111,7 +249,7 @@ nonisolated struct Message: Codable, Identifiable {
         finish: String?,
         tokens: TokenInfo?,
         cost: Double?,
-        structured: CarResponseEnvelope? = nil
+        structured: WireJSON? = nil
     ) {
         self.id = id
         self.sessionID = sessionID
@@ -126,6 +264,43 @@ nonisolated struct Message: Codable, Identifiable {
         self.tokens = tokens
         self.cost = cost
         self.structured = structured
+    }
+
+    init(
+        id: String,
+        sessionID: String,
+        role: String,
+        parentID: String?,
+        providerID: String?,
+        modelID: String?,
+        model: ModelInfo?,
+        error: MessageError?,
+        time: TimeInfo,
+        finish: String?,
+        tokens: TokenInfo?,
+        cost: Double?,
+        structured envelope: CarResponseEnvelope
+    ) throws {
+        self.init(
+            id: id,
+            sessionID: sessionID,
+            role: role,
+            parentID: parentID,
+            providerID: providerID,
+            modelID: modelID,
+            model: model,
+            error: error,
+            time: time,
+            finish: finish,
+            tokens: tokens,
+            cost: cost,
+            structured: try WireJSON(encoding: envelope)
+        )
+    }
+
+    var carResponseEnvelope: CarResponseEnvelope? {
+        guard let structured else { return nil }
+        return try? CarResponseEnvelope(validating: structured)
     }
 
     struct ModelInfo: Codable {
@@ -286,6 +461,7 @@ struct PartStateBridge: Codable {
     let inputSummary: String?
     /// 输出结果，来自 state.output 或 state.metadata.output
     let output: String?
+    let error: String?
     /// 文件路径，来自 state.input.path/file_path/filePath 或 patchText 中的 *** Add File: / *** Update File:
     let pathFromInput: String?
 
@@ -328,6 +504,7 @@ struct PartStateBridge: Codable {
             title = nil
             inputSummary = nil
             output = nil
+            error = nil
             pathFromInput = nil
             runStartMillis = nil
             runEndMillis = nil
@@ -342,6 +519,7 @@ struct PartStateBridge: Codable {
             }
             var tit: String? = dict["title"]?.value as? String
             var out: String? = dict["output"]?.value as? String
+            let errorText = dict["error"]?.value as? String
             if let meta = dict["metadata"]?.value as? [String: Any] {
                 if out == nil, let o = meta["output"] as? String { out = o }
                 if tit == nil, let d = meta["description"] as? String { tit = d }
@@ -414,6 +592,7 @@ struct PartStateBridge: Codable {
             title = tit
             inputSummary = inp
             output = out
+            error = errorText
             runStartMillis = millis(timeObj?["start"])
             runEndMillis = millis(timeObj?["end"])
             todos = todoList
@@ -422,6 +601,7 @@ struct PartStateBridge: Codable {
             runStartMillis = nil
             runEndMillis = nil
             todos = nil
+            error = nil
             throw DecodingError.typeMismatch(PartStateBridge.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Part.state must be String or object"))
         }
     }
@@ -429,6 +609,42 @@ struct PartStateBridge: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(displayString)
+    }
+}
+
+nonisolated enum PartSource: Equatable, Sendable {
+    case string(String)
+    case object([String: WireJSON])
+
+    var preservedObject: [String: WireJSON]? {
+        if case .object(let object) = self { return object }
+        return nil
+    }
+}
+
+extension PartSource: Codable {
+    init(from decoder: Decoder) throws {
+        switch try WireJSON(from: decoder) {
+        case .string(let value):
+            self = .string(value)
+        case .object(let object):
+            self = .object(object)
+        default:
+            throw DecodingError.typeMismatch(
+                PartSource.self,
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "source must be a string or object")
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .object(let object):
+            try container.encode(object)
+        }
     }
 }
 
@@ -449,7 +665,7 @@ nonisolated struct Part: Codable, Identifiable {
     var mime: String? = nil
     var filename: String? = nil
     var url: String? = nil
-    var source: String? = nil
+    var source: PartSource? = nil
 
     private enum CodingKeys: String, CodingKey {
         case id, messageID, sessionID, type, text, synthetic, tool, callID, state, metadata, files, mime, filename, url, source
@@ -470,7 +686,7 @@ nonisolated struct Part: Codable, Identifiable {
         mime: String? = nil,
         filename: String? = nil,
         url: String? = nil,
-        source: String? = nil
+        source: PartSource? = nil
     ) {
         self.id = id
         self.messageID = messageID
@@ -505,7 +721,7 @@ nonisolated struct Part: Codable, Identifiable {
         mime = try c.decodeIfPresent(String.self, forKey: .mime)
         filename = try c.decodeIfPresent(String.self, forKey: .filename)
         url = try c.decodeIfPresent(String.self, forKey: .url)
-        source = try c.decodeIfPresent(String.self, forKey: .source)
+        source = try c.decodeIfPresent(PartSource.self, forKey: .source)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -538,8 +754,10 @@ nonisolated struct Part: Codable, Identifiable {
     }
     /// 输出结果
     var toolOutput: String? { state?.output }
+    var toolError: String? { state?.error }
     var toolOutputForDisplay: String? {
-        toolOutput.map(DisplayTextDecoder.decodeJSONUnicodeEscapes)
+        let body = toolOutput ?? toolError
+        return body.map(DisplayTextDecoder.decodeJSONUnicodeEscapes)
     }
 
     /// Wall-clock this tool itself ran, from `state.time`. Nil while running or

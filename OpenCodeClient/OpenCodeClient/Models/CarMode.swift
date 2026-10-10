@@ -89,6 +89,29 @@ nonisolated struct CarResponseEnvelope: Codable, Equatable, Sendable {
     let speech: String
     let confirmation: CarConfirmation?
     let clientActions: [CarClientAction]
+
+    init(version: Int, status: CarResponseStatus, speech: String, confirmation: CarConfirmation?, clientActions: [CarClientAction]) {
+        self.version = version
+        self.status = status
+        self.speech = speech
+        self.confirmation = confirmation
+        self.clientActions = clientActions
+    }
+
+    init(validating json: WireJSON) throws {
+        let data = try JSONEncoder().encode(json)
+        self = try JSONDecoder().decode(CarResponseEnvelope.self, from: data)
+    }
+
+    static func accepted(from message: Message) throws -> CarResponseEnvelope {
+        guard let structured = message.structured,
+              let envelope = try? CarResponseEnvelope(validating: structured),
+              envelope.version == 1,
+              !envelope.speech.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CarModeError.invalidResponse
+        }
+        return envelope
+    }
 }
 
 nonisolated struct StructuredOutputFormat: Encodable {

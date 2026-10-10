@@ -135,9 +135,10 @@ struct OpenCodeClientTests {
         {"id":"a1","sessionID":"car-1","role":"assistant","parentID":"u1","time":{"created":1,"completed":2},"finish":"tool-calls","structured":{"version":1,"status":"needs_confirmation","speech":"Open the route?","confirmation":{"id":"confirm-1","prompt":"Confirm or cancel"},"clientActions":[]}}
         """
         let message = try JSONDecoder().decode(Message.self, from: Data(json.utf8))
-        #expect(message.structured?.version == 1)
-        #expect(message.structured?.status == .needsConfirmation)
-        #expect(message.structured?.confirmation?.id == "confirm-1")
+        #expect(message.carResponseEnvelope?.version == 1)
+        #expect(message.carResponseEnvelope?.status == .needsConfirmation)
+        #expect(message.carResponseEnvelope?.confirmation?.id == "confirm-1")
+        #expect(message.structured?["version"] == .int(1))
         #expect(message.finish == "tool-calls")
     }
 
@@ -188,7 +189,7 @@ struct OpenCodeClientTests {
         #expect(AppState().isCarModeEnabled)
     }
 
-    @Test @MainActor func structuredSpeechFallsBackWhenAssistantHasNoTextPart() {
+    @Test @MainActor func structuredSpeechFallsBackWhenAssistantHasNoTextPart() throws {
         let envelope = CarResponseEnvelope(
             version: 1,
             status: .completed,
@@ -196,7 +197,7 @@ struct OpenCodeClientTests {
             confirmation: nil,
             clientActions: []
         )
-        let info = Message(
+        let info = try Message(
             id: "assistant-car",
             sessionID: "car-session",
             role: "assistant",

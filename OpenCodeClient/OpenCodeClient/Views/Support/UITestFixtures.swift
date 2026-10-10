@@ -364,7 +364,7 @@ enum UITestFixtures {
             tokens: nil,
             cost: nil
         )
-        let assistant = Message(
+        let assistant = try! Message(
             id: "car-assistant",
             sessionID: sessionID,
             role: "assistant",
@@ -626,6 +626,49 @@ enum UITestFixtures {
                 ],
             ]))
         }
+
+        assistantParts.append(decodePart([
+            "id": "ap-todo-error",
+            "messageID": assistantMessageID,
+            "sessionID": sessionID,
+            "type": "tool",
+            "tool": "todowrite",
+            "callID": "call-ap-todo-error",
+            "state": [
+                "status": "error",
+                "input": [:] as [String: Any],
+                "error": "W02_TODOWRITE_ERROR permission denied",
+                "time": ["start": 1, "end": 2],
+            ],
+        ]))
+        assistantParts.append(decodePart([
+            "id": "ap-image-error",
+            "messageID": assistantMessageID,
+            "sessionID": sessionID,
+            "type": "tool",
+            "tool": "bash",
+            "callID": "call-ap-image-error",
+            "state": [
+                "status": "error",
+                "input": ["filePath": "missing.png"],
+                "error": "W02_IMAGE_READ_ERROR permission denied",
+                "time": ["start": 1, "end": 2],
+            ],
+        ]))
+        assistantParts.append(decodePart([
+            "id": "ap-todo-success",
+            "messageID": assistantMessageID,
+            "sessionID": sessionID,
+            "type": "tool",
+            "tool": "todowrite",
+            "callID": "call-ap-todo-success",
+            "state": [
+                "status": "completed",
+                "input": [:] as [String: Any],
+                "output": "W02_TODO_SUCCESS_OUTPUT",
+                "time": ["start": 1, "end": 2],
+            ],
+        ]))
 
         state.messages = [
             MessageWithParts(info: userInfo, parts: [userTextPart]),

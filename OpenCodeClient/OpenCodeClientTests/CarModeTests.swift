@@ -47,7 +47,7 @@ struct CarModeFlowTests {
         )
         await api.setCreateSessionResult(session)
         await api.setPromptStructuredResult(MessageWithParts(
-            info: Message(
+            info: try Message(
                 id: "assistant-1",
                 sessionID: session.id,
                 role: "assistant",
@@ -132,7 +132,7 @@ struct CarModeFlowTests {
         )
         await api.setSessionResult(session)
         await api.setPromptStructuredResult(MessageWithParts(
-            info: Message(
+            info: try Message(
                 id: "selected-assistant",
                 sessionID: session.id,
                 role: "assistant",
@@ -227,7 +227,7 @@ struct CarModeFlowTests {
         )
         await api.setCreateSessionResult(session)
         await api.setPromptStructuredResult(MessageWithParts(
-            info: Message(
+            info: try Message(
                 id: "assistant-failed",
                 sessionID: session.id,
                 role: "assistant",

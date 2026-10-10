@@ -118,12 +118,10 @@ extension AppState {
     private func handleCarResponse(_ response: MessageWithParts, sessionID: String, turnID: UUID) async throws {
         guard response.info.isAssistant,
               response.info.sessionID == sessionID,
-              response.info.time.completed != nil,
-              let envelope = response.info.structured,
-              envelope.version == 1,
-              !envelope.speech.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              response.info.time.completed != nil else {
             throw CarModeError.invalidResponse
         }
+        let envelope = try CarResponseEnvelope.accepted(from: response.info)
         guard currentCarSessionRecord?.lastHandledAssistantMessageID != response.info.id else {
             carPhase = .idle
             carActiveTurnID = nil
