@@ -147,20 +147,9 @@ extension AppState {
         do {
             let selectedSession = currentSession
             let loaded = try await fetchSessions(limit: loadedSessionLimit)
-            sessions = loaded
-            if let selectedSession,
-               currentSessionID == selectedSession.id,
-               !sessions.contains(where: { $0.id == selectedSession.id }) {
-                sessions.insert(selectedSession, at: 0)
-            }
+            applyFetchedSessionPage(loaded, capturedSelection: selectedSession)
             hasMoreSessions = loaded.count >= loadedSessionLimit
-
-            // Only auto-select first session if there's no persisted selection at all
-            // This handles the case of fresh install or after all sessions are deleted
-            if currentSessionID == nil, let first = sessions.first {
-                currentSessionID = first.id
-                applySavedModelForCurrentSession()
-            }
+            selectFirstAvailableSessionIfNeeded()
 
             // A persisted session was restored on launch but its messages were
             // never fetched (selectSession is the only path that loads them, and
@@ -192,21 +181,32 @@ extension AppState {
             let selectedSession = currentSession
             let loaded = try await fetchSessions(limit: nextLimit)
             loadedSessionLimit = nextLimit
-            sessions = loaded
-            if let selectedSession,
-               currentSessionID == selectedSession.id,
-               !sessions.contains(where: { $0.id == selectedSession.id }) {
-                sessions.insert(selectedSession, at: 0)
-            }
+            applyFetchedSessionPage(loaded, capturedSelection: selectedSession)
             hasMoreSessions = loaded.count >= loadedSessionLimit
-
-            if currentSessionID == nil, let first = sessions.first {
-                currentSessionID = first.id
-                applySavedModelForCurrentSession()
-            }
+            selectFirstAvailableSessionIfNeeded()
         } catch {
             connectionError = error.localizedDescription
         }
+    }
+
+    func applyFetchedSessionPage(_ loaded: [Session], capturedSelection: Session?) {
+        let missing = sessionScope.confirmedMissingSessionIDs
+        var next = loaded.filter { !missing.contains($0.id) }
+        if let selectedSession = capturedSelection,
+           currentSessionID == selectedSession.id,
+           !missing.contains(selectedSession.id),
+           !next.contains(where: { $0.id == selectedSession.id }) {
+            next.insert(selectedSession, at: 0)
+        }
+        sessions = next
+    }
+
+    func selectFirstAvailableSessionIfNeeded() {
+        guard currentSessionID == nil else { return }
+        let missing = sessionScope.confirmedMissingSessionIDs
+        guard let first = sessions.first(where: { !missing.contains($0.id) }) else { return }
+        currentSessionID = first.id
+        applySavedModelForCurrentSession()
     }
 
     func loadAgents() async {
@@ -243,6 +243,7 @@ extension AppState {
             } else {
                 session = try await apiClient.session(sessionID: trimmed)
             }
+            sessionScope.confirmedMissingSessionIDs.remove(session.id)
             let previousDirectory = effectiveProjectDirectory
             applyProjectDirectory(for: session)
             upsertSession(session)
@@ -305,13 +306,20 @@ extension AppState {
         return type == "busy" || type == "retry"
     }
 
-    func loadSessionTodos() async {
+    func loadSessionTodos(allowMissingSessionRecovery: Bool = true) async {
         guard let sessionID = currentSessionID else { return }
         do {
             let todos = try await apiClient.sessionTodos(sessionID: sessionID)
+            guard Self.shouldApplySessionScopedResult(requestedSessionID: sessionID, currentSessionID: currentSessionID) else {
+                return
+            }
             sessionTodos[sessionID] = todos
         } catch {
-            if await recoverFromMissingCurrentSessionIfNeeded(error: error, requestedSessionID: sessionID) {
+            if await recoverFromMissingCurrentSessionIfNeeded(
+                error: error,
+                requestedSessionID: sessionID,
+                allowMissingSessionRecovery: allowMissingSessionRecovery
+            ) {
                 return
             }
             // keep previous value if any
@@ -371,36 +379,34 @@ extension AppState {
     }
 
     func deleteSession(sessionID: String) async throws {
-        let previousCurrentSessionID = currentSessionID
+        let selectionAtStart = currentSessionID
         try await apiClient.deleteSession(sessionID: sessionID)
 
-        sessions.removeAll { $0.id == sessionID }
-        clearSessionScopedCaches(sessionID: sessionID)
+        let selectionIsDeletedTarget = currentSessionID == sessionID
+        let mayNavigateToReplacement = selectionAtStart == sessionID && selectionIsDeletedTarget
+        noteConfirmedMissingSession(sessionID, clearSelection: selectionIsDeletedTarget)
+        guard mayNavigateToReplacement else { return }
 
-        let nextSessionID = Self.nextSessionIDAfterDeleting(
+        guard let nextSessionID = Self.nextSessionIDAfterDeleting(
             deletedSessionID: sessionID,
-            currentSessionID: previousCurrentSessionID,
+            currentSessionID: sessionID,
             remainingSessions: sessions
-        )
-
-        guard previousCurrentSessionID == sessionID else {
-            currentSessionID = nextSessionID
+        ) else {
+            pendingPermissions = []
             return
         }
 
-        clearCurrentSessionViewState()
-        if let nextSessionID {
-            currentSessionID = nextSessionID
-            applySavedModelForCurrentSession()
-            await loadMessages()
-            await refreshPendingPermissions()
-            await loadSessionDiff()
-            await loadSessionTodos()
-            syncModelFromMessageHistory()
-        } else {
-            currentSessionID = nil
-            pendingPermissions = []
-        }
+        currentSessionID = nextSessionID
+        applySavedModelForCurrentSession()
+        await loadMessages()
+        guard currentSessionID == nextSessionID else { return }
+        await refreshPendingPermissions()
+        guard currentSessionID == nextSessionID else { return }
+        await loadSessionDiff()
+        guard currentSessionID == nextSessionID else { return }
+        await loadSessionTodos()
+        guard currentSessionID == nextSessionID else { return }
+        syncModelFromMessageHistory()
     }
 
     func archiveSession(sessionID: String) async throws {
@@ -446,18 +452,15 @@ extension AppState {
         Self.logger.debug("bootstrapSync reason=\(reason, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public) messages=\(self.messages.count, privacy: .public) permissions=\(self.pendingPermissions.count, privacy: .public)")
     }
 
-    /// Check whether the current session still exists on the server.
-    /// If the session was deleted (e.g. server restarted), reset currentSessionID
-    /// so the next loadSessions call auto-selects a valid session.
     func validateAndRecoverCurrentSession() async {
         guard let sid = currentSessionID else { return }
         do {
             _ = try await apiClient.messages(sessionID: sid, limit: 1)
         } catch {
-            guard case APIError.httpError(let statusCode, _) = error, statusCode == 404 else { return }
-            Self.logger.debug("bootstrapSync: current session \(sid) not found on server, resetting")
-            currentSessionID = nil
-            await loadSessions()
+            guard isSessionNotFoundError(error) else { return }
+            guard currentSessionID == sid else { return }
+            Self.logger.debug("bootstrapSync: current session \(sid, privacy: .public) not found on server, resetting")
+            await recoverMissingCurrentSession(sid)
         }
     }
 
