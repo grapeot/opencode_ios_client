@@ -146,9 +146,32 @@ struct ContentView: View {
         .ignoresSafeArea()
     }
 
+    private var webPreviewRetryFixtureView: some View {
+        ZStack(alignment: .topLeading) {
+            MarkdownWebPreviewContainer(
+                text: UITestFixtures.webPreviewRetryText,
+                state: state,
+                markdownFilePath: UITestFixtures.webPreviewRetryFile,
+                workspaceDirectory: UITestFixtures.webPreviewRetryWorkspace
+            )
+            .ignoresSafeArea()
+
+            Text(UITestFixtures.webPreviewRetryIdentity)
+                .font(.system(size: 1))
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("web-preview-fixture-identity")
+                .accessibilityIdentifier("web-preview-fixture-identity")
+                .accessibilityValue(UITestFixtures.webPreviewRetryIdentity)
+        }
+    }
+
     var body: some View {
         #if DEBUG
-        if UITestFixtures.hasUITestWebPreviewModeFixture {
+        if UITestFixtures.hasUITestWebPreviewRetryFixture {
+            webPreviewRetryFixtureView
+                .preferredColorScheme(Self.webPreviewFixtureColorScheme)
+        } else if UITestFixtures.hasUITestWebPreviewModeFixture {
             NavigationStack {
                 WebPreviewModeFixtureHost(
                     markdown: UITestFixtures.loadFixtureMarkdown(UITestFixtures.webPreviewFixtureName)
@@ -162,7 +185,10 @@ struct ContentView: View {
             mainBody
         }
         #else
-        if UITestFixtures.hasUITestWebPreviewFixture {
+        if UITestFixtures.hasUITestWebPreviewRetryFixture {
+            webPreviewRetryFixtureView
+                .preferredColorScheme(Self.webPreviewFixtureColorScheme)
+        } else if UITestFixtures.hasUITestWebPreviewFixture {
             webPreviewFixtureView
                 .preferredColorScheme(Self.webPreviewFixtureColorScheme)
         } else {
