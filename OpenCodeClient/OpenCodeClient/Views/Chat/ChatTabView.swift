@@ -806,6 +806,11 @@ struct ChatTabView: View {
                     GeometryReader { scrollGeometry in
                         ScrollView {
                             VStack(alignment: .leading, spacing: DesignSpacing.messageVertical) {
+                                if QuestionRecoveryFixture.isActive {
+                                    Text(QuestionRecoveryProbe.shared.recorded)
+                                        .font(.system(size: 1))
+                                        .accessibilityIdentifier("question-recovery-recorded")
+                                }
                                 if showLoadMoreHint {
                                     HStack(spacing: 8) {
                                         if state.isLoadingOlderMessagesInCurrentSession {
@@ -904,7 +909,7 @@ struct ChatTabView: View {
                                         QuestionCardView(
                                             request: question,
                                             onReply: { answers in
-                                                Task { await state.respondQuestion(question, answers: answers) }
+                                                await state.respondQuestion(question, answers: answers)
                                             },
                                             onReject: {
                                                 Task { await state.rejectQuestion(question) }
@@ -921,7 +926,7 @@ struct ChatTabView: View {
                                         QuestionCardView(
                                             request: question,
                                             onReply: { answers in
-                                                Task { await state.respondQuestion(question, answers: answers) }
+                                                await state.respondQuestion(question, answers: answers)
                                             },
                                             onReject: {
                                                 Task { await state.rejectQuestion(question) }

@@ -8,7 +8,7 @@ import SwiftUI
 struct QuestionCardView: View {
     @Environment(\.colorScheme) private var colorScheme
     let request: QuestionRequest
-    let onReply: ([[String]]) -> Void
+    let onReply: @MainActor ([[String]]) async -> Bool
     let onReject: () -> Void
 
     @State private var currentTab: Int
@@ -20,7 +20,11 @@ struct QuestionCardView: View {
 
     private let accent = DesignColors.Semantic.info
 
-    init(request: QuestionRequest, onReply: @escaping ([[String]]) -> Void, onReject: @escaping () -> Void) {
+    init(
+        request: QuestionRequest,
+        onReply: @escaping @MainActor ([[String]]) async -> Bool,
+        onReject: @escaping () -> Void
+    ) {
         self.request = request
         self.onReply = onReply
         self.onReject = onReject
@@ -64,6 +68,8 @@ struct QuestionCardView: View {
             .padding(DesignSpacing.cardPadding)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("question-card-\(request.id)")
         .background(accent.opacity(DesignColors.surfaceFill(for: colorScheme)))
         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
     }
@@ -102,27 +108,34 @@ struct QuestionCardView: View {
 
     private var customInputSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Image(systemName: isCustomActive ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(isCustomActive ? accent : .secondary)
-
-                Text(L10n.t(.questionTypeOwnAnswer))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(isCustomActive ? accent : .primary)
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isCustomActive ? Color.blue.opacity(0.08) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .contentShape(Rectangle())
-            .onTapGesture {
+            Button {
                 activateCustom()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: isCustomActive ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(isCustomActive ? accent : .secondary)
+
+                    Text(L10n.t(.questionTypeOwnAnswer))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(isCustomActive ? accent : .primary)
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isCustomActive ? Color.blue.opacity(0.08) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(L10n.t(.questionTypeOwnAnswer))
+            .accessibilityIdentifier("question-custom-toggle-\(request.id)")
+            .accessibilityAddTraits(.isButton)
 
             if isCustomActive {
                 TextField(L10n.t(.questionCustomPlaceholder), text: $customTexts[currentTab])
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("question-custom-field-\(request.id)")
                     .submitLabel(.done)
                     .onTapGesture {
                         isCustomEditing = true
@@ -169,6 +182,7 @@ struct QuestionCardView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
                 .disabled(!canProceed || isSending)
+                .accessibilityIdentifier("question-submit-\(request.id)")
             }
         }
     }
@@ -200,27 +214,34 @@ struct QuestionCardView: View {
         let selected = isSelected(option)
         let multiple = question.allowMultiple
 
-        HStack(spacing: 10) {
-            Image(systemName: selected ? (multiple ? "checkmark.square.fill" : "largecircle.fill.circle") : (multiple ? "square" : "circle"))
-                .foregroundStyle(selected ? .blue : .secondary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(option.label)
-                    .font(.subheadline.weight(.medium))
-                Text(option.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? Color.blue.opacity(0.08) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             selectOption(option)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selected ? (multiple ? "checkmark.square.fill" : "largecircle.fill.circle") : (multiple ? "square" : "circle"))
+                    .foregroundStyle(selected ? .blue : .secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.label)
+                        .font(.subheadline.weight(.medium))
+                    Text(option.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Color.blue.opacity(0.08) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(option.label)
+        .accessibilityIdentifier("question-option-\(request.id)-\(option.label)")
+        .accessibilityValue(selected ? "selected" : "unselected")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func selectOption(_ option: QuestionOption) {
@@ -304,7 +325,13 @@ struct QuestionCardView: View {
     private func submit() {
         guard !isSending else { return }
         isSending = true
-        onReply(answers)
+        let snapshot = answers
+        Task {
+            let ok = await onReply(snapshot)
+            if !ok {
+                isSending = false
+            }
+        }
     }
 
     private func goToTab(_ index: Int) {

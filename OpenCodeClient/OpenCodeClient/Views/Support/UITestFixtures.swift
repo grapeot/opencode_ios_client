@@ -12,6 +12,8 @@ enum UITestFixtures {
             || hasUITestF3ComposerFixture
             || hasUITestWebPreviewFixture
             || hasUITestWebPreviewModeFixture
+            || hasUITestWebPreviewRetryFixture
+            || QuestionRecoveryFixture.isActive
             || hasUITestQuotaFixture
             || hasUITestCarModeFixture
             || hasUITestCarHistoryFixture
@@ -45,6 +47,17 @@ enum UITestFixtures {
 
     static var hasUITestWebPreviewFixture: Bool {
         ProcessInfo.processInfo.arguments.contains("UITEST_WEB_PREVIEW_FIXTURE")
+    }
+
+    static var hasUITestWebPreviewRetryFixture: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_WEB_PREVIEW_RETRY_FIXTURE")
+    }
+
+    static let webPreviewRetryFile = "/tmp/w03-preview/note.md"
+    static let webPreviewRetryWorkspace = "/tmp/w03-preview"
+    static let webPreviewRetryText = "W03_PREVIEW_SENTINEL"
+    static var webPreviewRetryIdentity: String {
+        "\(webPreviewRetryFile)|\(webPreviewRetryText)"
     }
 
     static var hasUITestHostProfilesFixture: Bool {
@@ -102,6 +115,17 @@ enum UITestFixtures {
     }
 
     static func makeInitialState() -> AppState {
+        if QuestionRecoveryFixture.isActive {
+            let state = QuestionRecoveryFixture.makeAppState()
+            QuestionRecoveryFixture.apply(to: state)
+            return state
+        }
+
+        if hasUITestWebPreviewRetryFixture {
+            L10n.languagePreference = .en
+            return AppState(userDefaults: UserDefaults(suiteName: "opencode.uitest.web-preview-retry.\(UUID().uuidString)")!)
+        }
+
         if SessionScrollFixture.isActive {
             let state = SessionScrollFixture.makeAppState()
             SessionScrollFixture.apply(to: state)
