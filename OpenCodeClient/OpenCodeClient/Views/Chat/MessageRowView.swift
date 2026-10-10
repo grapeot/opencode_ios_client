@@ -423,7 +423,7 @@ struct MessageRowView: View {
 
     static func structuredSpeechFallback(for message: MessageWithParts) -> String? {
         guard !message.parts.contains(where: { $0.isText }) else { return nil }
-        return message.info.structured?.speech
+        return message.info.carResponseEnvelope?.speech
     }
 
     static func taskNotification(for part: Part) -> TaskNotification? {

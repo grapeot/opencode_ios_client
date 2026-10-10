@@ -208,11 +208,11 @@ extension AppState {
     ) async throws {
         guard response.info.isAssistant,
               response.info.sessionID == callbackRecord.sessionID,
-              response.info.time.completed != nil,
-              let envelope = response.info.structured,
-              envelope.version == 1,
-              !envelope.speech.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              envelope.clientActions.isEmpty else {
+              response.info.time.completed != nil else {
+            throw CarModeError.invalidResponse
+        }
+        let envelope = try CarResponseEnvelope.accepted(from: response.info)
+        guard envelope.clientActions.isEmpty else {
             throw CarModeError.invalidResponse
         }
 

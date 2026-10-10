@@ -78,6 +78,44 @@ final class ToolCardsUITests: XCTestCase {
     }
 
     @MainActor
+    func testExpandedToolDetailsShowErrorBodies() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_TOOL_CARDS_FIXTURE"]
+        app.launch()
+
+        let toolCalls = app.descendants(matching: .any)["toolcard.toolcalls"]
+        XCTAssertTrue(toolCalls.waitForExistence(timeout: 8))
+        if !toolCalls.isHittable {
+            app.swipeUp()
+        }
+        toolCalls.tap()
+
+        tapUniqueToolDetail("toolcard.detail.ap-todo-error", in: app)
+        let todoError = app.descendants(matching: .any)["toolcard.error.ap-todo-error"]
+        XCTAssertTrue(todoError.waitForExistence(timeout: 6))
+        XCTAssertTrue(todoError.label.contains("W02_TODOWRITE_ERROR"))
+
+        tapUniqueToolDetail("toolcard.detail.ap-image-error", in: app)
+        let imageError = app.descendants(matching: .any)["toolcard.error.ap-image-error"]
+        XCTAssertTrue(imageError.waitForExistence(timeout: 6))
+        XCTAssertTrue(imageError.label.contains("W02_IMAGE_READ_ERROR"))
+
+        tapUniqueToolDetail("toolcard.detail.ap-todo-success", in: app)
+        XCTAssertFalse(app.staticTexts["W02_TODO_SUCCESS_OUTPUT"].waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    private func tapUniqueToolDetail(_ identifier: String, in app: XCUIApplication) {
+        let button = app.buttons[identifier]
+        XCTAssertTrue(button.waitForExistence(timeout: 6))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier == %@", identifier)).count, 1)
+        if !button.isHittable {
+            app.swipeUp()
+        }
+        button.tap()
+    }
+
+    @MainActor
     private func attachScreenshot(named name: String) {
         let screenshot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)

@@ -217,7 +217,7 @@ struct ClientCapabilityContinuationTests {
             actionID: "health-1"
         )
         await api.setMessagesResult([])
-        await api.setPromptStructuredResult(Self.assistantResponse(
+        await api.setPromptStructuredResult(try Self.assistantResponse(
             id: "msg_analysis",
             sessionID: record.sessionID,
             parentID: record.continuationMessageID
@@ -278,7 +278,7 @@ struct ClientCapabilityContinuationTests {
         )
         await api.setMessagesResult([])
         await api.setPromptStructuredDelayNanoseconds(300_000_000)
-        await api.setPromptStructuredResult(Self.assistantResponse(
+        await api.setPromptStructuredResult(try Self.assistantResponse(
             id: "msg_visible_analysis",
             sessionID: record.sessionID,
             parentID: record.continuationMessageID
@@ -342,7 +342,7 @@ struct ClientCapabilityContinuationTests {
         )
         await api.setMessagesResult([])
         await api.setPromptStructuredDelayNanoseconds(300_000_000)
-        await api.setPromptStructuredResult(Self.assistantResponse(
+        await api.setPromptStructuredResult(try Self.assistantResponse(
             id: "msg_cancelled_analysis",
             sessionID: record.sessionID,
             parentID: record.continuationMessageID
@@ -369,9 +369,9 @@ struct ClientCapabilityContinuationTests {
         #expect(await api.abortSessionIDs == [record.sessionID])
     }
 
-    private static func assistantResponse(id: String, sessionID: String, parentID: String) -> MessageWithParts {
+    private static func assistantResponse(id: String, sessionID: String, parentID: String) throws -> MessageWithParts {
         MessageWithParts(
-            info: Message(
+            info: try Message(
                 id: id,
                 sessionID: sessionID,
                 role: "assistant",
