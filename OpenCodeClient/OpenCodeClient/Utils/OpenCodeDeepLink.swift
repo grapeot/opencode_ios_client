@@ -38,7 +38,6 @@ nonisolated enum OpenCodeDeepLinkParser {
         guard components.user == nil,
               components.password == nil,
               components.port == nil,
-              components.query == nil,
               components.fragment == nil else {
             return .failure(.invalidSessionLink)
         }
