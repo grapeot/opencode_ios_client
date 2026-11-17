@@ -1,0 +1,95 @@
+
+name: OpenCode iOS IPA Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build OpenCode IPA
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Select Xcode
+        run: |
+          XCODE_APP=$(find /Applications \
+            -maxdepth 1 -name 'Xcode*.app' \
+            | sort -V | tail -n 1)
+
+          if [ -z "$XCODE_APP" ]; then
+            echo "Xcode not found"
+            exit 1
+          fi
+
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project OpenCodeClient/OpenCodeClient.xcodeproj \
+            -scheme OpenCodeClient
+
+      - name: Build iOS application
+        run: |
+          xcodebuild \
+            -project OpenCodeClient/OpenCodeClient.xcodeproj \
+            -scheme OpenCodeClient \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          APP="build/DerivedData/Build/Products/Release-iphoneos/OpenCodeClient.app"
+
+          if [ ! -d "$APP" ]; then
+            echo "Application not found: $APP"
+            exit 1
+          fi
+
+          mkdir -p build/package/Payload
+
+          ditto "$APP" \
+            build/package/Payload/OpenCodeClient.app
+
+          cd build/package
+          zip -qry "$GITHUB_WORKSPACE/OpenCodeClient-unsigned.ipa" Payload
+
+          cd "$GITHUB_WORKSPACE"
+          ls -lh OpenCodeClient-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenCode-iOS-IPA
+          path: OpenCodeClient-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create download information
+        if: success()
+        run: |
+          echo "# OpenCode iOS Build" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build completed successfully." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**File:** OpenCodeClient-unsigned.ipa" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Open GitHub Actions run and download IPA]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)" >> "$GITHUB_STEP_SUMMARY"
