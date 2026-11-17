@@ -18,6 +18,18 @@ struct OpenCodeDeepLinkParserTests {
         #expect(OpenCodeDeepLinkParser.parse(url) == .success(.session(id: "ses_example")))
     }
 
+    @Test(arguments: [
+        "?message=msg_1",
+        "?server=https%3A%2F%2Fexample.com%3A4096",
+        "?message=msg_1&server=work&future_hint=value",
+        "?unknown&unknown=another",
+        "?",
+    ])
+    func ignoresSessionQueryParameters(query: String) throws {
+        let url = try #require(URL(string: "opencode://session/ses_example\(query)"))
+        #expect(OpenCodeDeepLinkParser.parse(url) == .success(.session(id: "ses_example")))
+    }
+
     @Test func rejectsUnsupportedOrMalformedLinks() throws {
         let values = [
             "https://session/ses_example",
@@ -29,7 +41,6 @@ struct OpenCodeDeepLinkParserTests {
             "opencode://session:4096/ses_example",
             "opencode://session/ses_",
             "opencode://session/not_a_session",
-            "opencode://session/ses_example?message=msg_1",
             "opencode://session/ses_example#fragment",
             "opencode://session/ses_%252e%252e",
         ]
@@ -40,6 +51,22 @@ struct OpenCodeDeepLinkParserTests {
                 Issue.record("Expected malformed link to fail: \(value)")
                 continue
             }
+        }
+    }
+
+    @Test(arguments: [
+        "opencode://user@session/ses_example?message=msg_1",
+        "opencode://session:4096/ses_example?message=msg_1",
+        "opencode://session/ses_one/extra?message=msg_1",
+        "opencode://session/not_a_session?message=msg_1",
+        "opencode://session/ses_example?message=msg_1#fragment",
+        "opencode://session/ses_\(String(repeating: "a", count: 300))?message=msg_1",
+    ])
+    func rejectsMalformedSessionLinksWithQuery(value: String) throws {
+        let url = try #require(URL(string: value))
+        guard case .failure = OpenCodeDeepLinkParser.parse(url) else {
+            Issue.record("Expected malformed link to fail: \(value)")
+            return
         }
     }
 
