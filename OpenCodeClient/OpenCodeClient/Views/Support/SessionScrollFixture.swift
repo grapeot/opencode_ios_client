@@ -16,6 +16,10 @@ enum SessionScrollFixture {
         ProcessInfo.processInfo.arguments.contains("UITEST_SESSION_SCROLL_FIXTURE")
     }
 
+    private static var testsBulkArchive: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_BULK_ARCHIVE")
+    }
+
     static func messageLabel(_ index: Int) -> String {
         String(format: "Long message %03d", index)
     }
@@ -35,7 +39,7 @@ enum SessionScrollFixture {
         state.selectedTab = RootTab.chat.rawValue
         state.sessions = makeSessions()
         state.currentSessionID = longSessionID
-        state.expandedSessionIDs = [longSessionID, shortSessionID]
+        state.expandedSessionIDs = testsBulkArchive ? [] : [longSessionID, shortSessionID]
         state.messages = makeLongMessages()
     }
 
@@ -65,7 +69,11 @@ enum SessionScrollFixture {
                 share: nil,
                 summary: nil
             ),
-        ]
+        ] + (testsBulkArchive ? [Session(
+            id: "scroll-hidden-child", slug: "scroll-hidden-child", projectID: "p1", directory: "/tmp",
+            parentID: longSessionID, title: "Hidden child", version: "1",
+            time: .init(created: 0, updated: 1_000, archived: nil), share: nil, summary: nil
+        )] : [])
     }
 
     static func makeLongMessages() -> [MessageWithParts] {
@@ -144,9 +152,9 @@ enum SessionScrollFixture {
     }
 
     /// Fully offline `APIClientProtocol` stub. Read paths return the fixture
-    /// data so `selectSession` round-trips succeed; write paths throw.
+    /// data so `selectSession` round-trips succeed. Archive writes are enabled for bulk archive UI tests.
     actor StubClient: APIClientProtocol {
-        private let sessions: [Session] = SessionScrollFixture.makeSessions()
+        private var sessions: [Session] = SessionScrollFixture.makeSessions()
         private let longMessages: [MessageWithParts] = SessionScrollFixture.makeLongMessages()
         private let shortMessages: [MessageWithParts] = SessionScrollFixture.makeShortMessages()
 
@@ -179,7 +187,17 @@ enum SessionScrollFixture {
         }
 
         func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session {
-            throw APIError.httpError(statusCode: 501, data: Data())
+            guard SessionScrollFixture.testsBulkArchive,
+                  let index = sessions.firstIndex(where: { $0.id == sessionID }) else {
+                throw APIError.httpError(statusCode: 501, data: Data())
+            }
+            let old = sessions[index]
+            let updated = Session(id: old.id, slug: old.slug, projectID: old.projectID, directory: old.directory,
+                                  parentID: old.parentID, title: old.title, version: old.version,
+                                  time: .init(created: old.time.created, updated: old.time.updated, archived: archived),
+                                  share: old.share, summary: old.summary)
+            sessions[index] = updated
+            return updated
         }
 
         func deleteSession(sessionID: String) async throws {

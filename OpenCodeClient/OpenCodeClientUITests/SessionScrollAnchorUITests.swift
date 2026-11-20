@@ -73,6 +73,45 @@ final class SessionScrollAnchorUITests: XCTestCase {
 
     // MARK: - Helpers
 
+    @MainActor
+    func testBulkArchiveCountsCollapsedChildAndKeepsListOpen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_SESSION_SCROLL_FIXTURE", "UITEST_BULK_ARCHIVE"]
+        app.launch()
+
+        let select = app.buttons["session-archive-select"]
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let open = app.buttons["chat-toolbar-session-list"]
+            XCTAssertTrue(open.waitForExistence(timeout: 10))
+            open.tap()
+        }
+        XCTAssertTrue(select.waitForExistence(timeout: 10))
+        select.tap()
+
+        let archive = app.buttons["session-archive-submit"]
+        XCTAssertFalse(archive.isEnabled)
+        let parent = app.descendants(matching: .any)["session-row-scroll-long-session"].firstMatch
+        XCTAssertTrue(parent.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["session-row-scroll-hidden-child"].exists)
+        parent.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5)).tap()
+        XCTAssertEqual(archive.label, "Archive 2")
+        let other = app.descendants(matching: .any)["session-row-scroll-short-session"].firstMatch
+        other.tap()
+        XCTAssertEqual(archive.label, "Archive 3")
+        attachScreenshot(named: "bulk_archive_selection")
+        archive.tap()
+
+        let result = app.staticTexts["session-archive-result"]
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
+        XCTAssertEqual(result.label, "Archived: 3")
+        XCTAssertTrue(select.exists)
+        XCTAssertFalse(parent.exists)
+        app.buttons["Archived"].tap()
+        XCTAssertTrue(parent.waitForExistence(timeout: 5))
+        XCTAssertTrue(other.exists)
+        attachScreenshot(named: "bulk_archive_result")
+    }
+
     private func bottomAnchorMessage(in app: XCUIApplication) -> XCUIElement {
         app.staticTexts.containing(
             NSPredicate(format: "label CONTAINS 'Long message 039'")

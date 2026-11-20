@@ -143,6 +143,8 @@ actor MockAPIClient: APIClientProtocol {
     var agentsError: Error?
     var updateSessionCalls: [(String, String)] = []
     var updateSessionArchivedCalls: [(String, Int)] = []
+    var archiveFailureIDs: Set<String> = []
+    func setArchiveFailureIDs(_ ids: Set<String>) { archiveFailureIDs = ids }
     var sessionDiffResult: [FileDiff] = []
     var sessionDiffCallCount = 0
     var fileListResults: [String: [FileNode]] = [:]
@@ -396,6 +398,7 @@ actor MockAPIClient: APIClientProtocol {
 
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session {
         updateSessionArchivedCalls.append((sessionID, archived))
+        if archiveFailureIDs.contains(sessionID) { throw URLError(.networkConnectionLost) }
         return Session(
             id: sessionID,
             slug: sessionID,

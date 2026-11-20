@@ -479,6 +479,57 @@ struct ArchivedSessionTests {
         #expect(Set(state.filteredSessions(archived: true).map(\.id)) == Set(["parent", "child-a", "child-b"]))
     }
 
+    @Test @MainActor func bulkArchiveCountsHiddenChildrenOnceAndExcludesAlreadyArchived() {
+        let sessions = [
+            makeSession(id: "parent", archived: nil),
+            makeSession(id: "child", parentID: "parent", archived: nil),
+            makeSession(id: "hidden", parentID: "child", archived: nil),
+            makeSession(id: "old", parentID: "parent", archived: 123),
+            makeSession(id: "unselected", archived: nil),
+        ]
+        let plan = SessionArchivePlan(sessions: sessions, selected: ["parent", "child", "missing", "old"])
+        #expect(plan.ids == ["hidden", "child", "parent"])
+        #expect(plan.additionalCount == 1)
+    }
+
+    @Test @MainActor func bulkArchiveKeepsParentWhenChildFailsAndContinuesOtherBranches() async {
+        let client = MockAPIClient()
+        await client.setArchiveFailureIDs(["failed"])
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.currentSessionID = "other"
+        state.sessions = [
+            makeSession(id: "parent", archived: nil),
+            makeSession(id: "failed", parentID: "parent", archived: nil),
+            makeSession(id: "done", parentID: "parent", archived: nil),
+            makeSession(id: "other", archived: nil),
+        ]
+        let scope = state.sessionArchiveScope
+        let roots: Set<String> = ["parent", "other"]
+        let result = await state.archiveSessions(.init(sessions: state.sessions, selected: roots), in: scope)
+        #expect(result.archived == ["done", "other"])
+        #expect(result.remaining == 2)
+        #expect(state.currentSessionID == "other")
+        #expect(await client.updateSessionArchivedCalls.map(\.0) == ["failed", "done", "other"])
+
+        await client.setArchiveFailureIDs([])
+        let retry = await state.archiveSessions(.init(sessions: state.sessions, selected: roots.subtracting(result.archived)), in: scope)
+        #expect(retry.archived == ["failed", "parent"])
+        #expect(retry.remaining == 0)
+    }
+
+    @Test @MainActor func bulkArchiveDoesNotSendAfterHostChanges() async {
+        let client = MockAPIClient()
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.sessions = [makeSession(id: "session", archived: nil)]
+        let oldScope = state.sessionArchiveScope
+        state.hostRequestGeneration += 1
+        let result = await state.archiveSessions(.init(sessions: state.sessions, selected: ["session"]), in: oldScope)
+        #expect(result.remaining == 1)
+        #expect(await client.updateSessionArchivedCalls.isEmpty)
+    }
+
     @Test @MainActor func restoreParentSessionRestoresParentBeforeChildren() async throws {
         let apiClient = MockAPIClient()
         let state = makeIsolatedAppState(apiClient: apiClient, sseClient: MockSSEClient())
