@@ -14,6 +14,7 @@ struct MessageRowView: View {
     @Bindable var state: AppState
     let message: MessageWithParts
     var turnMessages: [MessageWithParts]? = nil
+    var sharesWidthWithFiles = false
     let sessionTodos: [TodoItem]
     let workspaceDirectory: String?
     let onOpenResolvedPath: (String) -> Void
@@ -25,9 +26,8 @@ struct MessageRowView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showsTextSelection = false
 
-    // iPhone packs process tiles (thinking / merged tool calls / file cards)
-    // two-up to keep information density high; iPad has room for a 3-up grid.
-    private var cardGridColumnCount: Int { effectiveLayout == .regular ? 3 : 2 }
+    // A side-by-side Files pane leaves less room for the chat's process tiles.
+    private var cardGridColumnCount: Int { effectiveLayout == .regular && !sharesWidthWithFiles ? 3 : 2 }
     private var cardGridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: DesignSpacing.sm), count: cardGridColumnCount)
     }
@@ -710,7 +710,8 @@ struct MessageRowView: View {
                                 part: part,
                                 workspaceDirectory: workspaceDirectory,
                                 onOpenResolvedPath: onOpenResolvedPath,
-                                onOpenFilesTab: onOpenFilesTab
+                                onOpenFilesTab: onOpenFilesTab,
+                                usesCompactInsets: sharesWidthWithFiles
                             )
                         case .toolCalls(let parts):
                             ToolCallsRowView(

@@ -23,14 +23,38 @@ struct ChatToolbarView: View {
     @State private var showTodoPanel = false
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    private var showsLayoutShortcut: Bool { sizeClass == .regular }
+    private var showsLayoutShortcut: Bool { sizeClass == .regular || onFilesTap != nil }
     
     var body: some View {
-        HStack {
-            sessionButtons
-            Spacer()
-            rightButtons
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: DesignSpacing.md) {
+                sessionButtons
+                Spacer(minLength: 0)
+                layoutButton
+                configButton
+                AIUsageQuotaButton(state: state)
+                todoButton
+                ContextUsageButton(state: state)
+                settingsButton
+            }
+
+            VStack(spacing: DesignSpacing.xs) {
+                HStack(spacing: DesignSpacing.md) {
+                    sessionButtons
+                    Spacer(minLength: 0)
+                    layoutButton
+                    todoButton
+                    ContextUsageButton(state: state)
+                    settingsButton
+                }
+                HStack(spacing: DesignSpacing.md) {
+                    configButton
+                    Spacer(minLength: 0)
+                    AIUsageQuotaButton(state: state)
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, LayoutConstants.Spacing.spacious)
         .padding(.vertical, LayoutConstants.MessageList.verticalPadding)
     }
@@ -91,41 +115,20 @@ struct ChatToolbarView: View {
         }
     }
     
-    // MARK: - Right Side Buttons (Model + Agent + Settings)
-    private var rightButtons: some View {
-        HStack(spacing: DesignSpacing.md) {
-            if let onFilesTap {
-                if let filesPinned {
-                    Menu {
-                        Button(L10n.t(.navFiles), systemImage: "folder", action: onFilesTap)
-                        Toggle(L10n.t(.workspacePinFiles), isOn: filesPinned)
-                    } label: {
-                        Image(systemName: "folder")
-                    }
-                    .accessibilityLabel(L10n.t(.navFiles))
-                    .accessibilityIdentifier("chat-toolbar-files")
-                } else {
-                    Button(action: onFilesTap) { Image(systemName: "folder") }
-                        .accessibilityLabel(L10n.t(.navFiles))
-                        .accessibilityIdentifier("chat-toolbar-files")
-                }
-            }
-            if showsLayoutShortcut {
-                LayoutPreferenceMenu(state: state)
-            }
-            configButton
-            AIUsageQuotaButton(state: state)
-            todoButton
-            ContextUsageButton(state: state)
-            
-            if showSettingsInToolbar, let onSettingsTap {
-                Button {
-                    onSettingsTap()
-                } label: {
-                    Image(systemName: "gear")
-                        .font(.title3)
-                        .symbolRenderingMode(.hierarchical)
-                }
+    @ViewBuilder
+    private var layoutButton: some View {
+        if showsLayoutShortcut {
+            LayoutPreferenceMenu(state: state, onFilesTap: onFilesTap, filesPinned: filesPinned)
+        }
+    }
+
+    @ViewBuilder
+    private var settingsButton: some View {
+        if showSettingsInToolbar, let onSettingsTap {
+            Button(action: onSettingsTap) {
+                Image(systemName: "gear")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
             }
         }
     }
@@ -138,8 +141,11 @@ struct ChatToolbarView: View {
             HStack(spacing: 4) {
                 Text(state.selectedModel?.shortName ?? L10n.t(.configureModel))
                     .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Image(systemName: "chevron.down")
                     .font(.caption2)
+                    .fixedSize()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -383,28 +389,45 @@ private struct ModelConfigSheet: View {
 
 struct LayoutPreferenceMenu: View {
     @Bindable var state: AppState
+    var onFilesTap: (() -> Void)?
+    var filesPinned: Binding<Bool>?
     @State private var showChoices = false
 
     var body: some View {
-        Button {
-            showChoices = true
-        } label: {
-            Image(systemName: state.layoutPreference == .focus ? "iphone" : "rectangle.split.3x1")
-                .font(.body)
-                .frame(width: ComposerHitTarget.minimum, height: ComposerHitTarget.minimum)
-                .contentShape(Rectangle())
+        Group {
+            if let onFilesTap {
+                Menu {
+                    Picker(L10n.t(.settingsLayout), selection: $state.layoutPreference) {
+                        Text(L10n.t(.settingsLayoutAutomatic)).tag(LayoutPreference.automatic)
+                        Text(L10n.t(.settingsLayoutFocus)).tag(LayoutPreference.focus)
+                    }
+                    Section {
+                        Button(L10n.t(.workspaceShowFiles), systemImage: "folder", action: onFilesTap)
+                        if let filesPinned {
+                            Toggle(L10n.t(.workspacePinFiles), isOn: filesPinned)
+                        }
+                    }
+                } label: {
+                    icon
+                }
+            } else {
+                Button { showChoices = true } label: { icon }
+                    .confirmationDialog(L10n.t(.settingsLayout), isPresented: $showChoices, titleVisibility: .visible) {
+                        Button(L10n.t(.settingsLayoutAutomatic)) { state.layoutPreference = .automatic }
+                        Button(L10n.t(.settingsLayoutFocus)) { state.layoutPreference = .focus }
+                        Button(L10n.t(.commonCancel), role: .cancel) {}
+                    }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("layout-preference-menu")
         .accessibilityLabel(L10n.t(.settingsLayout))
-        .confirmationDialog(L10n.t(.settingsLayout), isPresented: $showChoices, titleVisibility: .visible) {
-            Button(L10n.t(.settingsLayoutAutomatic)) {
-                state.layoutPreference = .automatic
-            }
-            Button(L10n.t(.settingsLayoutFocus)) {
-                state.layoutPreference = .focus
-            }
-            Button(L10n.t(.commonCancel), role: .cancel) {}
-        }
+    }
+
+    private var icon: some View {
+        Image(systemName: state.layoutPreference == .focus ? "iphone" : "rectangle.split.3x1")
+            .font(.body)
+            .frame(width: ComposerHitTarget.minimum, height: ComposerHitTarget.minimum)
+            .contentShape(Rectangle())
     }
 }

@@ -75,15 +75,10 @@ final class PreviewMigrationUITests: XCTestCase {
         app.launch()
 
         let row = marked(app, "file-search-result-notes.txt")
-        let folder = app.buttons["chat-toolbar-files"]
         if !row.waitForExistence(timeout: 3) || !row.isHittable {
-            if folder.exists && folder.isHittable {
-                folder.tap()
-            } else {
-                let filesTab = app.tabBars.buttons["Files"]
-                XCTAssertTrue(filesTab.waitForExistence(timeout: 6))
-                filesTab.tap()
-            }
+            let filesTab = app.tabBars.buttons["Files"]
+            XCTAssertTrue(filesTab.waitForExistence(timeout: 6))
+            filesTab.tap()
         }
         XCTAssertTrue(row.waitForExistence(timeout: 8))
         row.tap()
@@ -113,7 +108,8 @@ final class PreviewMigrationUITests: XCTestCase {
         guard marked(app, "sidebar-workspace-layout").waitForExistence(timeout: 5) else {
             throw XCTSkip("Requires a middle-width portrait window")
         }
-        app.buttons["chat-toolbar-files"].tap()
+        app.buttons["layout-preference-menu"].tap()
+        app.buttons["Show Files"].tap()
         let result = marked(app, "file-search-result-notes.txt")
         XCTAssertTrue(result.waitForExistence(timeout: 8))
         result.tap()
@@ -135,6 +131,120 @@ final class PreviewMigrationUITests: XCTestCase {
         XCTAssertTrue(marked(app, "chat-inline-file-preview").waitForExistence(timeout: 10))
         XCTAssertEqual(input.value as? String, "Read this file with me")
         XCTAssertTrue(app.staticTexts[sentinel].exists)
+    }
+
+    @MainActor
+    func testNarrowWorkspaceControls() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_FILE_SEARCH_FIXTURE", "-AppleLanguages", "(en)"]
+        app.launchEnvironment = ["UITEST_NARROW_WORKSPACE_CONTROLS": "1", "UITEST_FILE_SEARCH_OPEN_PREVIEW": "1"]
+        app.launch()
+        let split = marked(app, "sidebar-workspace-layout").waitForExistence(timeout: 5)
+            || marked(app, "ipad-workspace-layout").waitForExistence(timeout: 1)
+        guard split else { throw XCTSkip("Requires a split portrait window") }
+        let create = app.buttons["sidebar-new-session"]
+        let settings = app.buttons["ipad-settings-button"]
+        capture(app, name: "narrow-sessions-portrait")
+        XCTAssertTrue(create.isHittable, "\(create.frame)")
+        XCTAssertTrue(settings.isHittable)
+        let rightBar = app.navigationBars.allElementsBoundByIndex.filter { $0.frame.width > 40 }.max { $0.frame.minX < $1.frame.minX }
+        if let rightBar {
+            XCTAssertLessThan(abs(create.frame.midY - rightBar.frame.midY), 18, "create \(create.frame) bar \(rightBar.frame)")
+        }
+        create.tap()
+        XCTAssertTrue(marked(app, "session-row-w06-created").waitForExistence(timeout: 5))
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(marked(app, "ipad-workspace-layout").waitForExistence(timeout: 8))
+        let model = app.buttons["chat-toolbar-model"]
+        let todo = app.buttons["chat-toolbar-todo"]
+        XCTAssertTrue(model.isHittable)
+        XCTAssertTrue(todo.isHittable)
+        XCTAssertGreaterThan(model.frame.minY, todo.frame.minY + 8)
+        let hide = app.buttons["ipad-hide-sessions-button"]
+        let landscapeBar = app.navigationBars.allElementsBoundByIndex.filter { $0.frame.width > 40 }.max { $0.frame.minX < $1.frame.minX }
+        if let landscapeBar {
+            XCTAssertLessThan(abs(hide.frame.midY - landscapeBar.frame.midY), 18, "hide \(hide.frame) bar \(landscapeBar.frame)")
+        }
+        capture(app, name: "narrow-chat-landscape")
+        model.tap()
+        XCTAssertTrue(app.navigationBars["Model & Agent"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        todo.tap()
+        XCTAssertTrue(app.navigationBars["Todo"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(settings.waitForExistence(timeout: 8))
+        settings.tap()
+        let done = app.buttons["sidebar-settings-done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testWideFileBrowserGainsSessionsWidth() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_FILE_SEARCH_FIXTURE", "-AppleLanguages", "(en)"]
+        app.launchEnvironment = ["FILE_SEARCH_FIXTURE_MODE": "results", "UITEST_LAYOUT_PREFERENCE": "automatic"]
+        app.launch()
+        guard marked(app, "ipad-workspace-layout").waitForExistence(timeout: 5) else {
+            throw XCTSkip("Requires a wide landscape window")
+        }
+        let browser = app.navigationBars.matching(identifier: "Files").firstMatch
+        let result = marked(app, "file-search-result-notes.txt")
+        if !result.waitForExistence(timeout: 2) || !result.isHittable {
+            app.buttons["layout-preference-menu"].tap()
+            app.buttons["Keep Files Open"].tap()
+        }
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertTrue(result.isHittable)
+        XCTAssertTrue(browser.waitForExistence(timeout: 5))
+        let input = marked(app, "chat-input")
+        assertOnlyFilesResizes(app, file: browser, input: input, name: "wide-browser")
+
+        result.tap()
+        let file = marked(app, "file-content-screen")
+        XCTAssertTrue(file.waitForExistence(timeout: 8))
+        assertOnlyFilesResizes(app, file: file, input: input, name: "wide-preview")
+    }
+
+    @MainActor
+    private func assertOnlyFilesResizes(_ app: XCUIApplication, file: XCUIElement, input: XCUIElement, name: String) {
+        let hideSessions = app.buttons["ipad-hide-sessions-button"]
+        let showSessions = app.buttons["ipad-show-sessions-button"]
+        XCTAssertFalse(showSessions.isHittable)
+        XCTAssertTrue(file.exists)
+        XCTAssertTrue(input.isHittable)
+        let originalFileWidth = file.frame.width
+        let originalInputFrame = input.frame
+        XCTAssertGreaterThan(originalFileWidth, originalInputFrame.width)
+        capture(app, name: "\(name)-sessions-expanded")
+        hideSessions.tap()
+        XCTAssertTrue(showSessions.waitForExistence(timeout: 5))
+        XCTAssertTrue(showSessions.isHittable)
+        var lastWidth = file.frame.width
+        let widened = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let width = file.frame.width
+            let stable = abs(width - lastWidth) < 0.5 && width > originalFileWidth + 100
+            lastWidth = width
+            return stable
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [widened], timeout: 5), .completed)
+        XCTAssertEqual(input.frame.width, originalInputFrame.width, accuracy: 2)
+        XCTAssertEqual(input.frame.minX, originalInputFrame.minX, accuracy: 2)
+        capture(app, name: "\(name)-sessions-collapsed")
+        showSessions.tap()
+        XCTAssertTrue(hideSessions.waitForExistence(timeout: 5))
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            abs(file.frame.width - originalFileWidth) <= 2
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
+        XCTAssertFalse(showSessions.isHittable)
+        XCTAssertEqual(input.frame.width, originalInputFrame.width, accuracy: 2)
+        XCTAssertEqual(input.frame.minX, originalInputFrame.minX, accuracy: 2)
     }
 
     @MainActor

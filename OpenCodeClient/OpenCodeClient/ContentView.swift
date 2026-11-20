@@ -29,6 +29,8 @@ struct ContentView: View {
     @State private var selectedTab = 0
     @State private var carModeEnabled: Bool
     @State private var sessionsCollapsed: Bool = false
+    @State private var navigationBarFrame: CGRect = .zero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var windowWidth: CGFloat = 0
     @State private var showFileBrowser = false
     @AppStorage("workspace.filesPinned") private var filesPinned = true
@@ -123,12 +125,14 @@ struct ContentView: View {
             let metrics = RegularPaneMetrics(totalWidth: geo.size.width, sessionsCollapsed: sessionsCollapsed,
                                              showsFiles: showsFilesColumn)
             let showColumns = useSplitLayout && geo.size.width > 0
+            let buttonTop = navigationButtonTop(in: geo)
             HStack(spacing: 0) {
-                regularColumnsSlot(shown: showColumns, metrics: metrics)
+                regularColumnsSlot(shown: showColumns, metrics: metrics, buttonTop: buttonTop)
                 tabLayout
                     .frame(width: showColumns ? metrics.chatWidth : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sessionsCollapsed)
             .overlay(alignment: .leading) {
                 if showColumns, sessionsCollapsed {
                     Color.clear
@@ -138,9 +142,7 @@ struct ContentView: View {
                             DragGesture(minimumDistance: 20)
                                 .onEnded { value in
                                     if value.translation.width > 40 && abs(value.translation.height) < 80 {
-                                        withAnimation(DesignAnimation.spring) {
-                                            sessionsCollapsed = false
-                                        }
+                                        sessionsCollapsed = false
                                     }
                                 }
                         )
@@ -148,29 +150,43 @@ struct ContentView: View {
             }
         }
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { windowWidth = $0 }
-        .accessibilityIdentifier(presentation == .sidebar ? "sidebar-workspace-layout"
-                                 : useSplitLayout ? "ipad-workspace-layout" : "compact-workspace-layout")
+        .background(alignment: .topLeading) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier(presentation == .sidebar ? "sidebar-workspace-layout"
+                                         : useSplitLayout ? "ipad-workspace-layout" : "compact-workspace-layout")
+        }
     }
 
-    private func regularColumnsSlot(shown: Bool, metrics: RegularPaneMetrics) -> some View {
+    private func navigationButtonTop(in geo: GeometryProxy) -> CGFloat {
+        let rootTop = geo.frame(in: .global).minY
+        guard navigationBarFrame.height > 1 else { return geo.safeAreaInsets.top }
+        return max(0, navigationBarFrame.midY - 22 - rootTop)
+    }
+
+    private func regularColumnsSlot(shown: Bool, metrics: RegularPaneMetrics, buttonTop: CGFloat) -> some View {
         Group {
             if shown {
                 HStack(spacing: 0) {
-                    if !sessionsCollapsed {
-                        TabletSessionsColumn(
-                            state: state,
-                            showSettings: $showTabletSettings,
-                            carModeEnabled: carModeEnabledBinding,
-                            onCollapse: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = true } }
-                        )
-                        .frame(width: metrics.sessionsWidth)
-                        Divider()
-                    }
+                    TabletSessionsColumn(
+                        state: state,
+                        showSettings: $showTabletSettings,
+                        carModeEnabled: carModeEnabledBinding,
+                        usesNarrowLayout: metrics.sessionsWidth < 240,
+                        usesAlignedHeader: alignsSessionHeader,
+                        headerTop: buttonTop,
+                        onCollapse: { sessionsCollapsed = true }
+                    )
+                    .frame(width: metrics.sessionsWidth)
+                    .clipped()
+                    .accessibilityHidden(sessionsCollapsed)
+                    .allowsHitTesting(!sessionsCollapsed)
+                    if metrics.sessionsWidth > 0 { Divider() }
                     if showsFilesColumn {
                         TabletFilesColumn(
                             state: state,
                             sessionsCollapsed: sessionsCollapsed,
-                            onExpandSessions: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = false } }
+                            onExpandSessions: { sessionsCollapsed = false }
                         )
                         .frame(width: metrics.filesWidth)
                         Divider()
@@ -184,6 +200,14 @@ struct ContentView: View {
         .clipped()
         .accessibilityHidden(!shown)
         .allowsHitTesting(shown)
+    }
+
+    private var alignsSessionHeader: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
     }
 
     private func restoreConnectionFlow() async {
@@ -507,7 +531,9 @@ struct ContentView: View {
             onFilesTap: useSplitLayout ? { showFileBrowser = true } : nil,
             onRestoreSessions: useSplitLayout && sessionsCollapsed && !showsFilesColumn
                 ? { sessionsCollapsed = false } : nil,
-            filesPinned: presentation == .wide ? $filesPinned : nil
+            filesPinned: presentation == .wide ? $filesPinned : nil,
+            sharesWidthWithFiles: showsFilesColumn,
+            navigationBarFrame: $navigationBarFrame
         )
     }
 
@@ -561,24 +587,30 @@ struct ContentView: View {
 }
 
 private struct RegularPaneMetrics {
-    var sessionsWidth: CGFloat
-    var filesWidth: CGFloat
-    var chatWidth: CGFloat
+    let sessionsWidth: CGFloat
+    let filesWidth: CGFloat
+    let chatWidth: CGFloat
 
     var leadingWidth: CGFloat { sessionsWidth + filesWidth + (sessionsWidth > 0 ? 1 : 0) + (filesWidth > 0 ? 1 : 0) }
 
     init(totalWidth: CGFloat, sessionsCollapsed: Bool, showsFiles: Bool) {
         let sessions = sessionsCollapsed ? 0 : min(264, max(152, totalWidth * 0.245))
-        let files = showsFiles ? min(370, max(235, totalWidth * 0.29)) : 0
+        let contentWidth = max(0, totalWidth - sessions - (sessions > 0 ? 1 : 0) - (showsFiles ? 1 : 0))
         sessionsWidth = sessions
-        filesWidth = files
-        chatWidth = max(0, totalWidth - sessions - files - (sessions > 0 ? 1 : 0) - (files > 0 ? 1 : 0))
+        if showsFiles {
+            // Size the composer from the window, not from the space left by Sessions.
+            chatWidth = min(contentWidth, min(360, max(288, totalWidth * 0.32)))
+            filesWidth = contentWidth - chatWidth
+        } else {
+            filesWidth = 0
+            chatWidth = contentWidth
+        }
     }
 }
 
 private struct TabletFilesColumn: View {
     @Bindable var state: AppState
-    var sessionsCollapsed: Bool = false
+    var sessionsCollapsed = false
     var onExpandSessions: (() -> Void)? = nil
 
     var body: some View {
@@ -599,16 +631,6 @@ private struct TabletFilesColumn: View {
                 }
             }
             .toolbar {
-                // 折叠 Sessions 时, Files 工具栏左上显示"展开 Sessions"按钮
-                if sessionsCollapsed, let onExpandSessions {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(action: onExpandSessions) {
-                            Image(systemName: "sidebar.left")
-                        }
-                        .help(L10n.t(.sidebarShowSessions))
-                        .accessibilityIdentifier("ipad-show-sessions-button")
-                    }
-                }
                 ToolbarItem(placement: .primaryAction) {
                     if let path = state.previewFilePath, !path.isEmpty {
                         Button {
@@ -621,6 +643,23 @@ private struct TabletFilesColumn: View {
                 }
             }
         }
+        // Keep the restore control out of the navigation bar so resizing the
+        // sidebar doesn't also change the native title's toolbar layout.
+        .overlay(alignment: .topLeading) {
+            if sessionsCollapsed, let onExpandSessions {
+                Button(action: onExpandSessions) {
+                    Image(systemName: "sidebar.left")
+                        .frame(width: 44, height: 44)
+                        .background(.regularMaterial, in: Circle())
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t(.sidebarShowSessions))
+                .accessibilityIdentifier("ipad-show-sessions-button")
+                .padding(.leading, 4)
+                .padding(.top, 6)
+            }
+        }
     }
 }
 
@@ -628,6 +667,9 @@ private struct TabletSessionsColumn: View {
     @Bindable var state: AppState
     @Binding var showSettings: Bool
     @Binding var carModeEnabled: Bool
+    let usesNarrowLayout: Bool
+    let usesAlignedHeader: Bool
+    let headerTop: CGFloat
     var onCollapse: (() -> Void)? = nil
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
@@ -637,6 +679,7 @@ private struct TabletSessionsColumn: View {
     @State private var archiveSelection = SessionArchiveSelection()
 
     private var isSelecting: Bool { archiveSelection.scope == state.sessionArchiveScope }
+    private var showsAlignedHeader: Bool { usesAlignedHeader && !showSettings && !isSelecting }
 
     private var activeNodes: [SessionNode] {
         state.sessionTree(archived: false)
@@ -648,6 +691,13 @@ private struct TabletSessionsColumn: View {
 
     var body: some View {
         let presentations = state.sessionIndicatorPresentations
+        VStack(spacing: 0) {
+            if showsAlignedHeader { alignedHeader }
+            sessionsNavigation(presentations: presentations)
+        }
+    }
+
+    private func sessionsNavigation(presentations: [String: SessionIndicatorPresentation]) -> some View {
         NavigationStack {
             Group {
                 if showSettings {
@@ -708,9 +758,9 @@ private struct TabletSessionsColumn: View {
             .navigationTitle(showSettings ? L10n.t(.navSettings) : isSelecting
                              ? L10n.t(.sessionsBatchSelected, archiveSelection.selected.count) : L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(showsAlignedHeader ? .hidden : .visible, for: .navigationBar)
             .toolbar {
-                // Sessions 列左上"折叠"按钮 (除 settings sheet 外都显示)
-                if !showSettings, !isSelecting, let onCollapse {
+                if !showsAlignedHeader, !showSettings, !isSelecting, let onCollapse {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(action: onCollapse) {
                             Image(systemName: "sidebar.left")
@@ -725,10 +775,11 @@ private struct TabletSessionsColumn: View {
                             showSettings = false
                             Task { await state.refresh() }
                         }
+                        .accessibilityIdentifier("sidebar-settings-done")
                     } else if isSelecting {
                         Button(L10n.t(.commonCancel), action: archiveSelection.cancel)
                             .disabled(archiveSelection.isRunning)
-                    } else {
+                    } else if !showsAlignedHeader {
                         HStack(spacing: 8) {
                             // 用 plus 图标替代 "New" 文字, 给 iPad 上 Sessions 标题留空间
                             // (Session 也是窄列, 文字按钮会把标题挤成省略号)
@@ -741,6 +792,7 @@ private struct TabletSessionsColumn: View {
                             .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
                             .help(L10n.t(.sessionsNew))
                             .accessibilityLabel(L10n.t(.sessionsNew))
+                            .accessibilityIdentifier("sidebar-new-session")
 
                             if !state.canCreateSession {
                                 Button {
@@ -786,6 +838,42 @@ private struct TabletSessionsColumn: View {
         .modifier(SessionStatusRefresh(state: state))
     }
 
+    private var alignedHeader: some View {
+        HStack(spacing: 0) {
+            if let onCollapse {
+                alignedHeaderButton("sidebar.left", label: L10n.t(.sidebarHideSessions),
+                                    id: "ipad-hide-sessions-button", action: onCollapse)
+            }
+            Spacer(minLength: 0)
+            alignedHeaderButton(state.canCreateSession ? "plus" : "plus.circle",
+                                label: L10n.t(.sessionsNew), id: "sidebar-new-session") {
+                if state.canCreateSession {
+                    Task { await state.createSession() }
+                } else {
+                    showCreateDisabledAlert = true
+                }
+            }
+            alignedHeaderButton("gear", label: L10n.t(.navSettings), id: "ipad-settings-button") {
+                showSettings = true
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, headerTop)
+        .background(.bar)
+    }
+
+    private func alignedHeaderButton(_ icon: String, label: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .help(label)
+        .accessibilityIdentifier(id)
+    }
+
     private func sessionNodes(
         _ nodes: [SessionNode],
         archived: Bool,
@@ -809,6 +897,7 @@ private struct TabletSessionsColumn: View {
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     archiveChecked: isSelecting ? archiveSelection.selected.contains(session.id) : nil,
+                    titleLineLimit: usesNarrowLayout ? 3 : 1,
                     onSelect: {
                         if isSelecting { archiveSelection.toggle(session.id) } else { state.selectSession(session) }
                     },

@@ -193,6 +193,8 @@ struct ChatTabView: View {
     var onFilesTap: (() -> Void)?
     var onRestoreSessions: (() -> Void)?
     var filesPinned: Binding<Bool>?
+    var sharesWidthWithFiles = false
+    var navigationBarFrame: Binding<CGRect>? = nil
     @State var inputText = ""
     @State private var hasMarkedText = false
     @State private var isComposerEditing = false
@@ -1010,10 +1012,11 @@ struct ChatTabView: View {
                                                 case .assistantMerged(let msgs):
                                                     if let first = msgs.first {
                                                         let workspaceDirectory = workspaceDirectory(for: first.info.sessionID)
-                                                        MessageRowView(
-                                                            state: state,
-                                                            message: first,
-                                                            turnMessages: msgs,
+                                                         MessageRowView(
+                                                             state: state,
+                                                             message: first,
+                                                             turnMessages: msgs,
+                                                             sharesWidthWithFiles: sharesWidthWithFiles,
                                                             sessionTodos: state.sessionTodos[first.info.sessionID] ?? [],
                                                               workspaceDirectory: workspaceDirectory,
                                                               onOpenResolvedPath: { openFileInChat($0) },
@@ -1244,6 +1247,7 @@ struct ChatTabView: View {
             }
             .navigationTitle(state.currentSession?.title ?? L10n.t(.appChat))
             .navigationBarTitleDisplayMode(.inline)
+            .background { WorkspaceNavigationBarProbe(frame: navigationBarFrame) }
             .sheet(isPresented: $showSessionList) {
                 SessionListView(state: state)
             }
@@ -2282,5 +2286,40 @@ private struct TurnActivityRowView: View {
                 .foregroundStyle(DesignColors.Neutral.textTertiary)
         }
         .padding(.vertical, DesignSpacing.sm)
+    }
+}
+
+struct WorkspaceNavigationBarProbe: UIViewRepresentable {
+    var frame: Binding<CGRect>?
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        DispatchQueue.main.async {
+            guard let bar = uiView.enclosingNavigationBar else { return }
+            let next = bar.convert(bar.bounds, to: nil)
+            let current = frame?.wrappedValue ?? .zero
+            guard next.width > 1,
+                  abs(next.minY - current.minY) > 0.5 || abs(next.height - current.height) > 0.5 else { return }
+            frame?.wrappedValue = next
+        }
+    }
+}
+
+private extension UIView {
+    var enclosingNavigationBar: UINavigationBar? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let controller = current as? UIViewController {
+                return controller.navigationController?.navigationBar
+            }
+            responder = current.next
+        }
+        return nil
     }
 }

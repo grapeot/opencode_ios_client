@@ -74,7 +74,8 @@ enum FileSearchFixture {
         }
         let filesDirectory = mode == .live || mode == .split ? workspaceB : directory
         let sessionDirectory = mode == .live || mode == .split ? workspaceA : directory
-        state.selectedProjectWorktree = filesDirectory
+        let checksNarrowControls = ProcessInfo.processInfo.environment["UITEST_NARROW_WORKSPACE_CONTROLS"] == "1"
+        state.selectedProjectWorktree = checksNarrowControls ? nil : filesDirectory
         state.sessions = [
             Session(
                 id: "w06-files",
@@ -82,7 +83,7 @@ enum FileSearchFixture {
                 projectID: "p1",
                 directory: sessionDirectory,
                 parentID: nil,
-                title: "Files",
+                title: checksNarrowControls ? "Review notes and implementation details for the sidebar layout" : "Files",
                 version: "1",
                 time: .init(created: 1, updated: 2, archived: nil),
                 share: nil,
@@ -90,6 +91,11 @@ enum FileSearchFixture {
             )
         ]
         state.currentSessionID = "w06-files"
+        if checksNarrowControls {
+            state.modelShortlist = [.init(providerID: "fixture", modelID: "workspace",
+                                          displayName: "Workspace Reasoning Model", shortName: "Workspace Reasoning Model")]
+            state.selectedModelIndex = 0
+        }
         state.fileTreeRoot = [
             FileNode(name: "src", path: "src", absolute: nil, type: "directory", ignored: false)
         ]
@@ -144,7 +150,14 @@ enum FileSearchFixture {
             throw APIError.httpError(statusCode: 404, data: Data())
         }
         func createSession(title: String?, directory: String?) async throws -> Session {
-            throw APIError.httpError(statusCode: 501, data: Data())
+            guard ProcessInfo.processInfo.environment["UITEST_NARROW_WORKSPACE_CONTROLS"] == "1" else {
+                throw APIError.httpError(statusCode: 501, data: Data())
+            }
+            let now = Int(Date().timeIntervalSince1970 * 1000)
+            return Session(id: "w06-created", slug: "w06-created", projectID: "p1",
+                           directory: directory ?? FileSearchFixture.directory, parentID: nil,
+                           title: "Created from sidebar", version: "1", time: .init(created: now, updated: now, archived: nil),
+                           share: nil, summary: nil)
         }
         func updateSession(sessionID: String, title: String) async throws -> Session {
             throw APIError.httpError(statusCode: 501, data: Data())

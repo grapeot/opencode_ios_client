@@ -21,6 +21,7 @@ struct FileCardView: View {
     let workspaceDirectory: String?
     let onOpenResolvedPath: (String) -> Void
     let onOpenFilesTab: () -> Void
+    var usesCompactInsets = false
     @State private var showOpenFileSheet = false
     @State private var showFolderSheet = false
 
@@ -122,7 +123,7 @@ struct FileCardView: View {
     }
 
     private func cardLabel(iconName: String, accent: Color) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: usesCompactInsets ? 4 : 8) {
             Image(systemName: iconName)
                 .foregroundStyle(accent)
                 .font(.caption)
@@ -131,13 +132,14 @@ struct FileCardView: View {
                 .foregroundStyle(DesignColors.Neutral.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Spacer(minLength: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right")
                 .font(DesignTypography.micro)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DesignSpacing.cardPadding)
+        .padding(.vertical, DesignSpacing.cardPadding)
+        .padding(.horizontal, usesCompactInsets ? 8 : DesignSpacing.cardPadding)
         .background(DesignColors.Neutral.text.opacity(DesignColors.surfaceFill(for: colorScheme)))
         .clipShape(RoundedRectangle(cornerRadius: DesignCorners.medium))
     }

@@ -322,6 +322,7 @@ struct SessionRowView: View {
     var hasChildren: Bool = false
     var isCollapsed: Bool = false
     var archiveChecked: Bool? = nil
+    var titleLineLimit: Int = 1
     let onSelect: () -> Void
     var onToggleCollapse: (() -> Void)? = nil
 
@@ -397,7 +398,8 @@ struct SessionRowView: View {
                 Text(session.title.isEmpty ? L10n.t(.sessionsUntitled) : session.title)
                     .font(depth > 0 ? DesignTypography.body : DesignTypography.headline)
                     .foregroundStyle(titleColor(depth: depth, isBusy: isBusy))
-                    .lineLimit(1)
+                    .lineLimit(titleLineLimit)
+                    .fixedSize(horizontal: false, vertical: titleLineLimit > 1)
                     .accessibilityIdentifier("session-title-\(session.id)")
 
                 HStack(spacing: DesignSpacing.sm) {
