@@ -71,12 +71,10 @@ final class SessionScrollAnchorUITests: XCTestCase {
         attachScreenshot(named: "oc_scroll_anchor_roundtrip")
     }
 
-    // MARK: - Helpers
-
     @MainActor
     func testBulkArchiveCountsCollapsedChildAndKeepsListOpen() {
         let app = XCUIApplication()
-        app.launchArguments = ["UITEST_SESSION_SCROLL_FIXTURE", "UITEST_BULK_ARCHIVE"]
+        app.launchArguments = ["UITEST_SESSION_SCROLL_FIXTURE", "UITEST_BULK_ARCHIVE", "-AppleLanguages", "(en)"]
         app.launch()
 
         let select = app.buttons["session-archive-select"]
@@ -109,8 +107,12 @@ final class SessionScrollAnchorUITests: XCTestCase {
         app.buttons["Archived"].tap()
         XCTAssertTrue(parent.waitForExistence(timeout: 5))
         XCTAssertTrue(other.exists)
+        app.buttons["session-toggle-scroll-long-session"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["session-row-scroll-hidden-child"].waitForExistence(timeout: 5))
         attachScreenshot(named: "bulk_archive_result")
     }
+
+    // MARK: - Helpers
 
     private func bottomAnchorMessage(in app: XCUIApplication) -> XCUIElement {
         app.staticTexts.containing(

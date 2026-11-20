@@ -16,6 +16,7 @@ struct SessionListView: View {
     @State private var archiveSelection = SessionArchiveSelection()
 
     private var isSelecting: Bool { archiveSelection.scope == state.sessionArchiveScope }
+    private var headerActionWidth: CGFloat { state.canCreateSession ? 88 : 108 }
 
     private var activeNodes: [SessionNode] {
         state.sessionTree(archived: false)
@@ -32,8 +33,8 @@ struct SessionListView: View {
                 Button(L10n.t(isSelecting ? .commonCancel : .sessionsClose)) {
                     if isSelecting { archiveSelection.cancel() } else { dismiss() }
                 }
-                    .disabled(archiveSelection.isRunning)
-                    .frame(width: 88, alignment: .leading)
+                .disabled(archiveSelection.isRunning)
+                .frame(width: headerActionWidth, alignment: .leading)
 
                 Spacer()
 
@@ -73,7 +74,7 @@ struct SessionListView: View {
                         }
                     }
                 }
-                .frame(width: 88, alignment: .trailing)
+                .frame(width: headerActionWidth, alignment: .trailing)
             }
             .padding(.horizontal, DesignSpacing.lg)
             .padding(.top, DesignSpacing.lg)
@@ -126,7 +127,8 @@ struct SessionListView: View {
             SessionArchiveBar(selection: archiveSelection, state: state)
         }
         .interactiveDismissDisabled(archiveSelection.isRunning)
-        .onChange(of: state.sessionArchiveScope) { archiveSelection.cancel() }
+        .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
+        .onDisappear { archiveSelection.scopeChanged() }
         .alert(
             L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(
@@ -246,28 +248,32 @@ struct SessionSectionHeader: View {
     let isExpanded: Bool
     var canToggle = true
     let onToggle: () -> Void
+    var archiveAccessory: SessionArchiveSelectButton? = nil
 
     var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: DesignSpacing.sm) {
-                Text(title)
-                    .font(DesignTypography.meta.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+        HStack(spacing: DesignSpacing.sm) {
+            Button(action: onToggle) {
+                HStack(spacing: DesignSpacing.sm) {
+                    Text(title)
+                        .font(DesignTypography.meta.weight(.semibold))
+                        .foregroundStyle(DesignColors.Neutral.textSecondary)
 
-                Spacer()
+                    Spacer()
 
-                if canToggle {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(DesignTypography.micro.weight(.semibold))
-                        .foregroundStyle(DesignColors.Neutral.textTertiary)
-                        .frame(width: 20, height: 20)
+                    if canToggle {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(DesignTypography.micro.weight(.semibold))
+                            .foregroundStyle(DesignColors.Neutral.textTertiary)
+                            .frame(width: 20, height: 20)
+                    }
                 }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .disabled(!canToggle)
+            archiveAccessory
         }
-        .buttonStyle(.plain)
-        .disabled(!canToggle)
         .textCase(nil)
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)

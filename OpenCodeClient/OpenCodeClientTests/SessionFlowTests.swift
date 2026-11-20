@@ -443,6 +443,7 @@ struct ArchivedSessionTests {
     @Test @MainActor func archiveAndRestoreSessionPatchArchivedTimestamp() async throws {
         let apiClient = MockAPIClient()
         let state = makeIsolatedAppState(apiClient: apiClient, sseClient: MockSSEClient())
+        state.isConnected = true
         state.sessions = [makeSession(id: "s1", title: "Session", archived: nil)]
 
         try await state.archiveSession(sessionID: "s1")
@@ -463,6 +464,7 @@ struct ArchivedSessionTests {
     @Test @MainActor func archiveParentSessionArchivesChildrenRecursively() async throws {
         let apiClient = MockAPIClient()
         let state = makeIsolatedAppState(apiClient: apiClient, sseClient: MockSSEClient())
+        state.isConnected = true
         state.sessions = [
             makeSession(id: "parent", title: "Parent", archived: nil),
             makeSession(id: "child-a", title: "Child A", parentID: "parent", archived: nil),
@@ -477,6 +479,38 @@ struct ArchivedSessionTests {
         #expect(calls.allSatisfy { $0.1 > 0 })
         #expect(state.filteredSessions(archived: false).isEmpty)
         #expect(Set(state.filteredSessions(archived: true).map(\.id)) == Set(["parent", "child-a", "child-b"]))
+    }
+
+    @Test @MainActor func singleArchiveFindsUnloadedChildrenAndGrandchildrenWithoutAnotherTap() async throws {
+        let client = MockAPIClient()
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.sessions = [makeSession(id: "parent", archived: nil)]
+        await client.setArchiveChildren([
+            makeSession(id: "child", parentID: "parent", archived: nil),
+            makeSession(id: "grandchild", parentID: "child", archived: nil),
+        ])
+
+        try await state.archiveSession(sessionID: "parent")
+
+        #expect(await client.updateSessionArchivedCalls.map(\.0) == ["grandchild", "child", "parent"])
+        #expect(state.filteredSessions(archived: false).isEmpty)
+    }
+
+    @Test @MainActor func singleArchiveFindsActiveDescendantBehindArchivedChild() async throws {
+        let client = MockAPIClient()
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.sessions = [makeSession(id: "parent", archived: nil)]
+        await client.setArchiveChildren([
+            makeSession(id: "archived-child", parentID: "parent", archived: 123),
+            makeSession(id: "reopened", parentID: "archived-child", archived: nil),
+        ])
+
+        try await state.archiveSession(sessionID: "parent")
+
+        #expect(await client.updateSessionArchivedCalls.map(\.0) == ["reopened", "parent"])
+        #expect(state.filteredSessions(archived: false).isEmpty)
     }
 
     @Test @MainActor func bulkArchiveCountsHiddenChildrenOnceAndExcludesAlreadyArchived() {
@@ -528,6 +562,52 @@ struct ArchivedSessionTests {
         let result = await state.archiveSessions(.init(sessions: state.sessions, selected: ["session"]), in: oldScope)
         #expect(result.remaining == 1)
         #expect(await client.updateSessionArchivedCalls.isEmpty)
+    }
+
+    @Test @MainActor func bulkArchiveRequiresAnotherClickForAnUnloadedChild() async {
+        let client = MockAPIClient()
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.sessions = [makeSession(id: "parent", archived: nil)]
+        await client.setArchiveChildren([makeSession(id: "unloaded", parentID: "parent", archived: nil)])
+        let scope = state.sessionArchiveScope
+        let first = await state.archiveSessions(.init(sessions: state.sessions, selected: ["parent"]), in: scope)
+        #expect(first.foundMoreChildren)
+        #expect(first.remaining == 1)
+        #expect(await client.updateSessionArchivedCalls.isEmpty)
+
+        let next = SessionArchivePlan(sessions: state.sessions, selected: ["parent"])
+        #expect(next.ids == ["unloaded", "parent"])
+        let second = await state.archiveSessions(next, in: scope)
+        #expect(second.archived == ["unloaded", "parent"])
+        #expect(await client.updateSessionArchivedCalls.map(\.0) == ["unloaded", "parent"])
+    }
+
+    @Test @MainActor func archiveDoesNotPatchIfHostChangesDuringChildLookup() async {
+        let client = MockAPIClient()
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.sessions = [makeSession(id: "parent", archived: nil)]
+        await client.setOnArchiveChildren { [weak state] in
+            await MainActor.run { state?.hostRequestGeneration += 1 }
+        }
+        let outcome = await state.archiveSessions(.init(sessions: state.sessions, selected: ["parent"]), in: state.sessionArchiveScope)
+        #expect(outcome.remaining == 1)
+        #expect(await client.updateSessionArchivedCalls.isEmpty)
+        #expect(state.sessions.first?.isArchived == false)
+    }
+
+    @Test @MainActor func bulkArchiveContinuesWhenAChildWasDeleted() async {
+        let client = MockAPIClient()
+        let state = makeIsolatedAppState(apiClient: client, sseClient: MockSSEClient())
+        state.isConnected = true
+        state.sessions = [makeSession(id: "parent", archived: nil), makeSession(id: "gone", parentID: "parent", archived: nil)]
+        await client.setArchiveMissingIDs(["gone"])
+        let outcome = await state.archiveSessions(.init(sessions: state.sessions, selected: ["parent"]), in: state.sessionArchiveScope)
+        #expect(outcome.archived == ["parent"])
+        #expect(outcome.missing == ["gone"])
+        #expect(outcome.remaining == 0)
+        #expect(state.sessions.map(\.id) == ["parent"])
     }
 
     @Test @MainActor func restoreParentSessionRestoresParentBeforeChildren() async throws {

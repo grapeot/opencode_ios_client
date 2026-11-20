@@ -465,9 +465,11 @@ enum L10n {
         case sessionsBatchSelected
         case sessionsBatchArchive
         case sessionsBatchChildren
+        case sessionsBatchReviewChildren
         case sessionsBatchArchiving
         case sessionsBatchArchived
         case sessionsBatchIncomplete
+        case sessionsBatchUnconfirmed
         case sessionsRestore
         case sessionsLoadMore
         case sessionsActionFailedTitle
@@ -980,9 +982,11 @@ enum L10n {
         Key.sessionsBatchSelected.rawValue: "%d Selected",
         Key.sessionsBatchArchive.rawValue: "Archive %d",
         Key.sessionsBatchChildren.rawValue: "Includes %d additional from child sessions",
+        Key.sessionsBatchReviewChildren.rawValue: "More child sessions found. Check the updated count and try again.",
         Key.sessionsBatchArchiving.rawValue: "Archiving…",
         Key.sessionsBatchArchived.rawValue: "Archived: %d",
         Key.sessionsBatchIncomplete.rawValue: "Archived: %d · Not archived: %d",
+        Key.sessionsBatchUnconfirmed.rawValue: "Could not finish archiving. Refresh Sessions and try again.",
         Key.sessionsRestore.rawValue: "Restore",
         Key.sessionsLoadMore.rawValue: "Load more sessions",
         Key.sessionsActionFailedTitle.rawValue: "Session Action Failed",
@@ -1499,9 +1503,11 @@ enum L10n {
         Key.sessionsBatchSelected.rawValue: "已选 %d 项",
         Key.sessionsBatchArchive.rawValue: "归档 %d 项",
         Key.sessionsBatchChildren.rawValue: "另含 %d 个子会话",
+        Key.sessionsBatchReviewChildren.rawValue: "发现更多子会话，请查看更新后的数量，再点归档。",
         Key.sessionsBatchArchiving.rawValue: "正在归档…",
         Key.sessionsBatchArchived.rawValue: "已归档 %d 项",
         Key.sessionsBatchIncomplete.rawValue: "已归档 %d 项 · 未归档 %d 项",
+        Key.sessionsBatchUnconfirmed.rawValue: "未能完成归档。请刷新会话列表后重试。",
         Key.sessionsRestore.rawValue: "恢复",
         Key.sessionsLoadMore.rawValue: "加载更多会话",
         Key.sessionsActionFailedTitle.rawValue: "会话操作失败",

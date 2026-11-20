@@ -668,9 +668,16 @@ private struct TabletSessionsColumn: View {
                     )
                 } else {
                     List {
-                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded, canToggle: !isSelecting) {
-                            activeExpanded.toggle()
-                        }
+                        SessionSectionHeader(
+                            title: L10n.t(.sessionsActive), isExpanded: activeExpanded, canToggle: !isSelecting,
+                            onToggle: { activeExpanded.toggle() },
+                            archiveAccessory: isSelecting ? nil : SessionArchiveSelectButton(
+                                disabled: !state.isConnected || activeNodes.isEmpty || mutatingSessionID != nil
+                            ) {
+                                activeExpanded = true
+                                archiveSelection.begin(in: state.sessionArchiveScope)
+                            }
+                        )
 
                         if activeExpanded || isSelecting {
                             sessionNodes(activeNodes, archived: false, presentations: presentations)
@@ -730,10 +737,6 @@ private struct TabletSessionsColumn: View {
                             .disabled(archiveSelection.isRunning)
                     } else {
                         HStack(spacing: 8) {
-                            SessionArchiveSelectButton(disabled: !state.isConnected || activeNodes.isEmpty || mutatingSessionID != nil) {
-                                activeExpanded = true
-                                archiveSelection.begin(in: state.sessionArchiveScope)
-                            }
                             // 用 plus 图标替代 "New" 文字, 给 iPad 上 Sessions 标题留空间
                             // (Session 也是窄列, 文字按钮会把标题挤成省略号)
                             Button {
@@ -766,8 +769,9 @@ private struct TabletSessionsColumn: View {
                 }
             }
         }
-        .onChange(of: state.sessionArchiveScope) { archiveSelection.cancel() }
-        .onChange(of: showSettings) { if showSettings { archiveSelection.cancel() } }
+        .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
+        .onChange(of: showSettings) { if showSettings { archiveSelection.scopeChanged() } }
+        .onDisappear { archiveSelection.scopeChanged() }
         .alert(
             L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(

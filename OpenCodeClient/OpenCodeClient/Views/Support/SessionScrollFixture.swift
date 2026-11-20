@@ -200,6 +200,10 @@ enum SessionScrollFixture {
             return updated
         }
 
+        func sessionChildren(sessionID: String) async throws -> [Session] {
+            sessions.filter { $0.parentID == sessionID }
+        }
+
         func deleteSession(sessionID: String) async throws {
             throw APIError.httpError(statusCode: 501, data: Data())
         }

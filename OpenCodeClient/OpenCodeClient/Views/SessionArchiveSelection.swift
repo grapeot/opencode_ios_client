@@ -6,6 +6,7 @@ final class SessionArchiveSelection {
     private(set) var selected = Set<String>()
     private(set) var isRunning = false
     private(set) var outcome: SessionArchiveOutcome?
+    private var task: Task<Void, Never>?
 
     func begin(in scope: SessionArchiveScope) {
         selected.removeAll()
@@ -20,6 +21,11 @@ final class SessionArchiveSelection {
         outcome = nil
     }
 
+    func scopeChanged() {
+        task?.cancel()
+        cancel()
+    }
+
     func toggle(_ id: String) {
         guard !isRunning else { return }
         outcome = nil
@@ -31,11 +37,12 @@ final class SessionArchiveSelection {
               !isRunning, !plan.ids.isEmpty else { return }
         isRunning = true
         outcome = nil
-        Task {
+        task = Task {
             let result = await state.archiveSessions(plan, in: scope)
             isRunning = false
-            guard scope == state.sessionArchiveScope else { cancel(); return }
-            selected.subtract(result.archived)
+            task = nil
+            guard scope == state.sessionArchiveScope, !Task.isCancelled else { cancel(); return }
+            selected.subtract(result.archived.union(result.missing))
             if result.remaining == 0 { cancel() }
             outcome = result
         }
@@ -69,6 +76,10 @@ struct SessionArchiveBar: View {
                     if selection.isRunning {
                         ProgressView(L10n.t(.sessionsBatchArchiving))
                     } else {
+                        if selection.outcome?.foundMoreChildren == true {
+                            Text(L10n.t(.sessionsBatchReviewChildren))
+                                .font(DesignTypography.meta)
+                        }
                         if plan.additionalCount > 0 {
                             Text(L10n.t(.sessionsBatchChildren, plan.additionalCount))
                                 .font(DesignTypography.meta)
@@ -78,10 +89,10 @@ struct SessionArchiveBar: View {
                             selection.submit(plan, state: state)
                         } label: {
                             Label(L10n.t(.sessionsBatchArchive, plan.ids.count), systemImage: "archivebox")
-                                .frame(maxWidth: .infinity, minHeight: 30)
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(plan.ids.isEmpty || !state.isConnected)
+                        .disabled(plan.ids.isEmpty || !state.isConnected || state.isLoadingMoreSessions)
                         .accessibilityIdentifier("session-archive-submit")
                     }
                 }
@@ -101,8 +112,10 @@ struct SessionArchiveSelectButton: View {
         Button(action: action) {
             Label(L10n.t(.sessionsBatchSelect), systemImage: "checkmark.circle")
                 .labelStyle(.iconOnly)
-                .frame(minWidth: 28, minHeight: 44)
+                .frame(minWidth: 32, minHeight: 44)
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(disabled ? DesignColors.Neutral.textTertiary : DesignColors.Brand.primary)
         .help(L10n.t(.sessionsBatchSelect))
         .accessibilityIdentifier("session-archive-select")
         .disabled(disabled)
