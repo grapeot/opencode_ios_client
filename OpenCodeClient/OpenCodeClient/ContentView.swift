@@ -22,17 +22,38 @@ enum SettingsFocus: Equatable {
 struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
     @State private var selectedTab = 0
     @State private var carModeEnabled: Bool
     @State private var sessionsCollapsed: Bool = false
+    @State private var navigationBarFrame: CGRect = .zero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var windowWidth: CGFloat = 0
+    @State private var showFileBrowser = false
+    @AppStorage private var filesPinned: Bool
 
     init() {
         let initialState = Self.makeInitialState()
         _state = State(initialValue: initialState)
         _carModeEnabled = State(initialValue: initialState.isCarModeEnabled)
+        _filesPinned = AppStorage(wrappedValue: Self.defaultFilesPinned, "workspace.filesPinned", store: initialState.defaults)
+    }
+
+    private static var defaultFilesPinned: Bool {
+        // Use the hardware identifier so other wide iPhones keep their default.
+        #if targetEnvironment(simulator)
+        let model = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"]
+        #else
+        var info = utsname()
+        uname(&info)
+        let model = withUnsafeBytes(of: &info.machine) {
+            String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        #endif
+        return model != "iPhone19,4" // iPhone Duo
     }
 
     private static func makeInitialState() -> AppState {
@@ -69,14 +90,22 @@ struct ContentView: View {
         forcedWidthClass ?? sizeClass
     }
 
-    private var effectiveLayout: EffectiveLayout {
-        EffectiveLayoutResolver.resolve(
+    private var presentation: WorkspacePresentation {
+        if showsCarMode && selectedTab == RootTab.car.rawValue { return .compact }
+        if let forcedWidthClass {
+            return state.layoutPreference == .automatic && forcedWidthClass == .regular ? .wide : .compact
+        }
+        return WorkspacePresentation.resolve(
             preference: state.layoutPreference,
-            width: WindowWidthClass(horizontalSizeClass: resolvedSizeClass)
+            width: windowWidth,
+            widthClass: WindowWidthClass(horizontalSizeClass: resolvedSizeClass),
+            shortWindow: verticalSizeClass == .compact
         )
     }
 
-    private var useSplitLayout: Bool { effectiveLayout == .regular }
+    private var effectiveLayout: EffectiveLayout { presentation.previewLayout }
+    private var useSplitLayout: Bool { presentation != .compact }
+    private var showsFilesColumn: Bool { presentation == .wide && (filesPinned || state.previewFilePath != nil) }
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -106,43 +135,19 @@ struct ContentView: View {
         )
     }
 
-    private var filePreviewSheetItem: Binding<FilePathWrapper?> {
-        Binding(
-            get: {
-                guard !useSplitLayout else { return nil }
-                return state.fileToOpenInFilesTab.map {
-                    FilePathWrapper(path: $0, workspaceDirectory: state.fileToOpenInFilesTabWorkspaceDirectory)
-                }
-            },
-            set: { newValue, _ in
-                guard newValue == nil else { return }
-                let dismissedSequence = state.pendingEventSequence
-                Task { @MainActor in
-                    await Task.yield()
-                    guard state.pendingEventSequence == dismissedSequence else { return }
-                    state.fileToOpenInFilesTab = nil
-                    state.fileToOpenInFilesTabWorkspaceDirectory = nil
-                    state.pendingFileOpenOwner = nil
-                    state.pendingEventSequence = 0
-                    if !useSplitLayout {
-                        selectedTab = RootTab.chat.rawValue
-                        state.selectedTab = RootTab.chat.rawValue
-                    }
-                }
-            }
-        )
-    }
-
     private var rootLayout: some View {
         GeometryReader { geo in
-            let metrics = RegularPaneMetrics(totalWidth: geo.size.width, sessionsCollapsed: sessionsCollapsed)
+            let metrics = RegularPaneMetrics(totalWidth: geo.size.width, sessionsCollapsed: sessionsCollapsed,
+                                             showsFiles: showsFilesColumn, prioritizesFiles: isPhone)
             let showColumns = useSplitLayout && geo.size.width > 0
+            let buttonTop = navigationButtonTop(in: geo)
             HStack(spacing: 0) {
-                regularColumnsSlot(shown: showColumns, metrics: metrics)
+                regularColumnsSlot(shown: showColumns, metrics: metrics, buttonTop: buttonTop)
                 tabLayout
                     .frame(width: showColumns ? metrics.chatWidth : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sessionsCollapsed)
             .overlay(alignment: .leading) {
                 if showColumns, sessionsCollapsed {
                     Color.clear
@@ -152,38 +157,67 @@ struct ContentView: View {
                             DragGesture(minimumDistance: 20)
                                 .onEnded { value in
                                     if value.translation.width > 40 && abs(value.translation.height) < 80 {
-                                        withAnimation(DesignAnimation.spring) {
-                                            sessionsCollapsed = false
-                                        }
+                                        sessionsCollapsed = false
                                     }
                                 }
                         )
                 }
             }
+            // Layer this above the navigation stack and its native search bar.
+            .overlay(alignment: .topLeading) {
+                if showColumns, showsFilesColumn, sessionsCollapsed {
+                    Button { sessionsCollapsed = false } label: {
+                        Image(systemName: "sidebar.left")
+                            .frame(width: 44, height: 44)
+                            .background(.regularMaterial, in: Circle())
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t(.sidebarShowSessions))
+                    .accessibilityIdentifier("ipad-show-sessions-button")
+                    .padding(.leading, 6)
+                    .padding(.top, buttonTop)
+                }
+            }
         }
-        .accessibilityIdentifier(useSplitLayout ? "ipad-workspace-layout" : "compact-workspace-layout")
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { windowWidth = $0 }
+        .background(alignment: .topLeading) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier(presentation == .sidebar ? "sidebar-workspace-layout"
+                                         : useSplitLayout ? "ipad-workspace-layout" : "compact-workspace-layout")
+        }
     }
 
-    private func regularColumnsSlot(shown: Bool, metrics: RegularPaneMetrics) -> some View {
+    private func navigationButtonTop(in geo: GeometryProxy) -> CGFloat {
+        let rootTop = geo.frame(in: .global).minY
+        guard navigationBarFrame.height > 1 else { return geo.safeAreaInsets.top }
+        return max(0, navigationBarFrame.midY - 22 - rootTop)
+    }
+
+    private func regularColumnsSlot(shown: Bool, metrics: RegularPaneMetrics, buttonTop: CGFloat) -> some View {
         Group {
             if shown {
                 HStack(spacing: 0) {
-                    if !sessionsCollapsed {
-                        TabletSessionsColumn(
-                            state: state,
-                            showSettings: $showTabletSettings,
-                            onCollapse: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = true } }
-                        )
-                        .frame(width: metrics.sessionsWidth)
+                    TabletSessionsColumn(
+                        state: state,
+                        showSettings: $showTabletSettings,
+                        carModeEnabled: carModeEnabledBinding,
+                        usesNarrowLayout: metrics.sessionsWidth < 240,
+                        usesAlignedHeader: isPhone,
+                        headerTop: buttonTop,
+                        onCollapse: { sessionsCollapsed = true }
+                    )
+                    .frame(width: metrics.sessionsWidth)
+                    .clipped()
+                    .accessibilityHidden(sessionsCollapsed)
+                    .allowsHitTesting(!sessionsCollapsed)
+                    if metrics.sessionsWidth > 0 { Divider() }
+                    if showsFilesColumn {
+                        TabletFilesColumn(state: state)
+                        .frame(width: metrics.filesWidth)
                         Divider()
                     }
-                    TabletFilesColumn(
-                        state: state,
-                        sessionsCollapsed: sessionsCollapsed,
-                        onExpandSessions: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = false } }
-                    )
-                    .frame(width: metrics.filesWidth)
-                    Divider()
                 }
             } else {
                 Color.clear.frame(width: 0)
@@ -193,6 +227,14 @@ struct ContentView: View {
         .clipped()
         .accessibilityHidden(!shown)
         .allowsHitTesting(shown)
+    }
+
+    private var isPhone: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
     }
 
     private func restoreConnectionFlow() async {
@@ -413,13 +455,19 @@ struct ContentView: View {
         }
         .onChange(of: effectiveLayout) { oldValue, newValue in
             state.applyPreviewLayout(from: oldValue, to: newValue)
-            if oldValue == .regular, newValue == .compact {
-                selectedTab = RootTab.chat.rawValue
-            }
+        }
+        .onChange(of: presentation) { oldValue, newValue in
+            guard oldValue != .compact, newValue == .compact, selectedTab != RootTab.car.rawValue else { return }
+            selectedTab = RootTab.chat.rawValue
+            state.selectedTab = RootTab.chat.rawValue
         }
         .onChange(of: state.pendingEventSequence) { _, sequence in
             guard ExternalFileOpenRouting.shouldAdopt(sequence: sequence, path: state.fileToOpenInFilesTab) else { return }
             state.adoptPendingFileOpen(layout: effectiveLayout)
+            if state.inlinePreviewPath != nil {
+                selectedTab = RootTab.chat.rawValue
+                state.selectedTab = RootTab.chat.rawValue
+            }
         }
         .onChange(of: state.currentHostProfileID) { oldHost, newHost in
             state.discardPreviewIfHostChanged(from: oldHost, to: newHost)
@@ -451,30 +499,15 @@ struct ContentView: View {
             selectedTab = RootTab.chat.rawValue
             state.selectedTab = RootTab.chat.rawValue
         }
-        .sheet(item: filePreviewSheetItem) { wrapper in
+        .sheet(isPresented: $showFileBrowser) {
             NavigationStack {
-                FileContentView(
-                    state: state,
-                    filePath: wrapper.path,
-                    workspaceDirectory: wrapper.workspaceDirectory,
-                    boundSessionID: state.pendingFileOpenOwner?.sessionID
-                )
+                FileTreeView(state: state, onFileSelect: openWorkspaceFile)
+                    .fileSearchQueryHandlers(state: state)
+                    .navigationTitle(L10n.t(.navFiles))
+                    .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button {
-                                Task { @MainActor in
-                                    state.fileToOpenInFilesTab = nil
-                                    state.fileToOpenInFilesTabWorkspaceDirectory = nil
-                                    state.pendingFileOpenOwner = nil
-                                    if !useSplitLayout {
-                                        selectedTab = RootTab.chat.rawValue
-                                        state.selectedTab = RootTab.chat.rawValue
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                            .accessibilityLabel(L10n.t(.appClose))
+                            Button(L10n.t(.appClose)) { showFileBrowser = false }
                         }
                     }
             }
@@ -493,6 +526,18 @@ struct ContentView: View {
         }
     }
 
+    private func openWorkspaceFile(_ path: String) {
+        if effectiveLayout == .regular {
+            state.presentFilesColumnPreview(path: path, workspaceDirectory: state.effectiveProjectDirectory)
+        } else {
+            state.presentChatFilePreview(path: path, workspaceDirectory: state.effectiveProjectDirectory ?? "",
+                                         layout: .compact, bindToSession: false)
+        }
+        selectedTab = RootTab.chat.rawValue
+        state.selectedTab = RootTab.chat.rawValue
+        showFileBrowser = false
+    }
+
     @ViewBuilder
     private var tabLayout: some View {
         Group {
@@ -509,7 +554,13 @@ struct ContentView: View {
             state: state,
             showSettingsInToolbar: false,
             showSessionListInToolbar: !useSplitLayout,
-            showCreateSessionInToolbar: !useSplitLayout
+            showCreateSessionInToolbar: !useSplitLayout,
+            onFilesTap: useSplitLayout ? { showFileBrowser = true } : nil,
+            onRestoreSessions: useSplitLayout && sessionsCollapsed && !showsFilesColumn
+                ? { sessionsCollapsed = false } : nil,
+            filesPinned: presentation == .wide ? $filesPinned : nil,
+            sharesWidthWithFiles: showsFilesColumn,
+            navigationBarFrame: $navigationBarFrame
         )
     }
 
@@ -519,7 +570,7 @@ struct ContentView: View {
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
                 .tag(RootTab.chat.rawValue)
 
-            systemTabBar(FilesTabView(state: state))
+            systemTabBar(FilesTabView(state: state, onFileSelect: openWorkspaceFile))
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(RootTab.files.rawValue)
 
@@ -535,7 +586,7 @@ struct ContentView: View {
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
                 .tag(RootTab.chat.rawValue)
 
-            systemTabBar(FilesTabView(state: state))
+            systemTabBar(FilesTabView(state: state, onFileSelect: openWorkspaceFile))
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(RootTab.files.rawValue)
 
@@ -563,32 +614,35 @@ struct ContentView: View {
 }
 
 private struct RegularPaneMetrics {
-    var sessionsWidth: CGFloat
-    var filesWidth: CGFloat
-    var chatWidth: CGFloat
+    let sessionsWidth: CGFloat
+    let filesWidth: CGFloat
+    let chatWidth: CGFloat
 
-    var leadingWidth: CGFloat { sessionsWidth + filesWidth + 2 }
+    var leadingWidth: CGFloat { sessionsWidth + filesWidth + (sessionsWidth > 0 ? 1 : 0) + (filesWidth > 0 ? 1 : 0) }
 
-    init(totalWidth: CGFloat, sessionsCollapsed: Bool) {
-        let sessions = sessionsCollapsed ? 0 : totalWidth * 0.25
-        let remaining = max(0, totalWidth - sessions)
-        let pane = sessionsCollapsed ? remaining / 2 : totalWidth * 0.375
+    init(totalWidth: CGFloat, sessionsCollapsed: Bool, showsFiles: Bool, prioritizesFiles: Bool) {
+        let sessions = sessionsCollapsed ? 0 : prioritizesFiles
+            ? min(264, max(152, totalWidth * 0.245)) : totalWidth * 0.25
+        let contentWidth = max(0, totalWidth - sessions - (sessions > 0 ? 1 : 0) - (showsFiles ? 1 : 0))
         sessionsWidth = sessions
-        filesWidth = pane
-        chatWidth = pane
+        if showsFiles && prioritizesFiles {
+            // Size the composer from the window, not from the space left by Sessions.
+            chatWidth = min(contentWidth, min(360, max(288, totalWidth * 0.32)))
+            filesWidth = contentWidth - chatWidth
+        } else if showsFiles {
+            // Keep the pre-adaptive iPad split: Sessions takes a quarter when
+            // open, and Files and Chat divide the remaining space equally.
+            filesWidth = contentWidth / 2
+            chatWidth = contentWidth / 2
+        } else {
+            filesWidth = 0
+            chatWidth = contentWidth
+        }
     }
-}
-
-private struct FilePathWrapper: Identifiable {
-    let path: String
-    let workspaceDirectory: String?
-    var id: String { "\(workspaceDirectory ?? ""):\(path)" }
 }
 
 private struct TabletFilesColumn: View {
     @Bindable var state: AppState
-    var sessionsCollapsed: Bool = false
-    var onExpandSessions: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -608,16 +662,6 @@ private struct TabletFilesColumn: View {
                 }
             }
             .toolbar {
-                // 折叠 Sessions 时, Files 工具栏左上显示"展开 Sessions"按钮
-                if sessionsCollapsed, let onExpandSessions {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(action: onExpandSessions) {
-                            Image(systemName: "sidebar.left")
-                        }
-                        .help(L10n.t(.sidebarShowSessions))
-                        .accessibilityIdentifier("ipad-show-sessions-button")
-                    }
-                }
                 ToolbarItem(placement: .primaryAction) {
                     if let path = state.previewFilePath, !path.isEmpty {
                         Button {
@@ -636,6 +680,10 @@ private struct TabletFilesColumn: View {
 private struct TabletSessionsColumn: View {
     @Bindable var state: AppState
     @Binding var showSettings: Bool
+    @Binding var carModeEnabled: Bool
+    let usesNarrowLayout: Bool
+    let usesAlignedHeader: Bool
+    let headerTop: CGFloat
     var onCollapse: (() -> Void)? = nil
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
@@ -645,6 +693,7 @@ private struct TabletSessionsColumn: View {
     @State private var archiveSelection = SessionArchiveSelection()
 
     private var isSelecting: Bool { archiveSelection.scope == state.sessionArchiveScope }
+    private var showsAlignedHeader: Bool { usesAlignedHeader && !showSettings && !isSelecting }
 
     private var activeNodes: [SessionNode] {
         state.sessionTree(archived: false)
@@ -656,10 +705,17 @@ private struct TabletSessionsColumn: View {
 
     var body: some View {
         let presentations = state.sessionIndicatorPresentations
+        VStack(spacing: 0) {
+            if showsAlignedHeader { alignedHeader }
+            sessionsNavigation(presentations: presentations)
+        }
+    }
+
+    private func sessionsNavigation(presentations: [String: SessionIndicatorPresentation]) -> some View {
         NavigationStack {
             Group {
                 if showSettings {
-                    SettingsTabView(state: state, isCarModeEnabled: .constant(false))
+                    SettingsTabView(state: state, isCarModeEnabled: $carModeEnabled)
                 } else if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
@@ -716,9 +772,9 @@ private struct TabletSessionsColumn: View {
             .navigationTitle(showSettings ? L10n.t(.navSettings) : isSelecting
                              ? L10n.t(.sessionsBatchSelected, archiveSelection.selected.count) : L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(showsAlignedHeader ? .hidden : .visible, for: .navigationBar)
             .toolbar {
-                // Sessions 列左上"折叠"按钮 (除 settings sheet 外都显示)
-                if !showSettings, !isSelecting, let onCollapse {
+                if !showsAlignedHeader, !showSettings, !isSelecting, let onCollapse {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(action: onCollapse) {
                             Image(systemName: "sidebar.left")
@@ -733,10 +789,11 @@ private struct TabletSessionsColumn: View {
                             showSettings = false
                             Task { await state.refresh() }
                         }
+                        .accessibilityIdentifier("sidebar-settings-done")
                     } else if isSelecting {
                         Button(L10n.t(.commonCancel), action: archiveSelection.cancel)
                             .disabled(archiveSelection.isRunning)
-                    } else {
+                    } else if !showsAlignedHeader {
                         HStack(spacing: 8) {
                             // 用 plus 图标替代 "New" 文字, 给 iPad 上 Sessions 标题留空间
                             // (Session 也是窄列, 文字按钮会把标题挤成省略号)
@@ -749,6 +806,7 @@ private struct TabletSessionsColumn: View {
                             .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
                             .help(L10n.t(.sessionsNew))
                             .accessibilityLabel(L10n.t(.sessionsNew))
+                            .accessibilityIdentifier("sidebar-new-session")
 
                             if !state.canCreateSession {
                                 Button {
@@ -794,6 +852,42 @@ private struct TabletSessionsColumn: View {
         .modifier(SessionStatusRefresh(state: state))
     }
 
+    private var alignedHeader: some View {
+        HStack(spacing: 0) {
+            if let onCollapse {
+                alignedHeaderButton("sidebar.left", label: L10n.t(.sidebarHideSessions),
+                                    id: "ipad-hide-sessions-button", action: onCollapse)
+            }
+            Spacer(minLength: 0)
+            alignedHeaderButton(state.canCreateSession ? "plus" : "plus.circle",
+                                label: L10n.t(.sessionsNew), id: "sidebar-new-session") {
+                if state.canCreateSession {
+                    Task { await state.createSession() }
+                } else {
+                    showCreateDisabledAlert = true
+                }
+            }
+            alignedHeaderButton("gear", label: L10n.t(.navSettings), id: "ipad-settings-button") {
+                showSettings = true
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, headerTop)
+        .background(.bar)
+    }
+
+    private func alignedHeaderButton(_ icon: String, label: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .help(label)
+        .accessibilityIdentifier(id)
+    }
+
     private func sessionNodes(
         _ nodes: [SessionNode],
         archived: Bool,
@@ -817,6 +911,7 @@ private struct TabletSessionsColumn: View {
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     archiveChecked: isSelecting ? archiveSelection.selected.contains(session.id) : nil,
+                    titleLineLimit: usesNarrowLayout ? 3 : 1,
                     onSelect: {
                         if isSelecting { archiveSelection.toggle(session.id) } else { state.selectSession(session) }
                     },

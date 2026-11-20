@@ -967,7 +967,8 @@ final class AppState {
         previewSessionID = nil
     }
 
-    func presentChatFilePreview(path: String, workspaceDirectory: String?, layout: EffectiveLayout) {
+    func presentChatFilePreview(path: String, workspaceDirectory: String?, layout: EffectiveLayout,
+                                bindToSession: Bool = true) {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let workspace = PreviewWorkspacePin.freeze(
@@ -980,7 +981,7 @@ final class AppState {
         pendingFileOpenOwner = nil
         previewEventSequence &+= 1
         previewHostID = currentHostProfileID
-        previewSessionID = currentSessionID
+        previewSessionID = bindToSession ? currentSessionID : nil
         pendingEventSequence = 0
         if layout == .regular {
             columnEventSequence = previewEventSequence
@@ -1087,9 +1088,6 @@ final class AppState {
         inlinePreviewWorkspaceDirectory = output.slots.inlineWorkspace
         previewFilePath = output.slots.columnPath
         previewFileWorkspaceDirectory = output.slots.columnWorkspace
-        if output.slots.inlinePath != nil, previewSessionID == nil {
-            previewSessionID = currentSessionID
-        }
         if output.slots.inlinePath != nil {
             inlineEventSequence = output.winnerSequence
             columnEventSequence = 0

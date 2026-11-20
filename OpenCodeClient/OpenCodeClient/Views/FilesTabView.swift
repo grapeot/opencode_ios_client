@@ -7,12 +7,13 @@ import SwiftUI
 
 struct FilesTabView: View {
     @Bindable var state: AppState
+    var onFileSelect: ((String) -> Void)?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.effectiveLayout) private var effectiveLayout
 
     var body: some View {
         NavigationStack(path: $state.filesNavigationPath) {
-            FileTreeView(state: state)
+            FileTreeView(state: state, onFileSelect: onFileSelect)
                 .fileSearchQueryHandlers(state: state)
             .navigationTitle(L10n.t(.navFiles))
             .navigationBarTitleDisplayMode(.inline)

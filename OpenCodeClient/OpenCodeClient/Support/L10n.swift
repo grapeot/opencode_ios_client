@@ -54,6 +54,8 @@ enum L10n {
 
         case carTab
         case navFiles
+        case workspacePinFiles
+        case workspaceShowFiles
         case navSettings
         case sidebarHideSessions
         case sidebarShowSessions
@@ -573,6 +575,8 @@ enum L10n {
         Key.commonRetry.rawValue: "Retry",
         Key.carTab.rawValue: "Ambient Mode",
         Key.navFiles.rawValue: "Files",
+        Key.workspacePinFiles.rawValue: "Keep Files Open",
+        Key.workspaceShowFiles.rawValue: "Show Files",
         Key.navSettings.rawValue: "Settings",
         Key.sidebarHideSessions.rawValue: "Hide sessions",
         Key.sidebarShowSessions.rawValue: "Show sessions",
@@ -1091,6 +1095,8 @@ enum L10n {
         Key.commonRetry.rawValue: "重试",
         Key.carTab.rawValue: "Ambient Mode",
         Key.navFiles.rawValue: "文件",
+        Key.workspacePinFiles.rawValue: "保持文件栏打开",
+        Key.workspaceShowFiles.rawValue: "显示文件",
         Key.navSettings.rawValue: "设置",
         Key.sidebarHideSessions.rawValue: "隐藏会话栏",
         Key.sidebarShowSessions.rawValue: "显示会话栏",

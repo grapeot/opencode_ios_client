@@ -363,6 +363,20 @@ extension ChatTabView {
     }
 
     func toggleRecording() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("UITEST_VOICE_STOP_TRANSITION") {
+            if isRecording {
+                isRecording = false
+                isTranscribing = true
+                try? await Task.sleep(for: .seconds(4))
+                inputText = "Synthetic transcript for the landscape voice stop layout test."
+                isTranscribing = false
+            } else {
+                isRecording = true
+            }
+            return
+        }
+        #endif
         guard speechConfigurationCleanupTask == nil else { return }
         if isRecording {
             let finalizationID = UUID()

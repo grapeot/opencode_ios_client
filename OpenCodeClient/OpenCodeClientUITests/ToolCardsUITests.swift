@@ -21,6 +21,53 @@ final class ToolCardsUITests: XCTestCase {
     }
 
     @MainActor
+    func testWideToolCardsReflowWhenFilesIsVisible() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_TOOL_CARDS_FIXTURE", "-AppleLanguages", "(en)"]
+        app.launch()
+        let descendants = app.descendants(matching: .any)
+        guard descendants["ipad-workspace-layout"].waitForExistence(timeout: 6) else {
+            throw XCTSkip("Requires the wide landscape workspace")
+        }
+        let layout = app.buttons["layout-preference-menu"]
+        let pin = app.buttons["Keep Files Open"]
+        let files = app.navigationBars.matching(identifier: "Files").firstMatch
+        if !files.isHittable {
+            layout.tap()
+            pin.tap()
+        }
+        let read = descendants["toolcard.read.client.ts"]
+        let edit = descendants["toolcard.write.types.ts"]
+        let write = descendants["toolcard.write.README.md"]
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.86, dy: 0.37))
+        let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.86, dy: 0.65))
+        for _ in 0..<3 where !read.isHittable { from.press(forDuration: 0.05, thenDragTo: to) }
+        XCTAssertTrue(read.isHittable)
+        XCTAssertTrue(edit.isHittable)
+        XCTAssertTrue(write.isHittable)
+        XCTAssertEqual(read.frame.minY, edit.frame.minY, accuracy: 2)
+        XCTAssertGreaterThan(write.frame.minY, edit.frame.minY + 10)
+        XCTAssertEqual(write.frame.minX, read.frame.minX, accuracy: 2)
+        attachWorkspaceScreens(named: "wide-tool-cards-with-files")
+
+        app.buttons["chat-toolbar-model"].tap()
+        XCTAssertTrue(app.navigationBars["Model & Agent"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        app.buttons["chat-toolbar-todo"].tap()
+        XCTAssertTrue(app.navigationBars["Todo"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+
+        layout.tap()
+        pin.tap()
+        XCTAssertTrue(read.isHittable)
+        XCTAssertEqual(read.frame.minY, write.frame.minY, accuracy: 2)
+        XCTAssertGreaterThan(write.frame.minX, edit.frame.minX)
+        attachWorkspaceScreens(named: "wide-tool-cards-without-files")
+    }
+
+    @MainActor
     func testToolCardsFixtureRendersFileCardsAndMergedToolCalls() throws {
         let app = XCUIApplication()
         app.launchArguments = ["UITEST_TOOL_CARDS_FIXTURE"]
@@ -116,9 +163,21 @@ final class ToolCardsUITests: XCTestCase {
     }
 
     @MainActor
-    private func attachScreenshot(named name: String) {
-        let screenshot = XCUIScreen.main.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
+    private func attachWorkspaceScreens(named name: String) {
+        let screens = XCUIScreen.screens
+        if screens.count <= 1 {
+            attachScreenshot(named: name)
+        } else {
+            // Duo exposes the cover and inner screens first; other entries may be disconnected.
+            for (index, screen) in screens.prefix(2).enumerated() {
+                attachScreenshot(named: "\(name)-display-\(index)", screenshot: screen.screenshot())
+            }
+        }
+    }
+
+    @MainActor
+    private func attachScreenshot(named name: String, screenshot: XCUIScreenshot? = nil) {
+        let attachment = XCTAttachment(screenshot: screenshot ?? XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
