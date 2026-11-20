@@ -239,9 +239,16 @@ actor APIClient {
     }
 
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session {
+        try Task.checkCancellation()
         let data = try CarLiveArchiveWire.body(archived: archived)
         let (responseData, _) = try await makeRequest(path: "/session/\(sessionID)", method: "PATCH", body: data)
         return try JSONDecoder().decode(Session.self, from: responseData)
+    }
+
+    func sessionChildren(sessionID: String) async throws -> [Session] {
+        try Task.checkCancellation()
+        let (data, _) = try await makeRequest(path: "/session/\(sessionID)/children")
+        return try JSONDecoder().decode([Session].self, from: data)
     }
 
     func updateSessionArchivedForLive(sessionID: String, archived: Int, transportToken: UInt64) async throws -> Int {
@@ -1244,6 +1251,7 @@ protocol APIClientProtocol: Actor {
     func createSession(title: String?, directory: String?) async throws -> Session
     func updateSession(sessionID: String, title: String) async throws -> Session
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session
+    func sessionChildren(sessionID: String) async throws -> [Session]
     func updateSessionArchivedForLive(sessionID: String, archived: Int, transportToken: UInt64) async throws -> Int
     func deleteSession(sessionID: String) async throws
     func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts]
@@ -1297,6 +1305,10 @@ protocol FileDirectorySearching: APIClientProtocol {
 extension APIClient: FileDirectorySearching {}
 
 extension APIClientProtocol {
+    func sessionChildren(sessionID: String) async throws -> [Session] {
+        throw URLError(.unsupportedURL)
+    }
+
     func sessionStatus(directory: String?) async throws -> [String: SessionStatus] {
         try await sessionStatus()
     }

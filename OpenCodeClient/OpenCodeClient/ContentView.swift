@@ -642,6 +642,9 @@ private struct TabletSessionsColumn: View {
     @State private var mutatingSessionID: String?
     @State private var actionError: String?
     @State private var showCreateDisabledAlert = false
+    @State private var archiveSelection = SessionArchiveSelection()
+
+    private var isSelecting: Bool { archiveSelection.scope == state.sessionArchiveScope }
 
     private var activeNodes: [SessionNode] {
         state.sessionTree(archived: false)
@@ -665,20 +668,28 @@ private struct TabletSessionsColumn: View {
                     )
                 } else {
                     List {
-                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
-                            activeExpanded.toggle()
-                        }
+                        SessionSectionHeader(
+                            title: L10n.t(.sessionsActive), isExpanded: activeExpanded, canToggle: !isSelecting,
+                            onToggle: { activeExpanded.toggle() },
+                            archiveAccessory: isSelecting ? nil : SessionArchiveSelectButton(
+                                disabled: !state.isConnected || activeNodes.isEmpty || mutatingSessionID != nil
+                            ) {
+                                activeExpanded = true
+                                archiveSelection.begin(in: state.sessionArchiveScope)
+                            }
+                        )
 
-                        if activeExpanded {
+                        if activeExpanded || isSelecting {
                             sessionNodes(activeNodes, archived: false, presentations: presentations)
                         }
 
-                        SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
-                            archivedExpanded.toggle()
-                        }
-
-                        if archivedExpanded {
-                            sessionNodes(archivedNodes, archived: true, presentations: presentations)
+                        if !isSelecting {
+                            SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
+                                archivedExpanded.toggle()
+                            }
+                            if archivedExpanded {
+                                sessionNodes(archivedNodes, archived: true, presentations: presentations)
+                            }
                         }
 
                         if state.isLoadingMoreSessions {
@@ -692,15 +703,22 @@ private struct TabletSessionsColumn: View {
                     .listStyle(.plain)
                     .contentMargins(.top, 0, for: .scrollContent)
                     .refreshable {
+                        guard !archiveSelection.isRunning else { return }
                         await state.refreshSessions()
                     }
+                    .disabled(archiveSelection.isRunning)
                 }
             }
-            .navigationTitle(showSettings ? L10n.t(.navSettings) : L10n.t(.sessionsTitle))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !showSettings { SessionArchiveBar(selection: archiveSelection, state: state) }
+            }
+            .modifier(SessionArchiveSuccessOverlay(selection: archiveSelection))
+            .navigationTitle(showSettings ? L10n.t(.navSettings) : isSelecting
+                             ? L10n.t(.sessionsBatchSelected, archiveSelection.selected.count) : L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // Sessions 列左上"折叠"按钮 (除 settings sheet 外都显示)
-                if !showSettings, let onCollapse {
+                if !showSettings, !isSelecting, let onCollapse {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(action: onCollapse) {
                             Image(systemName: "sidebar.left")
@@ -715,6 +733,9 @@ private struct TabletSessionsColumn: View {
                             showSettings = false
                             Task { await state.refresh() }
                         }
+                    } else if isSelecting {
+                        Button(L10n.t(.commonCancel), action: archiveSelection.cancel)
+                            .disabled(archiveSelection.isRunning)
                     } else {
                         HStack(spacing: 8) {
                             // 用 plus 图标替代 "New" 文字, 给 iPad 上 Sessions 标题留空间
@@ -749,6 +770,9 @@ private struct TabletSessionsColumn: View {
                 }
             }
         }
+        .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
+        .onChange(of: showSettings) { if showSettings { archiveSelection.scopeChanged() } }
+        .onDisappear { archiveSelection.scopeChanged() }
         .alert(
             L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(
@@ -786,40 +810,47 @@ private struct TabletSessionsColumn: View {
                     status: status,
                     indicator: presentations[session.id]?.indicator,
                     presentation: presentations[session.id],
-                    isSelected: state.currentSessionID == session.id,
+                    isSelected: !isSelecting && state.currentSessionID == session.id,
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
                     depth: depth,
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
-                    onSelect: { state.selectSession(session) },
+                    archiveChecked: isSelecting ? archiveSelection.selected.contains(session.id) : nil,
+                    onSelect: {
+                        if isSelecting { archiveSelection.toggle(session.id) } else { state.selectSession(session) }
+                    },
                     onToggleCollapse: { state.toggleSessionExpanded(session.id) }
                 )
                 .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    Button {
-                        mutateSession(session) {
-                            if archived {
-                                try await state.restoreSession(sessionID: session.id)
-                            } else {
-                                try await state.archiveSession(sessionID: session.id)
+                    if !isSelecting {
+                        Button {
+                            mutateSession(session) {
+                                if archived {
+                                    try await state.restoreSession(sessionID: session.id)
+                                } else {
+                                    try await state.archiveSession(sessionID: session.id)
+                                }
                             }
+                        } label: {
+                            Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
                         }
-                    } label: {
-                        Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
+                        .tint(DesignColors.Brand.primary.opacity(0.7))
+                        .disabled(mutatingSessionID != nil)
                     }
-                    .tint(DesignColors.Brand.primary.opacity(0.7))
-                    .disabled(mutatingSessionID != nil)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button {
-                        mutateSession(session) {
-                            try await state.deleteSession(sessionID: session.id)
+                    if !isSelecting {
+                        Button {
+                            mutateSession(session) {
+                                try await state.deleteSession(sessionID: session.id)
+                            }
+                        } label: {
+                            Label(L10n.t(.sessionsDelete), systemImage: "trash")
                         }
-                    } label: {
-                        Label(L10n.t(.sessionsDelete), systemImage: "trash")
+                        .tint(.red)
+                        .disabled(mutatingSessionID != nil)
                     }
-                    .tint(.red)
-                    .disabled(mutatingSessionID != nil)
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {

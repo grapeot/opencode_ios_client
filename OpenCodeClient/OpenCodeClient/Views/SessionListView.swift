@@ -13,6 +13,10 @@ struct SessionListView: View {
     @State private var mutatingSessionID: String?
     @State private var actionError: String?
     @State private var showCreateDisabledAlert = false
+    @State private var archiveSelection = SessionArchiveSelection()
+
+    private var isSelecting: Bool { archiveSelection.scope == state.sessionArchiveScope }
+    private var headerActionWidth: CGFloat { state.canCreateSession ? 88 : 108 }
 
     private var activeNodes: [SessionNode] {
         state.sessionTree(archived: false)
@@ -26,40 +30,51 @@ struct SessionListView: View {
         let presentations = state.sessionIndicatorPresentations
         VStack(spacing: 0) {
             HStack {
-                Button(L10n.t(.sessionsClose)) { dismiss() }
-                    .frame(width: 88, alignment: .leading)
+                Button(L10n.t(isSelecting ? .commonCancel : .sessionsClose)) {
+                    if isSelecting { archiveSelection.cancel() } else { dismiss() }
+                }
+                .disabled(archiveSelection.isRunning)
+                .frame(width: headerActionWidth, alignment: .leading)
 
                 Spacer()
 
-                Text(L10n.t(.sessionsTitle))
+                Text(isSelecting ? L10n.t(.sessionsBatchSelected, archiveSelection.selected.count) : L10n.t(.sessionsTitle))
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(DesignColors.Neutral.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
 
                 Spacer()
 
                 HStack(spacing: 8) {
-                    Button {
-                        Task {
-                            await state.createSession()
-                            dismiss()
+                    if !isSelecting {
+                        SessionArchiveSelectButton(disabled: !state.isConnected || activeNodes.isEmpty || mutatingSessionID != nil) {
+                            activeExpanded = true
+                            archiveSelection.begin(in: state.sessionArchiveScope)
                         }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 28, weight: .regular))
-                    }
-                    .disabled(!state.canCreateSession)
-                    .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
-
-                    if !state.canCreateSession {
                         Button {
-                            showCreateDisabledAlert = true
+                            Task {
+                                await state.createSession()
+                                dismiss()
+                            }
                         } label: {
-                            Image(systemName: "info.circle")
+                            Image(systemName: "plus")
+                                .font(.system(size: 28, weight: .regular))
                         }
-                        .foregroundColor(.secondary)
+                        .disabled(!state.canCreateSession)
+                        .foregroundColor(state.canCreateSession ? DesignColors.Brand.primary : DesignColors.Neutral.textTertiary)
+
+                        if !state.canCreateSession {
+                            Button {
+                                showCreateDisabledAlert = true
+                            } label: {
+                                Image(systemName: "info.circle")
+                            }
+                            .foregroundColor(.secondary)
+                        }
                     }
                 }
-                .frame(width: 88, alignment: .trailing)
+                .frame(width: headerActionWidth, alignment: .trailing)
             }
             .padding(.horizontal, DesignSpacing.lg)
             .padding(.top, DesignSpacing.lg)
@@ -74,20 +89,21 @@ struct SessionListView: View {
                     )
                 } else {
                     List {
-                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded) {
+                        SessionSectionHeader(title: L10n.t(.sessionsActive), isExpanded: activeExpanded, canToggle: !isSelecting) {
                             activeExpanded.toggle()
                         }
 
-                        if activeExpanded {
+                        if activeExpanded || isSelecting {
                             sessionNodes(activeNodes, archived: false, presentations: presentations)
                         }
 
-                        SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
-                            archivedExpanded.toggle()
-                        }
-
-                        if archivedExpanded {
-                            sessionNodes(archivedNodes, archived: true, presentations: presentations)
+                        if !isSelecting {
+                            SessionSectionHeader(title: L10n.t(.sessionsArchived), isExpanded: archivedExpanded) {
+                                archivedExpanded.toggle()
+                            }
+                            if archivedExpanded {
+                                sessionNodes(archivedNodes, archived: true, presentations: presentations)
+                            }
                         }
 
                         if state.isLoadingMoreSessions {
@@ -102,11 +118,18 @@ struct SessionListView: View {
                     .contentMargins(.top, 0, for: .scrollContent)
                     .accessibilityIdentifier("session-list")
                     .refreshable {
+                        guard !archiveSelection.isRunning else { return }
                         await state.refreshSessions()
                     }
+                    .disabled(archiveSelection.isRunning)
                 }
             }
+            SessionArchiveBar(selection: archiveSelection, state: state)
         }
+        .modifier(SessionArchiveSuccessOverlay(selection: archiveSelection))
+        .interactiveDismissDisabled(archiveSelection.isRunning)
+        .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
+        .onDisappear { archiveSelection.scopeChanged() }
         .alert(
             L10n.t(.sessionsActionFailedTitle),
             isPresented: Binding(
@@ -152,40 +175,47 @@ struct SessionListView: View {
                     status: status,
                     indicator: presentations[session.id]?.indicator,
                     presentation: presentations[session.id],
-                    isSelected: state.currentSessionID == session.id,
+                    isSelected: !isSelecting && state.currentSessionID == session.id,
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
                     depth: depth,
                     hasChildren: !node.children.isEmpty,
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
-                    onSelect: { selectSession(session) },
+                    archiveChecked: isSelecting ? archiveSelection.selected.contains(session.id) : nil,
+                    onSelect: {
+                        if isSelecting { archiveSelection.toggle(session.id) } else { selectSession(session) }
+                    },
                     onToggleCollapse: { state.toggleSessionExpanded(session.id) }
                 )
                 .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    Button {
-                        mutateSession(session) {
-                            if archived {
-                                try await state.restoreSession(sessionID: session.id)
-                            } else {
-                                try await state.archiveSession(sessionID: session.id)
+                    if !isSelecting {
+                        Button {
+                            mutateSession(session) {
+                                if archived {
+                                    try await state.restoreSession(sessionID: session.id)
+                                } else {
+                                    try await state.archiveSession(sessionID: session.id)
+                                }
                             }
+                        } label: {
+                            Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
                         }
-                    } label: {
-                        Label(archived ? L10n.t(.sessionsRestore) : L10n.t(.sessionsArchive), systemImage: archived ? "arrow.uturn.backward" : "archivebox")
+                        .tint(DesignColors.Brand.primary.opacity(0.7))
+                        .disabled(mutatingSessionID != nil)
                     }
-                    .tint(DesignColors.Brand.primary.opacity(0.7))
-                    .disabled(mutatingSessionID != nil)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button {
-                        mutateSession(session) {
-                            try await state.deleteSession(sessionID: session.id)
+                    if !isSelecting {
+                        Button {
+                            mutateSession(session) {
+                                try await state.deleteSession(sessionID: session.id)
+                            }
+                        } label: {
+                            Label(L10n.t(.sessionsDelete), systemImage: "trash")
                         }
-                    } label: {
-                        Label(L10n.t(.sessionsDelete), systemImage: "trash")
+                        .tint(.red)
+                        .disabled(mutatingSessionID != nil)
                     }
-                    .tint(.red)
-                    .disabled(mutatingSessionID != nil)
                 }
 
                 if state.expandedSessionIDs.contains(session.id) {
@@ -217,26 +247,34 @@ struct SessionListView: View {
 struct SessionSectionHeader: View {
     let title: String
     let isExpanded: Bool
+    var canToggle = true
     let onToggle: () -> Void
+    var archiveAccessory: SessionArchiveSelectButton? = nil
 
     var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: DesignSpacing.sm) {
-                Text(title)
-                    .font(DesignTypography.meta.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textSecondary)
+        HStack(spacing: DesignSpacing.sm) {
+            Button(action: onToggle) {
+                HStack(spacing: DesignSpacing.sm) {
+                    Text(title)
+                        .font(DesignTypography.meta.weight(.semibold))
+                        .foregroundStyle(DesignColors.Neutral.textSecondary)
 
-                Spacer()
+                    Spacer()
 
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(DesignTypography.micro.weight(.semibold))
-                    .foregroundStyle(DesignColors.Neutral.textTertiary)
-                    .frame(width: 20, height: 20)
+                    if canToggle {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(DesignTypography.micro.weight(.semibold))
+                            .foregroundStyle(DesignColors.Neutral.textTertiary)
+                            .frame(width: 20, height: 20)
+                    }
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .disabled(!canToggle)
+            archiveAccessory
         }
-        .buttonStyle(.plain)
         .textCase(nil)
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
@@ -283,6 +321,7 @@ struct SessionRowView: View {
     var depth: Int = 0
     var hasChildren: Bool = false
     var isCollapsed: Bool = false
+    var archiveChecked: Bool? = nil
     let onSelect: () -> Void
     var onToggleCollapse: (() -> Void)? = nil
 
@@ -318,6 +357,11 @@ struct SessionRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: DesignSpacing.sm) {
+            if let archiveChecked {
+                Image(systemName: archiveChecked ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(archiveChecked ? DesignColors.Brand.primary : DesignColors.Neutral.textSecondary)
+                    .accessibilityHidden(true)
+            }
             if hasChildren {
                 Button {
                     onToggleCollapse?()
@@ -389,6 +433,7 @@ struct SessionRowView: View {
         // poke out past the pill or collide with the expand/indent of child rows.
         .listRowBackground(selectionBackground)
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(archiveChecked == true ? .isSelected : [])
         .accessibilityIdentifier("session-row-\(session.id)")
     }
 

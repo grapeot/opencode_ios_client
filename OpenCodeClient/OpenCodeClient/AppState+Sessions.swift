@@ -456,10 +456,22 @@ extension AppState {
     }
 
     func archiveSession(sessionID: String) async throws {
-        let archived = Int(Date().timeIntervalSince1970 * 1000)
-        for id in sessionSubtreeIDs(rootedAt: sessionID, parentFirst: false) {
-            let updated = try await apiClient.updateSessionArchived(sessionID: id, archived: archived)
-            upsertSession(updated)
+        // A single-row archive already covers its subtree. Unlike a counted
+        // batch, it may include descendants discovered during execution.
+        let scope = sessionArchiveScope
+        let selected: Set<String> = [sessionID]
+        var plan = SessionArchivePlan(sessions: sessions, selected: selected)
+        while !plan.ids.isEmpty {
+            let result = await archiveSessions(plan, in: scope)
+            guard sessionArchiveScope == scope, !Task.isCancelled else { return }
+            if result.remaining == 0 { return }
+            if let error = result.firstError { throw error }
+            let revisedPlan = SessionArchivePlan(sessions: sessions, selected: selected)
+            guard result.foundMoreChildren, !revisedPlan.ids.isEmpty,
+                  Set(revisedPlan.ids) != Set(plan.ids) else {
+                throw SessionArchiveError.unconfirmed
+            }
+            plan = revisedPlan
         }
     }
 

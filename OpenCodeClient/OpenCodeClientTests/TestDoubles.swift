@@ -143,6 +143,14 @@ actor MockAPIClient: APIClientProtocol {
     var agentsError: Error?
     var updateSessionCalls: [(String, String)] = []
     var updateSessionArchivedCalls: [(String, Int)] = []
+    var archiveFailureIDs: Set<String> = []
+    func setArchiveFailureIDs(_ ids: Set<String>) { archiveFailureIDs = ids }
+    private var archiveMissingIDs: Set<String> = []
+    func setArchiveMissingIDs(_ ids: Set<String>) { archiveMissingIDs = ids }
+    private var archiveChildren: [Session] = []
+    func setArchiveChildren(_ children: [Session]) { archiveChildren = children }
+    private var onArchiveChildren: (@Sendable () async -> Void)?
+    func setOnArchiveChildren(_ hook: @escaping @Sendable () async -> Void) { onArchiveChildren = hook }
     var sessionDiffResult: [FileDiff] = []
     var sessionDiffCallCount = 0
     var fileListResults: [String: [FileNode]] = [:]
@@ -396,6 +404,9 @@ actor MockAPIClient: APIClientProtocol {
 
     func updateSessionArchived(sessionID: String, archived: Int) async throws -> Session {
         updateSessionArchivedCalls.append((sessionID, archived))
+        if archiveMissingIDs.contains(sessionID) { throw APIError.httpError(statusCode: 404, data: Data()) }
+        if archiveFailureIDs.contains(sessionID) { throw URLError(.networkConnectionLost) }
+        archiveChildren.removeAll { $0.id == sessionID }
         return Session(
             id: sessionID,
             slug: sessionID,
@@ -408,6 +419,11 @@ actor MockAPIClient: APIClientProtocol {
             share: nil,
             summary: nil
         )
+    }
+
+    func sessionChildren(sessionID: String) async throws -> [Session] {
+        await onArchiveChildren?()
+        return archiveChildren.filter { $0.parentID == sessionID }
     }
 
     func deleteSession(sessionID: String) async throws {
