@@ -6,9 +6,10 @@ import SwiftUI
 final class FileSearchProbe {
     var findDirectories: [String] = []
     var contentDirectories: [String] = []
+    var sentFromFilePreview = false
 
     var summary: String {
-        "find:\(findDirectories.joined(separator: "|")) content:\(contentDirectories.joined(separator: "|"))"
+        "find:\(findDirectories.joined(separator: "|")) content:\(contentDirectories.joined(separator: "|")) sent:\(sentFromFilePreview)"
     }
 }
 
@@ -49,6 +50,7 @@ enum FileSearchFixture {
     static func makeAppState() -> AppState {
         probe.findDirectories = []
         probe.contentDirectories = []
+        probe.sentFromFilePreview = false
         let defaults = UITestFixtures.isolatedDefaults(label: "file-search")
         return AppState(
             apiClient: StubClient(),
@@ -152,7 +154,11 @@ enum FileSearchFixture {
         }
         func deleteSession(sessionID: String) async throws {}
         func messages(sessionID: String, limit: Int?) async throws -> [MessageWithParts] { [] }
-        func promptAsync(sessionID: String, messageID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?, directory: String?) async throws {}
+        func promptAsync(sessionID: String, messageID: String, text: String, attachments: [ComposerImageAttachment], agent: String, model: Message.ModelInfo?, directory: String?) async throws {
+            if sessionID == "w06-files", text == "Read this file with me" {
+                await MainActor.run { FileSearchFixture.probe.sentFromFilePreview = true }
+            }
+        }
         func promptStructured(sessionID: String, messageID: String?, text: String, system: String, format: StructuredOutputFormat, agent: String, model: Message.ModelInfo) async throws -> MessageWithParts {
             throw APIError.httpError(statusCode: 501, data: Data())
         }

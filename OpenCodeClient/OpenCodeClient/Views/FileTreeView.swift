@@ -12,10 +12,11 @@ struct FileTreeView: View {
 
     /// Force iPad split behavior (preview in middle column instead of push).
     var forceSplitPreview: Bool = false
+    var onFileSelect: ((String) -> Void)?
 
     /// Regular workspace previews in the middle column; compact pushes.
     private var useSplitPreview: Bool {
-        forceSplitPreview || effectiveLayout == .regular
+        onFileSelect != nil || forceSplitPreview || effectiveLayout == .regular
     }
 
     var body: some View {
@@ -140,7 +141,8 @@ struct FileTreeView: View {
     }
 
     private func openFile(_ path: String) {
-        state.presentFilesColumnPreview(path: path, workspaceDirectory: openedWorkspaceDirectory)
+        if let onFileSelect { onFileSelect(path) }
+        else { state.presentFilesColumnPreview(path: path, workspaceDirectory: openedWorkspaceDirectory) }
     }
 
     private var visibleNodes: [TreeNodeItem] {

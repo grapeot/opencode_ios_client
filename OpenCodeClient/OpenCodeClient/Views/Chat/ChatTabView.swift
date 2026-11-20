@@ -190,6 +190,9 @@ struct ChatTabView: View {
     var showSessionListInToolbar: Bool = true
     var showCreateSessionInToolbar: Bool = true
     var onSettingsTap: (() -> Void)?
+    var onFilesTap: (() -> Void)?
+    var onRestoreSessions: (() -> Void)?
+    var filesPinned: Binding<Bool>?
     @State var inputText = ""
     @State private var hasMarkedText = false
     @State private var isComposerEditing = false
@@ -925,25 +928,12 @@ struct ChatTabView: View {
         .frame(width: composerActionSlotWidth)
     }
 
+    private var showsDockedFile: Bool { effectiveLayout == .compact && state.inlinePreviewPath != nil }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Docked file preview (iPhone): fills the whole screen except the
-                // composer strip at the bottom, which stays interactive so voice
-                // recording and typing keep working while the file is open.
-                if effectiveLayout == .compact, let previewPath = state.inlinePreviewPath {
-                    ChatInlineFilePreview(
-                        state: state,
-                        filePath: previewPath,
-                        workspaceDirectory: state.inlinePreviewWorkspaceDirectory,
-                        onClose: {
-                            withAnimation(DesignAnimation.spring) {
-                                state.closeFilePreview()
-                            }
-                        }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
+                VStack(spacing: 0) {
                     ChatToolbarView(
                         state: state,
                         showSessionList: $showSessionList,
@@ -952,7 +942,10 @@ struct ChatTabView: View {
                         showSettingsInToolbar: showSettingsInToolbar,
                         showSessionListInToolbar: showSessionListInToolbar,
                         showCreateSessionInToolbar: showCreateSessionInToolbar,
-                        onSettingsTap: onSettingsTap
+                        onSettingsTap: onSettingsTap,
+                        onFilesTap: onFilesTap,
+                        onRestoreSessions: onRestoreSessions,
+                        filesPinned: filesPinned
                     )
 
                     ScrollViewReader { proxy in
@@ -1124,7 +1117,7 @@ struct ChatTabView: View {
                             pendingBottomVisibilityTask = nil
                         }
                         .overlay(alignment: .leading) {
-                            if effectiveLayout != .regular {
+                            if showSessionListInToolbar {
                                 Color.clear
                                     .frame(width: SessionListEdgeSwipeBehavior.edgeThreshold)
                                     .contentShape(Rectangle())
@@ -1143,6 +1136,19 @@ struct ChatTabView: View {
                         .defaultScrollAnchor(.bottom)
                         .id(state.currentSessionID)
                     }
+                    }
+                }
+                .opacity(showsDockedFile ? 0 : 1)
+                .accessibilityHidden(showsDockedFile)
+                .allowsHitTesting(!showsDockedFile)
+                .overlay {
+                    if showsDockedFile, let previewPath = state.inlinePreviewPath {
+                        ChatInlineFilePreview(
+                            state: state,
+                            filePath: previewPath,
+                            workspaceDirectory: state.inlinePreviewWorkspaceDirectory,
+                            onClose: { state.closeFilePreview() }
+                        )
                     }
                 }
 
@@ -1845,7 +1851,8 @@ struct ChatTabView: View {
     }
 
     private func openFilesTab() {
-        state.selectedTab = RootTab.files.rawValue
+        if let onFilesTap { onFilesTap() }
+        else { state.selectedTab = RootTab.files.rawValue }
     }
 
     private var sessionListEdgeSwipeGesture: some Gesture {

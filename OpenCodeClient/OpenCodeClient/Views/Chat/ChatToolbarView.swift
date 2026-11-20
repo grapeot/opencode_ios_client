@@ -14,6 +14,9 @@ struct ChatToolbarView: View {
     var showSessionListInToolbar: Bool = true
     var showCreateSessionInToolbar: Bool = true
     var onSettingsTap: (() -> Void)?
+    var onFilesTap: (() -> Void)?
+    var onRestoreSessions: (() -> Void)?
+    var filesPinned: Binding<Bool>?
     
     @State private var showCreateDisabledAlert = false
     @State private var showConfigSheet = false
@@ -35,6 +38,11 @@ struct ChatToolbarView: View {
     // MARK: - Session Operation Buttons
     private var sessionButtons: some View {
         HStack(spacing: LayoutConstants.Toolbar.buttonSpacing) {
+            if let onRestoreSessions {
+                Button(action: onRestoreSessions) { Image(systemName: "sidebar.left") }
+                    .accessibilityLabel(L10n.t(.sidebarShowSessions))
+                    .accessibilityIdentifier("chat-restore-sessions")
+            }
             if showSessionListInToolbar {
                 Button {
                     showSessionList = true
@@ -86,6 +94,22 @@ struct ChatToolbarView: View {
     // MARK: - Right Side Buttons (Model + Agent + Settings)
     private var rightButtons: some View {
         HStack(spacing: DesignSpacing.md) {
+            if let onFilesTap {
+                if let filesPinned {
+                    Menu {
+                        Button(L10n.t(.navFiles), systemImage: "folder", action: onFilesTap)
+                        Toggle(L10n.t(.workspacePinFiles), isOn: filesPinned)
+                    } label: {
+                        Image(systemName: "folder")
+                    }
+                    .accessibilityLabel(L10n.t(.navFiles))
+                    .accessibilityIdentifier("chat-toolbar-files")
+                } else {
+                    Button(action: onFilesTap) { Image(systemName: "folder") }
+                        .accessibilityLabel(L10n.t(.navFiles))
+                        .accessibilityIdentifier("chat-toolbar-files")
+                }
+            }
             if showsLayoutShortcut {
                 LayoutPreferenceMenu(state: state)
             }

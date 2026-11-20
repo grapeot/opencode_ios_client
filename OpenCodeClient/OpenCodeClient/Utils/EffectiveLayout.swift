@@ -35,6 +35,22 @@ enum EffectiveLayout: Equatable {
     case regular
 }
 
+/// Sidebar mode shares compact preview routing, including its live composer.
+enum WorkspacePresentation: Equatable {
+    case compact, sidebar, wide
+
+    var previewLayout: EffectiveLayout { self == .wide ? .regular : .compact }
+
+    static func resolve(preference: LayoutPreference, width: CGFloat,
+                        widthClass: WindowWidthClass, shortWindow: Bool) -> Self {
+        guard preference == .automatic else { return .compact }
+        if width >= 820 { return .wide }
+        if width >= 555, !shortWindow { return .sidebar }
+        if width <= 0, widthClass == .regular { return .wide }
+        return .compact
+    }
+}
+
 enum EffectiveLayoutResolver {
     static func resolve(preference: LayoutPreference, width: WindowWidthClass) -> EffectiveLayout {
         switch preference {

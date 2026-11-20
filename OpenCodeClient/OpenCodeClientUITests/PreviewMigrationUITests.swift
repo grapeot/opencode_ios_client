@@ -68,6 +68,76 @@ final class PreviewMigrationUITests: XCTestCase {
     }
 
     @MainActor
+    func testFileBrowserKeepsComposerUsableWhileReading() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_FILE_SEARCH_FIXTURE", "-AppleLanguages", "(en)"]
+        app.launchEnvironment = ["FILE_SEARCH_FIXTURE_MODE": "results", "UITEST_LAYOUT_PREFERENCE": "focus"]
+        app.launch()
+
+        let row = marked(app, "file-search-result-notes.txt")
+        let folder = app.buttons["chat-toolbar-files"]
+        if !row.waitForExistence(timeout: 3) || !row.isHittable {
+            if folder.exists && folder.isHittable {
+                folder.tap()
+            } else {
+                let filesTab = app.tabBars.buttons["Files"]
+                XCTAssertTrue(filesTab.waitForExistence(timeout: 6))
+                filesTab.tap()
+            }
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        row.tap()
+        let preview = marked(app, "chat-inline-file-preview")
+        XCTAssertTrue(preview.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts[sentinel].waitForExistence(timeout: 8))
+
+        let input = marked(app, "chat-input")
+        XCTAssertTrue(input.isHittable)
+        input.tap()
+        input.typeText("Read this file with me")
+        XCTAssertTrue(preview.exists)
+        capture(app, name: "file-and-active-composer")
+        app.buttons["chat-send"].tap()
+        let probe = app.staticTexts.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "file-search-probe", "sent:true")).firstMatch
+        XCTAssertTrue(probe.waitForExistence(timeout: 8))
+        XCTAssertTrue(preview.exists)
+        XCTAssertTrue(app.staticTexts[sentinel].exists)
+    }
+
+    @MainActor
+    func testSidebarFileAndDraftSurviveRotation() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_FILE_SEARCH_FIXTURE", "-AppleLanguages", "(en)"]
+        app.launchEnvironment = ["FILE_SEARCH_FIXTURE_MODE": "results"]
+        app.launch()
+        guard marked(app, "sidebar-workspace-layout").waitForExistence(timeout: 5) else {
+            throw XCTSkip("Requires a middle-width portrait window")
+        }
+        app.buttons["chat-toolbar-files"].tap()
+        let result = marked(app, "file-search-result-notes.txt")
+        XCTAssertTrue(result.waitForExistence(timeout: 8))
+        result.tap()
+        XCTAssertTrue(marked(app, "chat-inline-file-preview").waitForExistence(timeout: 8))
+        let input = marked(app, "chat-input")
+        XCTAssertTrue(input.isHittable)
+        input.tap()
+        input.typeText("Read this file with me")
+        capture(app, name: "sidebar-file-before-rotation")
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(marked(app, "ipad-workspace-layout").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts[sentinel].waitForExistence(timeout: 8))
+        XCTAssertFalse(marked(app, "chat-inline-file-preview").exists)
+        XCTAssertEqual(input.value as? String, "Read this file with me")
+        capture(app, name: "wide-file-after-rotation")
+
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(marked(app, "chat-inline-file-preview").waitForExistence(timeout: 10))
+        XCTAssertEqual(input.value as? String, "Read this file with me")
+        XCTAssertTrue(app.staticTexts[sentinel].exists)
+    }
+
+    @MainActor
     private func openFilesAndPushResult(_ app: XCUIApplication) {
         let result = marked(app, "file-search-result-notes.txt")
         if !result.waitForExistence(timeout: 2) {

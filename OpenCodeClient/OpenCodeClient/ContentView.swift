@@ -22,12 +22,16 @@ enum SettingsFocus: Equatable {
 struct ContentView: View {
     @State private var state: AppState
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettingsSheet = false
     @State private var showTabletSettings = false
     @State private var selectedTab = 0
     @State private var carModeEnabled: Bool
     @State private var sessionsCollapsed: Bool = false
+    @State private var windowWidth: CGFloat = 0
+    @State private var showFileBrowser = false
+    @AppStorage("workspace.filesPinned") private var filesPinned = true
 
     init() {
         let initialState = Self.makeInitialState()
@@ -69,14 +73,22 @@ struct ContentView: View {
         forcedWidthClass ?? sizeClass
     }
 
-    private var effectiveLayout: EffectiveLayout {
-        EffectiveLayoutResolver.resolve(
+    private var presentation: WorkspacePresentation {
+        if showsCarMode && selectedTab == RootTab.car.rawValue { return .compact }
+        if let forcedWidthClass {
+            return state.layoutPreference == .automatic && forcedWidthClass == .regular ? .wide : .compact
+        }
+        return WorkspacePresentation.resolve(
             preference: state.layoutPreference,
-            width: WindowWidthClass(horizontalSizeClass: resolvedSizeClass)
+            width: windowWidth,
+            widthClass: WindowWidthClass(horizontalSizeClass: resolvedSizeClass),
+            shortWindow: verticalSizeClass == .compact
         )
     }
 
-    private var useSplitLayout: Bool { effectiveLayout == .regular }
+    private var effectiveLayout: EffectiveLayout { presentation.previewLayout }
+    private var useSplitLayout: Bool { presentation != .compact }
+    private var showsFilesColumn: Bool { presentation == .wide && (filesPinned || state.previewFilePath != nil) }
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -106,36 +118,10 @@ struct ContentView: View {
         )
     }
 
-    private var filePreviewSheetItem: Binding<FilePathWrapper?> {
-        Binding(
-            get: {
-                guard !useSplitLayout else { return nil }
-                return state.fileToOpenInFilesTab.map {
-                    FilePathWrapper(path: $0, workspaceDirectory: state.fileToOpenInFilesTabWorkspaceDirectory)
-                }
-            },
-            set: { newValue, _ in
-                guard newValue == nil else { return }
-                let dismissedSequence = state.pendingEventSequence
-                Task { @MainActor in
-                    await Task.yield()
-                    guard state.pendingEventSequence == dismissedSequence else { return }
-                    state.fileToOpenInFilesTab = nil
-                    state.fileToOpenInFilesTabWorkspaceDirectory = nil
-                    state.pendingFileOpenOwner = nil
-                    state.pendingEventSequence = 0
-                    if !useSplitLayout {
-                        selectedTab = RootTab.chat.rawValue
-                        state.selectedTab = RootTab.chat.rawValue
-                    }
-                }
-            }
-        )
-    }
-
     private var rootLayout: some View {
         GeometryReader { geo in
-            let metrics = RegularPaneMetrics(totalWidth: geo.size.width, sessionsCollapsed: sessionsCollapsed)
+            let metrics = RegularPaneMetrics(totalWidth: geo.size.width, sessionsCollapsed: sessionsCollapsed,
+                                             showsFiles: showsFilesColumn)
             let showColumns = useSplitLayout && geo.size.width > 0
             HStack(spacing: 0) {
                 regularColumnsSlot(shown: showColumns, metrics: metrics)
@@ -161,7 +147,9 @@ struct ContentView: View {
                 }
             }
         }
-        .accessibilityIdentifier(useSplitLayout ? "ipad-workspace-layout" : "compact-workspace-layout")
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { windowWidth = $0 }
+        .accessibilityIdentifier(presentation == .sidebar ? "sidebar-workspace-layout"
+                                 : useSplitLayout ? "ipad-workspace-layout" : "compact-workspace-layout")
     }
 
     private func regularColumnsSlot(shown: Bool, metrics: RegularPaneMetrics) -> some View {
@@ -172,18 +160,21 @@ struct ContentView: View {
                         TabletSessionsColumn(
                             state: state,
                             showSettings: $showTabletSettings,
+                            carModeEnabled: carModeEnabledBinding,
                             onCollapse: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = true } }
                         )
                         .frame(width: metrics.sessionsWidth)
                         Divider()
                     }
-                    TabletFilesColumn(
-                        state: state,
-                        sessionsCollapsed: sessionsCollapsed,
-                        onExpandSessions: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = false } }
-                    )
-                    .frame(width: metrics.filesWidth)
-                    Divider()
+                    if showsFilesColumn {
+                        TabletFilesColumn(
+                            state: state,
+                            sessionsCollapsed: sessionsCollapsed,
+                            onExpandSessions: { withAnimation(DesignAnimation.spring) { sessionsCollapsed = false } }
+                        )
+                        .frame(width: metrics.filesWidth)
+                        Divider()
+                    }
                 }
             } else {
                 Color.clear.frame(width: 0)
@@ -413,13 +404,19 @@ struct ContentView: View {
         }
         .onChange(of: effectiveLayout) { oldValue, newValue in
             state.applyPreviewLayout(from: oldValue, to: newValue)
-            if oldValue == .regular, newValue == .compact {
-                selectedTab = RootTab.chat.rawValue
-            }
+        }
+        .onChange(of: presentation) { oldValue, newValue in
+            guard oldValue != .compact, newValue == .compact, selectedTab != RootTab.car.rawValue else { return }
+            selectedTab = RootTab.chat.rawValue
+            state.selectedTab = RootTab.chat.rawValue
         }
         .onChange(of: state.pendingEventSequence) { _, sequence in
             guard ExternalFileOpenRouting.shouldAdopt(sequence: sequence, path: state.fileToOpenInFilesTab) else { return }
             state.adoptPendingFileOpen(layout: effectiveLayout)
+            if state.inlinePreviewPath != nil {
+                selectedTab = RootTab.chat.rawValue
+                state.selectedTab = RootTab.chat.rawValue
+            }
         }
         .onChange(of: state.currentHostProfileID) { oldHost, newHost in
             state.discardPreviewIfHostChanged(from: oldHost, to: newHost)
@@ -451,30 +448,15 @@ struct ContentView: View {
             selectedTab = RootTab.chat.rawValue
             state.selectedTab = RootTab.chat.rawValue
         }
-        .sheet(item: filePreviewSheetItem) { wrapper in
+        .sheet(isPresented: $showFileBrowser) {
             NavigationStack {
-                FileContentView(
-                    state: state,
-                    filePath: wrapper.path,
-                    workspaceDirectory: wrapper.workspaceDirectory,
-                    boundSessionID: state.pendingFileOpenOwner?.sessionID
-                )
+                FileTreeView(state: state, onFileSelect: openWorkspaceFile)
+                    .fileSearchQueryHandlers(state: state)
+                    .navigationTitle(L10n.t(.navFiles))
+                    .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button {
-                                Task { @MainActor in
-                                    state.fileToOpenInFilesTab = nil
-                                    state.fileToOpenInFilesTabWorkspaceDirectory = nil
-                                    state.pendingFileOpenOwner = nil
-                                    if !useSplitLayout {
-                                        selectedTab = RootTab.chat.rawValue
-                                        state.selectedTab = RootTab.chat.rawValue
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                            .accessibilityLabel(L10n.t(.appClose))
+                            Button(L10n.t(.appClose)) { showFileBrowser = false }
                         }
                     }
             }
@@ -493,6 +475,18 @@ struct ContentView: View {
         }
     }
 
+    private func openWorkspaceFile(_ path: String) {
+        if effectiveLayout == .regular {
+            state.presentFilesColumnPreview(path: path, workspaceDirectory: state.effectiveProjectDirectory)
+        } else {
+            state.presentChatFilePreview(path: path, workspaceDirectory: state.effectiveProjectDirectory ?? "",
+                                         layout: .compact, bindToSession: false)
+        }
+        selectedTab = RootTab.chat.rawValue
+        state.selectedTab = RootTab.chat.rawValue
+        showFileBrowser = false
+    }
+
     @ViewBuilder
     private var tabLayout: some View {
         Group {
@@ -509,7 +503,11 @@ struct ContentView: View {
             state: state,
             showSettingsInToolbar: false,
             showSessionListInToolbar: !useSplitLayout,
-            showCreateSessionInToolbar: !useSplitLayout
+            showCreateSessionInToolbar: !useSplitLayout,
+            onFilesTap: useSplitLayout ? { showFileBrowser = true } : nil,
+            onRestoreSessions: useSplitLayout && sessionsCollapsed && !showsFilesColumn
+                ? { sessionsCollapsed = false } : nil,
+            filesPinned: presentation == .wide ? $filesPinned : nil
         )
     }
 
@@ -519,7 +517,7 @@ struct ContentView: View {
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
                 .tag(RootTab.chat.rawValue)
 
-            systemTabBar(FilesTabView(state: state))
+            systemTabBar(FilesTabView(state: state, onFileSelect: openWorkspaceFile))
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(RootTab.files.rawValue)
 
@@ -535,7 +533,7 @@ struct ContentView: View {
                 .tabItem { Label(L10n.t(.appChat), systemImage: "bubble.left.and.text.bubble.right") }
                 .tag(RootTab.chat.rawValue)
 
-            systemTabBar(FilesTabView(state: state))
+            systemTabBar(FilesTabView(state: state, onFileSelect: openWorkspaceFile))
                 .tabItem { Label(L10n.t(.navFiles), systemImage: "folder") }
                 .tag(RootTab.files.rawValue)
 
@@ -567,22 +565,15 @@ private struct RegularPaneMetrics {
     var filesWidth: CGFloat
     var chatWidth: CGFloat
 
-    var leadingWidth: CGFloat { sessionsWidth + filesWidth + 2 }
+    var leadingWidth: CGFloat { sessionsWidth + filesWidth + (sessionsWidth > 0 ? 1 : 0) + (filesWidth > 0 ? 1 : 0) }
 
-    init(totalWidth: CGFloat, sessionsCollapsed: Bool) {
-        let sessions = sessionsCollapsed ? 0 : totalWidth * 0.25
-        let remaining = max(0, totalWidth - sessions)
-        let pane = sessionsCollapsed ? remaining / 2 : totalWidth * 0.375
+    init(totalWidth: CGFloat, sessionsCollapsed: Bool, showsFiles: Bool) {
+        let sessions = sessionsCollapsed ? 0 : min(264, max(152, totalWidth * 0.245))
+        let files = showsFiles ? min(370, max(235, totalWidth * 0.29)) : 0
         sessionsWidth = sessions
-        filesWidth = pane
-        chatWidth = pane
+        filesWidth = files
+        chatWidth = max(0, totalWidth - sessions - files - (sessions > 0 ? 1 : 0) - (files > 0 ? 1 : 0))
     }
-}
-
-private struct FilePathWrapper: Identifiable {
-    let path: String
-    let workspaceDirectory: String?
-    var id: String { "\(workspaceDirectory ?? ""):\(path)" }
 }
 
 private struct TabletFilesColumn: View {
@@ -636,6 +627,7 @@ private struct TabletFilesColumn: View {
 private struct TabletSessionsColumn: View {
     @Bindable var state: AppState
     @Binding var showSettings: Bool
+    @Binding var carModeEnabled: Bool
     var onCollapse: (() -> Void)? = nil
     @State private var activeExpanded = true
     @State private var archivedExpanded = false
@@ -659,7 +651,7 @@ private struct TabletSessionsColumn: View {
         NavigationStack {
             Group {
                 if showSettings {
-                    SettingsTabView(state: state, isCarModeEnabled: .constant(false))
+                    SettingsTabView(state: state, isCarModeEnabled: $carModeEnabled)
                 } else if activeNodes.isEmpty && archivedNodes.isEmpty {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),

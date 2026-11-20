@@ -5,6 +5,16 @@ import UIKit
 @testable import OpenCodeClient
 
 struct EffectiveLayoutTests {
+    @Test func measuredWorkspaceSeparatesSidebarFromFilesColumn() {
+        let outer = WorkspacePresentation.resolve(preference: .automatic, width: 445, widthClass: .compact, shortWindow: false)
+        let tall = WorkspacePresentation.resolve(preference: .automatic, width: 626, widthClass: .compact, shortWindow: false)
+        let wide = WorkspacePresentation.resolve(preference: .automatic, width: 875, widthClass: .regular, shortWindow: false)
+        #expect(outer == .compact)
+        #expect(tall == .sidebar)
+        #expect(tall.previewLayout == .compact)
+        #expect(wide == .wide)
+        #expect(WorkspacePresentation.resolve(preference: .focus, width: 875, widthClass: .regular, shortWindow: false) == .compact)
+    }
     @Test func automaticFollowsRegularWidth() {
         #expect(EffectiveLayoutResolver.resolve(preference: .automatic, width: .regular) == .regular)
     }
@@ -749,7 +759,7 @@ struct EffectiveLayoutTests {
     }
 
     @MainActor
-    @Test func unboundColumnBecomesSessionBoundInlineAndClosesOnNextSwitch() {
+    @Test func unboundWorkspaceFileStaysUnboundWhileMovingBetweenLayouts() {
         let state = makePreviewState()
         state.sessions = [
             previewSession(id: "session-a", directory: "/proj/a"),
@@ -773,12 +783,12 @@ struct EffectiveLayoutTests {
         #expect(state.inlinePreviewPath == "notes.md")
         #expect(state.inlinePreviewWorkspaceDirectory == "/proj/a")
         #expect(state.previewFilePath == nil)
-        #expect(state.previewSessionID == "session-b")
+        #expect(state.previewSessionID == nil)
 
         state.currentSessionID = "session-c"
         state.discardChatPreviewIfSessionChanged(from: "session-b", to: "session-c")
-        #expect(state.inlinePreviewPath == nil)
-        #expect(state.inlinePreviewWorkspaceDirectory == nil)
+        #expect(state.inlinePreviewPath == "notes.md")
+        #expect(state.inlinePreviewWorkspaceDirectory == "/proj/a")
         #expect(state.previewFilePath == nil)
         #expect(state.previewSessionID == nil)
 
@@ -788,6 +798,18 @@ struct EffectiveLayoutTests {
         unbound.applyPreviewLayout(from: .regular, to: .compact)
         #expect(unbound.inlinePreviewPath == "notes.md")
         #expect(unbound.previewSessionID == nil)
+    }
+
+    @MainActor
+    @Test func dockedBrowserFileStaysOpenAcrossSessionSwitch() {
+        let state = makePreviewState()
+        state.currentSessionID = "session-a"
+        state.presentChatFilePreview(path: "notes.txt", workspaceDirectory: "/workspace", layout: .compact, bindToSession: false)
+        state.currentSessionID = "session-b"
+        state.discardChatPreviewIfSessionChanged(from: "session-a", to: "session-b")
+        #expect(state.inlinePreviewPath == "notes.txt")
+        #expect(state.inlinePreviewWorkspaceDirectory == "/workspace")
+        #expect(state.previewSessionID == nil)
     }
 }
 
