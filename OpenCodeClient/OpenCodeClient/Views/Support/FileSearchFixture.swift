@@ -127,6 +127,11 @@ enum FileSearchFixture {
             state.fileStore.fileSearchInFlight = false
         }
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("UITEST_VOICE_STOP_TRANSITION") {
+            state._aiBuilderToken = "fixture-token"
+            state._aiBuilderBaseURL = "https://voice.example.invalid"
+            state.voiceFirstInput = true
+        }
         if let stale = ProcessInfo.processInfo.environment["UITEST_STALE_INLINE"], !stale.isEmpty {
             state.inlinePreviewPath = stale
             state.inlinePreviewWorkspaceDirectory = filesDirectory

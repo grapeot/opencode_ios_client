@@ -33,12 +33,27 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var windowWidth: CGFloat = 0
     @State private var showFileBrowser = false
-    @AppStorage("workspace.filesPinned") private var filesPinned = true
+    @AppStorage private var filesPinned: Bool
 
     init() {
         let initialState = Self.makeInitialState()
         _state = State(initialValue: initialState)
         _carModeEnabled = State(initialValue: initialState.isCarModeEnabled)
+        _filesPinned = AppStorage(wrappedValue: Self.defaultFilesPinned, "workspace.filesPinned", store: initialState.defaults)
+    }
+
+    private static var defaultFilesPinned: Bool {
+        // Use the hardware identifier so other wide iPhones keep their default.
+        #if targetEnvironment(simulator)
+        let model = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"]
+        #else
+        var info = utsname()
+        uname(&info)
+        let model = withUnsafeBytes(of: &info.machine) {
+            String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self)
+        }
+        #endif
+        return model != "iPhone19,4" // iPhone Duo
     }
 
     private static func makeInitialState() -> AppState {
@@ -123,7 +138,7 @@ struct ContentView: View {
     private var rootLayout: some View {
         GeometryReader { geo in
             let metrics = RegularPaneMetrics(totalWidth: geo.size.width, sessionsCollapsed: sessionsCollapsed,
-                                             showsFiles: showsFilesColumn)
+                                             showsFiles: showsFilesColumn, prioritizesFiles: isPhone)
             let showColumns = useSplitLayout && geo.size.width > 0
             let buttonTop = navigationButtonTop(in: geo)
             HStack(spacing: 0) {
@@ -146,6 +161,22 @@ struct ContentView: View {
                                     }
                                 }
                         )
+                }
+            }
+            // Layer this above the navigation stack and its native search bar.
+            .overlay(alignment: .topLeading) {
+                if showColumns, showsFilesColumn, sessionsCollapsed {
+                    Button { sessionsCollapsed = false } label: {
+                        Image(systemName: "sidebar.left")
+                            .frame(width: 44, height: 44)
+                            .background(.regularMaterial, in: Circle())
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t(.sidebarShowSessions))
+                    .accessibilityIdentifier("ipad-show-sessions-button")
+                    .padding(.leading, 6)
+                    .padding(.top, buttonTop)
                 }
             }
         }
@@ -173,7 +204,7 @@ struct ContentView: View {
                         showSettings: $showTabletSettings,
                         carModeEnabled: carModeEnabledBinding,
                         usesNarrowLayout: metrics.sessionsWidth < 240,
-                        usesAlignedHeader: alignsSessionHeader,
+                        usesAlignedHeader: isPhone,
                         headerTop: buttonTop,
                         onCollapse: { sessionsCollapsed = true }
                     )
@@ -183,11 +214,7 @@ struct ContentView: View {
                     .allowsHitTesting(!sessionsCollapsed)
                     if metrics.sessionsWidth > 0 { Divider() }
                     if showsFilesColumn {
-                        TabletFilesColumn(
-                            state: state,
-                            sessionsCollapsed: sessionsCollapsed,
-                            onExpandSessions: { sessionsCollapsed = false }
-                        )
+                        TabletFilesColumn(state: state)
                         .frame(width: metrics.filesWidth)
                         Divider()
                     }
@@ -202,7 +229,7 @@ struct ContentView: View {
         .allowsHitTesting(shown)
     }
 
-    private var alignsSessionHeader: Bool {
+    private var isPhone: Bool {
         #if os(iOS)
         UIDevice.current.userInterfaceIdiom == .phone
         #else
@@ -593,14 +620,20 @@ private struct RegularPaneMetrics {
 
     var leadingWidth: CGFloat { sessionsWidth + filesWidth + (sessionsWidth > 0 ? 1 : 0) + (filesWidth > 0 ? 1 : 0) }
 
-    init(totalWidth: CGFloat, sessionsCollapsed: Bool, showsFiles: Bool) {
-        let sessions = sessionsCollapsed ? 0 : min(264, max(152, totalWidth * 0.245))
+    init(totalWidth: CGFloat, sessionsCollapsed: Bool, showsFiles: Bool, prioritizesFiles: Bool) {
+        let sessions = sessionsCollapsed ? 0 : prioritizesFiles
+            ? min(264, max(152, totalWidth * 0.245)) : totalWidth * 0.25
         let contentWidth = max(0, totalWidth - sessions - (sessions > 0 ? 1 : 0) - (showsFiles ? 1 : 0))
         sessionsWidth = sessions
-        if showsFiles {
+        if showsFiles && prioritizesFiles {
             // Size the composer from the window, not from the space left by Sessions.
             chatWidth = min(contentWidth, min(360, max(288, totalWidth * 0.32)))
             filesWidth = contentWidth - chatWidth
+        } else if showsFiles {
+            // Keep the pre-adaptive iPad split: Sessions takes a quarter when
+            // open, and Files and Chat divide the remaining space equally.
+            filesWidth = contentWidth / 2
+            chatWidth = contentWidth / 2
         } else {
             filesWidth = 0
             chatWidth = contentWidth
@@ -610,8 +643,6 @@ private struct RegularPaneMetrics {
 
 private struct TabletFilesColumn: View {
     @Bindable var state: AppState
-    var sessionsCollapsed = false
-    var onExpandSessions: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -641,23 +672,6 @@ private struct TabletFilesColumn: View {
                         .help(L10n.t(.appClose))
                     }
                 }
-            }
-        }
-        // Keep the restore control out of the navigation bar so resizing the
-        // sidebar doesn't also change the native title's toolbar layout.
-        .overlay(alignment: .topLeading) {
-            if sessionsCollapsed, let onExpandSessions {
-                Button(action: onExpandSessions) {
-                    Image(systemName: "sidebar.left")
-                        .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: Circle())
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t(.sidebarShowSessions))
-                .accessibilityIdentifier("ipad-show-sessions-button")
-                .padding(.leading, 4)
-                .padding(.top, 6)
             }
         }
     }

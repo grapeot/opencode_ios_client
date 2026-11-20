@@ -855,20 +855,42 @@ struct ChatTabView: View {
     }
 
     private var voiceRail: some View {
+        Group {
+            if voiceFirstEnabled, isShowingTranscribingUI || hasPreservedSpeechAudioForUI {
+                // Keep the localized action and all tap targets inside the
+                // composer when a narrow split pane can't fit both in one row.
+                ViewThatFits(in: .horizontal) {
+                    voiceRailRow(includesTrailingAction: true)
+                    VStack(alignment: .trailing, spacing: DesignSpacing.xs) {
+                        voiceRailTrailingAction
+                            .environment(\.layoutDirection, textLayoutDirection)
+                        voiceRailRow(includesTrailingAction: false)
+                    }
+                }
+            } else {
+                voiceRailRow(includesTrailingAction: true)
+            }
+        }
+        .environment(\.layoutDirection, composerControlDirection)
+        .padding(.top, DesignSpacing.xs)
+        .padding(.bottom, 6)
+    }
+
+    private func voiceRailRow(includesTrailingAction: Bool) -> some View {
         HStack(spacing: DesignSpacing.sm) {
             voiceRailWaveform
                 .environment(\.layoutDirection, textLayoutDirection)
 
             Group {
-                if voiceFirstEnabled {
+                if includesTrailingAction {
                     voiceRailTrailingAction
-                        .fixedSize(horizontal: true, vertical: false)
-                        .layoutPriority(1)
+                        .fixedSize(horizontal: voiceFirstEnabled, vertical: false)
+                        .layoutPriority(voiceFirstEnabled ? 1 : 0)
+                }
+                if voiceFirstEnabled {
                     voiceFirstAccessoryRow
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(1)
-                } else {
-                    voiceRailTrailingAction
                 }
             }
             .environment(\.layoutDirection, textLayoutDirection)
@@ -876,9 +898,6 @@ struct ChatTabView: View {
             voiceRailTransportButton
                 .environment(\.layoutDirection, textLayoutDirection)
         }
-        .environment(\.layoutDirection, composerControlDirection)
-        .padding(.top, DesignSpacing.xs)
-        .padding(.bottom, 6)
     }
 
     private var composerActions: some View {
