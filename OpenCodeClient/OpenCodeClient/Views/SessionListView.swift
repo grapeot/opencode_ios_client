@@ -126,6 +126,7 @@ struct SessionListView: View {
             }
             SessionArchiveBar(selection: archiveSelection, state: state)
         }
+        .modifier(SessionArchiveSuccessOverlay(selection: archiveSelection))
         .interactiveDismissDisabled(archiveSelection.isRunning)
         .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
         .onDisappear { archiveSelection.scopeChanged() }

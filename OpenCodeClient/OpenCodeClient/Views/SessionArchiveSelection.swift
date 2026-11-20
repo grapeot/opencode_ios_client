@@ -6,11 +6,18 @@ final class SessionArchiveSelection {
     private(set) var selected = Set<String>()
     private(set) var isRunning = false
     private(set) var outcome: SessionArchiveOutcome?
+    private(set) var successToast: SuccessToast?
     private var task: Task<Void, Never>?
+
+    struct SuccessToast: Identifiable {
+        let id = UUID()
+        let count: Int
+    }
 
     func begin(in scope: SessionArchiveScope) {
         selected.removeAll()
         outcome = nil
+        successToast = nil
         self.scope = scope
     }
 
@@ -19,6 +26,7 @@ final class SessionArchiveSelection {
         scope = nil
         selected.removeAll()
         outcome = nil
+        successToast = nil
     }
 
     func scopeChanged() {
@@ -43,12 +51,61 @@ final class SessionArchiveSelection {
             task = nil
             guard scope == state.sessionArchiveScope, !Task.isCancelled else { cancel(); return }
             selected.subtract(result.archived.union(result.missing))
-            if result.remaining == 0 { cancel() }
-            outcome = result
+            if result.remaining == 0 {
+                cancel()
+                if !result.archived.isEmpty { successToast = SuccessToast(count: result.archived.count) }
+            } else {
+                outcome = result
+            }
         }
     }
 
     func dismissOutcome() { outcome = nil }
+    func dismissSuccessToast(id: UUID) {
+        if successToast?.id == id { successToast = nil }
+    }
+}
+
+struct SessionArchiveSuccessOverlay: ViewModifier {
+    let selection: SessionArchiveSelection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottomLeading) {
+            if let toast = selection.successToast {
+                let message = L10n.t(.sessionsBatchArchived, toast.count)
+                let shape = RoundedRectangle(cornerRadius: DesignCorners.medium)
+                HStack(spacing: DesignSpacing.sm) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DesignColors.Brand.primary)
+                        .accessibilityHidden(true)
+                    Text(message)
+                        .font(DesignTypography.body.weight(.semibold))
+                        .foregroundStyle(DesignColors.Neutral.text)
+                        .accessibilityIdentifier("session-archive-result")
+                }
+                .padding(.horizontal, DesignSpacing.md)
+                .padding(.vertical, DesignSpacing.sm)
+                .frame(minHeight: 44)
+                .background(.regularMaterial, in: shape)
+                .overlay(shape.strokeBorder(.primary.opacity(colorScheme == .dark ? 0.16 : 0.10)))
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.32 : 0.12), radius: 8, y: 3)
+                .padding(DesignSpacing.md)
+                .allowsHitTesting(false)
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+                .task(id: toast.id) {
+                    AccessibilityNotification.Announcement(message).post()
+                    do {
+                        try await Task.sleep(for: .seconds(3))
+                        selection.dismissSuccessToast(id: toast.id)
+                    } catch { /* View disappeared or toast was replaced. */ }
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: selection.successToast?.id)
+    }
 }
 
 struct SessionArchiveBar: View {
@@ -61,9 +118,7 @@ struct SessionArchiveBar: View {
             VStack(spacing: DesignSpacing.xs) {
                 if let result = selection.outcome {
                     HStack {
-                        Text(result.remaining == 0
-                             ? L10n.t(.sessionsBatchArchived, result.archived.count)
-                             : L10n.t(.sessionsBatchIncomplete, result.archived.count, result.remaining))
+                        Text(L10n.t(.sessionsBatchIncomplete, result.archived.count, result.remaining))
                             .accessibilityIdentifier("session-archive-result")
                         Button(action: selection.dismissOutcome) {
                             Image(systemName: "xmark")

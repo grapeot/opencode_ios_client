@@ -102,6 +102,7 @@ final class SessionScrollAnchorUITests: XCTestCase {
         let result = app.staticTexts["session-archive-result"]
         XCTAssertTrue(result.waitForExistence(timeout: 10))
         XCTAssertEqual(result.label, "Archived: 3")
+        attachScreenshot(named: "bulk_archive_toast")
         XCTAssertTrue(select.exists)
         XCTAssertFalse(parent.exists)
         app.buttons["Archived"].tap()
@@ -109,6 +110,7 @@ final class SessionScrollAnchorUITests: XCTestCase {
         XCTAssertTrue(other.exists)
         app.buttons["session-toggle-scroll-long-session"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["session-row-scroll-hidden-child"].waitForExistence(timeout: 5))
+        XCTAssertTrue(result.waitForNonExistence(timeout: 6), "Success toast should dismiss itself")
         attachScreenshot(named: "bulk_archive_result")
     }
 

@@ -712,6 +712,7 @@ private struct TabletSessionsColumn: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !showSettings { SessionArchiveBar(selection: archiveSelection, state: state) }
             }
+            .modifier(SessionArchiveSuccessOverlay(selection: archiveSelection))
             .navigationTitle(showSettings ? L10n.t(.navSettings) : isSelecting
                              ? L10n.t(.sessionsBatchSelected, archiveSelection.selected.count) : L10n.t(.sessionsTitle))
             .navigationBarTitleDisplayMode(.inline)
