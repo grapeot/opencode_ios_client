@@ -169,6 +169,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3B4F44232F3E642600A4CD74 /* Build configuration list for PBXNativeTarget "OpenCodeClient" */;
 			buildPhases = (
+				D27100000000000000000001 /* Require iOS 27.1 SDK for devices */,
 				3B4F43FE2F3E642500A4CD74 /* Sources */,
 				3B4F43FF2F3E642500A4CD74 /* Frameworks */,
 				3B4F44002F3E642500A4CD74 /* Resources */,
@@ -288,6 +289,19 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		D27100000000000000000001 /* Require iOS 27.1 SDK for devices */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			name = "Require iOS 27.1 SDK for devices";
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$PLATFORM_NAME\" != iphoneos ]; then exit 0; fi\nif ! /usr/bin/awk -v version=\"$SDK_VERSION\" 'BEGIN { split(version, v, \".\"); exit !(v[1] > 27 || (v[1] == 27 && v[2] >= 1)) }'; then\n  echo \"error: OpenCode requires the iOS 27.1 SDK or newer for device builds and archives (found ${SDK_VERSION:-unknown}). Open the project in Xcode 27.1 or newer.\" >&2\n  exit 1\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		CC5000000000000000000004 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
