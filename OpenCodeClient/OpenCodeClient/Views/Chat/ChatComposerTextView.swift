@@ -115,7 +115,14 @@ struct ChatComposerTextView: UIViewRepresentable {
             context.coordinator.wasRequestingFocus = false
             context.coordinator.focusScheduled = false
             if uiView.isFirstResponder {
-                uiView.resignFirstResponder()
+                // Resigning synchronously here can re-enter SwiftUI's focus
+                // graph while updateUIView is applying the send state.
+                let coordinator = context.coordinator
+                DispatchQueue.main.async { [weak uiView, weak coordinator] in
+                    guard let uiView, let coordinator, uiView.window != nil,
+                          !coordinator.requestsFirstResponder, uiView.isFirstResponder else { return }
+                    uiView.resignFirstResponder()
+                }
             }
         }
     }
