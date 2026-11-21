@@ -28,3 +28,7 @@ Do not add sibling app targets or duplicate client trees at repo root. Server-si
 - Success criterion for this workflow: after the rebuild, launching OpenCode from `knowledge_working` must use the freshly built binary from this rebased state, not an older binary left on disk.
 - When the user is actively using an existing OpenCode server, do not kill or restart the live process, especially anything bound to port `4096`.
 - In that situation, skip destructive runtime validation against the live server; if runtime verification is still needed, use a separate temporary port/process and never touch the user's active `4096` process.
+
+## App Store Connect
+
+- For iOS release archives and App Store Connect uploads, follow [the iOS release runbook](skills/release_ios.md). Routine store archives exclude the experimental Watch companion.

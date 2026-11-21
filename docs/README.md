@@ -43,6 +43,7 @@
 |---|---|
 | `skills/client_capabilities.md` | 新增 client capability 的 canonical agent 接入入口 |
 | `skills/operate_ios_simulator.md` | iOS 模拟器自动化操作层 |
+| [`skills/release_ios.md`](../skills/release_ios.md) | iOS-only 商店归档、排除 Watch companion 与上传前核验 |
 | `skills/ui_test_tasks.md` | Tier 4 UI 测试任务工作流（workflow） |
 | `skills/ui_test_prompts/` | Tier 4 测试 Prompt 集合 |
 
