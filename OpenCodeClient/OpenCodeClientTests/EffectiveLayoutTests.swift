@@ -458,22 +458,24 @@ struct EffectiveLayoutTests {
     }
 
     @MainActor
-    @Test func tapFocusResignsWhenSessionEpochChanges() {
-        let previousKey = UIApplication.shared.connectedScenes
+    @Test func tapFocusResignsAfterSessionUpdateWithoutReenteringUpdate() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first { $0.isKeyWindow }
+            .first { $0.windows.contains(where: \.isKeyWindow) })
+        let keyWindow = scene.windows.first { $0.isKeyWindow }
+        let previousKey = try #require(keyWindow)
         let textView = IMEAwareTextView(frame: CGRect(x: 0, y: 0, width: 220, height: 44))
         textView.text = "hello"
         textView.isEditable = true
         textView.setSoftwareKeyboardSuppressed(true)
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 220, height: 44))
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 220, height: 44)
         window.addSubview(textView)
         defer {
             textView.resignFirstResponder()
             window.isHidden = true
             window.resignKey()
-            previousKey?.makeKey()
+            previousKey.makeKey()
         }
         window.makeKeyAndVisible()
         #expect(textView.becomeFirstResponder())
@@ -483,13 +485,63 @@ struct EffectiveLayoutTests {
             hasMarkedText: .constant(false),
             onSubmit: {}
         )
-        coordinator.requestsFirstResponder = false
-        coordinator.focusScheduled = true
-        coordinator.applyFocusReset(epoch: 1, to: textView)
+        textView.delegate = coordinator
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 1)
+        // Another representable update in the same turn must not swallow the reset.
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 1)
+        #expect(textView.isFirstResponder)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
         #expect(!textView.isFirstResponder)
-        #expect(!coordinator.focusScheduled)
-        coordinator.applyFocusReset(epoch: 1, to: textView)
-        #expect(coordinator.seenFocusResetEpoch == 1)
+        #expect(textView.becomeFirstResponder())
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 1)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(textView.isFirstResponder)
+
+        // A later explicit open should keep a tap-focused caret and show the keyboard.
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 2)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 2)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(textView.isFirstResponder)
+        #expect(!textView.softwareKeyboardSuppressed)
+
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 3)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(!textView.isFirstResponder)
+        #expect(textView.softwareKeyboardSuppressed)
+
+        // A stale explicit request must not replay when the window becomes key.
+        previousKey.makeKey()
+        try #require(!window.isKeyWindow)
+        textView.onKeyWindowAvailable = { [weak coordinator, weak textView] in
+            guard let textView else { return }
+            coordinator?.enqueueInputUpdate(for: textView)
+        }
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 3)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 4)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        window.makeKey()
+        try #require(window.isKeyWindow)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 4)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(!textView.isFirstResponder)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 4)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 4)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(textView.isFirstResponder)
     }
 
     @MainActor

@@ -1309,6 +1309,8 @@ struct ChatTabView: View {
             }
             .onChange(of: state.currentHostProfileID) { _, _ in
                 persistAllDeferredToOrigins()
+                isComposerEditing = false
+                composerHasCaretFocus = false
                 composerFocusResetEpoch &+= 1
             }
             .onChange(of: state.isChatSpeechConfigured) { _, configured in
