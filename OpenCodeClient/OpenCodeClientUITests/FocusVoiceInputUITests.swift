@@ -29,6 +29,92 @@ final class FocusVoiceInputUITests: XCTestCase {
     }
 
     @MainActor
+    func testResumeWithCaretButNoSoftwareKeyboard() {
+        exerciseResume(focus: "caret")
+    }
+
+    @MainActor
+    func testResumeWithSoftwareKeyboard() {
+        exerciseResume(focus: "keyboard")
+    }
+
+    @MainActor
+    func testResumeWithoutInputFocus() {
+        exerciseResume(focus: "none")
+    }
+
+    @MainActor
+    func testCaretOnlyStaysResponsiveWithoutBackgrounding() {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_SESSION_TREE_FIXTURE"]
+        app.launchEnvironment["UITEST_COMPOSER_SPEECH_CONFIGURED"] = "1"
+        app.launchEnvironment["UITEST_COMPOSER_VOICE_FIRST"] = "1"
+        app.launch()
+        let input = app.descendants(matching: .any)["chat-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 8))
+        input.tap()
+        let probe = waitForCaretProbe(app, contains: "first=1")
+        XCTAssertTrue(probe.contains("first=1"), probe)
+        XCTAssertTrue(probe.contains("keyboard=suppressed"))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        capture(app, name: "caret-only")
+        app.buttons["chat-keyboard"].tap()
+        input.typeText("focuscheck9")
+        XCTAssertTrue((input.value as? String)?.contains("focuscheck9") == true)
+    }
+
+    @MainActor
+    private func exerciseResume(focus: String) {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_SESSION_TREE_FIXTURE"]
+        app.launchEnvironment["UITEST_COMPOSER_SPEECH_CONFIGURED"] = "1"
+        app.launchEnvironment["UITEST_COMPOSER_VOICE_FIRST"] = "1"
+        app.launch()
+        let input = app.descendants(matching: .any)["chat-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 8))
+        if focus == "caret" {
+            input.tap()
+            let probe = waitForCaretProbe(app, contains: "first=1")
+            XCTAssertTrue(probe.contains("first=1") && probe.contains("keyboard=suppressed"), probe)
+            XCTAssertFalse(app.keyboards.firstMatch.exists)
+        } else if focus == "keyboard" {
+            app.buttons["chat-keyboard"].tap()
+            assertSoftwareKeyboardVisible(app)
+            let probe = waitForCaretProbe(app, contains: "first=1")
+            XCTAssertTrue(probe.contains("first=1") && probe.contains("keyboard=system"), probe)
+        } else {
+            let probe = waitForCaretProbe(app, contains: "first=0")
+            XCTAssertTrue(probe.contains("first=0") && probe.contains("keyboard=suppressed"), probe)
+            XCTAssertFalse(app.keyboards.firstMatch.exists)
+        }
+        capture(app, name: "resume-\(focus)-before")
+        print("RESUME_QA \(focus) opening Settings")
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        settings.activate()
+        XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 5))
+        let deadline = Date().addingTimeInterval(5)
+        while app.state == .runningForeground && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        XCTAssertTrue(app.state == .runningBackground || app.state == .runningBackgroundSuspended, "expected same app to background: \(app.state.rawValue)")
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertTrue(app.state == .runningBackground || app.state == .runningBackgroundSuspended, "app exited in background: \(app.state.rawValue)")
+        print("RESUME_QA \(focus) activating")
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        if focus != "keyboard" { XCTAssertFalse(app.keyboards.firstMatch.exists) }
+        capture(app, name: "resume-\(focus)-before-interaction")
+        if !app.buttons["chat-keyboard-done"].exists { app.buttons["chat-keyboard"].tap() }
+        XCTAssertTrue(app.buttons["chat-keyboard-done"].waitForExistence(timeout: 5))
+        input.typeText("resumecheck9")
+        XCTAssertTrue((input.value as? String)?.contains("resumecheck9") == true)
+        capture(app, name: "resume-\(focus)-after")
+        print("RESUME_QA \(focus) typed successfully")
+    }
+
+    @MainActor
     func testVoiceFirstDraftTapDoesNotPresentKeyboard() {
         let app = launchSessionTree()
         let input = app.textViews["chat-input"]

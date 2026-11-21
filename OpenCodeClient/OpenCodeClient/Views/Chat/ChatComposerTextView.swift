@@ -61,11 +61,15 @@ struct ChatComposerTextView: UIViewRepresentable {
         textView.setSoftwareKeyboardSuppressed(suppressesSoftwareKeyboard)
         textView.accessibilityIdentifier = "chat-input"
         textView.accessibilityLabel = placeholder
-        textView.onShiftReturn = {
-            context.coordinator.insertNewline(into: textView)
+        textView.onShiftReturn = { [weak coordinator = context.coordinator, weak textView] in
+            guard let textView else { return }
+            coordinator?.insertNewline(into: textView)
+        }
+        textView.onKeyWindowAvailable = { [weak coordinator = context.coordinator, weak textView] in
+            guard let textView else { return }
+            coordinator?.enqueueInputUpdate(for: textView)
         }
         textView.text = text
-        context.coordinator.updateMarkedTextState(for: textView)
         return textView
     }
 
@@ -74,57 +78,30 @@ struct ChatComposerTextView: UIViewRepresentable {
         context.coordinator.onCaretFocusChange = onCaretFocusChange
         context.coordinator.onSelectionUTF16 = onSelectionUTF16
         context.coordinator.onCaretProbe = onCaretProbe
-        context.coordinator.requestsFirstResponder = requestsFirstResponder
-        if uiView.isEditable != isEditable {
-            uiView.isEditable = isEditable
-        }
-        if context.coordinator.wasEditable, !isEditable, uiView.isFirstResponder {
-            uiView.resignFirstResponder()
-        }
-        context.coordinator.wasEditable = isEditable
-        uiView.isSelectable = true
-        uiView.setSoftwareKeyboardSuppressed(suppressesSoftwareKeyboard)
-        context.coordinator.applyFocusReset(epoch: focusResetEpoch, to: uiView)
+        context.coordinator.scheduleInputUpdate(
+            for: uiView, editable: isEditable, requestsFocus: requestsFirstResponder,
+            suppressKeyboard: suppressesSoftwareKeyboard, resetEpoch: focusResetEpoch
+        )
         if uiView.text != text {
-            uiView.text = text
-            if let cursor = preferredCursorUTF16, isEditable {
-                let length = (text as NSString).length
-                uiView.selectedRange = NSRange(location: min(max(0, cursor), length), length: 0)
-            }
-            if autoScrollToBottomOnTextChange {
-                context.coordinator.scrollToBottom(uiView)
+            context.coordinator.applyingProgrammaticText(to: uiView) {
+                uiView.text = text
+                if let cursor = preferredCursorUTF16, isEditable {
+                    let length = (text as NSString).length
+                    uiView.selectedRange = NSRange(location: min(max(0, cursor), length), length: 0)
+                }
+                if autoScrollToBottomOnTextChange {
+                    context.coordinator.scrollToBottom(uiView)
+                }
             }
         }
         uiView.accessibilityLabel = placeholder
-        uiView.onShiftReturn = {
-            context.coordinator.insertNewline(into: uiView)
-        }
-        context.coordinator.updateMarkedTextState(for: uiView)
-        context.coordinator.publishProbe(for: uiView)
-        if requestsFirstResponder {
-            context.coordinator.wasRequestingFocus = true
-            if !uiView.isFirstResponder, !context.coordinator.focusScheduled {
-                context.coordinator.focusScheduled = true
-                DispatchQueue.main.async {
-                    context.coordinator.focusScheduled = false
-                    guard context.coordinator.requestsFirstResponder, !uiView.isFirstResponder else { return }
-                    uiView.becomeFirstResponder()
-                }
-            }
-        } else if context.coordinator.wasRequestingFocus {
-            context.coordinator.wasRequestingFocus = false
-            context.coordinator.focusScheduled = false
-            if uiView.isFirstResponder {
-                // Resigning synchronously here can re-enter SwiftUI's focus
-                // graph while updateUIView is applying the send state.
-                let coordinator = context.coordinator
-                DispatchQueue.main.async { [weak uiView, weak coordinator] in
-                    guard let uiView, let coordinator, uiView.window != nil,
-                          !coordinator.requestsFirstResponder, uiView.isFirstResponder else { return }
-                    uiView.resignFirstResponder()
-                }
-            }
-        }
+        context.coordinator.scheduleInputFeedback(for: uiView)
+    }
+
+    static func dismantleUIView(_ uiView: IMEAwareTextView, coordinator: Coordinator) {
+        uiView.delegate = nil
+        uiView.onShiftReturn = nil
+        uiView.onKeyWindowAvailable = nil
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -136,18 +113,89 @@ struct ChatComposerTextView: UIViewRepresentable {
         var onCaretFocusChange: (Bool) -> Void = { _ in }
         var onSelectionUTF16: (NSRange) -> Void = { _ in }
         var onCaretProbe: (String) -> Void = { _ in }
-        var focusScheduled = false
-        var requestsFirstResponder = false
-        var wasRequestingFocus = false
-        var wasEditable = true
-        var seenFocusResetEpoch = 0
+        private var inputUpdateScheduled = false
+        private var requestedFocus = false
+        private var pendingFocusDismissal = false
+        private var observedResetEpoch = 0
+        private var pendingReset = false
+        private var desiredInput = (editable: true, suppressKeyboard: false)
+        private var isApplyingProgrammaticText = false
+        private var inputFeedbackScheduled = false
+        private var selectionFeedbackPending = false
 
-        func applyFocusReset(epoch: Int, to textView: UITextView) {
-            guard epoch != seenFocusResetEpoch else { return }
-            seenFocusResetEpoch = epoch
-            focusScheduled = false
-            if textView.isFirstResponder {
-                textView.resignFirstResponder()
+        func scheduleInputUpdate(
+            for textView: IMEAwareTextView, editable: Bool, requestsFocus: Bool,
+            suppressKeyboard: Bool, resetEpoch: Int
+        ) {
+            if resetEpoch != observedResetEpoch {
+                observedResetEpoch = resetEpoch
+                pendingReset = true
+            } else if requestsFocus && !requestedFocus {
+                // A new explicit open supersedes a reset from an earlier update.
+                pendingReset = false
+            }
+            pendingFocusDismissal = !requestsFocus && (pendingFocusDismissal || requestedFocus)
+            requestedFocus = requestsFocus
+            desiredInput = (editable, suppressKeyboard)
+            enqueueInputUpdate(for: textView)
+        }
+
+        func enqueueInputUpdate(for textView: IMEAwareTextView) {
+            guard !inputUpdateScheduled else { return }
+            guard pendingReset || pendingFocusDismissal ||
+                    textView.isEditable != desiredInput.editable || textView.softwareKeyboardSuppressed != desiredInput.suppressKeyboard ||
+                    (requestedFocus && desiredInput.editable && !textView.isFirstResponder && textView.window?.isKeyWindow == true) else { return }
+            inputUpdateScheduled = true
+            // Responder changes and keyboard reloads can query SwiftUI's focus graph.
+            // Apply the latest input state only after updateUIView has returned.
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self else { return }
+                self.inputUpdateScheduled = false
+                guard let textView, textView.delegate === self else { return }
+                self.applyInputUpdate(to: textView)
+            }
+        }
+
+        private func applyInputUpdate(to textView: IMEAwareTextView) {
+            let input = desiredInput
+            let resetsFocus = pendingReset
+            let dismissesFocus = pendingFocusDismissal
+            let requestsFocus = requestedFocus
+            pendingReset = false
+            pendingFocusDismissal = false
+            let resignsFocus = textView.isFirstResponder && (resetsFocus || dismissesFocus || !input.editable)
+            if resignsFocus { textView.resignFirstResponder() }
+            if textView.isEditable != input.editable { textView.isEditable = input.editable }
+            if !textView.isSelectable { textView.isSelectable = true }
+            textView.setSoftwareKeyboardSuppressed(input.suppressKeyboard)
+            if input.editable, requestsFocus, !resetsFocus, !resignsFocus,
+               !textView.isFirstResponder, textView.window?.isKeyWindow == true {
+                textView.becomeFirstResponder()
+            }
+            publishProbe(for: textView)
+        }
+
+        func applyingProgrammaticText(to textView: IMEAwareTextView, _ update: () -> Void) {
+            isApplyingProgrammaticText = true
+            defer { isApplyingProgrammaticText = false }
+            update()
+            selectionFeedbackPending = true
+            scheduleInputFeedback(for: textView)
+        }
+
+        func scheduleInputFeedback(for textView: IMEAwareTextView) {
+            guard !inputFeedbackScheduled else { return }
+            inputFeedbackScheduled = true
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self else { return }
+                self.inputFeedbackScheduled = false
+                guard let textView, textView.delegate === self else { return }
+                self.updateMarkedTextState(for: textView)
+                if self.selectionFeedbackPending {
+                    self.selectionFeedbackPending = false
+                    self.onSelectionUTF16(textView.selectedRange)
+                }
+                self.publishProbe(for: textView)
             }
         }
 
@@ -170,12 +218,14 @@ struct ChatComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            guard !isApplyingProgrammaticText else { return }
             text = textView.text
             updateMarkedTextState(for: textView)
             onSelectionUTF16(textView.selectedRange)
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isApplyingProgrammaticText else { return }
             updateMarkedTextState(for: textView)
             onSelectionUTF16(textView.selectedRange)
             publishProbe(for: textView)
@@ -219,7 +269,8 @@ struct ChatComposerTextView: UIViewRepresentable {
         }
 
         func updateMarkedTextState(for textView: UITextView) {
-            hasMarkedText = textView.markedTextRange != nil
+            let marked = textView.markedTextRange != nil
+            if hasMarkedText != marked { hasMarkedText = marked }
         }
 
         func scrollToBottom(_ textView: UITextView) {
@@ -246,8 +297,21 @@ final class ZeroHeightInputView: UIView {
 
 class IMEAwareTextView: UITextView {
     var onShiftReturn: (() -> Void)?
+    var onKeyWindowAvailable: (() -> Void)?
     private(set) var softwareKeyboardSuppressed = false
     private let suppressedInput = ZeroHeightInputView(frame: .zero)
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        let center = NotificationCenter.default
+        center.removeObserver(self, name: UIWindow.didBecomeKeyNotification, object: nil)
+        if let window {
+            center.addObserver(self, selector: #selector(windowDidBecomeKey(_:)), name: UIWindow.didBecomeKeyNotification, object: window)
+            if window.isKeyWindow { onKeyWindowAvailable?() }
+        }
+    }
+
+    @objc private func windowDidBecomeKey(_ notification: Notification) { onKeyWindowAvailable?() }
     #if os(iOS)
     private var savedLeading: [UIBarButtonItemGroup] = []
     private var savedTrailing: [UIBarButtonItemGroup] = []
