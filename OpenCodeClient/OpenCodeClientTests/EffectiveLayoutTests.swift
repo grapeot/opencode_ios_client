@@ -514,6 +514,30 @@ struct EffectiveLayoutTests {
         }
         #expect(!textView.isFirstResponder)
         #expect(textView.softwareKeyboardSuppressed)
+
+        // A stale explicit request must not replay when the window becomes key.
+        window.resignKey()
+        textView.onKeyWindowAvailable = { [weak coordinator, weak textView] in
+            guard let textView else { return }
+            coordinator?.enqueueInputUpdate(for: textView)
+        }
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 3)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 4)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        window.makeKey()
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 4)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(!textView.isFirstResponder)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: false, suppressKeyboard: true, resetEpoch: 4)
+        coordinator.scheduleInputUpdate(for: textView, editable: true, requestsFocus: true, suppressKeyboard: false, resetEpoch: 4)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(textView.isFirstResponder)
     }
 
     @MainActor

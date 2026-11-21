@@ -115,6 +115,7 @@ struct ChatComposerTextView: UIViewRepresentable {
         var onCaretProbe: (String) -> Void = { _ in }
         private var inputUpdateScheduled = false
         private var requestedFocus = false
+        private var focusRequestInvalidated = false
         private var pendingFocusDismissal = false
         private var observedResetEpoch = 0
         private var pendingReset = false
@@ -130,9 +131,13 @@ struct ChatComposerTextView: UIViewRepresentable {
             if resetEpoch != observedResetEpoch {
                 observedResetEpoch = resetEpoch
                 pendingReset = true
+                focusRequestInvalidated = requestsFocus
             } else if requestsFocus && !requestedFocus {
                 // A new explicit open supersedes a reset from an earlier update.
                 pendingReset = false
+                focusRequestInvalidated = false
+            } else if !requestsFocus {
+                focusRequestInvalidated = false
             }
             pendingFocusDismissal = !requestsFocus && (pendingFocusDismissal || requestedFocus)
             requestedFocus = requestsFocus
@@ -144,7 +149,8 @@ struct ChatComposerTextView: UIViewRepresentable {
             guard !inputUpdateScheduled else { return }
             guard pendingReset || pendingFocusDismissal ||
                     textView.isEditable != desiredInput.editable || textView.softwareKeyboardSuppressed != desiredInput.suppressKeyboard ||
-                    (requestedFocus && desiredInput.editable && !textView.isFirstResponder && textView.window?.isKeyWindow == true) else { return }
+                    (requestedFocus && !focusRequestInvalidated && desiredInput.editable &&
+                     !textView.isFirstResponder && textView.window?.isKeyWindow == true) else { return }
             inputUpdateScheduled = true
             // Responder changes and keyboard reloads can query SwiftUI's focus graph.
             // Apply the latest input state only after updateUIView has returned.
@@ -160,7 +166,7 @@ struct ChatComposerTextView: UIViewRepresentable {
             let input = desiredInput
             let resetsFocus = pendingReset
             let dismissesFocus = pendingFocusDismissal
-            let requestsFocus = requestedFocus
+            let requestsFocus = requestedFocus && !focusRequestInvalidated
             pendingReset = false
             pendingFocusDismissal = false
             let resignsFocus = textView.isFirstResponder && (resetsFocus || dismissesFocus || !input.editable)
