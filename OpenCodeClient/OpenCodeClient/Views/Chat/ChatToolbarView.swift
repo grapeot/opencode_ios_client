@@ -19,9 +19,10 @@ struct ChatToolbarView: View {
     var filesPinned: Binding<Bool>?
     
     @State private var showCreateDisabledAlert = false
-    @State private var showConfigSheet = false
+    @State private var modelConfig: ModelConfigPresentation?
     @State private var showTodoPanel = false
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.effectiveLayout) private var effectiveLayout
 
     private var showsLayoutShortcut: Bool { sizeClass == .regular || onFilesTap != nil }
     
@@ -57,6 +58,12 @@ struct ChatToolbarView: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, LayoutConstants.Spacing.spacious)
         .padding(.vertical, LayoutConstants.MessageList.verticalPadding)
+        // Keep the sheet presenter alive if the model label makes the toolbar reflow.
+        .sheet(item: $modelConfig) { presentation in
+            ModelConfigSheet(state: state, presentation: presentation) {
+                modelConfig = nil
+            }
+        }
     }
     
     // MARK: - Session Operation Buttons
@@ -136,7 +143,11 @@ struct ChatToolbarView: View {
     private var configButton: some View {
         Button {
             state.rebuildPickerModelItems(reason: "open")
-            showConfigSheet = true
+            modelConfig = ModelConfigPresentation(
+                closesOnModelSelection: effectiveLayout == .compact,
+                hostID: state.currentHostProfileID,
+                sessionID: state.currentSessionID
+            )
         } label: {
             HStack(spacing: 4) {
                 Text(state.selectedModel?.shortName ?? L10n.t(.configureModel))
@@ -156,9 +167,6 @@ struct ChatToolbarView: View {
             )
         }
         .accessibilityIdentifier("chat-toolbar-model")
-        .sheet(isPresented: $showConfigSheet) {
-            ModelConfigSheet(state: state, isPresented: $showConfigSheet)
-        }
     }
 
     // MARK: - Todo Button & Panel
@@ -215,9 +223,17 @@ struct ChatToolbarView: View {
     }
 }
 
+private struct ModelConfigPresentation: Identifiable {
+    let id = UUID()
+    let closesOnModelSelection: Bool
+    let hostID: UUID
+    let sessionID: String?
+}
+
 private struct ModelConfigSheet: View {
     @Bindable var state: AppState
-    @Binding var isPresented: Bool
+    let presentation: ModelConfigPresentation
+    let close: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -229,9 +245,8 @@ private struct ModelConfigSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.t(.appDone)) {
-                        isPresented = false
-                    }
+                    Button(L10n.t(.appDone), action: close)
+                        .accessibilityIdentifier("model-config-done")
                 }
             }
             .onAppear { state.rebuildPickerModelItems(reason: "appear") }
@@ -280,7 +295,7 @@ private struct ModelConfigSheet: View {
 
     private func settingsJumpRow(title: String, systemImage: String, identifier: String) -> some View {
         Button {
-            isPresented = false
+            close()
             state.revealModelShortlistInSettings()
         } label: {
             HStack(spacing: 10) {
@@ -323,8 +338,8 @@ private struct ModelConfigSheet: View {
         switch item {
         case .providerHeader(let providerID):
             providerHeaderRow(providerID)
-        case .model(let index, let preset):
-            modelRow(index: index, preset: preset)
+        case .model(_, let preset):
+            modelRow(preset)
         }
     }
 
@@ -336,9 +351,16 @@ private struct ModelConfigSheet: View {
             .accessibilityIdentifier("model-picker-header-\(providerID)")
     }
 
-    private func modelRow(index: Int, preset: ModelPreset) -> some View {
+    private func modelRow(_ preset: ModelPreset) -> some View {
         Button {
+            guard state.currentHostProfileID == presentation.hostID,
+                  state.currentSessionID == presentation.sessionID else {
+                close()
+                return
+            }
+            guard let index = state.pickerModelPresets.firstIndex(where: { $0.id == preset.id }) else { return }
             state.setSelectedModelIndex(index)
+            if presentation.closesOnModelSelection { close() }
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -349,7 +371,7 @@ private struct ModelConfigSheet: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                if state.selectedModelIndex == index {
+                if state.selectedModel?.id == preset.id {
                     Image(systemName: "checkmark")
                         .foregroundColor(DesignColors.Brand.primary)
                 }

@@ -599,6 +599,11 @@ enum UITestFixtures {
                 )
             ]
         }
+        if ProcessInfo.processInfo.arguments.contains("UITEST_MODEL_SHORTLIST_TWO_MODELS"),
+           let secondModel = state.catalogModelPresets.dropFirst().first {
+            state.addModelsToShortlist([secondModel])
+            state.selectedModelIndex = 0
+        }
         state.rebuildPickerModelItems(reason: "fixture")
     }
 
