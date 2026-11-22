@@ -44,6 +44,40 @@ final class ModelShortlistUITests: XCTestCase {
     }
 
     @MainActor
+    func testCompactPickerAppliesAndClosesOnModelTap() throws {
+        try assertModelTap(width: "compact", closesOnTap: true)
+    }
+
+    @MainActor
+    func testWidePickerStaysOpenAfterModelTap() throws {
+        try assertModelTap(width: "regular", closesOnTap: false)
+    }
+
+    @MainActor
+    private func assertModelTap(width: String, closesOnTap: Bool) throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["UITEST_MODEL_SHORTLIST_FIXTURE", "UITEST_MODEL_SHORTLIST_TWO_MODELS"]
+        app.launchEnvironment["UITEST_FORCE_WIDTH_CLASS"] = width
+        app.launch()
+
+        let chip = app.buttons["chat-toolbar-model"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 6))
+        chip.tap()
+        XCTAssertEqual(chip.label, "GLM")
+        let model = app.buttons["model-picker-row-google-gemini-3.5-flash"]
+        XCTAssertTrue(model.waitForExistence(timeout: 6))
+        let done = app.buttons["model-config-done"]
+        XCTAssertTrue(done.exists)
+        model.tap()
+        if !closesOnTap {
+            XCTAssertTrue(done.isHittable)
+            done.tap()
+        }
+        XCTAssertTrue(done.waitForNonExistence(timeout: 4))
+        XCTAssertEqual(chip.label, "Gemini")
+    }
+
+    @MainActor
     func testEmptyPickerJumpsToSettingsModels() throws {
         let app = XCUIApplication()
         app.launchArguments = ["UITEST_MODEL_SHORTLIST_EMPTY_FIXTURE"]
