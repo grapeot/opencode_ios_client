@@ -123,7 +123,7 @@ struct SessionListView: View {
                     .accessibilityIdentifier("session-list")
                     .refreshable {
                         guard !archiveSelection.isRunning else { return }
-                        await state.refreshSessions()
+                        await state.refreshSessions(resetPaging: true)
                         if archivedExpanded { await state.loadArchivedSessions(reset: true) }
                     }
                     .disabled(archiveSelection.isRunning)

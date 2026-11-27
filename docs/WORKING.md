@@ -4,6 +4,18 @@
 
 ## 当前状态
 
+### Session 列表活跃分页与老 server 探测（2026-11-27，分支 `fix/session-list-active-paging`，PR #233 后续）
+
+PR #233 把活跃列表一次拉全（上限 3000），只适合归档占绝大多数的 server。活跃会话多的用户每次切 session 都要重拉全部活跃行（2000 行约 1.6MB），超过 3000 的会被静默截断且无法再翻到；作者本机另一个项目就有 2233 个未归档会话。
+
+- [x] 活跃列表首屏只拉最新 400 条；load more 用游标增量拉下一页，不重复下载前面的页；去掉 3000 上限。
+- [x] 切 session 等触发的刷新只重拉第一页并合并：第一页最后一行之前的范围由新结果为准（范围内消失的行即被归档或删除，移除），更早的深页保留原样，状态可能滞后；load more 过的深页游标保留。下拉刷新整体重置分页。
+- [x] 老 server 探测：health 版本明确低于 1.2.11 时不探测 `/experimental/session`；尚未确认支持的 host 探测出任何错误，先用旧窗口加载本次、不记结论。依据：1.2.0–1.2.10 把未知路径转发到 app.opencode.ai，实测返回 HTML 200（客户端解码失败后正常回退），只有连不上外网的老 server 会得到 5xx 或超时。
+- [x] 独立 review 后修正：分页、归档区、懒加载按"当前列表是否来自过滤路径"（`usesFilteredSessionList`）判断，不按 host 标志；legacy 窗口 apply 时清掉过滤路径的分页状态（"/" 启动的 server 默认目录走旧窗口、选定项目仍过滤时，原来会把旧窗口行当深页或把 load more 打到别的目录）。静默回退只对版本不可判定的 host（nil、"local"、"0.0.0-…"），已知版本的错误照常报出；任务取消不回退。边界改用服务端 `nextCursor`，保留深游标时取较小值。
+- [ ] 已知限制（未改，待定）：活跃父会话在第一页、其子会话在更深的页时，展开父会话只看到已加载的子会话，load more 翻到前看不到；父会话在深页时子会话暂作孤儿根显示。可选修法是活跃行展开时也懒加载 `/children`。
+- [x] 验证：`SessionListArchiveFilterTests` 32 项；全量 1055 项 / 107 suites 通过（exit 0、xcresult Passed；其中一次全量 `CarLiveControllerTests.emptyHistoryStartClearsPreviousConversation` 等待超时，单独重跑 3 次均通过，重跑全量通过）。两轮独立 review，must-fix 与 should-fix 均已处理。Xcode 27.1 签名构建已原位装到 iPad。
+- [ ] 按用户要求不合并，等验收。
+
 ### Session 列表只拉活跃会话（2026-11-27，分支 `fix/session-list-active-only`）
 
 起因：批量归档一千多个含 sub-agent 的 session 后整个 app 卡顿。V1 `GET /session?limit=N` 不过滤归档，按 `time_updated` 倒序，归档又不刷新这个时间；实测 live 最近 1200 行里 1130 行已归档、1143 行是子会话，只有 9 个活跃 root。客户端把整窗留在内存，每次重绘对全量做 indicator 与 tree 派生，`ChatTabView` 还因读整张 indicator 表随任何 session/status 变化整页重绘。为选中这一千多行必须点两次 load more，窗口停在 1200 直到切 host。

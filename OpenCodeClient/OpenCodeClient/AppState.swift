@@ -1271,10 +1271,13 @@ final class AppState {
     /// nil until the host answers; false once `/experimental/session` proved
     /// unsupported, which keeps the legacy `/session` window for that host.
     var serverFiltersArchivedSessions: Bool?
-    nonisolated static let activeSessionPageSize = 500
-    /// Active rows can grow without bound on a misbehaving host; stop paging here.
-    nonisolated static let activeSessionCap = 3000
-    nonisolated static let maxActiveSessionPages = activeSessionCap / activeSessionPageSize + 1
+    /// Active rows load one server page at a time, newest first; "load more"
+    /// follows the cursor. Hosts that keep most sessions unarchived can have
+    /// thousands, so the list never fetches them all up front.
+    nonisolated static let activeSessionPageSize = 400
+    /// Restore walks a whole subtree; past this many rows it refuses instead
+    /// of restoring part of it.
+    nonisolated static let descendantRestoreCap = 3000
     /// Archived subtree tops per load; each load reads up to
     /// `maxArchivedRequestsPerLoad` server pages of `archivedSessionRequestSize` rows.
     nonisolated static let archivedSessionPageSize = 50
@@ -1298,21 +1301,31 @@ final class AppState {
     var hasMoreArchivedSessions = false
     /// Directory of the archived load in flight; a load for another directory may start alongside it.
     var archivedLoadingDirectory: String?
+    /// Cursor for the next active page on the filtered path; nil once the oldest page is loaded.
+    var activeSessionCursor: Int?
+    /// Whether "load more" has paged active rows beyond the first page since
+    /// the last full refresh. Incremental refreshes keep those rows and the cursor.
+    var hasLoadedDeeperActivePages = false
 
     var isLoadingArchivedSessions: Bool {
         archivedLoadingDirectory != nil && archivedLoadingDirectory == archivedSessionDirectory
     }
 
+    /// The host answered `/experimental/session` (a per-host fact).
     var usesServerArchiveFilter: Bool { serverFiltersArchivedSessions == true }
+    /// The list on screen came from the filtered path (a per-list fact). A
+    /// filtering host can still show a legacy window, e.g. for a server
+    /// started at "/", so paging and archived loads follow this, not the host.
+    var usesFilteredSessionList: Bool { archivedSessionDirectory != nil }
 
     var canLoadMoreArchivedSessions: Bool {
-        usesServerArchiveFilter && hasLoadedArchivedSessions && hasMoreArchivedSessions && !isLoadingArchivedSessions
+        usesFilteredSessionList && hasLoadedArchivedSessions && hasMoreArchivedSessions && !isLoadingArchivedSessions
     }
 
     /// The archived section may still have rows to fetch, so an empty active
     /// list is not an empty session list.
     var mayHaveUnloadedArchivedSessions: Bool {
-        usesServerArchiveFilter && (!hasLoadedArchivedSessions || hasMoreArchivedSessions)
+        usesFilteredSessionList && (!hasLoadedArchivedSessions || hasMoreArchivedSessions)
     }
 
     func resetSessionPagination() {
@@ -1328,6 +1341,8 @@ final class AppState {
         hasMoreArchivedSessions = false
         archivedLoadingDirectory = nil
         defaultSessionListDirectory = nil
+        activeSessionCursor = nil
+        hasLoadedDeeperActivePages = false
     }
 
     // WAN optimization: page message history in fixed-size message batches.
