@@ -42,7 +42,7 @@ struct SessionListArchiveFilterTests {
 
     // MARK: Active list
 
-    @Test @MainActor func activeListFollowsServerCursorAndSkipsLegacyWindow() async {
+    @Test @MainActor func activeListLoadsOnePageAndPagesIncrementally() async {
         let api = MockAPIClient()
         await api.setActiveSessionPages([
             nil: SessionPage(rows: [Self.session("a1", updated: 30), Self.session("a1-child", parent: "a1", updated: 29)], nextCursor: 29),
@@ -53,14 +53,20 @@ struct SessionListArchiveFilterTests {
 
         await state.loadSessions()
 
-        #expect(Set(state.sessions.map(\.id)) == ["a1", "a1-child", "a2"])
+        #expect(Set(state.sessions.map(\.id)) == ["a1", "a1-child"])
         #expect(await api.sessionLimitRequests.isEmpty)
+        #expect(state.usesServerArchiveFilter)
+        #expect(state.canLoadMoreSessions)
+        #expect(state.mayHaveUnloadedArchivedSessions)
+
+        await state.loadMoreSessions()
+
+        #expect(Set(state.sessions.map(\.id)) == ["a1", "a1-child", "a2"])
+        #expect(state.canLoadMoreSessions == false)
         let requests = await api.sessionPageRequests
+        // Load more follows the cursor; it does not re-download the first page.
         #expect(requests.map(\.cursor) == [nil, 29])
         #expect(requests.allSatisfy { $0.directory == Self.worktree && !$0.includeArchived && !$0.rootsOnly })
-        #expect(state.usesServerArchiveFilter)
-        #expect(state.canLoadMoreSessions == false)
-        #expect(state.mayHaveUnloadedArchivedSessions)
     }
 
     @Test @MainActor func activePagingStopsWhenTheCursorDoesNotAdvance() async {
@@ -72,9 +78,90 @@ struct SessionListArchiveFilterTests {
         let state = await Self.makeState(api)
 
         await state.loadSessions()
+        await state.loadMoreSessions()
 
         #expect(state.sessions.map(\.id) == ["a1"])
+        #expect(state.canLoadMoreSessions == false)
         #expect(await api.sessionPageRequests.map(\.cursor) == [nil, 30])
+    }
+
+    /// Two loaded pages: a(50) b(40) | c(30) d(20).
+    @MainActor private static func twoPageState() async -> (MockAPIClient, AppState) {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([
+            nil: SessionPage(rows: [session("a", updated: 50), session("b", updated: 40)], nextCursor: 40),
+            40: SessionPage(rows: [session("c", updated: 30), session("d", updated: 20)], nextCursor: nil),
+        ])
+        let state = await makeState(api)
+        await state.loadSessions()
+        await state.loadMoreSessions()
+        return (api, state)
+    }
+
+    @Test @MainActor func incrementalRefreshKeepsDeeperPagesAndDropsVanishedRows() async {
+        let (api, state) = await Self.twoPageState()
+        #expect(state.sessions.map(\.id) == ["a", "b", "c", "d"])
+        // The first load selected "a"; a selected row is always kept, so select a deep one.
+        state.currentSessionID = "d"
+
+        // "a" was archived elsewhere; "e" is new. Only the first page is fetched again.
+        await api.setActiveSessionPages([
+            nil: SessionPage(rows: [Self.session("e", updated: 60), Self.session("b", updated: 40)], nextCursor: 40),
+        ])
+        await state.loadSessions()
+
+        #expect(Set(state.sessions.map(\.id)) == ["e", "b", "c", "d"])
+        #expect(await api.sessionPageRequests.map(\.cursor) == [nil, 40, nil])
+        // The deeper page was the last one, so there is still nothing more to load.
+        #expect(state.canLoadMoreSessions == false)
+    }
+
+    @Test @MainActor func incrementalRefreshKeepsTheDeepestCursor() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([
+            nil: SessionPage(rows: [Self.session("a", updated: 50)], nextCursor: 50),
+            50: SessionPage(rows: [Self.session("b", updated: 40)], nextCursor: 40),
+            40: SessionPage(rows: [Self.session("c", updated: 30)], nextCursor: nil),
+        ])
+        let state = await Self.makeState(api)
+        await state.loadSessions()
+        await state.loadMoreSessions()
+
+        await state.loadSessions()
+        await state.loadMoreSessions()
+
+        #expect(state.sessions.map(\.id) == ["a", "b", "c"])
+        #expect(await api.sessionPageRequests.map(\.cursor) == [nil, 50, nil, 40])
+    }
+
+    @Test @MainActor func pullToRefreshDropsDeeperPages() async {
+        let (api, state) = await Self.twoPageState()
+
+        await state.refreshSessions(resetPaging: true)
+
+        #expect(state.sessions.map(\.id) == ["a", "b"])
+        #expect(state.canLoadMoreSessions)
+        await state.loadMoreSessions()
+        #expect(await api.sessionPageRequests.map(\.cursor) == [nil, 40, nil, 40])
+    }
+
+    @Test @MainActor func completeFirstPageDropsEveryAbsentActiveRow() async {
+        let (api, state) = await Self.twoPageState()
+
+        await api.setActiveSessionPages([nil: SessionPage(rows: [Self.session("a", updated: 50)], nextCursor: nil)])
+        await state.loadSessions()
+
+        #expect(state.sessions.map(\.id) == ["a"])
+        #expect(state.canLoadMoreSessions == false)
+    }
+
+    @Test @MainActor func selectedDeepRowSurvivesPullToRefresh() async {
+        let (_, state) = await Self.twoPageState()
+        state.currentSessionID = "d"
+
+        await state.loadSessions(resetPaging: true)
+
+        #expect(state.sessions.contains { $0.id == "d" })
     }
 
     @Test @MainActor func defaultDirectoryPrefersServerInstanceDirectory() async {
@@ -137,17 +224,145 @@ struct SessionListArchiveFilterTests {
         #expect(state.mayHaveUnloadedArchivedSessions == false)
     }
 
-    @Test @MainActor func serverErrorSurfacesWithoutDowngradingHost() async {
+    @Test @MainActor func unconfirmedHostFallsBackOnProbeError() async {
+        // Pre-1.2.11 servers proxy unknown paths upstream; that proxy can 5xx or time out.
         let api = MockAPIClient()
         await api.setActiveSessionPages([:])
-        await api.setSessionPageError(APIError.httpError(statusCode: 500, data: Data()))
+        await api.setSessionPageError(APIError.httpError(statusCode: 502, data: Data()))
+        await api.setSessionsResult([Self.session("s1", updated: 10)])
         let state = await Self.makeState(api)
 
         await state.loadSessions()
 
+        #expect(state.sessions.map(\.id) == ["s1"])
+        #expect(state.connectionError == nil)
+        // Not recorded as unsupported, so a later load probes again.
         #expect(state.serverFiltersArchivedSessions == nil)
+        await state.loadSessions()
+        #expect(await api.sessionPageRequests.count == 2)
+    }
+
+    @Test @MainActor func confirmedHostSurfacesServerError() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([nil: SessionPage(rows: [Self.session("a1", updated: 50)], nextCursor: nil)])
+        let state = await Self.makeState(api)
+        await state.loadSessions()
+        #expect(state.usesServerArchiveFilter)
+
+        await api.setSessionPageError(APIError.httpError(statusCode: 500, data: Data()))
+        await state.loadSessions()
+
+        #expect(state.connectionError != nil)
+        #expect(state.serverFiltersArchivedSessions == true)
+        #expect(await api.sessionLimitRequests.isEmpty)
+        #expect(state.sessions.map(\.id) == ["a1"])
+    }
+
+    @Test @MainActor func serversBefore1211SkipTheProbe() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([nil: SessionPage(rows: [], nextCursor: nil)])
+        await api.setSessionsResult([Self.session("s1", updated: 10)])
+        let state = await Self.makeState(api)
+        state.serverVersion = "1.2.10"
+
+        await state.loadSessions()
+
+        #expect(await api.sessionPageRequests.isEmpty)
+        #expect(await api.sessionLimitRequests == [400])
+        #expect(state.serverFiltersArchivedSessions == false)
+    }
+
+    @Test func versionGateParsesReleaseStrings() {
+        let probes = ["1.2.11", "v1.2.11", "1.2.12", "1.3.0", "1.19.6", "2.4.2", "local", "0.0.0-private-sync-202611271845", "0.0.0", "", nil]
+        for version in probes {
+            #expect(AppState.serverMayFilterArchivedSessions(version: version), "\(version ?? "nil")")
+        }
+        for version in ["1.2.10", "1.2.0", "1.1.9", "1.0.0", "0.15.3", "1.2", "1.2.10-beta.1"] {
+            #expect(!AppState.serverMayFilterArchivedSessions(version: version), "\(version)")
+        }
+    }
+
+    @Test @MainActor func knownReleaseSurfacesProbeError() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([:])
+        await api.setSessionPageError(APIError.httpError(statusCode: 500, data: Data()))
+        let state = await Self.makeState(api)
+        state.serverVersion = "1.19.6"
+
+        await state.loadSessions()
+
         #expect(state.connectionError != nil)
         #expect(await api.sessionLimitRequests.isEmpty)
+    }
+
+    @Test @MainActor func cancelledProbeDoesNotFallBack() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([:])
+        await api.setSessionPageError(URLError(.cancelled))
+        let state = await Self.makeState(api)
+
+        await state.loadSessions()
+
+        #expect(await api.sessionLimitRequests.isEmpty)
+    }
+
+    @Test func knownReleaseParsing() {
+        for version in ["1.2.11", "v1.19.6", "1.2.10-beta.1", "2.4.2", "0.15.3"] {
+            #expect(AppState.isKnownServerRelease(version: version), "\(version)")
+        }
+        for version in ["local", "0.0.0-private-sync-1", "0.0.0", "", nil] {
+            #expect(!AppState.isKnownServerRelease(version: version), "\(version ?? "nil")")
+        }
+    }
+
+    @Test @MainActor func legacyWindowClearsFilteredPaging() async {
+        // A server at "/" lists the default directory through the legacy window
+        // while a chosen project still filters.
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([
+            nil: SessionPage(rows: [Self.session("p1", updated: 20)], nextCursor: 20),
+            20: SessionPage(rows: [Self.session("p2", updated: 10)], nextCursor: nil),
+        ])
+        await api.setSessionsResult([Self.session("legacy-1", updated: 5)])
+        let state = await Self.makeState(api, worktree: "/")
+        // A full legacy window, so its load more is live and must stay on the legacy path.
+        state.loadedSessionLimit = 1
+        state.customProjectPath = "/proj"
+        state.selectedProjectWorktree = AppState.customProjectSentinel
+        await state.loadSessions()
+        #expect(state.usesFilteredSessionList)
+        #expect(state.canLoadMoreSessions)
+
+        state.selectedProjectWorktree = nil
+        await state.loadSessions()
+
+        // "p1" stays only because the first load selected it.
+        #expect(Set(state.sessions.map(\.id)) == ["p1", "legacy-1"])
+        #expect(state.usesFilteredSessionList == false)
+        #expect(state.activeSessionCursor == nil)
+        #expect(state.canLoadMoreSessions)
+        await state.loadMoreSessions()
+        #expect(await api.sessionPageRequests.map(\.cursor) == [nil])
+        #expect(await api.sessionLimitRequests.count == 2)
+
+        state.selectedProjectWorktree = AppState.customProjectSentinel
+        await state.loadSessions()
+        // Back on the filtered list, legacy rows are not kept as deeper pages.
+        #expect(state.sessions.map(\.id) == ["p1"])
+    }
+
+    @Test @MainActor func projectSwitchResetsDeeperActivePages() async {
+        let (api, state) = await Self.twoPageState()
+        #expect(state.hasLoadedDeeperActivePages)
+
+        state.customProjectPath = "/other"
+        state.selectedProjectWorktree = AppState.customProjectSentinel
+        await state.loadSessions()
+
+        #expect(state.hasLoadedDeeperActivePages == false)
+        #expect(state.sessions.map(\.id) == ["a", "b"])
+        #expect(state.activeSessionCursor == 40)
+        #expect(await api.sessionPageRequests.last?.directory == "/other")
     }
 
     // MARK: Archived pages

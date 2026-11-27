@@ -768,7 +768,7 @@ private struct TabletSessionsColumn: View {
                     .contentMargins(.top, 0, for: .scrollContent)
                     .refreshable {
                         guard !archiveSelection.isRunning else { return }
-                        await state.refreshSessions()
+                        await state.refreshSessions(resetPaging: true)
                         if archivedExpanded { await state.loadArchivedSessions(reset: true) }
                     }
                     .disabled(archiveSelection.isRunning)

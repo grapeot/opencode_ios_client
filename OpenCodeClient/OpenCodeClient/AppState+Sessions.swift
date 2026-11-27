@@ -166,6 +166,8 @@ extension AppState {
         var hasMore: Bool
         /// Set when the server filtered out archived rows for this directory.
         var filteredDirectory: String?
+        /// Filtered path only: the cursor after this first page, nil when it held every active row.
+        var nextCursor: Int? = nil
     }
 
     /// V1 `/session` without a directory lists the server's current project,
@@ -194,6 +196,37 @@ extension AppState {
         return resolved
     }
 
+    /// `/experimental/session` with archive filtering and cursors shipped in
+    /// OpenCode 1.2.11. Older 1.x servers proxy unknown paths to
+    /// app.opencode.ai, which can answer 5xx or time out when the host is
+    /// offline, so they are not probed. Unparseable versions ("local") and
+    /// locally compiled binaries ("0.0.0-…") are probed.
+    nonisolated static func serverMayFilterArchivedSessions(version: String?) -> Bool {
+        guard let version else { return true }
+        let core = version.trimmingCharacters(in: .whitespaces).drop { $0 == "v" }
+            .split(whereSeparator: { $0 == "-" || $0 == "+" }).first ?? ""
+        let parts = core.split(separator: ".").map { Int($0) }
+        guard parts.count >= 2, parts.allSatisfy({ $0 != nil }) else { return true }
+        let numbers = parts.compactMap { $0 } + [0]
+        if numbers.prefix(3).allSatisfy({ $0 == 0 }) { return true }
+        return (numbers[0], numbers[1], numbers[2]) >= (1, 2, 11)
+    }
+
+    /// A parseable non-zero version; "local", nil and "0.0.0-…" builds are unknown.
+    nonisolated static func isKnownServerRelease(version: String?) -> Bool {
+        guard let version else { return false }
+        let core = version.trimmingCharacters(in: .whitespaces).drop { $0 == "v" }
+            .split(whereSeparator: { $0 == "-" || $0 == "+" }).first ?? ""
+        let parts = core.split(separator: ".").map { Int($0) }
+        guard parts.count >= 2, parts.allSatisfy({ $0 != nil }) else { return false }
+        return parts.contains { $0 != 0 }
+    }
+
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        return (error as? URLError)?.code == .cancelled
+    }
+
     nonisolated static func isUnsupportedSessionPage(_ error: Error) -> Bool {
         if error is DecodingError { return true } // e.g. an HTML 200 from a packaged server
         if let error = error as? URLError { return error.code == .unsupportedURL }
@@ -201,30 +234,25 @@ extension AppState {
         return false
     }
 
-    /// Every unarchived row (roots and children) in `directory`, following
-    /// the server cursor while it strictly decreases, up to `activeSessionCap`.
-    func fetchActiveSessions(directory: String) async throws -> [Session] {
-        var rows: [Session] = []
-        var seen = Set<String>()
-        var cursor: Int?
-        for _ in 0..<Self.maxActiveSessionPages {
-            let page = try await apiClient.sessionPage(
-                directory: directory, includeArchived: false, rootsOnly: false,
-                limit: Self.activeSessionPageSize, cursor: cursor
-            )
-            for row in page.rows where seen.insert(row.id).inserted { rows.append(row) }
-            guard rows.count < Self.activeSessionCap, let next = page.nextCursor,
-                  cursor.map({ next < $0 }) ?? true else { break }
-            cursor = next
-        }
-        Self.logger.debug("loadSessions(filtered): directory=\(directory, privacy: .public) count=\(rows.count, privacy: .public)")
-        return rows
+    /// One page of unarchived rows (roots and children) in `directory`, newest
+    /// first. A next cursor that does not strictly decrease is treated as the end.
+    func fetchActiveSessionPage(directory: String, cursor: Int?) async throws -> SessionPage {
+        var page = try await apiClient.sessionPage(
+            directory: directory, includeArchived: false, rootsOnly: false,
+            limit: Self.activeSessionPageSize, cursor: cursor
+        )
+        if let next = page.nextCursor, let cursor, next >= cursor { page.nextCursor = nil }
+        Self.logger.debug("loadSessions(filtered): directory=\(directory, privacy: .public) cursor=\(cursor.map(String.init) ?? "nil", privacy: .public) count=\(page.rows.count, privacy: .public)")
+        return page
     }
 
     /// Unarchived rows when the host filters on the server, else the legacy
     /// recent-N window, which mixes in archived rows.
     func fetchSessionList() async throws -> SessionListFetch {
         let snapshot = captureHostRequestSnapshot()
+        if serverFiltersArchivedSessions == nil, !Self.serverMayFilterArchivedSessions(version: serverVersion) {
+            serverFiltersArchivedSessions = false
+        }
         if serverFiltersArchivedSessions != false {
             guard let directory = await sessionListDirectory() else {
                 // An unresolved default directory on a filtering host keeps the
@@ -233,11 +261,20 @@ extension AppState {
                 return try await fetchLegacySessionList()
             }
             do {
-                let rows = try await fetchActiveSessions(directory: directory)
+                let page = try await fetchActiveSessionPage(directory: directory, cursor: nil)
                 if isCurrentHostRequest(snapshot) { serverFiltersArchivedSessions = true }
-                return SessionListFetch(rows: rows, hasMore: false, filteredDirectory: directory)
+                return SessionListFetch(rows: page.rows, hasMore: page.nextCursor != nil,
+                                        filteredDirectory: directory, nextCursor: page.nextCursor)
             } catch where Self.isUnsupportedSessionPage(error) {
                 if isCurrentHostRequest(snapshot) { serverFiltersArchivedSessions = false }
+            } catch where serverFiltersArchivedSessions == nil
+                        && !Self.isKnownServerRelease(version: serverVersion)
+                        && !Self.isCancellation(error) {
+                // Unconfirmed host of unknown version: it may be a pre-1.2.11
+                // server whose upstream proxy 5xxs or times out offline. Load
+                // the legacy window this time and probe again later. A known
+                // release has the route, so its errors surface instead.
+                Self.logger.warning("session page probe failed; using legacy list: \(error.localizedDescription)")
             }
         }
         return try await fetchLegacySessionList()
@@ -248,25 +285,56 @@ extension AppState {
         return SessionListFetch(rows: rows, hasMore: rows.count >= loadedSessionLimit, filteredDirectory: nil)
     }
 
-    /// Applies a fetch, keeping archived rows the user paged in for the same
-    /// directory. `droppedSessionID` is a row the server just reported gone.
-    func applySessionListFetch(_ fetched: SessionListFetch, capturedSelection: Session?, droppedSessionID: String? = nil) {
+    /// Applies a first-page fetch, keeping archived rows the user paged in for
+    /// the same directory. With `keepDeeperPages`, active rows older than the
+    /// first page's last row stay as they were (they may be stale until a full
+    /// refresh); rows inside the first page's range that it no longer lists
+    /// were archived or deleted and leave. `droppedSessionID` is a row the
+    /// server just reported gone.
+    func applySessionListFetch(
+        _ fetched: SessionListFetch,
+        capturedSelection: Session?,
+        droppedSessionID: String? = nil,
+        keepDeeperPages: Bool = true
+    ) {
         guard let directory = fetched.filteredDirectory else {
+            // A legacy window replaces the list wholesale; filtered paging
+            // state from an earlier list must not carry into it or out of it.
+            resetArchivedSessionPages()
+            archivedSessionDirectory = nil
+            activeSessionCursor = nil
+            hasLoadedDeeperActivePages = false
             applyFetchedSessionPage(fetched.rows, capturedSelection: capturedSelection)
             hasMoreSessions = fetched.hasMore
             return
         }
+        var keepDeeper = keepDeeperPages
         if archivedSessionDirectory != directory {
             resetArchivedSessionPages()
             archivedSessionDirectory = directory
+            keepDeeper = false
         }
         if let droppedSessionID { loadedArchivedSessionIDs.remove(droppedSessionID) }
         let activeIDs = Set(fetched.rows.map(\.id))
+        // The first page covers every active row with time.updated >= its next
+        // cursor (the server pages on `< cursor`); with no cursor it covers all.
+        let boundary = fetched.nextCursor
+        let deeper = !keepDeeper ? [] : sessions.filter { row in
+            !row.isArchived && !activeIDs.contains(row.id) && row.id != droppedSessionID
+                && boundary.map { row.time.updated < $0 } == true
+        }
         let retained = sessions.filter {
             $0.isArchived && loadedArchivedSessionIDs.contains($0.id) && !activeIDs.contains($0.id)
         }
-        applyFetchedSessionPage(fetched.rows + retained, capturedSelection: capturedSelection)
-        hasMoreSessions = false
+        applyFetchedSessionPage(fetched.rows + deeper + retained, capturedSelection: capturedSelection)
+        if keepDeeper && hasLoadedDeeperActivePages, let next = fetched.nextCursor {
+            // Keep paging from the deepest page already loaded (nil when it was the last).
+            activeSessionCursor = activeSessionCursor.map { min($0, next) }
+        } else {
+            activeSessionCursor = fetched.nextCursor
+            hasLoadedDeeperActivePages = false
+        }
+        hasMoreSessions = activeSessionCursor != nil
     }
 
     func resetArchivedSessionPages() {
@@ -301,7 +369,7 @@ extension AppState {
     /// Archived subtree tops, newest first. `archived=true` returns every row,
     /// so one load reads server pages until it has a page of tops.
     func loadArchivedSessions(reset: Bool = false) async {
-        guard isConnected, usesServerArchiveFilter, let directory = archivedSessionDirectory,
+        guard isConnected, let directory = archivedSessionDirectory,
               archivedLoadingDirectory != directory else { return }
         guard reset || !hasLoadedArchivedSessions || hasMoreArchivedSessions else { return }
         let snapshot = captureHostRequestSnapshot()
@@ -353,7 +421,7 @@ extension AppState {
     /// they fall inside the window already paged in; older rows wait for the
     /// user to page that far, as they would after any refresh. No request.
     func noteArchivedInPlace(_ ids: Set<String>) {
-        guard usesServerArchiveFilter, hasLoadedArchivedSessions, !ids.isEmpty else { return }
+        guard usesFilteredSessionList, hasLoadedArchivedSessions, !ids.isEmpty else { return }
         let loadedTops = sessions.filter { loadedArchivedSessionIDs.contains($0.id) && $0.isArchived }
         let oldest = hasMoreArchivedSessions ? loadedTops.map(\.time.updated).min() : nil
         let archived = sessions.filter { ids.contains($0.id) && $0.isArchived }
@@ -363,11 +431,11 @@ extension AppState {
 
     /// Archived rows are paged in as subtree tops; children arrive when a row expands.
     func mayHaveUnloadedChildren(_ session: Session) -> Bool {
-        usesServerArchiveFilter && session.isArchived && !archivedChildrenLoadedIDs.contains(session.id)
+        usesFilteredSessionList && session.isArchived && !archivedChildrenLoadedIDs.contains(session.id)
     }
 
     func loadArchivedChildren(of sessionID: String) async {
-        guard usesServerArchiveFilter, archivedChildrenLoadedIDs.insert(sessionID).inserted else { return }
+        guard usesFilteredSessionList, archivedChildrenLoadedIDs.insert(sessionID).inserted else { return }
         let snapshot = captureHostRequestSnapshot()
         let directory = archivedSessionDirectory
         do {
@@ -393,14 +461,14 @@ extension AppState {
     /// with bounded concurrency. Throws when any level cannot be read, so a
     /// restore never silently stops at the root.
     func fetchArchivedDescendants(of rootID: String) async throws {
-        guard usesServerArchiveFilter else { return }
+        guard usesFilteredSessionList else { return }
         let snapshot = captureHostRequestSnapshot()
         let api = apiClient
         var frontier = [rootID]
         var seen: Set<String> = [rootID]
         while !frontier.isEmpty {
             // Restoring part of a subtree would leave the rest unreachable.
-            guard seen.count <= Self.activeSessionCap else { throw URLError(.dataLengthExceedsMaximum) }
+            guard seen.count <= Self.descendantRestoreCap else { throw URLError(.dataLengthExceedsMaximum) }
             var fetched: [(String, [Session])] = []
             for chunk in stride(from: 0, to: frontier.count, by: Self.descendantFetchConcurrency) {
                 let ids = frontier[chunk..<min(chunk + Self.descendantFetchConcurrency, frontier.count)]
@@ -421,7 +489,9 @@ extension AppState {
         }
     }
 
-    func loadSessions() async {
+    /// Reloads the first page. `resetPaging` (pull to refresh) also drops
+    /// deeper active pages, so everything shown is fresh from the server.
+    func loadSessions(resetPaging: Bool = false) async {
         guard isConnected else { return }
         let snapshot = captureHostRequestSnapshot()
         let directoryKey = effectiveProjectDirectory
@@ -430,7 +500,7 @@ extension AppState {
             let fetched = try await fetchSessionList()
             // A later project switch owns the list; a slower earlier fetch must not overwrite it.
             guard isCurrentHostRequest(snapshot), effectiveProjectDirectory == directoryKey else { return }
-            applySessionListFetch(fetched, capturedSelection: selectedSession)
+            applySessionListFetch(fetched, capturedSelection: selectedSession, keepDeeperPages: !resetPaging)
             selectFirstAvailableSessionIfNeeded()
 
             // A persisted session was restored on launch but its messages were
@@ -457,9 +527,14 @@ extension AppState {
         guard isConnected else { return }
         guard hasMoreSessions else { return }
         guard !isLoadingMoreSessions else { return }
+        if usesFilteredSessionList {
+            await loadMoreActiveSessions()
+            return
+        }
 
         isLoadingMoreSessions = true
         let snapshot = captureHostRequestSnapshot()
+        let directoryKey = effectiveProjectDirectory
         let nextLimit = Self.nextSessionFetchLimit(current: loadedSessionLimit)
         defer {
             if isCurrentHostRequest(snapshot) {
@@ -470,11 +545,33 @@ extension AppState {
         do {
             let selectedSession = currentSession
             let loaded = try await fetchSessions(limit: nextLimit)
-            guard isCurrentHostRequest(snapshot) else { return }
+            // A project switch may have moved the list to the filtered path meanwhile.
+            guard isCurrentHostRequest(snapshot), !usesFilteredSessionList,
+                  effectiveProjectDirectory == directoryKey else { return }
             loadedSessionLimit = nextLimit
             applyFetchedSessionPage(loaded, capturedSelection: selectedSession)
             hasMoreSessions = loaded.count >= loadedSessionLimit
             selectFirstAvailableSessionIfNeeded()
+        } catch {
+            guard isCurrentHostRequest(snapshot) else { return }
+            connectionError = error.localizedDescription
+        }
+    }
+
+    /// Appends the next active page without re-downloading earlier ones.
+    private func loadMoreActiveSessions() async {
+        guard let directory = archivedSessionDirectory, let cursor = activeSessionCursor else { return }
+        isLoadingMoreSessions = true
+        let snapshot = captureHostRequestSnapshot()
+        defer { if isCurrentHostRequest(snapshot) { isLoadingMoreSessions = false } }
+        do {
+            let page = try await fetchActiveSessionPage(directory: directory, cursor: cursor)
+            guard isCurrentHostRequest(snapshot), archivedSessionDirectory == directory,
+                  activeSessionCursor == cursor else { return }
+            addMissingSessions(page.rows.filter { !$0.isArchived })
+            activeSessionCursor = page.nextCursor
+            hasLoadedDeeperActivePages = true
+            hasMoreSessions = page.nextCursor != nil
         } catch {
             guard isCurrentHostRequest(snapshot) else { return }
             connectionError = error.localizedDescription
@@ -520,9 +617,9 @@ extension AppState {
         isLoadingAgents = false
     }
 
-    func refreshSessions() async {
+    func refreshSessions(resetPaging: Bool = false) async {
         guard isConnected else { return }
-        await loadSessions()
+        await loadSessions(resetPaging: resetPaging)
         await syncSessionStatusesFromPoll()
     }
 
