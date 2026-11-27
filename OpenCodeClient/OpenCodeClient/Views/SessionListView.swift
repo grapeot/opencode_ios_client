@@ -28,6 +28,9 @@ struct SessionListView: View {
 
     var body: some View {
         let presentations = state.sessionIndicatorPresentations
+        // One tree derivation per render; the archived tree only when it can show.
+        let activeNodes = self.activeNodes
+        let archivedNodes = archivedExpanded || activeNodes.isEmpty ? self.archivedNodes : []
         VStack(spacing: 0) {
             HStack {
                 Button(L10n.t(isSelecting ? .commonCancel : .sessionsClose)) {
@@ -81,7 +84,7 @@ struct SessionListView: View {
             .padding(.bottom, DesignSpacing.md)
 
             Group {
-                if activeNodes.isEmpty && archivedNodes.isEmpty {
+                if activeNodes.isEmpty && archivedNodes.isEmpty && !state.mayHaveUnloadedArchivedSessions {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -103,6 +106,7 @@ struct SessionListView: View {
                             }
                             if archivedExpanded {
                                 sessionNodes(archivedNodes, archived: true, presentations: presentations)
+                                ArchivedSessionsPagingRow(state: state)
                             }
                         }
 
@@ -120,6 +124,7 @@ struct SessionListView: View {
                     .refreshable {
                         guard !archiveSelection.isRunning else { return }
                         await state.refreshSessions()
+                        if archivedExpanded { await state.loadArchivedSessions(reset: true) }
                     }
                     .disabled(archiveSelection.isRunning)
                 }
@@ -129,6 +134,12 @@ struct SessionListView: View {
         .modifier(SessionArchiveSuccessOverlay(selection: archiveSelection))
         .interactiveDismissDisabled(archiveSelection.isRunning)
         .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
+        .onChange(of: archivedExpanded) { _, expanded in
+            if expanded { Task { await state.loadArchivedSessions() } }
+        }
+        .onChange(of: state.archivedSessionDirectory) {
+            if archivedExpanded { Task { await state.loadArchivedSessions() } }
+        }
         .onDisappear { archiveSelection.scopeChanged() }
         .alert(
             L10n.t(.sessionsActionFailedTitle),
@@ -179,7 +190,7 @@ struct SessionListView: View {
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
                     depth: depth,
-                    hasChildren: !node.children.isEmpty,
+                    hasChildren: !node.children.isEmpty || state.mayHaveUnloadedChildren(session),
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     archiveChecked: isSelecting ? archiveSelection.selected.contains(session.id) : nil,
                     onSelect: {
@@ -240,6 +251,22 @@ struct SessionListView: View {
                 actionError = error.localizedDescription
             }
             mutatingSessionID = nil
+        }
+    }
+}
+
+/// Archived rows page in from the server once the section is open. The
+/// legacy window carries archived rows itself and shows nothing here.
+struct ArchivedSessionsPagingRow: View {
+    let state: AppState
+
+    var body: some View {
+        if state.isLoadingArchivedSessions {
+            LoadMoreSessionsRow(isLoading: true) {}
+        } else if state.canLoadMoreArchivedSessions {
+            LoadMoreSessionsRow(isLoading: false) {
+                Task { await state.loadArchivedSessions() }
+            }
         }
     }
 }

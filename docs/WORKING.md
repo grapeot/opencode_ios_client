@@ -4,6 +4,19 @@
 
 ## 当前状态
 
+### Session 列表只拉活跃会话（2026-11-27，分支 `fix/session-list-active-only`）
+
+起因：批量归档一千多个含 sub-agent 的 session 后整个 app 卡顿。V1 `GET /session?limit=N` 不过滤归档，按 `time_updated` 倒序，归档又不刷新这个时间；实测 live 最近 1200 行里 1130 行已归档、1143 行是子会话，只有 9 个活跃 root。客户端把整窗留在内存，每次重绘对全量做 indicator 与 tree 派生，`ChatTabView` 还因读整张 indicator 表随任何 session/status 变化整页重绘。为选中这一千多行必须点两次 load more，窗口停在 1200 直到切 host。
+
+- [x] 活跃列表改走 `GET /experimental/session`：服务端默认排除归档，跟随 `x-next-cursor` 拉全（游标须严格递减，上限 3000）。该接口不带 directory 时返回所有项目、带 directory 时精确匹配 `session.directory`，所以总是显式传目录：选定项目用它，否则用 `GET /path` 的 instance 目录，退而用 `/project/current` 的 worktree，结果为 `/` 时走旧路径；解析结果按 host 缓存。取舍：同项目其它目录的 session 不再出现在默认列表。
+- [x] 不支持该接口的 host（404/405/501、HTML 200 解码失败、unsupportedURL）按 host 记住并回退原 `/session` 窗口，行为不变；其它错误照常抛出，不降级；已确认支持的 host 目录解析失败时报错而不混入旧窗口。
+- [x] 归档区展开时按页拉"归档子树顶端"（`archived=true`，客户端保留已归档且父节点不是已知已归档的行，含活跃父节点下单独归档的子会话），一次加载最多读 4 个 300 行服务端页直到攒够 50 个；归档行展开时懒加载 `/children`。restore 无视展开缓存逐层并发拉齐后代，任一层失败即报错且不做 PATCH；发送路径的自动恢复只恢复已加载子树。
+- [x] 只有分页或展开加载进来的归档行在刷新时保留；本设备归档后若归档区已加载，重载第一页；切项目目录重置归档分页，归档加载按目录区分进行中状态；跨目录的慢返回不覆盖新目录；404 的当前行不随保留集回来；重载后已展开的归档行补拉子节点。
+- [x] `SessionListView` 与 iPad 侧栏每次 body 只算一次 tree，归档 tree 只在可见时算；`ChatTabView` 把读 indicator 表和后代扫描的部分拆进 `ComposerSessionIndicatorRows` 子 View。
+- [x] 独立 code review 一轮（1 must-fix + 9 should-fix 均已处理）；新增 `SessionListArchiveFilterTests` 17 项。
+- [ ] 未改：批量归档仍逐个串行 `children` + `PATCH`、每成功一个 upsert 一次；`ChatTabView` 的消息分组仍经 `currentSession` 读整个 `sessions` 数组。活跃集变小后代价随之下降，留作后续。
+- [ ] DSH shim 目前没有 `/experimental/session` 和 `/children`，走回退路径；shim 侧另开 PR 补齐。
+
 ### Watch Ambient（Experimental，PR #223）
 
 - [x] Antigravity 起草 PRD/RFC，完成异步设计与实现审查；新增 watchOS 11 App、独立手机桥接 client、工具去重和结果分片、gateway 确认后回执。

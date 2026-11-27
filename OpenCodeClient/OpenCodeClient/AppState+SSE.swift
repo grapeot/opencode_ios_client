@@ -251,7 +251,7 @@ extension AppState {
                 if sessionScope.confirmedMissingSessionIDs.contains(session.id) {
                     return
                 }
-                let dir = effectiveProjectDirectory ?? serverCurrentProjectWorktree
+                let dir = effectiveProjectDirectory ?? resolvedDefaultSessionListDirectory ?? serverCurrentProjectWorktree
                 let isCurrent = (session.id == currentSessionID)
                 let isKnown = sessions.contains(where: { $0.id == session.id })
                 // REST treats a missing directory as the server's current project,
@@ -668,15 +668,15 @@ extension AppState {
         guard currentSessionID == sessionID else { return }
         clearSelectionIfCurrent(sessionID)
         guard isConnected else { return }
-        let loaded: [Session]
+        var fetched: SessionListFetch
         do {
-            loaded = try await fetchSessions(limit: loadedSessionLimit)
+            fetched = try await fetchSessionList()
         } catch {
             connectionError = error.localizedDescription
             return
         }
-        applyFetchedSessionPage(loaded.filter { $0.id != sessionID }, capturedSelection: nil)
-        hasMoreSessions = loaded.count >= loadedSessionLimit
+        fetched.rows.removeAll { $0.id == sessionID }
+        applySessionListFetch(fetched, capturedSelection: nil, droppedSessionID: sessionID)
         selectFirstAvailableSessionIfNeeded()
         guard let nextID = currentSessionID, nextID != sessionID else { return }
         await loadMessages(allowMissingSessionRecovery: false)

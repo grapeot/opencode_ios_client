@@ -203,7 +203,7 @@ extension AppState {
                 hostProfileID: host.hostProfileID
             )
             do {
-                try await restoreSession(sessionID: sessionID)
+                try await restoreSession(sessionID: sessionID, fetchDescendants: false)
             } catch {
                 guard ownsSend(host: host, selection: selection, sessionID: sessionID) else {
                     keepExistingUnsent(messageID)
