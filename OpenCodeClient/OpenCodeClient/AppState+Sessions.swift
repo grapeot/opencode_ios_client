@@ -26,6 +26,9 @@ extension AppState {
             expandedSessionIDs.remove(sessionID)
         } else {
             expandedSessionIDs.insert(sessionID)
+            if let session = sessions.first(where: { $0.id == sessionID }), mayHaveUnloadedChildren(session) {
+                Task { await loadArchivedChildren(of: sessionID) }
+            }
         }
     }
 
@@ -108,6 +111,10 @@ extension AppState {
             isConnected = health.healthy
             serverVersion = health.version
             if isConnected {
+                // A restart under the same profile may change the server's
+                // directory or protocol; probe both again on the next list.
+                defaultSessionListDirectory = nil
+                serverFiltersArchivedSessions = nil
                 updateConnectionDiagnostic(
                     phase: .connected,
                     message: L10n.t(.hostDiagnosticConnectedToOpenCode, health.version.map { " \($0)" } ?? "")
@@ -154,15 +161,276 @@ extension AppState {
         isLoadingProjects = false
     }
 
+    struct SessionListFetch {
+        var rows: [Session]
+        var hasMore: Bool
+        /// Set when the server filtered out archived rows for this directory.
+        var filteredDirectory: String?
+    }
+
+    /// V1 `/session` without a directory lists the server's current project,
+    /// while `/experimental/session` without one lists every project and with
+    /// one matches `session.directory` exactly. Sessions record the server's
+    /// instance directory (`GET /path`), which can differ from the project
+    /// worktree (a non-git server reports "/"), so prefer it; cached per host.
+    func sessionListDirectory() async -> String? {
+        if let directory = effectiveProjectDirectory, !directory.isEmpty { return directory }
+        if let cached = defaultSessionListDirectory { return cached.isEmpty ? nil : cached }
+        let snapshot = captureHostRequestSnapshot()
+        var resolved = try? await apiClient.instanceDirectory()
+        guard isCurrentHostRequest(snapshot) else { return nil }
+        if resolved?.isEmpty != false {
+            resolved = try? await apiClient.projectCurrent()?.worktree
+            guard isCurrentHostRequest(snapshot) else { return nil }
+        }
+        guard let resolved, !resolved.isEmpty else { return nil }
+        guard resolved != "/" else {
+            // Sessions started at "/" are not a project; the default list keeps
+            // the legacy window, cached as "" so it is not reprobed.
+            defaultSessionListDirectory = ""
+            return nil
+        }
+        defaultSessionListDirectory = resolved
+        return resolved
+    }
+
+    nonisolated static func isUnsupportedSessionPage(_ error: Error) -> Bool {
+        if error is DecodingError { return true } // e.g. an HTML 200 from a packaged server
+        if let error = error as? URLError { return error.code == .unsupportedURL }
+        if case APIError.httpError(let status, _) = error { return [404, 405, 501].contains(status) }
+        return false
+    }
+
+    /// Every unarchived row (roots and children) in `directory`, following
+    /// the server cursor while it strictly decreases, up to `activeSessionCap`.
+    func fetchActiveSessions(directory: String) async throws -> [Session] {
+        var rows: [Session] = []
+        var seen = Set<String>()
+        var cursor: Int?
+        for _ in 0..<Self.maxActiveSessionPages {
+            let page = try await apiClient.sessionPage(
+                directory: directory, includeArchived: false, rootsOnly: false,
+                limit: Self.activeSessionPageSize, cursor: cursor
+            )
+            for row in page.rows where seen.insert(row.id).inserted { rows.append(row) }
+            guard rows.count < Self.activeSessionCap, let next = page.nextCursor,
+                  cursor.map({ next < $0 }) ?? true else { break }
+            cursor = next
+        }
+        Self.logger.debug("loadSessions(filtered): directory=\(directory, privacy: .public) count=\(rows.count, privacy: .public)")
+        return rows
+    }
+
+    /// Unarchived rows when the host filters on the server, else the legacy
+    /// recent-N window, which mixes in archived rows.
+    func fetchSessionList() async throws -> SessionListFetch {
+        let snapshot = captureHostRequestSnapshot()
+        if serverFiltersArchivedSessions != false {
+            guard let directory = await sessionListDirectory() else {
+                // An unresolved default directory on a filtering host keeps the
+                // current list rather than mixing the legacy window into it.
+                if serverFiltersArchivedSessions == true, defaultSessionListDirectory == nil { throw CancellationError() }
+                return try await fetchLegacySessionList()
+            }
+            do {
+                let rows = try await fetchActiveSessions(directory: directory)
+                if isCurrentHostRequest(snapshot) { serverFiltersArchivedSessions = true }
+                return SessionListFetch(rows: rows, hasMore: false, filteredDirectory: directory)
+            } catch where Self.isUnsupportedSessionPage(error) {
+                if isCurrentHostRequest(snapshot) { serverFiltersArchivedSessions = false }
+            }
+        }
+        return try await fetchLegacySessionList()
+    }
+
+    private func fetchLegacySessionList() async throws -> SessionListFetch {
+        let rows = try await fetchSessions(limit: loadedSessionLimit)
+        return SessionListFetch(rows: rows, hasMore: rows.count >= loadedSessionLimit, filteredDirectory: nil)
+    }
+
+    /// Applies a fetch, keeping archived rows the user paged in for the same
+    /// directory. `droppedSessionID` is a row the server just reported gone.
+    func applySessionListFetch(_ fetched: SessionListFetch, capturedSelection: Session?, droppedSessionID: String? = nil) {
+        guard let directory = fetched.filteredDirectory else {
+            applyFetchedSessionPage(fetched.rows, capturedSelection: capturedSelection)
+            hasMoreSessions = fetched.hasMore
+            return
+        }
+        if archivedSessionDirectory != directory {
+            resetArchivedSessionPages()
+            archivedSessionDirectory = directory
+        }
+        if let droppedSessionID { loadedArchivedSessionIDs.remove(droppedSessionID) }
+        let activeIDs = Set(fetched.rows.map(\.id))
+        let retained = sessions.filter {
+            $0.isArchived && loadedArchivedSessionIDs.contains($0.id) && !activeIDs.contains($0.id)
+        }
+        applyFetchedSessionPage(fetched.rows + retained, capturedSelection: capturedSelection)
+        hasMoreSessions = false
+    }
+
+    func resetArchivedSessionPages() {
+        loadedArchivedSessionIDs = []
+        archivedChildrenLoadedIDs = []
+        archivedSessionCursor = nil
+        hasLoadedArchivedSessions = false
+        hasMoreArchivedSessions = false
+    }
+
+    /// Adds rows not already present. A local row is never replaced by a page
+    /// row, which may predate a restore made from this device.
+    func addMissingSessions(_ rows: [Session]) {
+        var known = Set(sessions.map(\.id))
+        let missing = sessionScope.confirmedMissingSessionIDs
+        let added = rows.filter { !missing.contains($0.id) && known.insert($0.id).inserted }
+        guard !added.isEmpty else { return }
+        sessions.append(contentsOf: added)
+    }
+
+    /// Archived rows that head an archived subtree: roots, and rows whose
+    /// parent is not known to be archived (a child archived on its own under an
+    /// active parent, or an orphan). Rows under an archived parent arrive when
+    /// that parent expands.
+    nonisolated static func archivedSubtreeTops(_ rows: [Session], known: [Session]) -> [Session] {
+        let archivedIDs = Set((rows + known).filter(\.isArchived).map(\.id))
+        return rows.filter { row in
+            row.isArchived && !(row.parentID.map(archivedIDs.contains) ?? false)
+        }
+    }
+
+    /// Archived subtree tops, newest first. `archived=true` returns every row,
+    /// so one load reads server pages until it has a page of tops.
+    func loadArchivedSessions(reset: Bool = false) async {
+        guard isConnected, usesServerArchiveFilter, let directory = archivedSessionDirectory,
+              archivedLoadingDirectory != directory else { return }
+        guard reset || !hasLoadedArchivedSessions || hasMoreArchivedSessions else { return }
+        let snapshot = captureHostRequestSnapshot()
+        archivedLoadingDirectory = directory
+        defer { if archivedLoadingDirectory == directory { archivedLoadingDirectory = nil } }
+        var cursor = reset ? nil : archivedSessionCursor
+        var collected: [Session] = []
+        var exhausted = false
+        do {
+            for _ in 0..<Self.maxArchivedRequestsPerLoad {
+                let page = try await apiClient.sessionPage(
+                    directory: directory, includeArchived: true, rootsOnly: false,
+                    limit: Self.archivedSessionRequestSize, cursor: cursor
+                )
+                guard isCurrentHostRequest(snapshot), archivedSessionDirectory == directory else { return }
+                collected.append(contentsOf: page.rows)
+                guard let next = page.nextCursor, cursor.map({ next < $0 }) ?? true else {
+                    exhausted = true
+                    break
+                }
+                cursor = next
+                if Self.archivedSubtreeTops(collected, known: sessions).count >= Self.archivedSessionPageSize { break }
+            }
+        } catch {
+            guard isCurrentHostRequest(snapshot) else { return }
+            Self.logger.warning("loadArchivedSessions failed: \(error.localizedDescription)")
+            return
+        }
+        if reset {
+            let dropped = loadedArchivedSessionIDs
+            sessions.removeAll { dropped.contains($0.id) && $0.isArchived && $0.id != currentSessionID }
+            resetArchivedSessionPages()
+        }
+        let tops = Self.archivedSubtreeTops(collected, known: sessions)
+        addMissingSessions(tops)
+        loadedArchivedSessionIDs.formUnion(tops.map(\.id))
+        archivedSessionCursor = exhausted ? nil : cursor
+        hasMoreArchivedSessions = !exhausted
+        hasLoadedArchivedSessions = true
+        // A reset drops children, so rows the user left expanded reload theirs.
+        for id in expandedSessionIDs {
+            if let session = sessions.first(where: { $0.id == id }), mayHaveUnloadedChildren(session) {
+                await loadArchivedChildren(of: id)
+            }
+        }
+    }
+
+    /// Keeps rows this device just archived in a loaded archived section when
+    /// they fall inside the window already paged in; older rows wait for the
+    /// user to page that far, as they would after any refresh. No request.
+    func noteArchivedInPlace(_ ids: Set<String>) {
+        guard usesServerArchiveFilter, hasLoadedArchivedSessions, !ids.isEmpty else { return }
+        let loadedTops = sessions.filter { loadedArchivedSessionIDs.contains($0.id) && $0.isArchived }
+        let oldest = hasMoreArchivedSessions ? loadedTops.map(\.time.updated).min() : nil
+        let archived = sessions.filter { ids.contains($0.id) && $0.isArchived }
+        let tops = Self.archivedSubtreeTops(archived, known: sessions)
+        loadedArchivedSessionIDs.formUnion(tops.filter { row in oldest.map { row.time.updated >= $0 } ?? true }.map(\.id))
+    }
+
+    /// Archived rows are paged in as subtree tops; children arrive when a row expands.
+    func mayHaveUnloadedChildren(_ session: Session) -> Bool {
+        usesServerArchiveFilter && session.isArchived && !archivedChildrenLoadedIDs.contains(session.id)
+    }
+
+    func loadArchivedChildren(of sessionID: String) async {
+        guard usesServerArchiveFilter, archivedChildrenLoadedIDs.insert(sessionID).inserted else { return }
+        let snapshot = captureHostRequestSnapshot()
+        let directory = archivedSessionDirectory
+        do {
+            let children = try await apiClient.sessionChildren(sessionID: sessionID)
+            guard isCurrentHostRequest(snapshot), archivedSessionDirectory == directory else { return }
+            addArchivedChildren(children, of: sessionID)
+        } catch {
+            guard isCurrentHostRequest(snapshot), archivedSessionDirectory == directory else { return }
+            archivedChildrenLoadedIDs.remove(sessionID)
+            Self.logger.warning("loadArchivedChildren failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func addArchivedChildren(_ children: [Session], of sessionID: String) {
+        let rows = children.filter { $0.parentID == sessionID }
+        addMissingSessions(rows)
+        loadedArchivedSessionIDs.formUnion(rows.filter(\.isArchived).map(\.id))
+        archivedChildrenLoadedIDs.insert(sessionID)
+    }
+
+    /// Restore walks the loaded subtree, so it first fetches every descendant
+    /// afresh (the expand cache can predate later archives), level by level
+    /// with bounded concurrency. Throws when any level cannot be read, so a
+    /// restore never silently stops at the root.
+    func fetchArchivedDescendants(of rootID: String) async throws {
+        guard usesServerArchiveFilter else { return }
+        let snapshot = captureHostRequestSnapshot()
+        let api = apiClient
+        var frontier = [rootID]
+        var seen: Set<String> = [rootID]
+        while !frontier.isEmpty {
+            // Restoring part of a subtree would leave the rest unreachable.
+            guard seen.count <= Self.activeSessionCap else { throw URLError(.dataLengthExceedsMaximum) }
+            var fetched: [(String, [Session])] = []
+            for chunk in stride(from: 0, to: frontier.count, by: Self.descendantFetchConcurrency) {
+                let ids = frontier[chunk..<min(chunk + Self.descendantFetchConcurrency, frontier.count)]
+                try await withThrowingTaskGroup(of: (String, [Session]).self) { group in
+                    for id in ids { group.addTask { (id, try await api.sessionChildren(sessionID: id)) } }
+                    for try await result in group { fetched.append(result) }
+                }
+            }
+            guard isCurrentHostRequest(snapshot) else { throw CancellationError() }
+            var next: [String] = []
+            for (id, children) in fetched {
+                addArchivedChildren(children, of: id)
+                for child in children where child.parentID == id && seen.insert(child.id).inserted {
+                    next.append(child.id)
+                }
+            }
+            frontier = next
+        }
+    }
+
     func loadSessions() async {
         guard isConnected else { return }
         let snapshot = captureHostRequestSnapshot()
+        let directoryKey = effectiveProjectDirectory
         do {
             let selectedSession = currentSession
-            let loaded = try await fetchSessions(limit: loadedSessionLimit)
-            guard isCurrentHostRequest(snapshot) else { return }
-            applyFetchedSessionPage(loaded, capturedSelection: selectedSession)
-            hasMoreSessions = loaded.count >= loadedSessionLimit
+            let fetched = try await fetchSessionList()
+            // A later project switch owns the list; a slower earlier fetch must not overwrite it.
+            guard isCurrentHostRequest(snapshot), effectiveProjectDirectory == directoryKey else { return }
+            applySessionListFetch(fetched, capturedSelection: selectedSession)
             selectFirstAvailableSessionIfNeeded()
 
             // A persisted session was restored on launch but its messages were
@@ -177,6 +445,8 @@ extension AppState {
                 await loadMessages()
                 await refreshPendingPermissions()
             }
+        } catch is CancellationError {
+            return
         } catch {
             guard isCurrentHostRequest(snapshot) else { return }
             connectionError = error.localizedDescription
@@ -475,8 +745,14 @@ extension AppState {
         }
     }
 
-    func restoreSession(sessionID: String) async throws {
+    /// `fetchDescendants` loads archived descendants first, so the whole
+    /// subtree comes back; the send path skips it and restores what is loaded.
+    func restoreSession(sessionID: String, fetchDescendants: Bool = true) async throws {
         let host = captureHostRequestSnapshot()
+        if fetchDescendants {
+            do { try await fetchArchivedDescendants(of: sessionID) } catch is CancellationError { return }
+        }
+        guard isCurrentHostRequest(host) else { return }
         for id in sessionSubtreeIDs(rootedAt: sessionID, parentFirst: true) {
             guard isCurrentHostRequest(host) else { return }
             let updated = try await apiClient.updateSessionArchived(sessionID: id, archived: -1)

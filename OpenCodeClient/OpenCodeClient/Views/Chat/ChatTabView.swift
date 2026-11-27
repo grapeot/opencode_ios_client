@@ -661,20 +661,6 @@ struct ChatTabView: View {
         }
     }
 
-    private var currentIndicatorPresentation: SessionIndicatorPresentation? {
-        guard let id = state.currentSessionID else { return nil }
-        return state.sessionIndicatorPresentations[id]
-    }
-
-    /// Navigation targets for freshly confirmed descendants, including while
-    /// the current session executes. The single lamp carries execution state.
-    private var runningBackgroundSubagents: [Session] {
-        guard state.isConnected, state.statusStreamConnected, let sid = state.currentSessionID else { return [] }
-        return state.runningDescendantSessions(of: sid).filter { session in
-            state.statusConfirmedAt[session.id].map { Date().timeIntervalSince($0) < 60 } == true
-        }
-    }
-
     private var voiceRailTransportIcon: String {
         if isRecording { return "stop.circle.fill" }
         if isShowingTranscribingUI || isRetryingSpeech { return "circle.dotted" }
@@ -690,21 +676,16 @@ struct ChatTabView: View {
     /// the bottom line but moved to the always-visible top line, so it no
     /// longer disappears (and duplicates) once the turn completes.
     private var quietComposerStatus: some View {
-        let presentation = currentIndicatorPresentation
-        let currentActivity = state.currentSessionActivity
-        let activity = presentation?.ownIsActive == true
-            ? (runningTurnActivity?.text ?? (currentActivity?.state == .running ? currentActivity?.text : nil))
-            : nil
-        let text = ComposerActivityText.text(presentation: presentation, activity: activity, voice: voiceStatusText)
         // 6pt gap: xs (4) read as cramped between the two lines.
-        return VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             sessionStatsLine
-            if let first = runningBackgroundSubagents.first {
-                backgroundTaskNavigationRow(first)
-            }
-            if text != nil || presentation?.indicator != nil {
-                quietComposerStatusRow(presentation: presentation, text: text)
-            }
+            ComposerSessionIndicatorRows(
+                state: state,
+                runningTurnText: runningTurnActivity?.text,
+                voiceText: voiceStatusText,
+                navigation: { backgroundTaskNavigationRow($0) },
+                row: { quietComposerStatusRow(presentation: $0, text: $1) }
+            )
         }
         .padding(.horizontal, DesignSpacing.xs)
         .padding(.top, DesignSpacing.xs)
@@ -2268,6 +2249,41 @@ private struct VoiceRailWaveformView: View {
                 let intensity = max(0, 1 - distance / 3)
                 return CGFloat(0.05 + intensity * 0.85)
             }
+        }
+    }
+}
+
+/// Reads the session-wide indicator derivation and descendant scan in its own
+/// body, so session, status and read-state churn re-renders these rows rather
+/// than the whole chat transcript.
+private struct ComposerSessionIndicatorRows<Navigation: View, Row: View>: View {
+    let state: AppState
+    let runningTurnText: String?
+    let voiceText: String?
+    @ViewBuilder let navigation: (Session) -> Navigation
+    @ViewBuilder let row: (SessionIndicatorPresentation?, String?) -> Row
+
+    /// Navigation targets for freshly confirmed descendants, including while
+    /// the current session executes. The single lamp carries execution state.
+    private var runningBackgroundSubagents: [Session] {
+        guard state.isConnected, state.statusStreamConnected, let sid = state.currentSessionID else { return [] }
+        return state.runningDescendantSessions(of: sid).filter { session in
+            state.statusConfirmedAt[session.id].map { Date().timeIntervalSince($0) < 60 } == true
+        }
+    }
+
+    var body: some View {
+        let presentation = state.currentSessionID.flatMap { state.sessionIndicatorPresentations[$0] }
+        let currentActivity = state.currentSessionActivity
+        let activity = presentation?.ownIsActive == true
+            ? (runningTurnText ?? (currentActivity?.state == .running ? currentActivity?.text : nil))
+            : nil
+        let text = ComposerActivityText.text(presentation: presentation, activity: activity, voice: voiceText)
+        if let first = runningBackgroundSubagents.first {
+            navigation(first)
+        }
+        if text != nil || presentation?.indicator != nil {
+            row(presentation, text)
         }
     }
 }

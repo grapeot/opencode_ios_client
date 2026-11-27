@@ -154,6 +154,13 @@ actor APIClient {
         return try? JSONDecoder().decode(Project.self, from: data)
     }
 
+    /// The server's instance directory, which sessions record as `directory`.
+    func instanceDirectory() async throws -> String? {
+        struct PathInfo: Decodable { let directory: String? }
+        let (data, _) = try await makeRequest(path: "/path")
+        return try JSONDecoder().decode(PathInfo.self, from: data).directory
+    }
+
     func sessions(directory: String? = nil, limit: Int = 100) async throws -> [Session] {
         var queryItems: [URLQueryItem] = []
         if let directory, !directory.isEmpty {
@@ -167,6 +174,29 @@ actor APIClient {
             queryItems: queryItems.isEmpty ? nil : queryItems
         )
         return try JSONDecoder().decode([Session].self, from: data)
+    }
+
+    /// `/experimental/session` filters archive state on the server: without
+    /// `archived` it returns only unarchived rows; with `archived=true` it
+    /// returns both. `cursor` is the previous page's `x-next-cursor`.
+    func sessionPage(
+        directory: String?,
+        includeArchived: Bool,
+        rootsOnly: Bool,
+        limit: Int,
+        cursor: Int?
+    ) async throws -> SessionPage {
+        var queryItems = [URLQueryItem(name: "limit", value: String(max(limit, 1)))]
+        if let directory, !directory.isEmpty {
+            queryItems.append(URLQueryItem(name: "directory", value: directory))
+        }
+        if includeArchived { queryItems.append(URLQueryItem(name: "archived", value: "true")) }
+        if rootsOnly { queryItems.append(URLQueryItem(name: "roots", value: "true")) }
+        if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: String(cursor))) }
+        let (data, http) = try await makeRequest(path: "/experimental/session", queryItems: queryItems)
+        let rows = try JSONDecoder().decode([Session].self, from: data)
+        let next = http.value(forHTTPHeaderField: "x-next-cursor").flatMap(Int.init)
+        return SessionPage(rows: rows, nextCursor: next)
     }
 
     func session(sessionID: String) async throws -> Session {
@@ -1246,7 +1276,9 @@ protocol APIClientProtocol: Actor {
     func health() async throws -> HealthResponse
     func projects() async throws -> [Project]
     func projectCurrent() async throws -> Project?
+    func instanceDirectory() async throws -> String?
     func sessions(directory: String?, limit: Int) async throws -> [Session]
+    func sessionPage(directory: String?, includeArchived: Bool, rootsOnly: Bool, limit: Int, cursor: Int?) async throws -> SessionPage
     func session(sessionID: String) async throws -> Session
     func createSession(title: String?, directory: String?) async throws -> Session
     func updateSession(sessionID: String, title: String) async throws -> Session
@@ -1304,8 +1336,21 @@ protocol FileDirectorySearching: APIClientProtocol {
 
 extension APIClient: FileDirectorySearching {}
 
+struct SessionPage: Equatable, Sendable {
+    var rows: [Session]
+    var nextCursor: Int?
+}
+
 extension APIClientProtocol {
     func sessionChildren(sessionID: String) async throws -> [Session] {
+        throw URLError(.unsupportedURL)
+    }
+
+    func sessionPage(directory: String?, includeArchived: Bool, rootsOnly: Bool, limit: Int, cursor: Int?) async throws -> SessionPage {
+        throw URLError(.unsupportedURL)
+    }
+
+    func instanceDirectory() async throws -> String? {
         throw URLError(.unsupportedURL)
     }
 

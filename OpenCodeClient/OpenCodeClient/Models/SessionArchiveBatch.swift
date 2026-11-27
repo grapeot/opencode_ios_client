@@ -142,6 +142,7 @@ extension AppState {
             }
         }
         result.remaining = plan.ids.count - result.archived.count - result.missing.count
+        if sessionArchiveScope == scope { noteArchivedInPlace(result.archived) }
         return result
     }
 }

@@ -1268,10 +1268,66 @@ final class AppState {
         hasMoreSessions && !isLoadingMoreSessions
     }
 
+    /// nil until the host answers; false once `/experimental/session` proved
+    /// unsupported, which keeps the legacy `/session` window for that host.
+    var serverFiltersArchivedSessions: Bool?
+    nonisolated static let activeSessionPageSize = 500
+    /// Active rows can grow without bound on a misbehaving host; stop paging here.
+    nonisolated static let activeSessionCap = 3000
+    nonisolated static let maxActiveSessionPages = activeSessionCap / activeSessionPageSize + 1
+    /// Archived subtree tops per load; each load reads up to
+    /// `maxArchivedRequestsPerLoad` server pages of `archivedSessionRequestSize` rows.
+    nonisolated static let archivedSessionPageSize = 50
+    nonisolated static let archivedSessionRequestSize = 300
+    nonisolated static let maxArchivedRequestsPerLoad = 4
+    nonisolated static let descendantFetchConcurrency = 6
+    /// The resolved directory for `effectiveProjectDirectory == nil`, per host;
+    /// "" records that the server has no usable default (it runs at "/").
+    var defaultSessionListDirectory: String?
+    var resolvedDefaultSessionListDirectory: String? {
+        defaultSessionListDirectory.flatMap { $0.isEmpty ? nil : $0 }
+    }
+    /// Archived rows the user paged in or expanded. Only these survive a refresh;
+    /// rows archived in place drop out of memory on the next active fetch.
+    var loadedArchivedSessionIDs: Set<String> = []
+    var archivedChildrenLoadedIDs: Set<String> = []
+    var archivedSessionCursor: Int?
+    /// Directory the archived pages above belong to; a project switch resets them.
+    var archivedSessionDirectory: String?
+    var hasLoadedArchivedSessions = false
+    var hasMoreArchivedSessions = false
+    /// Directory of the archived load in flight; a load for another directory may start alongside it.
+    var archivedLoadingDirectory: String?
+
+    var isLoadingArchivedSessions: Bool {
+        archivedLoadingDirectory != nil && archivedLoadingDirectory == archivedSessionDirectory
+    }
+
+    var usesServerArchiveFilter: Bool { serverFiltersArchivedSessions == true }
+
+    var canLoadMoreArchivedSessions: Bool {
+        usesServerArchiveFilter && hasLoadedArchivedSessions && hasMoreArchivedSessions && !isLoadingArchivedSessions
+    }
+
+    /// The archived section may still have rows to fetch, so an empty active
+    /// list is not an empty session list.
+    var mayHaveUnloadedArchivedSessions: Bool {
+        usesServerArchiveFilter && (!hasLoadedArchivedSessions || hasMoreArchivedSessions)
+    }
+
     func resetSessionPagination() {
         isLoadingMoreSessions = false
         loadedSessionLimit = Self.sessionPageSize
         hasMoreSessions = true
+        serverFiltersArchivedSessions = nil
+        loadedArchivedSessionIDs = []
+        archivedChildrenLoadedIDs = []
+        archivedSessionCursor = nil
+        archivedSessionDirectory = nil
+        hasLoadedArchivedSessions = false
+        hasMoreArchivedSessions = false
+        archivedLoadingDirectory = nil
+        defaultSessionListDirectory = nil
     }
 
     // WAN optimization: page message history in fixed-size message batches.

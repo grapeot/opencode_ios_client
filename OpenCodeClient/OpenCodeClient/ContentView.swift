@@ -705,18 +705,25 @@ private struct TabletSessionsColumn: View {
 
     var body: some View {
         let presentations = state.sessionIndicatorPresentations
+        // One tree derivation per render; the archived tree only when it can show.
+        let activeNodes = self.activeNodes
+        let archivedNodes = archivedExpanded || activeNodes.isEmpty ? self.archivedNodes : []
         VStack(spacing: 0) {
             if showsAlignedHeader { alignedHeader }
-            sessionsNavigation(presentations: presentations)
+            sessionsNavigation(presentations: presentations, activeNodes: activeNodes, archivedNodes: archivedNodes)
         }
     }
 
-    private func sessionsNavigation(presentations: [String: SessionIndicatorPresentation]) -> some View {
+    private func sessionsNavigation(
+        presentations: [String: SessionIndicatorPresentation],
+        activeNodes: [SessionNode],
+        archivedNodes: [SessionNode]
+    ) -> some View {
         NavigationStack {
             Group {
                 if showSettings {
                     SettingsTabView(state: state, isCarModeEnabled: $carModeEnabled)
-                } else if activeNodes.isEmpty && archivedNodes.isEmpty {
+                } else if activeNodes.isEmpty && archivedNodes.isEmpty && !state.mayHaveUnloadedArchivedSessions {
                     ContentUnavailableView(
                         L10n.t(.sessionsEmptyTitle),
                         systemImage: "bubble.left.and.text.bubble.right",
@@ -745,6 +752,7 @@ private struct TabletSessionsColumn: View {
                             }
                             if archivedExpanded {
                                 sessionNodes(archivedNodes, archived: true, presentations: presentations)
+                                ArchivedSessionsPagingRow(state: state)
                             }
                         }
 
@@ -761,6 +769,7 @@ private struct TabletSessionsColumn: View {
                     .refreshable {
                         guard !archiveSelection.isRunning else { return }
                         await state.refreshSessions()
+                        if archivedExpanded { await state.loadArchivedSessions(reset: true) }
                     }
                     .disabled(archiveSelection.isRunning)
                 }
@@ -829,6 +838,12 @@ private struct TabletSessionsColumn: View {
             }
         }
         .onChange(of: state.sessionArchiveScope) { archiveSelection.scopeChanged() }
+        .onChange(of: archivedExpanded) { _, expanded in
+            if expanded { Task { await state.loadArchivedSessions() } }
+        }
+        .onChange(of: state.archivedSessionDirectory) {
+            if archivedExpanded { Task { await state.loadArchivedSessions() } }
+        }
         .onChange(of: showSettings) { if showSettings { archiveSelection.scopeChanged() } }
         .onDisappear { archiveSelection.scopeChanged() }
         .alert(
@@ -908,7 +923,7 @@ private struct TabletSessionsColumn: View {
                     isMutating: mutatingSessionID == session.id,
                     isArchived: archived,
                     depth: depth,
-                    hasChildren: !node.children.isEmpty,
+                    hasChildren: !node.children.isEmpty || state.mayHaveUnloadedChildren(session),
                     isCollapsed: !state.expandedSessionIDs.contains(session.id),
                     archiveChecked: isSelecting ? archiveSelection.selected.contains(session.id) : nil,
                     titleLineLimit: usesNarrowLayout ? 3 : 1,

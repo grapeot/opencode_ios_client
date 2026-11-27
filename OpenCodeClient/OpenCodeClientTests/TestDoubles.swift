@@ -71,6 +71,21 @@ actor MockAPIClient: APIClientProtocol {
     var sessionsResult: [Session] = []
     var sessionsByLimit: [Int: [Session]] = [:]
     var sessionLimitRequests: [Int] = []
+    /// nil keeps `/experimental/session` unsupported, as on legacy hosts.
+    var activeSessionPages: [Int?: SessionPage]?
+    var archivedSessionPages: [Int?: SessionPage] = [:]
+    var sessionPageError: Error?
+    /// nil makes `GET /path` unsupported, as on the DSH shim.
+    var instanceDirectoryResult: String?
+    var sessionChildrenError: Error?
+    var sessionPageRequests: [SessionPageRequest] = []
+
+    struct SessionPageRequest: Equatable {
+        var directory: String?
+        var includeArchived: Bool
+        var rootsOnly: Bool
+        var cursor: Int?
+    }
     var createSessionResult = Session(
         id: "created-session",
         slug: "created-session",
@@ -149,6 +164,11 @@ actor MockAPIClient: APIClientProtocol {
     func setArchiveMissingIDs(_ ids: Set<String>) { archiveMissingIDs = ids }
     private var archiveChildren: [Session] = []
     func setArchiveChildren(_ children: [Session]) { archiveChildren = children }
+    func setActiveSessionPages(_ pages: [Int?: SessionPage]?) { activeSessionPages = pages }
+    func setArchivedSessionPages(_ pages: [Int?: SessionPage]) { archivedSessionPages = pages }
+    func setSessionPageError(_ error: Error?) { sessionPageError = error }
+    func setInstanceDirectoryResult(_ directory: String?) { instanceDirectoryResult = directory }
+    func setSessionChildrenError(_ error: Error?) { sessionChildrenError = error }
     private var onArchiveChildren: (@Sendable () async -> Void)?
     func setOnArchiveChildren(_ hook: @escaping @Sendable () async -> Void) { onArchiveChildren = hook }
     var sessionDiffResult: [FileDiff] = []
@@ -368,6 +388,13 @@ actor MockAPIClient: APIClientProtocol {
         sessionLimitRequests.append(limit)
         return sessionsByLimit[limit] ?? sessionsResult
     }
+    func sessionPage(directory: String?, includeArchived: Bool, rootsOnly: Bool, limit: Int, cursor: Int?) async throws -> SessionPage {
+        sessionPageRequests.append(.init(directory: directory, includeArchived: includeArchived, rootsOnly: rootsOnly, cursor: cursor))
+        if let sessionPageError { throw sessionPageError }
+        guard let activeSessionPages else { throw URLError(.unsupportedURL) }
+        let pages = includeArchived ? archivedSessionPages : activeSessionPages
+        return pages[cursor] ?? SessionPage(rows: [], nextCursor: nil)
+    }
     func session(sessionID: String) async throws -> Session {
         sessionRequests.append(sessionID)
         if let sessionError { throw sessionError }
@@ -421,7 +448,13 @@ actor MockAPIClient: APIClientProtocol {
         )
     }
 
+    func instanceDirectory() async throws -> String? {
+        guard let instanceDirectoryResult else { throw URLError(.unsupportedURL) }
+        return instanceDirectoryResult
+    }
+
     func sessionChildren(sessionID: String) async throws -> [Session] {
+        if let sessionChildrenError { throw sessionChildrenError }
         await onArchiveChildren?()
         return archiveChildren.filter { $0.parentID == sessionID }
     }
