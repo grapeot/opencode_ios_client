@@ -1284,6 +1284,9 @@ final class AppState {
     nonisolated static let archivedSessionRequestSize = 300
     nonisolated static let maxArchivedRequestsPerLoad = 4
     nonisolated static let descendantFetchConcurrency = 6
+    /// Restored roots are found by paging every root of the directory; see `fetchRestoredRoots`.
+    nonisolated static let restoredScanPageSize = 300
+    nonisolated static let maxRestoredScanPages = 10
     /// The resolved directory for `effectiveProjectDirectory == nil`, per host;
     /// "" records that the server has no usable default (it runs at "/").
     var defaultSessionListDirectory: String?
