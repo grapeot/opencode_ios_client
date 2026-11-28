@@ -31,27 +31,8 @@ struct AIUsageQuotaButton: View {
                     quotaButton(at: context.date)
                 }
                 .sheet(isPresented: $showSheet) {
-                NavigationStack {
-                    AIUsageQuotaDetailView(state: state)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(L10n.t(.appDone)) { showSheet = false }
-                            }
-                            ToolbarItem(placement: .primaryAction) {
-                                Button {
-                                    Task { await state.refreshAIUsageDashboard() }
-                                } label: {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                                .disabled({
-                                    if case .loading = state.aiUsageQuotaState { return true }
-                                    return false
-                                }())
-                            }
-                        }
+                    AIUsageQuotaSheet(state: state, isPresented: $showSheet)
                 }
-                .presentationDetents([.medium, .large])
-            }
             }
         }
         .task(id: state.aiUsageDashboardURL) {
@@ -82,6 +63,37 @@ struct AIUsageQuotaButton: View {
         .accessibilityIdentifier("chat-toolbar-quota")
         .accessibilityLabel(L10n.t(.quotaCurrentModelAccessibility, text))
         .accessibilityHint(quota != nil && state.isSelectedModelQuotaStale ? L10n.t(.quotaStale) : "")
+    }
+}
+
+struct AIUsageQuotaSheet: View {
+    @Bindable var state: AppState
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            AIUsageQuotaDetailView(state: state)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { isPresented = false } label: {
+                            Label(L10n.t(.appDone), systemImage: "xmark")
+                        }
+                        .accessibilityIdentifier("quota-detail-close")
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Task { await state.refreshAIUsageDashboard() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .disabled({
+                            if case .loading = state.aiUsageQuotaState { return true }
+                            return false
+                        }())
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
