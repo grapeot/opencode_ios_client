@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ChatToolbarView: View {
     @Bindable var state: AppState
@@ -21,12 +22,60 @@ struct ChatToolbarView: View {
     @State private var showCreateDisabledAlert = false
     @State private var modelConfig: ModelConfigPresentation?
     @State private var showTodoPanel = false
+    @State private var showQuotaPanel = false
+    @State private var isOuterDisplay = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.effectiveLayout) private var effectiveLayout
 
     private var showsLayoutShortcut: Bool { sizeClass == .regular || onFilesTap != nil }
     
     var body: some View {
+        platformBar
+            .sheet(item: $modelConfig) { presentation in
+                ModelConfigSheet(state: state, presentation: presentation) {
+                    modelConfig = nil
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var platformBar: some View {
+        // SwiftUI 8.0.85.29 is the first supported iOS 27.1 SDK module.
+        #if canImport(SwiftUI, _version: 8.0.85.29)
+        Group {
+            if #available(iOS 27.1, *), isOuterDisplay {
+                Color.clear.frame(height: 0)
+                    .accessibilityHidden(true)
+                    .toolbar { outerDisplayItems }
+                    .toolbarVerticalCompressionBehavior(.prefersTabBar)
+                    .sheet(isPresented: $showTodoPanel) { todoPanel }
+                    .sheet(isPresented: $showQuotaPanel) {
+                        AIUsageQuotaSheet(state: state, isPresented: $showQuotaPanel)
+                    }
+                    .alert(L10n.t(.chatCreateDisabledHint), isPresented: $showCreateDisabledAlert) {
+                        Button(L10n.t(.commonOk)) {}
+                    }
+                    .task(id: state.aiUsageDashboardURL) {
+                        guard state.isAIUsageQuotaConfigured else { return }
+                        await state.refreshAIUsageQuotas()
+                    }
+            } else {
+                horizontalBar
+            }
+        }
+        .background {
+            if #available(iOS 27.1, *) {
+                ChatToolbarDisplayProbe(isOuterDisplay: $isOuterDisplay)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        #else
+        horizontalBar
+        #endif
+    }
+
+    private var horizontalBar: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: DesignSpacing.md) {
                 sessionButtons
@@ -58,13 +107,84 @@ struct ChatToolbarView: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, LayoutConstants.Spacing.spacious)
         .padding(.vertical, LayoutConstants.MessageList.verticalPadding)
-        // Keep the sheet presenter alive if the model label makes the toolbar reflow.
-        .sheet(item: $modelConfig) { presentation in
-            ModelConfigSheet(state: state, presentation: presentation) {
-                modelConfig = nil
-            }
-        }
     }
+
+    #if canImport(SwiftUI, _version: 8.0.85.29)
+    @available(iOS 27.1, *)
+    @ToolbarContentBuilder
+    private var outerDisplayItems: some ToolbarContent {
+        if let onRestoreSessions {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: onRestoreSessions) {
+                    Label(L10n.t(.sidebarShowSessions), systemImage: "sidebar.left")
+                }
+            }
+            .axisBehavior(.verticalPreferred)
+        }
+        if showSessionListInToolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showSessionList = true } label: {
+                    Label(L10n.t(.sessionsTitle), systemImage: "list.bullet")
+                }
+                .accessibilityIdentifier("chat-toolbar-session-list")
+            }
+            .axisBehavior(.verticalPreferred)
+        }
+        if showCreateSessionInToolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    if state.canCreateSession { Task { await state.createSession() } }
+                    else { showCreateDisabledAlert = true }
+                } label: {
+                    Label(L10n.t(.carNewSession), systemImage: "plus")
+                }
+                .accessibilityIdentifier("chat-toolbar-create-session")
+            }
+            .axisBehavior(.verticalPreferred)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(action: openModelConfig) {
+                Label(state.selectedModel?.shortName ?? L10n.t(.configureModel), systemImage: "cpu")
+            }
+            .accessibilityIdentifier("chat-toolbar-model")
+        }
+        .axisBehavior(.verticalPreferred)
+        .visibilityPriority(.high)
+        ToolbarItem(placement: .topBarTrailing) {
+            ContextUsageButton(state: state)
+        }
+        .axisBehavior(.verticalPreferred)
+        .visibilityPriority(.high)
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Button { showTodoPanel = true } label: {
+                    Label(L10n.t(.todoPanelTitle), systemImage: "checklist")
+                }
+                .accessibilityValue(todoBadge)
+                .accessibilityIdentifier("chat-toolbar-todo")
+                Button { beginRename() } label: {
+                    Label(L10n.t(.chatRenameSession), systemImage: "pencil")
+                }
+                if state.isAIUsageQuotaConfigured, state.selectedModel?.primaryQuotaKey != nil {
+                    Button {
+                        showQuotaPanel = true
+                        Task { await state.refreshAIUsageQuotas(force: true) }
+                    } label: {
+                        Label(L10n.t(.quotaTitle), systemImage: "gauge.with.dots.needle.67percent")
+                    }
+                    .accessibilityIdentifier("chat-toolbar-quota")
+                }
+                layoutButton
+                settingsButton
+            } label: {
+                Image(systemName: "ellipsis")
+                    .accessibilityLabel(L10n.t(.chatMoreActions))
+            }
+            .accessibilityIdentifier("chat-toolbar-more")
+        }
+        .axisBehavior(.verticalPreferred)
+    }
+    #endif
     
     // MARK: - Session Operation Buttons
     private var sessionButtons: some View {
@@ -86,8 +206,7 @@ struct ChatToolbarView: View {
             }
 
             Button {
-                renameText = state.currentSession?.title ?? ""
-                showRenameAlert = true
+                beginRename()
             } label: {
                 Image(systemName: "pencil")
                     .font(.body)
@@ -121,6 +240,11 @@ struct ChatToolbarView: View {
             Button(L10n.t(.commonOk)) {}
         }
     }
+
+    private func beginRename() {
+        renameText = state.currentSession?.title ?? ""
+        showRenameAlert = true
+    }
     
     @ViewBuilder
     private var layoutButton: some View {
@@ -141,14 +265,7 @@ struct ChatToolbarView: View {
     }
     
     private var configButton: some View {
-        Button {
-            state.rebuildPickerModelItems(reason: "open")
-            modelConfig = ModelConfigPresentation(
-                closesOnModelSelection: effectiveLayout == .compact,
-                hostID: state.currentHostProfileID,
-                sessionID: state.currentSessionID
-            )
-        } label: {
+        Button(action: openModelConfig) {
             HStack(spacing: 4) {
                 Text(state.selectedModel?.shortName ?? L10n.t(.configureModel))
                     .font(.caption.weight(.semibold))
@@ -167,6 +284,15 @@ struct ChatToolbarView: View {
             )
         }
         .accessibilityIdentifier("chat-toolbar-model")
+    }
+
+    private func openModelConfig() {
+        state.rebuildPickerModelItems(reason: "open")
+        modelConfig = ModelConfigPresentation(
+            closesOnModelSelection: effectiveLayout == .compact,
+            hostID: state.currentHostProfileID,
+            sessionID: state.currentSessionID
+        )
     }
 
     // MARK: - Todo Button & Panel
@@ -201,25 +327,70 @@ struct ChatToolbarView: View {
             .padding(.vertical, 5)
         }
         .accessibilityIdentifier("chat-toolbar-todo")
-        .popover(isPresented: $showTodoPanel) {
-            NavigationStack {
-                todoPanelContent
-                    .navigationTitle(L10n.t(.todoPanelTitle))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button(L10n.t(.appDone)) {
-                                showTodoPanel = false
-                            }
-                        }
+        .popover(isPresented: $showTodoPanel) { todoPanel }
+    }
+
+    private var todoPanel: some View {
+        NavigationStack {
+            todoPanelContent
+                .navigationTitle(L10n.t(.todoPanelTitle))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L10n.t(.appDone)) { showTodoPanel = false }
                     }
-            }
-            .frame(idealWidth: 320, idealHeight: 400)
+                }
         }
+        .frame(idealWidth: 320, idealHeight: 400)
     }
 
     private var todoPanelContent: some View {
         TodoListPanel(todos: currentTodos)
+    }
+}
+
+/// The public screen API has no outer/inner role. Match the Duo cover panel's
+/// native resolution (Apple tech specs), not window size or toolbar direction.
+private struct ChatToolbarDisplayProbe: UIViewRepresentable {
+    @Binding var isOuterDisplay: Bool
+
+    func makeUIView(context: Context) -> ProbeView { ProbeView() }
+
+    func updateUIView(_ view: ProbeView, context: Context) {
+        view.onChange = { outer in
+            if isOuterDisplay != outer { isOuterDisplay = outer }
+        }
+        view.checkDisplay()
+    }
+
+    final class ProbeView: UIView {
+        var onChange: ((Bool) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            checkDisplay()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            checkDisplay()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            checkDisplay()
+        }
+
+        func checkDisplay() {
+            // SwiftUI can call this while updating UIViewRepresentable.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let scene = self.window?.windowScene else { return }
+                let size = scene.screen.nativeBounds.size
+                self.onChange?(scene.traitCollection.userInterfaceIdiom == .phone
+                    && min(size.width, size.height) == 1398
+                    && max(size.width, size.height) == 2034)
+            }
+        }
     }
 }
 

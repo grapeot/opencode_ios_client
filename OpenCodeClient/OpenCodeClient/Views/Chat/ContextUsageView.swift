@@ -143,6 +143,8 @@ struct ContextUsageButton: View {
         }
         .buttonStyle(.plain)
         .help(L10n.t(.contextUsageHelp))
+        .accessibilityLabel(L10n.t(.contextUsageHelp))
+        .accessibilityIdentifier("chat-toolbar-context")
         .sheet(isPresented: $showSheet) {
             NavigationStack {
                 ContextUsageDetailView(

@@ -144,6 +144,7 @@ enum L10n {
         case settingsLanguageEnglish
         case settingsLanguageChinese
         case chatCreateDisabledHint
+        case chatMoreActions
 
         case hostCurrent
         case hostCurrentFooter
@@ -769,6 +770,7 @@ enum L10n {
         Key.chatKeyboard.rawValue: "Keyboard",
         Key.chatDismissKeyboard.rawValue: "Hide Keyboard",
         Key.chatSendFailed.rawValue: "Send failed",
+        Key.chatMoreActions.rawValue: "More chat actions",
         Key.chatRenameSession.rawValue: "Rename Session",
         Key.chatRenameSessionPlaceholder.rawValue: "Input new title",
         Key.chatTitleField.rawValue: "Title",
@@ -1292,6 +1294,7 @@ enum L10n {
         Key.chatKeyboard.rawValue: "键盘",
         Key.chatDismissKeyboard.rawValue: "收起键盘",
         Key.chatSendFailed.rawValue: "发送失败",
+        Key.chatMoreActions.rawValue: "更多聊天操作",
         Key.chatRenameSession.rawValue: "重命名会话",
         Key.chatRenameSessionPlaceholder.rawValue: "输入新标题",
         Key.chatTitleField.rawValue: "标题",
