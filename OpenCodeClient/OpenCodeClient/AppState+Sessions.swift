@@ -168,6 +168,8 @@ extension AppState {
         var filteredDirectory: String?
         /// Filtered path only: the cursor after this first page, nil when it held every active row.
         var nextCursor: Int? = nil
+        /// Restored roots from a full scan; nil when this load did not scan.
+        var restoredRoots: [Session]? = nil
     }
 
     /// V1 `/session` without a directory lists the server's current project,
@@ -246,9 +248,31 @@ extension AppState {
         return page
     }
 
+    /// Restore writes `archived = -1` and the server keeps it, so a restored row
+    /// is neither in the unarchived list (which needs the field empty) nor
+    /// archived. Restore always starts at a subtree top, and roots are a small
+    /// share of all rows, so a full load pages every root with
+    /// `archived=true&roots=true` and keeps the restored ones. Their restored
+    /// children load on expand.
+    func fetchRestoredRoots(directory: String) async throws -> [Session] {
+        var restored: [Session] = []
+        var cursor: Int?
+        for _ in 0..<Self.maxRestoredScanPages {
+            let page = try await apiClient.sessionPage(
+                directory: directory, includeArchived: true, rootsOnly: true,
+                limit: Self.restoredScanPageSize, cursor: cursor
+            )
+            restored.append(contentsOf: page.rows.filter(\.isRestored))
+            guard let next = page.nextCursor, cursor.map({ next < $0 }) ?? true else { break }
+            cursor = next
+        }
+        return restored
+    }
+
     /// Unarchived rows when the host filters on the server, else the legacy
-    /// recent-N window, which mixes in archived rows.
-    func fetchSessionList() async throws -> SessionListFetch {
+    /// recent-N window, which mixes in archived rows. `resetPaging` marks a
+    /// full load, which also rescans restored roots.
+    func fetchSessionList(resetPaging: Bool = false) async throws -> SessionListFetch {
         let snapshot = captureHostRequestSnapshot()
         if serverFiltersArchivedSessions == nil, !Self.serverMayFilterArchivedSessions(version: serverVersion) {
             serverFiltersArchivedSessions = false
@@ -263,8 +287,19 @@ extension AppState {
             do {
                 let page = try await fetchActiveSessionPage(directory: directory, cursor: nil)
                 if isCurrentHostRequest(snapshot) { serverFiltersArchivedSessions = true }
+                // A full load (a new list or pull to refresh) rescans restored roots;
+                // an incremental refresh keeps the ones already shown.
+                var restored: [Session]?
+                if resetPaging || archivedSessionDirectory != directory {
+                    do {
+                        restored = try await fetchRestoredRoots(directory: directory)
+                    } catch {
+                        Self.logger.warning("restored root scan failed: \(error.localizedDescription)")
+                    }
+                }
                 return SessionListFetch(rows: page.rows, hasMore: page.nextCursor != nil,
-                                        filteredDirectory: directory, nextCursor: page.nextCursor)
+                                        filteredDirectory: directory, nextCursor: page.nextCursor,
+                                        restoredRoots: restored)
             } catch where Self.isUnsupportedSessionPage(error) {
                 if isCurrentHostRequest(snapshot) { serverFiltersArchivedSessions = false }
             } catch where serverFiltersArchivedSessions == nil
@@ -309,6 +344,7 @@ extension AppState {
             return
         }
         var keepDeeper = keepDeeperPages
+        let sameDirectory = archivedSessionDirectory == directory
         if archivedSessionDirectory != directory {
             resetArchivedSessionPages()
             archivedSessionDirectory = directory
@@ -320,13 +356,25 @@ extension AppState {
         // cursor (the server pages on `< cursor`); with no cursor it covers all.
         let boundary = fetched.nextCursor
         let deeper = !keepDeeper ? [] : sessions.filter { row in
-            !row.isArchived && !activeIDs.contains(row.id) && row.id != droppedSessionID
+            !row.isArchived && !row.isRestored && !activeIDs.contains(row.id) && row.id != droppedSessionID
                 && boundary.map { row.time.updated < $0 } == true
         }
         let retained = sessions.filter {
             $0.isArchived && loadedArchivedSessionIDs.contains($0.id) && !activeIDs.contains($0.id)
         }
-        applyFetchedSessionPage(fetched.rows + deeper + retained, capturedSelection: capturedSelection)
+        // The unarchived page never lists restored rows, so it cannot speak for
+        // them: keep the local ones, or take a fresh scan's roots plus local
+        // restored children when this load scanned.
+        let localRestored = sameDirectory ? sessions.filter(\.isRestored) : []
+        var restored = localRestored
+        if let roots = fetched.restoredRoots {
+            let rootIDs = Set(roots.map(\.id))
+            restored = roots + localRestored.filter { $0.parentID != nil && !rootIDs.contains($0.id) }
+        }
+        let restoredRows = restored.filter {
+            !activeIDs.contains($0.id) && $0.id != droppedSessionID && $0.directory == directory
+        }
+        applyFetchedSessionPage(fetched.rows + restoredRows + deeper + retained, capturedSelection: capturedSelection)
         if keepDeeper && hasLoadedDeeperActivePages, let next = fetched.nextCursor {
             // Keep paging from the deepest page already loaded (nil when it was the last).
             activeSessionCursor = activeSessionCursor.map { min($0, next) }
@@ -404,7 +452,8 @@ extension AppState {
             resetArchivedSessionPages()
         }
         let tops = Self.archivedSubtreeTops(collected, known: sessions)
-        addMissingSessions(tops)
+        // Restored rows met here (e.g. a restored child under an active parent) join the active list.
+        addMissingSessions(tops + collected.filter(\.isRestored))
         loadedArchivedSessionIDs.formUnion(tops.map(\.id))
         archivedSessionCursor = exhausted ? nil : cursor
         hasMoreArchivedSessions = !exhausted
@@ -429,9 +478,11 @@ extension AppState {
         loadedArchivedSessionIDs.formUnion(tops.filter { row in oldest.map { row.time.updated >= $0 } ?? true }.map(\.id))
     }
 
-    /// Archived rows are paged in as subtree tops; children arrive when a row expands.
+    /// Archived rows page in as subtree tops and restored rows as roots; their
+    /// children (archived or restored too) arrive when a row expands.
     func mayHaveUnloadedChildren(_ session: Session) -> Bool {
-        usesFilteredSessionList && session.isArchived && !archivedChildrenLoadedIDs.contains(session.id)
+        usesFilteredSessionList && (session.isArchived || session.isRestored)
+            && !archivedChildrenLoadedIDs.contains(session.id)
     }
 
     func loadArchivedChildren(of sessionID: String) async {
@@ -497,10 +548,18 @@ extension AppState {
         let directoryKey = effectiveProjectDirectory
         do {
             let selectedSession = currentSession
-            let fetched = try await fetchSessionList()
+            let fetched = try await fetchSessionList(resetPaging: resetPaging)
             // A later project switch owns the list; a slower earlier fetch must not overwrite it.
             guard isCurrentHostRequest(snapshot), effectiveProjectDirectory == directoryKey else { return }
             applySessionListFetch(fetched, capturedSelection: selectedSession, keepDeeperPages: !resetPaging)
+            if fetched.restoredRoots != nil {
+                // Restored roots arrive without children; rows left expanded reload theirs.
+                for id in expandedSessionIDs {
+                    if let session = sessions.first(where: { $0.id == id }), mayHaveUnloadedChildren(session) {
+                        await loadArchivedChildren(of: id)
+                    }
+                }
+            }
             selectFirstAvailableSessionIfNeeded()
 
             // A persisted session was restored on launch but its messages were

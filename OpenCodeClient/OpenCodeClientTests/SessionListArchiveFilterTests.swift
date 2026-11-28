@@ -566,4 +566,74 @@ struct SessionListArchiveFilterTests {
         #expect(state.hasLoadedArchivedSessions == false)
         #expect(await api.sessionPageRequests.last?.directory == "/other")
     }
+
+    // MARK: Restored rows (archived = -1)
+
+    @Test @MainActor func fullLoadListsRestoredRootsAndIncrementalRefreshKeepsThem() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([nil: SessionPage(rows: [Self.session("a1", updated: 50)], nextCursor: 50)])
+        await api.setRestoredRootPages([nil: SessionPage(rows: [
+            Self.session("restored", updated: 60, archived: -1),
+            Self.session("still-archived", updated: 55, archived: 9),
+        ], nextCursor: nil)])
+        let state = await Self.makeState(api)
+
+        await state.loadSessions()
+
+        #expect(state.sessions.map(\.id) == ["a1", "restored"])
+        let restored = state.sessions.first { $0.id == "restored" }
+        #expect(restored?.isRestored == true)
+        #expect(restored?.isArchived == false)
+        #expect(restored.map(state.mayHaveUnloadedChildren) == true)
+        #expect(state.sessionTree(archived: false).map(\.id).contains("restored"))
+
+        // An incremental refresh does not rescan and does not treat the row as vanished.
+        await state.loadSessions()
+        #expect(state.sessions.contains { $0.id == "restored" })
+        #expect(await api.restoredScanRequests.count == 1)
+
+        // Pull to refresh rescans; a row archived again elsewhere leaves.
+        await api.setRestoredRootPages([:])
+        await state.refreshSessions(resetPaging: true)
+        #expect(state.sessions.map(\.id) == ["a1"])
+        let scans = await api.restoredScanRequests
+        #expect(scans.count == 2)
+        #expect(scans.allSatisfy { $0.includeArchived && $0.directory == Self.worktree })
+    }
+
+    @Test @MainActor func restoredRowsKeepLoadedChildrenWithoutDuplicates() async {
+        let api = MockAPIClient()
+        await api.setActiveSessionPages([nil: SessionPage(rows: [Self.session("a1", updated: 50)], nextCursor: 50)])
+        await api.setRestoredRootPages([nil: SessionPage(rows: [Self.session("restored", updated: 10, archived: -1)], nextCursor: nil)])
+        await api.setArchiveChildren([Self.session("kid", parent: "restored", updated: 9, archived: -1)])
+        let state = await Self.makeState(api)
+
+        await state.loadSessions()
+        await state.loadArchivedChildren(of: "restored")
+        #expect(state.sessions.map(\.id) == ["a1", "restored", "kid"])
+
+        await state.loadSessions()
+        #expect(state.sessions.map(\.id) == ["a1", "restored", "kid"])
+        await state.refreshSessions(resetPaging: true)
+        #expect(state.sessions.map(\.id) == ["a1", "restored", "kid"])
+    }
+
+    @Test @MainActor func restoredScanStopsAtThePageCap() async throws {
+        let api = MockAPIClient()
+        var pages: [Int?: SessionPage] = [:]
+        var cursor: Int? = nil
+        for index in 0..<15 {
+            let next = 10_000 - index * 10
+            pages[cursor] = SessionPage(rows: [Self.session("r\(index)", updated: next + 1, archived: -1)], nextCursor: next)
+            cursor = next
+        }
+        await api.setActiveSessionPages([nil: SessionPage(rows: [], nextCursor: nil)])
+        await api.setRestoredRootPages(pages)
+        let state = await Self.makeState(api)
+
+        let roots = try await state.fetchRestoredRoots(directory: Self.worktree)
+
+        #expect(roots.count == AppState.maxRestoredScanPages)
+        #expect(await api.restoredScanRequests.count == AppState.maxRestoredScanPages)
+    }
 }

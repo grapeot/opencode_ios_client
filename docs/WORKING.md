@@ -4,6 +4,16 @@
 
 ## 当前状态
 
+### Session 列表找回恢复过的会话（2026-11-27，分支 `fix/session-list-restored-sessions`，PR #233/#234 后续）
+
+起因（Android PR #146 独立 review 发现，两端共有）：恢复归档写 `archived = -1`，server 原样存入 `time_archived`（PATCH 只接受数字，projector `.set(sessionRow)` 跳过 undefined 字段，没有清空的写法），而 `/experimental/session` 的未归档过滤是 `time_archived IS NULL`；客户端 `isArchived` 只认 `> 0`。结果恢复过的会话（含历史上恢复的）在过滤路径下活跃区、归档区都看不到，只有当前选中的还在。
+
+- [x] `Session.isRestored`（`archived` 非空且 ≤ 0）。
+- [x] 完整加载（新目录、下拉刷新）额外用 `archived=true&roots=true` 分页扫该目录全部根（每页 300、最多 10 页），恢复过的根放进活跃区；子会话展开时懒加载（`mayHaveUnloadedChildren` 覆盖恢复行）；已展开的恢复行在扫描后补拉子节点。依据：恢复总从子树顶端开始，根只占全部行的一小部分（live 实测最近 1200 行里 1143 行是子会话）。
+- [x] 增量刷新不重扫，保留本地恢复行，不把它们当成首页范围内消失的行，也不重复算进深页；扫描失败只记日志，不影响活跃列表。归档区分页遇到的恢复行也加入活跃列表。
+- [ ] 已知限制：活跃父会话下单独归档又恢复的子会话不是根，扫不到；本设备恢复的会留在列表里，别处恢复的要等打开归档区翻到它。
+- [x] 验证：`SessionListArchiveFilterTests` 新增 3 项（扫描进活跃区与增量保留与下拉重扫、恢复行子节点不重复、扫描页数上限），MockAPIClient 把扫描请求记到单独的 `restoredScanRequests`。
+
 ### Session 列表活跃分页与老 server 探测（2026-11-27，分支 `fix/session-list-active-paging`，PR #233 后续）
 
 PR #233 把活跃列表一次拉全（上限 3000），只适合归档占绝大多数的 server。活跃会话多的用户每次切 session 都要重拉全部活跃行（2000 行约 1.6MB），超过 3000 的会被静默截断且无法再翻到；作者本机另一个项目就有 2233 个未归档会话。

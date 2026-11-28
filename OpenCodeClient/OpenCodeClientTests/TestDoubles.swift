@@ -74,11 +74,15 @@ actor MockAPIClient: APIClientProtocol {
     /// nil keeps `/experimental/session` unsupported, as on legacy hosts.
     var activeSessionPages: [Int?: SessionPage]?
     var archivedSessionPages: [Int?: SessionPage] = [:]
+    /// `archived=true&roots=true` pages, the restored-root scan.
+    var restoredRootPages: [Int?: SessionPage] = [:]
     var sessionPageError: Error?
     /// nil makes `GET /path` unsupported, as on the DSH shim.
     var instanceDirectoryResult: String?
     var sessionChildrenError: Error?
     var sessionPageRequests: [SessionPageRequest] = []
+    /// Restored-root scans (`archived=true&roots=true`), kept apart from active and archived paging.
+    var restoredScanRequests: [SessionPageRequest] = []
 
     struct SessionPageRequest: Equatable {
         var directory: String?
@@ -166,6 +170,7 @@ actor MockAPIClient: APIClientProtocol {
     func setArchiveChildren(_ children: [Session]) { archiveChildren = children }
     func setActiveSessionPages(_ pages: [Int?: SessionPage]?) { activeSessionPages = pages }
     func setArchivedSessionPages(_ pages: [Int?: SessionPage]) { archivedSessionPages = pages }
+    func setRestoredRootPages(_ pages: [Int?: SessionPage]) { restoredRootPages = pages }
     func setSessionPageError(_ error: Error?) { sessionPageError = error }
     func setInstanceDirectoryResult(_ directory: String?) { instanceDirectoryResult = directory }
     func setSessionChildrenError(_ error: Error?) { sessionChildrenError = error }
@@ -389,10 +394,11 @@ actor MockAPIClient: APIClientProtocol {
         return sessionsByLimit[limit] ?? sessionsResult
     }
     func sessionPage(directory: String?, includeArchived: Bool, rootsOnly: Bool, limit: Int, cursor: Int?) async throws -> SessionPage {
-        sessionPageRequests.append(.init(directory: directory, includeArchived: includeArchived, rootsOnly: rootsOnly, cursor: cursor))
+        let request = SessionPageRequest(directory: directory, includeArchived: includeArchived, rootsOnly: rootsOnly, cursor: cursor)
+        if includeArchived && rootsOnly { restoredScanRequests.append(request) } else { sessionPageRequests.append(request) }
         if let sessionPageError { throw sessionPageError }
         guard let activeSessionPages else { throw URLError(.unsupportedURL) }
-        let pages = includeArchived ? archivedSessionPages : activeSessionPages
+        let pages = includeArchived ? (rootsOnly ? restoredRootPages : archivedSessionPages) : activeSessionPages
         return pages[cursor] ?? SessionPage(rows: [], nextCursor: nil)
     }
     func session(sessionID: String) async throws -> Session {

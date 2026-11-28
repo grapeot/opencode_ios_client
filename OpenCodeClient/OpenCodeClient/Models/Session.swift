@@ -29,6 +29,14 @@ struct Session: Identifiable, Equatable {
         return archived > 0
     }
 
+    /// Restored from the archive. Restore writes `archived = -1`, which the
+    /// server keeps, and `/experimental/session` lists only rows whose archived
+    /// field is empty, so these rows need their own lookup.
+    var isRestored: Bool {
+        guard let archived = time.archived else { return false }
+        return archived <= 0
+    }
+
     struct TimeInfo: Codable, Equatable {
         let created: Int
         let updated: Int
