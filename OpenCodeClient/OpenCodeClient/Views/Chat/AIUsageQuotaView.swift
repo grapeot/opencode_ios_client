@@ -75,7 +75,10 @@ struct AIUsageQuotaSheet: View {
             AIUsageQuotaDetailView(state: state)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(L10n.t(.appDone)) { isPresented = false }
+                        Button { isPresented = false } label: {
+                            Label(L10n.t(.appDone), systemImage: "xmark")
+                        }
+                        .accessibilityIdentifier("quota-detail-close")
                     }
                     ToolbarItem(placement: .primaryAction) {
                         Button {

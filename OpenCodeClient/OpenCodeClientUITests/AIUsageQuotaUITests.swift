@@ -7,24 +7,37 @@ final class AIUsageQuotaUITests: XCTestCase {
     }
 
     @MainActor
-    func testQuotaBadgeAndDetailFixture() throws {
+    func testQuotaEntryAndDetailFixture() throws {
         let app = XCUIApplication()
         app.launchArguments = ["UITEST_QUOTA_FIXTURE"]
         app.launch()
 
-        let badge = app.buttons["chat-toolbar-quota"]
-        XCTAssertTrue(badge.waitForExistence(timeout: 8))
-        XCTAssertTrue(badge.label.contains("71% / 13h"))
-        saveScreenshot(app, name: "quota-toolbar")
-
-        badge.tap()
+        let quota = app.buttons["chat-toolbar-quota"]
+        let more = app.buttons["chat-toolbar-more"]
+        if more.waitForExistence(timeout: 3) {
+            XCTAssertFalse(quota.exists)
+            more.tap()
+            XCTAssertTrue(quota.waitForExistence(timeout: 8))
+            saveScreenshot(app, name: "quota-more-menu")
+        } else {
+            XCTAssertTrue(quota.waitForExistence(timeout: 8))
+            XCTAssertTrue(quota.label.contains("71% / 13h"))
+            saveScreenshot(app, name: "quota-toolbar")
+        }
+        quota.tap()
         XCTAssertTrue(app.staticTexts["Usage & Limits"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["OpenAI / Codex"].waitForExistence(timeout: 8))
-        app.swipeUp()
+        let detail = app.descendants(matching: .any)["quota-detail"]
+        XCTAssertTrue(detail.exists)
         let generatedAt = app.descendants(matching: .any)["quota-generated-at"]
+        for _ in 0..<3 where !generatedAt.exists {
+            detail.swipeUp()
+        }
         XCTAssertTrue(generatedAt.waitForExistence(timeout: 8))
         XCTAssertTrue(generatedAt.label.contains("2026-07-12T09:40:00"))
         saveScreenshot(app, name: "quota-detail")
+        app.buttons["quota-detail-close"].tap()
+        XCTAssertTrue(detail.waitForNonExistence(timeout: 8))
     }
 
     @MainActor

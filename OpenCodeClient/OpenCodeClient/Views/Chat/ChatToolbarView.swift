@@ -136,7 +136,7 @@ struct ChatToolbarView: View {
                     if state.canCreateSession { Task { await state.createSession() } }
                     else { showCreateDisabledAlert = true }
                 } label: {
-                    Label(L10n.t(.carNewSession), systemImage: "plus")
+                    Label(L10n.t(.chatNewSession), systemImage: "plus")
                 }
                 .accessibilityIdentifier("chat-toolbar-create-session")
             }
@@ -337,7 +337,9 @@ struct ChatToolbarView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button(L10n.t(.appDone)) { showTodoPanel = false }
+                        Button { showTodoPanel = false } label: {
+                            Label(L10n.t(.appDone), systemImage: "checkmark")
+                        }
                     }
                 }
         }
